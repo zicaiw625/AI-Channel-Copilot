@@ -94,6 +94,47 @@ export const redactCustomerRecords = async (
   }
 };
 
+export const collectCustomerData = async (
+  shopDomain: string,
+  customerIds: string[],
+  orderIds: string[],
+) => {
+  if (!shopDomain) return { orders: [], customers: [] };
+
+  try {
+    const orderFilter: any = { shopDomain };
+    const orFilters = [] as Record<string, unknown>[];
+
+    if (customerIds.length) {
+      orFilters.push({ customerId: { in: customerIds } });
+    }
+    if (orderIds.length) {
+      orFilters.push({ id: { in: orderIds } });
+    }
+
+    if (orFilters.length) {
+      orderFilter.OR = orFilters;
+    }
+
+    const [orders, customers] = await Promise.all([
+      prisma.order.findMany({
+        where: orderFilter,
+        include: { products: true },
+      }),
+      customerIds.length
+        ? prisma.customer.findMany({ where: { shopDomain, id: { in: customerIds } } })
+        : [],
+    ]);
+
+    return { orders, customers };
+  } catch (error) {
+    if (tableMissing(error)) {
+      return { orders: [], customers: [] };
+    }
+    throw error;
+  }
+};
+
 export const describeCustomerFootprint = async (shopDomain: string, customerIds: string[]) => {
   if (!shopDomain) {
     return { hasData: false, orders: 0, customers: 0 };

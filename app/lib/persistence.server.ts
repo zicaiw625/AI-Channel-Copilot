@@ -43,14 +43,17 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
 
   try {
     ensureTables();
-    let created = 0;
-    let updated = 0;
+    const { created, updated } = await prisma.$transaction(async (tx) => {
+      let created = 0;
+      let updated = 0;
 
-    for (const order of orders) {
-      const aiSource = toAiEnum(order.aiSource);
-      const createdAt = new Date(order.createdAt);
+      const orderIds = orders.map((order) => order.id);
+      await tx.orderProduct.deleteMany({ where: { orderId: { in: orderIds } } });
 
-      const result = await prisma.$transaction(async (tx) => {
+      for (const order of orders) {
+        const aiSource = toAiEnum(order.aiSource);
+        const createdAt = new Date(order.createdAt);
+
         const orderData: Prisma.OrderUpsertArgs["create"] = {
           id: order.id,
           shopDomain,
@@ -78,7 +81,6 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
           update: orderData,
         });
 
-        await tx.orderProduct.deleteMany({ where: { orderId: order.id } });
         if (order.products?.length) {
           await tx.orderProduct.createMany({
             data: order.products.map((line) => ({
@@ -128,15 +130,15 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
           });
         }
 
-        return existingOrder ? "updated" : "created";
-      });
-
-      if (result === "created") {
-        created += 1;
-      } else {
-        updated += 1;
+        if (existingOrder) {
+          updated += 1;
+        } else {
+          created += 1;
+        }
       }
-    }
+
+      return { created, updated };
+    });
 
     return { created, updated };
   } catch (error) {

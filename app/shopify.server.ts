@@ -16,10 +16,12 @@ const scopes = requireEnv("SCOPES")
   .map((item) => item.trim())
   .filter(Boolean);
 
+const appApiVersion = ApiVersion.July24;
+
 const shopify = shopifyApp({
   apiKey,
   apiSecretKey,
-  apiVersion: ApiVersion.January26,
+  apiVersion: appApiVersion,
   scopes,
   appUrl,
   authPathPrefix: "/auth",
@@ -31,7 +33,7 @@ const shopify = shopifyApp({
 });
 
 export default shopify;
-export const apiVersion = ApiVersion.January26;
+export const apiVersion = appApiVersion;
 export const addDocumentResponseHeaders = shopify.addDocumentResponseHeaders;
 export const authenticate = shopify.authenticate;
 export const unauthenticated = shopify.unauthenticated;

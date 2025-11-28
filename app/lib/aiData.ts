@@ -125,6 +125,7 @@ export type SettingsDefaults = {
   utmSources: UtmSourceRule[];
   utmMediumKeywords: string[];
   gmvMetric: "current_total_price" | "subtotal_price";
+  primaryCurrency?: string;
   tagging: TaggingSettings;
   languages: string[];
   timezones: string[];
@@ -199,6 +200,18 @@ const parseDateInput = (value?: string | null) => {
   return parsed;
 };
 
+const startOfUtcDay = (date: Date) => {
+  const copy = new Date(date);
+  copy.setUTCHours(0, 0, 0, 0);
+  return copy;
+};
+
+const endOfUtcDay = (date: Date) => {
+  const copy = new Date(date);
+  copy.setUTCHours(23, 59, 59, 999);
+  return copy;
+};
+
 export const resolveDateRange = (
   key: TimeRangeKey,
   nowDate = new Date(),
@@ -213,31 +226,30 @@ export const resolveDateRange = (
     const start = parseDateInput(from);
     const end = parseDateInput(to);
     if (start && end) {
-      const [rangeStart, rangeEnd] = start.getTime() <= end.getTime() ? [start, end] : [end, start];
-      rangeStart.setHours(0, 0, 0, 0);
-      rangeEnd.setHours(23, 59, 59, 999);
+      const [rangeStart, rangeEnd] =
+        start.getTime() <= end.getTime() ? [start, end] : [end, start];
+      const normalizedStart = startOfUtcDay(rangeStart);
+      const normalizedEnd = endOfUtcDay(rangeEnd);
       const days = Math.max(
         1,
-        Math.round((rangeEnd.getTime() - rangeStart.getTime()) / 86_400_000) + 1,
+        Math.round((normalizedEnd.getTime() - normalizedStart.getTime()) / 86_400_000) + 1,
       );
       return {
         key: "custom",
-        label: `${formatDateOnly(rangeStart, timeZone)} → ${formatDateOnly(rangeEnd, timeZone)}`,
-        start: rangeStart,
-        end: rangeEnd,
+        label: `${formatDateOnly(normalizedStart, timeZone)} → ${formatDateOnly(normalizedEnd, timeZone)}`,
+        start: normalizedStart,
+        end: normalizedEnd,
         days,
-        fromParam: formatDateOnly(rangeStart, timeZone),
-        toParam: formatDateOnly(rangeEnd, timeZone),
+        fromParam: formatDateOnly(normalizedStart, timeZone),
+        toParam: formatDateOnly(normalizedEnd, timeZone),
       };
     }
   }
 
   const preset = timeRanges[baseKey === "custom" ? DEFAULT_RANGE_KEY : baseKey] || timeRanges[DEFAULT_RANGE_KEY];
-  const end = new Date(nowDate);
-  end.setHours(23, 59, 59, 999);
-  const start = new Date(end);
-  start.setDate(start.getDate() - (preset.days - 1));
-  start.setHours(0, 0, 0, 0);
+  const end = endOfUtcDay(nowDate);
+  const start = startOfUtcDay(end);
+  start.setUTCDate(start.getUTCDate() - (preset.days - 1));
 
   return {
     key: baseKey === "custom" ? DEFAULT_RANGE_KEY : baseKey,
@@ -871,6 +883,7 @@ export const defaultSettings: SettingsDefaults = {
   utmSources: defaultUtmSources,
   utmMediumKeywords: defaultUtmMediums,
   gmvMetric: "current_total_price",
+  primaryCurrency: "USD",
   tagging: {
     orderTagPrefix: "AI-Source",
     customerTag: "AI-Customer",
@@ -1129,10 +1142,10 @@ const formatDateLabel = (date: Date, bucket: TrendBucket, timeZone?: string) => 
   }
 
   if (bucket === "week") {
-    const startOfWeek = new Date(date);
-    const day = startOfWeek.getDay();
+    const startOfWeek = startOfUtcDay(date);
+    const day = startOfWeek.getUTCDay();
     const diff = (day + 6) % 7;
-    startOfWeek.setDate(startOfWeek.getDate() - diff);
+    startOfWeek.setUTCDate(startOfWeek.getUTCDate() - diff);
     return `${formatDateOnly(startOfWeek, timeZone)} · 周`;
   }
 
@@ -1259,18 +1272,16 @@ const buildTrend = (
   >();
 
   ordersInRange.forEach((order) => {
-    const date = new Date(order.createdAt);
-    const bucketStart = new Date(date);
+    const bucketStart = startOfUtcDay(new Date(order.createdAt));
 
     if (bucket === "week") {
-      const day = bucketStart.getDay();
+      const day = bucketStart.getUTCDay();
       const diff = (day + 6) % 7;
-      bucketStart.setDate(bucketStart.getDate() - diff);
+      bucketStart.setUTCDate(bucketStart.getUTCDate() - diff);
     }
 
     if (bucket === "month") {
-      bucketStart.setDate(1);
-      bucketStart.setHours(0, 0, 0, 0);
+      bucketStart.setUTCDate(1);
     }
 
     const label = formatDateLabel(bucketStart, bucket, timeZone);

@@ -15,7 +15,13 @@ import {
   type UtmSourceRule,
 } from "../lib/aiData";
 import { fetchOrdersForRange } from "../lib/shopifyOrders.server";
-import { getSettings, markActivity, normalizeSettingsPayload, saveSettings } from "../lib/settings.server";
+import {
+  getSettings,
+  markActivity,
+  normalizeSettingsPayload,
+  saveSettings,
+  syncShopPreferences,
+} from "../lib/settings.server";
 import { loadOrdersFromDb, persistOrders } from "../lib/persistence.server";
 import { applyAiTags } from "../lib/tagging.server";
 import { authenticate } from "../shopify.server";
@@ -25,10 +31,18 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
   const url = new URL(request.url);
   const shopDomain = session?.shop || "";
-  const settings = await getSettings(shopDomain);
-  const timeZone = settings.timezones[0] || "UTC";
+  let settings = await getSettings(shopDomain);
+  settings = await syncShopPreferences(admin, shopDomain, settings);
+  const displayTimezone = settings.timezones[0] || "UTC";
+  const calculationTimezone = "UTC";
   const exportRange = (url.searchParams.get("range") as TimeRangeKey) || "90d";
-  const range: DateRange = resolveDateRange(exportRange, new Date(), undefined, undefined, timeZone);
+  const range: DateRange = resolveDateRange(
+    exportRange,
+    new Date(),
+    undefined,
+    undefined,
+    calculationTimezone,
+  );
 
   let orders = await loadOrdersFromDb(shopDomain, range);
 
@@ -45,46 +59,77 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   }
 
   const exports = orders.length
-    ? buildDashboardFromOrders(orders, range, settings.gmvMetric, timeZone).exports
-    : buildDashboardData(range, settings.gmvMetric, timeZone).exports;
+    ? buildDashboardFromOrders(orders, range, settings.gmvMetric, displayTimezone).exports
+    : buildDashboardData(range, settings.gmvMetric, displayTimezone).exports;
 
   return { settings, exports, exportRange };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { session, admin } = await authenticate.admin(request);
-  const shopDomain = session?.shop || "";
-  const formData = await request.formData();
-  const intent = formData.get("intent") || "save";
-  const incoming = formData.get("settings");
+  try {
+    const { session, admin } = await authenticate.admin(request);
+    const shopDomain = session?.shop || "";
+    const formData = await request.formData();
+    const intent = formData.get("intent") || "save";
+    const incoming = formData.get("settings");
 
-  if (!incoming) {
-    throw json({ ok: false, message: "Missing settings payload" }, { status: 400 });
-  }
-
-  const normalized = normalizeSettingsPayload(incoming.toString());
-  await saveSettings(shopDomain, normalized);
-  const timeZone = normalized.timezones?.[0] || "UTC";
-  const range: DateRange = resolveDateRange("90d", new Date(), undefined, undefined, timeZone);
-
-  if (intent === "backfill") {
-    const { orders } = await fetchOrdersForRange(admin, range, normalized);
-    await persistOrders(shopDomain, orders);
-    await markActivity(shopDomain, { lastBackfillAt: new Date() });
-  }
-
-  if (intent === "tag") {
-    const { orders } = await fetchOrdersForRange(admin, range, normalized);
-    const aiOrders = orders.filter((order) => order.aiSource);
-
-    if (normalized.tagging.writeOrderTags || normalized.tagging.writeCustomerTags) {
-      await applyAiTags(admin, aiOrders, normalized);
+    if (!incoming) {
+      throw new Error("Missing settings payload");
     }
-    await persistOrders(shopDomain, orders);
-    await markActivity(shopDomain, { lastTaggingAt: new Date() });
-  }
 
-  return json({ ok: true, intent });
+    const normalized = normalizeSettingsPayload(incoming.toString());
+    const existing = await getSettings(shopDomain);
+    const merged = {
+      ...existing,
+      ...normalized,
+      primaryCurrency: normalized.primaryCurrency || existing.primaryCurrency || "USD",
+      languages:
+        normalized.languages && normalized.languages.length ? normalized.languages : existing.languages,
+      timezones:
+        normalized.timezones && normalized.timezones.length ? normalized.timezones : existing.timezones,
+      pipelineStatuses:
+        normalized.pipelineStatuses && normalized.pipelineStatuses.length
+          ? normalized.pipelineStatuses
+          : existing.pipelineStatuses,
+    };
+
+    await saveSettings(shopDomain, merged);
+    const calculationTimezone = "UTC";
+    const range: DateRange = resolveDateRange(
+      "90d",
+      new Date(),
+      undefined,
+      undefined,
+      calculationTimezone,
+    );
+
+    if (intent === "backfill") {
+      const { orders } = await fetchOrdersForRange(admin, range, merged);
+      await persistOrders(shopDomain, orders);
+      await markActivity(shopDomain, { lastBackfillAt: new Date() });
+    }
+
+    if (intent === "tag") {
+      const { orders } = await fetchOrdersForRange(admin, range, merged);
+      const aiOrders = orders.filter((order) => order.aiSource);
+
+      if (merged.tagging.writeOrderTags || merged.tagging.writeCustomerTags) {
+        await applyAiTags(admin, aiOrders, merged);
+      }
+      await persistOrders(shopDomain, orders);
+      await markActivity(shopDomain, { lastTaggingAt: new Date() });
+    }
+
+    return json({ ok: true, intent });
+  } catch (error) {
+    console.error("Failed to save settings", {
+      message: (error as Error).message,
+    });
+    return json(
+      { ok: false, message: (error as Error).message },
+      { status: 400 },
+    );
+  }
 };
 
 const toCsvHref = (content: string) =>
@@ -201,6 +246,7 @@ export default function SettingsAndExport() {
       utmSources: sanitizedUtmSources,
       utmMediumKeywords,
       gmvMetric,
+      primaryCurrency: settings.primaryCurrency,
       tagging,
       languages: [language, ...settings.languages.filter((l) => l !== language)],
       timezones: [timezone, ...settings.timezones.filter((t) => t !== timezone)],
@@ -214,16 +260,24 @@ export default function SettingsAndExport() {
   };
 
   useEffect(() => {
-    if (fetcher.data?.ok) {
-      const message =
-        fetcher.data.intent === "tag"
-          ? "标签写回已触发（基于最近 90 天 AI 订单）"
-          : fetcher.data.intent === "backfill"
-            ? "已补拉最近 90 天订单（含 AI 识别）"
-          : "设置已保存";
-      shopify.toast.show?.(message);
+    if (fetcher.data) {
+      if (fetcher.data.ok) {
+        const message =
+          fetcher.data.intent === "tag"
+            ? "标签写回已触发（基于最近 90 天 AI 订单）"
+            : fetcher.data.intent === "backfill"
+              ? "已补拉最近 90 天订单（含 AI 识别）"
+              : "设置已保存";
+        shopify.toast.show?.(message);
+      } else {
+        shopify.toast.show?.("保存失败，请检查配置或稍后重试");
+        if (import.meta.env.DEV && fetcher.data.message) {
+          // eslint-disable-next-line no-console
+          console.error("Save settings failed", fetcher.data.message);
+        }
+      }
     }
-  }, [fetcher.data?.ok, shopify]);
+  }, [fetcher.data, shopify]);
 
   return (
     <s-page heading="设置 / 规则 & 导出">
@@ -234,10 +288,18 @@ export default function SettingsAndExport() {
           控制 referrer / UTM 匹配规则、标签写回、语言时区，支持一键导出 AI 渠道订单和产品榜单
           CSV。所有演示数据均基于 v0.1 保守识别。
         </p>
+        <p className={styles.helpText}>
+          默认规则已覆盖 ChatGPT / Perplexity / Gemini / Copilot / Claude / DeepSeek 等常见 referrer 与
+          utm_source（chatgpt、perplexity、gemini、copilot、deepseek、claude），安装后无需改动即可识别主流 AI 域名与 UTM。
+        </p>
+        <p className={styles.helpText}>
+          标签默认前缀：订单 AI-Source-*，客户 AI-Customer；如需自定义请在下方修改并保存。
+        </p>
         <div className={styles.inlineStats}>
           <span>最近 webhook：{settings.lastOrdersWebhookAt ? new Date(settings.lastOrdersWebhookAt).toLocaleString() : "暂无"}</span>
           <span>最近补拉：{settings.lastBackfillAt ? new Date(settings.lastBackfillAt).toLocaleString() : "暂无"}</span>
           <span>最近标签写回：{settings.lastTaggingAt ? new Date(settings.lastTaggingAt).toLocaleString() : "暂无 / 模拟"}</span>
+          <span>店铺货币：{settings.primaryCurrency || "USD"}</span>
         </div>
         <div className={styles.inlineActions}>
           <button
@@ -251,6 +313,7 @@ export default function SettingsAndExport() {
                     utmSources: sanitizedUtmSources,
                     utmMediumKeywords,
                     gmvMetric,
+                    primaryCurrency: settings.primaryCurrency,
                     tagging,
                     languages: [language, ...settings.languages.filter((l) => l !== language)],
                     timezones: [timezone, ...settings.timezones.filter((t) => t !== timezone)],
@@ -264,6 +327,9 @@ export default function SettingsAndExport() {
           >
             补拉最近 90 天订单
           </button>
+        </div>
+        <div className={styles.alert}>
+          当前版本针对单次 Backfill 做了保护：最多回拉 90 天 / 1000 笔订单。日订单量较大的店铺请拆分时间窗口分批回填，避免 webhook 漏数。
         </div>
       </div>
 
@@ -412,6 +478,7 @@ export default function SettingsAndExport() {
                           utmSources: sanitizedUtmSources,
                           utmMediumKeywords,
                           gmvMetric,
+                          primaryCurrency: settings.primaryCurrency,
                           tagging,
                           languages: [language, ...settings.languages.filter((l) => l !== language)],
                           timezones: [timezone, ...settings.timezones.filter((t) => t !== timezone)],
@@ -470,6 +537,10 @@ export default function SettingsAndExport() {
                   默认模拟模式避免误写；取消选中后才会真正写入订单/客户标签。
                 </div>
               </div>
+            </div>
+            <div className={styles.alert}>
+              启用后，本应用会修改订单 / 客户标签。若你依赖标签驱动自动化流程，请先在测试店验证。默认前缀：
+              {tagging.orderTagPrefix || "AI-Source"}-* / 客户标签 {tagging.customerTag || "AI-Customer"}，建议避免与现有标签冲突。
             </div>
             <label className={styles.stackField}>
               <span className={styles.fieldLabel}>订单标签前缀</span>

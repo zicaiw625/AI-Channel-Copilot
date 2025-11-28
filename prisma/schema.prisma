@@ -10,6 +10,7 @@ generator client {
 // See https://www.prisma.io/docs/orm/reference/prisma-schema-reference#string for more information
 datasource db {
   provider = "sqlite"
+  url      = env("DATABASE_URL")
 }
 
 model Session {
@@ -99,6 +100,7 @@ model OrderProduct {
 model ShopSettings {
   id                 Int      @id @default(autoincrement())
   shopDomain         String   @unique
+  primaryCurrency    String   @default("USD")
   aiDomains          Json
   utmSources         Json
   utmMediumKeywords  Json

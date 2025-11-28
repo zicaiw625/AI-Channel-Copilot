@@ -31,13 +31,9 @@ const fromAiEnum = (source: Prisma.AiSource | null): AIChannel | null => {
 };
 
 const ensureTables = () => {
-  const orderModel = (prisma as any).order;
-  const customerModel = (prisma as any).customer;
-  const productModel = (prisma as any).orderProduct;
-
-  if (!orderModel || !customerModel || !productModel) {
-    throw new Error("Order/Customer tables are not available. Run Prisma migrations.");
-  }
+  const orderModel = prisma.order;
+  const customerModel = prisma.customer;
+  const productModel = prisma.orderProduct;
 
   return { orderModel, customerModel, productModel };
 };
@@ -46,91 +42,99 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
   if (!shopDomain || !orders.length) return { created: 0, updated: 0 };
 
   try {
-    const { orderModel, customerModel, productModel } = ensureTables();
+    ensureTables();
     let created = 0;
     let updated = 0;
 
     for (const order of orders) {
       const aiSource = toAiEnum(order.aiSource);
+      const createdAt = new Date(order.createdAt);
 
-      const orderData: Prisma.OrderUpsertArgs["create"] = {
-        id: order.id,
-        shopDomain,
-        name: order.name,
-        createdAt: new Date(order.createdAt),
-        totalPrice: order.totalPrice,
-        subtotalPrice: order.subtotalPrice ?? order.totalPrice,
-        aiSource,
-        detection: order.detection,
-        referrer: order.referrer,
-        landingPage: order.landingPage,
-        utmSource: order.utmSource,
-        utmMedium: order.utmMedium,
-        sourceName: order.sourceName,
-        customerId: order.customerId || null,
-        isNewCustomer: order.isNewCustomer,
-        createdAtLocal: new Date(order.createdAt),
-      };
+      const result = await prisma.$transaction(async (tx) => {
+        const orderData: Prisma.OrderUpsertArgs["create"] = {
+          id: order.id,
+          shopDomain,
+          name: order.name,
+          createdAt,
+          totalPrice: order.totalPrice,
+          subtotalPrice: order.subtotalPrice ?? order.totalPrice,
+          aiSource,
+          detection: order.detection,
+          referrer: order.referrer,
+          landingPage: order.landingPage,
+          utmSource: order.utmSource,
+          utmMedium: order.utmMedium,
+          sourceName: order.sourceName,
+          customerId: order.customerId || null,
+          isNewCustomer: order.isNewCustomer,
+          createdAtLocal: createdAt,
+        };
 
-      const existingOrder = await orderModel.findUnique({ where: { id: order.id } });
+        const existingOrder = await tx.order.findUnique({ where: { id: order.id } });
 
-      await orderModel.upsert({
-        where: { id: order.id },
-        create: orderData,
-        update: orderData,
+        await tx.order.upsert({
+          where: { id: order.id },
+          create: orderData,
+          update: orderData,
+        });
+
+        await tx.orderProduct.deleteMany({ where: { orderId: order.id } });
+        if (order.products?.length) {
+          await tx.orderProduct.createMany({
+            data: order.products.map((line) => ({
+              orderId: order.id,
+              productId: line.id,
+              title: line.title,
+              handle: line.handle || null,
+              url: line.url || null,
+              price: line.price,
+              quantity: line.quantity,
+            })),
+          });
+        }
+
+        if (order.customerId) {
+          const existing = await tx.customer.findUnique({
+            where: { id: order.customerId },
+          });
+
+          const nextOrderCount = (existing?.orderCount ?? 0) + 1;
+          const nextTotal = (existing?.totalSpent ?? 0) + order.totalPrice;
+          const acquiredViaAi =
+            existing?.acquiredViaAi || Boolean(order.aiSource && order.isNewCustomer);
+          const firstAiOrderId = existing?.firstAiOrderId || (order.aiSource ? order.id : null);
+
+          await tx.customer.upsert({
+            where: { id: order.customerId },
+            create: {
+              id: order.customerId,
+              shopDomain,
+              firstOrderAt: createdAt,
+              lastOrderAt: createdAt,
+              orderCount: 1,
+              totalSpent: order.totalPrice,
+              acquiredViaAi,
+              firstAiOrderId,
+            },
+            update: {
+              shopDomain,
+              firstOrderAt: existing?.firstOrderAt || createdAt,
+              lastOrderAt: createdAt,
+              orderCount: nextOrderCount,
+              totalSpent: nextTotal,
+              acquiredViaAi,
+              firstAiOrderId,
+            },
+          });
+        }
+
+        return existingOrder ? "updated" : "created";
       });
 
-      created += existingOrder ? 0 : 1;
-      updated += existingOrder ? 1 : 0;
-
-      await productModel.deleteMany({ where: { orderId: order.id } });
-      if (order.products?.length) {
-        await productModel.createMany({
-          data: order.products.map((line) => ({
-            orderId: order.id,
-            productId: line.id,
-            title: line.title,
-            handle: line.handle || null,
-            url: line.url || null,
-            price: line.price,
-            quantity: line.quantity,
-          })),
-        });
-      }
-
-      if (order.customerId) {
-        const existing = await customerModel.findUnique({
-          where: { id: order.customerId },
-        });
-
-        const nextOrderCount = (existing?.orderCount ?? 0) + 1;
-        const nextTotal = (existing?.totalSpent ?? 0) + order.totalPrice;
-        const acquiredViaAi =
-          existing?.acquiredViaAi || Boolean(order.aiSource && order.isNewCustomer);
-        const firstAiOrderId = existing?.firstAiOrderId || (order.aiSource ? order.id : null);
-
-        await customerModel.upsert({
-          where: { id: order.customerId },
-          create: {
-            id: order.customerId,
-            shopDomain,
-            firstOrderAt: new Date(order.createdAt),
-            lastOrderAt: new Date(order.createdAt),
-            orderCount: 1,
-            totalSpent: order.totalPrice,
-            acquiredViaAi,
-            firstAiOrderId,
-          },
-          update: {
-            shopDomain,
-            firstOrderAt: existing?.firstOrderAt || new Date(order.createdAt),
-            lastOrderAt: new Date(order.createdAt),
-            orderCount: nextOrderCount,
-            totalSpent: nextTotal,
-            acquiredViaAi,
-            firstAiOrderId,
-          },
-        });
+      if (result === "created") {
+        created += 1;
+      } else {
+        updated += 1;
       }
     }
 

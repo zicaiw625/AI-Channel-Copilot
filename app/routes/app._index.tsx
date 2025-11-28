@@ -14,7 +14,7 @@ import {
   type TimeRangeKey,
 } from "../lib/aiData";
 import { fetchOrdersForRange } from "../lib/shopifyOrders.server";
-import { getSettings } from "../lib/settings.server";
+import { getSettings, syncShopPreferences } from "../lib/settings.server";
 import { loadOrdersFromDb, persistOrders } from "../lib/persistence.server";
 import { authenticate } from "../shopify.server";
 import styles from "./app.dashboard.module.css";
@@ -27,10 +27,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const to = url.searchParams.get("to");
 
   const shopDomain = session?.shop || "";
-  const settings = await getSettings(shopDomain);
-  const timeZone = settings.timezones[0] || "UTC";
+  let settings = await getSettings(shopDomain);
+  settings = await syncShopPreferences(admin, shopDomain, settings);
+  const displayTimezone = settings.timezones[0] || "UTC";
   const language = settings.languages[0] || "中文";
-  const dateRange = resolveDateRange(rangeParam, new Date(), from, to, timeZone);
+  const currency = settings.primaryCurrency || "USD";
+  const calculationTimezone = "UTC";
+  const dateRange = resolveDateRange(rangeParam, new Date(), from, to, calculationTimezone);
 
   let dataSource: "live" | "demo" | "stored" = "live";
   let orders = await loadOrdersFromDb(shopDomain, dateRange);
@@ -55,8 +58,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   const data =
     orders.length > 0
-      ? buildDashboardFromOrders(orders, dateRange, settings.gmvMetric, timeZone)
-      : buildDashboardData(dateRange, settings.gmvMetric, timeZone);
+      ? buildDashboardFromOrders(orders, dateRange, settings.gmvMetric, displayTimezone)
+      : buildDashboardData(dateRange, settings.gmvMetric, displayTimezone);
 
   return {
     range: dateRange.key,
@@ -68,7 +71,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     data,
     dataSource,
     gmvMetric: settings.gmvMetric,
-    timezone: timeZone,
+    currency,
+    calculationTimezone,
+    timezone: displayTimezone,
     language,
     pipeline: {
       lastOrdersWebhookAt: settings.lastOrdersWebhookAt || null,
@@ -82,13 +87,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   };
 };
 
-const fmtCurrency = (value: number) =>
-  new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 0,
-  }).format(value);
-
 const fmtNumber = (value: number) =>
   new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(value);
 
@@ -98,8 +96,18 @@ const fmtPercent = (value: number, fractionDigits = 1) =>
 type TrendScope = "overall" | "ai" | AIChannel;
 
 export default function Index() {
-  const { range, dateRange, data, dataSource, gmvMetric, timezone, language, pipeline } =
-    useLoaderData<typeof loader>();
+  const {
+    range,
+    dateRange,
+    data,
+    dataSource,
+    gmvMetric,
+    currency,
+    calculationTimezone,
+    timezone,
+    language,
+    pipeline,
+  } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
   const location = useLocation();
   const [metricView, setMetricView] = useState<"gmv" | "orders" | "newCustomers">("gmv");
@@ -112,6 +120,15 @@ export default function Index() {
     (dateRange.toParam as string | undefined) || dateRange.end.slice(0, 10),
   );
   const locale = language === "English" ? "en-US" : "zh-CN";
+  const fmtCurrency = useCallback(
+    (value: number) =>
+      new Intl.NumberFormat(locale, {
+        style: "currency",
+        currency: currency || "USD",
+        maximumFractionDigits: 0,
+      }).format(value),
+    [currency, locale],
+  );
   const timeFormatter = useMemo(
     () =>
       new Intl.DateTimeFormat(locale, {
@@ -232,8 +249,11 @@ export default function Index() {
                   : dataSource === "stored"
                     ? "已缓存的店铺订单"
                     : "Demo 样例（未检索到 AI 订单）"}
+                （live=实时 API，stored=本地缓存，demo=演示数据）
               </span>
-              <span>展示时区：{timezone}</span>
+              <span>
+                计算时区：{calculationTimezone} · 展示时区：{timezone} · 货币：{currency}
+              </span>
             </div>
             <div className={styles.pipelineRow}>
               <span>Webhook：{fmtTime(pipeline.lastOrdersWebhookAt)}</span>
@@ -259,7 +279,7 @@ export default function Index() {
             {dataSource === "demo" && (
               <div className={styles.callout}>
                 <span>提示</span>
-                未在所选时间范围内识别到 AI 渠道订单，当前展示 Demo 样例。请检查时间范围、referrer/UTM 规则或延长观测时间。
+                当前店铺暂无可识别的 AI 渠道订单，以下为演示数据。可检查时间范围、referrer/UTM 规则，或延长观测窗口后再试。
               </div>
             )}
             </div>

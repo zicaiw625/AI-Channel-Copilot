@@ -5,11 +5,25 @@ import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 const tableMissing = (error: unknown) =>
   error instanceof PrismaClientKnownRequestError && error.code === "P2021";
 
+type AdminGraphqlClient = {
+  graphql: (query: string, options: { variables?: Record<string, unknown> }) => Promise<Response>;
+};
+
+const SHOP_PREFS_QUERY = `#graphql
+  query ShopPreferencesForAiCopilot {
+    shop {
+      currencyCode
+      ianaTimezone
+    }
+  }
+`;
+
 const mapRecordToSettings = (record: {
   aiDomains: unknown;
   utmSources: unknown;
   utmMediumKeywords: unknown;
   gmvMetric: string;
+  primaryCurrency?: string | null;
   orderTagPrefix: string;
   customerTag: string;
   writeOrderTags: boolean;
@@ -28,6 +42,7 @@ const mapRecordToSettings = (record: {
     (record.utmMediumKeywords as string[]) || defaultSettings.utmMediumKeywords,
   gmvMetric:
     record.gmvMetric === "subtotal_price" ? "subtotal_price" : "current_total_price",
+  primaryCurrency: record.primaryCurrency || defaultSettings.primaryCurrency,
   tagging: {
     orderTagPrefix: record.orderTagPrefix,
     customerTag: record.customerTag,
@@ -48,11 +63,8 @@ const mapRecordToSettings = (record: {
 export const getSettings = async (shopDomain: string): Promise<SettingsDefaults> => {
   if (!shopDomain) return defaultSettings;
 
-  const shopSettings = (prisma as any).shopSettings;
-  if (!shopSettings) return defaultSettings;
-
   try {
-    const record = await shopSettings.findUnique({ where: { shopDomain } });
+    const record = await prisma.shopSettings.findUnique({ where: { shopDomain } });
     if (!record) return defaultSettings;
     return mapRecordToSettings(record);
   } catch (error) {
@@ -63,21 +75,73 @@ export const getSettings = async (shopDomain: string): Promise<SettingsDefaults>
   }
 };
 
+export const syncShopPreferences = async (
+  admin: AdminGraphqlClient | null,
+  shopDomain: string,
+  settings: SettingsDefaults,
+): Promise<SettingsDefaults> => {
+  if (!admin || !shopDomain) return settings;
+
+  try {
+    const response = await admin.graphql(SHOP_PREFS_QUERY, { variables: {} });
+    if (!response.ok) return settings;
+
+    const json = (await response.json()) as {
+      data?: { shop?: { currencyCode?: string | null; ianaTimezone?: string | null } };
+    };
+
+    const currency = json.data?.shop?.currencyCode || undefined;
+    const timezone = json.data?.shop?.ianaTimezone || undefined;
+
+    let next = settings;
+    let changed = false;
+
+    if (currency && currency !== settings.primaryCurrency) {
+      next = { ...next, primaryCurrency: currency };
+      changed = true;
+    }
+
+    if (
+      timezone &&
+      settings.timezones &&
+      settings.timezones.length &&
+      settings.timezones[0] === defaultSettings.timezones[0]
+    ) {
+      next = {
+        ...next,
+        timezones: [timezone, ...settings.timezones.filter((value) => value !== timezone)],
+      };
+      changed = true;
+    }
+
+    if (changed) {
+      await saveSettings(shopDomain, next);
+      return next;
+    }
+  } catch (error) {
+    console.error("Failed to sync shop preferences", {
+      shop: shopDomain,
+      message: (error as Error).message,
+    });
+  }
+
+  return settings;
+};
+
 export const saveSettings = async (
   shopDomain: string,
   payload: SettingsDefaults,
 ): Promise<SettingsDefaults> => {
   if (!shopDomain) return payload;
 
-  const shopSettings = (prisma as any).shopSettings;
-  if (!shopSettings) return payload;
-
   try {
+    const primaryCurrency = payload.primaryCurrency || defaultSettings.primaryCurrency || "USD";
     const baseData = {
       aiDomains: payload.aiDomains,
       utmSources: payload.utmSources,
       utmMediumKeywords: payload.utmMediumKeywords,
       gmvMetric: payload.gmvMetric,
+      primaryCurrency,
       orderTagPrefix: payload.tagging.orderTagPrefix,
       customerTag: payload.tagging.customerTag,
       writeOrderTags: payload.tagging.writeOrderTags,
@@ -103,9 +167,9 @@ export const saveSettings = async (
     if (payload.lastOrdersWebhookAt) {
       updateOptionals.lastOrdersWebhookAt = new Date(payload.lastOrdersWebhookAt);
     }
-    if (payload.pipelineStatuses) updateOptionals.pipelineStatuses = payload.pipelineStatuses;
+      if (payload.pipelineStatuses) updateOptionals.pipelineStatuses = payload.pipelineStatuses;
 
-    await shopSettings.upsert({
+    await prisma.shopSettings.upsert({
       where: { shopDomain },
       create: { shopDomain, ...withOptionalsCreate },
       update: { ...baseData, ...updateOptionals },
@@ -129,11 +193,9 @@ export const markActivity = async (
   }>,
 ) => {
   if (!shopDomain) return;
-  const shopSettings = (prisma as any).shopSettings;
-  if (!shopSettings) return;
 
   try {
-    await shopSettings.update({
+    await prisma.shopSettings.update({
       where: { shopDomain },
       data: {
         ...(updates.lastOrdersWebhookAt ? { lastOrdersWebhookAt: updates.lastOrdersWebhookAt } : {}),
@@ -149,13 +211,25 @@ export const markActivity = async (
   }
 };
 
+export const updatePipelineStatuses = async (
+  shopDomain: string,
+  updater: (statuses: PipelineStatus[]) => PipelineStatus[],
+) => {
+  if (!shopDomain) return;
+  const current = await getSettings(shopDomain);
+  const next = updater(
+    current.pipelineStatuses && current.pipelineStatuses.length
+      ? current.pipelineStatuses
+      : defaultSettings.pipelineStatuses,
+  );
+  await markActivity(shopDomain, { pipelineStatuses: next });
+};
+
 export const deleteSettings = async (shopDomain: string) => {
   if (!shopDomain) return;
-  const shopSettings = (prisma as any).shopSettings;
-  if (!shopSettings) return;
 
   try {
-    await shopSettings.delete({ where: { shopDomain } });
+    await prisma.shopSettings.delete({ where: { shopDomain } });
   } catch (error) {
     if (!tableMissing(error)) {
       throw error;
@@ -181,6 +255,10 @@ export const normalizeSettingsPayload = (incoming: unknown): SettingsDefaults =>
       : defaultSettings.utmMediumKeywords,
     gmvMetric:
       parsed.gmvMetric === "subtotal_price" ? "subtotal_price" : defaultSettings.gmvMetric,
+    primaryCurrency:
+      typeof parsed.primaryCurrency === "string" && parsed.primaryCurrency
+        ? parsed.primaryCurrency
+        : defaultSettings.primaryCurrency,
     tagging: {
       orderTagPrefix:
         parsed.tagging?.orderTagPrefix || defaultSettings.tagging.orderTagPrefix,

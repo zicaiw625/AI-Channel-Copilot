@@ -123,6 +123,10 @@ type AdminGraphqlClient = {
   graphql: (query: string, options: { variables?: Record<string, unknown> }) => Promise<Response>;
 };
 
+const MAX_BACKFILL_PAGES = 20;
+const MAX_BACKFILL_ORDERS = 1000;
+const MAX_BACKFILL_DAYS = 90;
+
 const fetchOrdersPage = async (
   admin: AdminGraphqlClient,
   query: string,
@@ -153,7 +157,11 @@ export const fetchOrdersForRange = async (
   range: DateRange,
   settings: SettingsDefaults = defaultSettings,
 ): Promise<{ orders: OrderRecord[]; start: Date; end: Date }> => {
-  const search = `created_at:>=${range.start.toISOString()} created_at:<=${range.end.toISOString()}`;
+  const lowerBound = new Date();
+  lowerBound.setUTCDate(lowerBound.getUTCDate() - MAX_BACKFILL_DAYS);
+  lowerBound.setUTCHours(0, 0, 0, 0);
+  const effectiveStart = range.start < lowerBound ? lowerBound : range.start;
+  const search = `created_at:>=${effectiveStart.toISOString()} created_at:<=${range.end.toISOString()}`;
   const records: OrderRecord[] = [];
 
   let after: string | undefined;
@@ -170,13 +178,13 @@ export const fetchOrdersForRange = async (
 
     after = page.pageInfo.hasNextPage ? page.pageInfo.endCursor || undefined : undefined;
     guard += 1;
-    if (guard > 20) {
+    if (guard >= MAX_BACKFILL_PAGES || records.length >= MAX_BACKFILL_ORDERS) {
       // Avoid runaway pagination in extreme cases.
       break;
     }
   } while (after);
 
-  return { orders: records, start: range.start, end: range.end };
+  return { orders: records, start: effectiveStart, end: range.end };
 };
 
 export const fetchOrderById = async (

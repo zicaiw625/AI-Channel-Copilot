@@ -30,9 +30,9 @@ export const handleOrderWebhook = async (request: Request, expectedTopic: string
   let shopDomain = "";
 
   try {
-    const { admin, shop, topic } = await authenticate.webhook(request);
+    const { admin, shop, topic, payload } = await authenticate.webhook(request);
     shopDomain = shop;
-    const payload = await request.json().catch(() => null);
+    const webhookPayload = (payload || {}) as Record<string, unknown>;
 
     console.log(`Received ${topic} webhook for ${shop}`);
 
@@ -42,8 +42,10 @@ export const handleOrderWebhook = async (request: Request, expectedTopic: string
     }
 
     const orderGid =
-      payload?.admin_graphql_api_id ||
-      (payload?.id ? `gid://shopify/Order/${payload.id}` : null);
+      (webhookPayload as any)?.admin_graphql_api_id ||
+      ((webhookPayload as any)?.id
+        ? `gid://shopify/Order/${(webhookPayload as any).id}`
+        : null);
 
     if (!orderGid) {
       await setWebhookStatus(shop, "warning", "Missing order id in webhook payload");

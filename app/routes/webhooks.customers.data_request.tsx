@@ -9,15 +9,18 @@ const jsonResponse = (payload: Record<string, unknown>) =>
   });
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { shop, topic } = await authenticate.webhook(request);
-  const payload = await request.json().catch(() => null);
-
-  console.log(`Received ${topic} webhook for ${shop}`);
-
-  if (!shop) return jsonResponse({ ok: true, message: "Missing shop domain" });
+  let shop = "";
 
   try {
-    const { customerIds, customerEmail } = extractGdprIdentifiers(payload);
+    const { shop: webhookShop, topic, payload } = await authenticate.webhook(request);
+    shop = webhookShop;
+    const webhookPayload = (payload || {}) as Record<string, unknown>;
+
+    console.log(`Received ${topic} webhook for ${shop}`);
+
+    if (!shop) return jsonResponse({ ok: true, message: "Missing shop domain" });
+
+    const { customerIds, customerEmail } = extractGdprIdentifiers(webhookPayload);
     const footprint = await describeCustomerFootprint(shop, customerIds);
     if (!footprint.hasData) {
       return jsonResponse({

@@ -32,7 +32,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const displayTimezone = settings.timezones[0] || "UTC";
   const language = settings.languages[0] || "中文";
   const currency = settings.primaryCurrency || "USD";
-  const calculationTimezone = "UTC";
+  const calculationTimezone = displayTimezone || "UTC";
   const dateRange = resolveDateRange(rangeParam, new Date(), from, to, calculationTimezone);
 
   let dataSource: "live" | "demo" | "stored" = "live";
@@ -240,7 +240,7 @@ export default function Index() {
               <span>同步时间：{timeFormatter.format(new Date(overview.lastSyncedAt))}</span>
               <span>区间：{dateRange.label}</span>
               <span>
-                数据口径：订单 {gmvMetric} · 新客=首单客户 · GMV 仅基于订单字段
+                数据口径：订单 {gmvMetric} · 新客=首单客户（仅限当前时间范围） · GMV 仅基于订单字段
               </span>
               <span>
                 数据源：

@@ -135,6 +135,23 @@ When you're ready to set up your app in production, you can follow [our deployme
 
 When you reach the step for [setting up environment variables](https://shopify.dev/docs/apps/deployment/web#set-env-vars), you also need to set the variable `NODE_ENV=production`.
 
+## Local development (project-specific)
+
+The template commands above still work, but this repo adds Prisma models and GDPR webhooks. To run locally:
+
+1. Install dependencies: `npm install`
+2. Ensure required environment variables are set: `SHOPIFY_API_KEY`, `SHOPIFY_API_SECRET`, `SCOPES`, `SHOPIFY_APP_URL`, and `DATABASE_URL`.
+3. Prepare the database and generated client: `npm run setup` (runs `prisma generate` and `prisma migrate deploy`).
+4. Start the dev server (using the Shopify CLI tunnel and env helpers): `npm run dev`.
+
+## Deployment checklist
+
+- Database ready and `DATABASE_URL` points to the deployed instance; `npm run setup` succeeds in the target environment.
+- Shopify config uses API version `2024-07` in both `app/shopify.server.ts` and `shopify.app.toml`.
+- Webhooks registered and reachable: `app/uninstalled`, `customers/data_request`, `customers/redact`, `shop/redact`, `orders/create`, `orders/updated`.
+- GDPR flows verified: `customers/data_request` responds with stored records, and `customers/redact` / `shop/redact` purge Orders, OrderProducts, Customers, ShopSettings, and Sessions.
+- Critical env vars (`SHOPIFY_API_KEY`, `SHOPIFY_API_SECRET`, `SCOPES`, `SHOPIFY_APP_URL`, `DATABASE_URL`) are present in the hosting platform.
+
 ## Gotchas / Troubleshooting
 
 ### Database tables don't exist

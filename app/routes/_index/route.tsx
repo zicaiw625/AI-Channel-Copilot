@@ -20,37 +20,73 @@ export default function App() {
 
   return (
     <div className={styles.index}>
-      <div className={styles.content}>
-        <h1 className={styles.heading}>A short heading about [your app]</h1>
+      <div className={styles.hero}>
+        <div className={styles.badge}>AI Discovery & Attribution Copilot · v0.1</div>
+        <h1 className={styles.heading}>
+          发现被忽略的 AI 渠道 GMV，基于 Shopify 订单的保守归因
+        </h1>
         <p className={styles.text}>
-          A tagline about [your app] that describes your value proposition.
+          自动识别来自 ChatGPT / Perplexity / Gemini / Copilot 的订单，提供基础仪表盘、调试视图、规则配置与
+          CSV 导出，帮助中高阶 DTC 商家判断 AI 渠道是否值得投入。
         </p>
-        {showForm && (
-          <Form className={styles.form} method="post" action="/auth/login">
-            <label className={styles.label}>
-              <span>Shop domain</span>
-              <input className={styles.input} type="text" name="shop" />
-              <span>e.g: my-shop-domain.myshopify.com</span>
-            </label>
-            <button className={styles.button} type="submit">
-              Log in
-            </button>
-          </Form>
-        )}
-        <ul className={styles.list}>
-          <li>
-            <strong>Product feature</strong>. Some detail about your feature and
-            its benefit to your customer.
-          </li>
-          <li>
-            <strong>Product feature</strong>. Some detail about your feature and
-            its benefit to your customer.
-          </li>
-          <li>
-            <strong>Product feature</strong>. Some detail about your feature and
-            its benefit to your customer.
-          </li>
-        </ul>
+        <div className={styles.actions}>
+          {showForm && (
+            <Form className={styles.form} method="post" action="/auth/login">
+              <label className={styles.label}>
+                <span>Shop domain</span>
+                <input
+                  className={styles.input}
+                  type="text"
+                  name="shop"
+                  placeholder="your-store.myshopify.com"
+                />
+              </label>
+              <button className={styles.button} type="submit">
+                登录 Shopify 店铺
+              </button>
+            </Form>
+          )}
+          <div className={styles.chips}>
+            <span>Referrer + UTM 保守识别</span>
+            <span>AI 渠道 GMV / 订单 / 新客</span>
+            <span>Top Products from AI Channels</span>
+            <span>标签写回 & CSV 导出</span>
+          </div>
+        </div>
+      </div>
+
+      <div className={styles.panel}>
+        <div className={styles.panelSection}>
+          <h3>v0.1 功能覆盖</h3>
+          <ul>
+            <li>数据接入：Shopify Admin API + orders/create webhook + 90 天补拉。</li>
+            <li>AI 渠道识别：预置 ChatGPT / Perplexity / Gemini / Copilot 域名 & UTM。</li>
+            <li>基础仪表盘：GMV、订单、新客、AOV、复购，对比 AI vs Overall。</li>
+            <li>调试视图：最近订单的 referrer / UTM / 解析结果，便于核验规则。</li>
+            <li>设置 & 导出：域名/UTM 规则、标签写回、语言时区、订单/产品 CSV。</li>
+          </ul>
+        </div>
+        <div className={styles.panelSection}>
+          <h3>适合谁？</h3>
+          <p>
+            年 GMV 20万-500万美金的 DTC 品牌主 / 增长负责人 / 数据分析师，希望量化 AI 助手带来的真实 GMV 与
+            客单表现。
+          </p>
+          <div className={styles.statsRow}>
+            <div>
+              <div className={styles.statLabel}>AI 新客占比</div>
+              <div className={styles.statValue}>30-45%</div>
+            </div>
+            <div>
+              <div className={styles.statLabel}>AI AOV 对比</div>
+              <div className={styles.statValue}>+15-30%</div>
+            </div>
+            <div>
+              <div className={styles.statLabel}>识别口径</div>
+              <div className={styles.statValue}>保守估计</div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

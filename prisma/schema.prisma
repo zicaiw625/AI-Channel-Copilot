@@ -10,7 +10,6 @@ generator client {
 // See https://www.prisma.io/docs/orm/reference/prisma-schema-reference#string for more information
 datasource db {
   provider = "sqlite"
-  url      = "file:dev.sqlite"
 }
 
 model Session {
@@ -29,4 +28,92 @@ model Session {
   locale        String?
   collaborator  Boolean?  @default(false)
   emailVerified Boolean?  @default(false)
+}
+
+enum AiSource {
+  ChatGPT
+  Perplexity
+  Gemini
+  Copilot
+  Other_AI
+}
+
+model Customer {
+  id               String   @id
+  shopDomain       String
+  acquiredViaAi    Boolean  @default(false)
+  firstOrderAt     DateTime?
+  lastOrderAt      DateTime?
+  orderCount       Int      @default(0)
+  totalSpent       Float    @default(0)
+  firstAiOrderId   String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  orders           Order[]
+
+  @@index([shopDomain])
+}
+
+model Order {
+  id              String    @id
+  shopDomain      String
+  name            String
+  createdAt       DateTime
+  totalPrice      Float
+  subtotalPrice   Float?
+  aiSource        AiSource?
+  detection       String?
+  referrer        String?
+  landingPage     String?
+  utmSource       String?
+  utmMedium       String?
+  sourceName      String?
+  customerId      String?
+  isNewCustomer   Boolean   @default(false)
+  products        OrderProduct[]
+  createdAtLocal  DateTime?
+  updatedAt       DateTime  @updatedAt
+
+  customer        Customer? @relation(fields: [customerId], references: [id])
+
+  @@index([shopDomain, createdAt])
+  @@index([shopDomain, aiSource])
+}
+
+model OrderProduct {
+  id         Int     @id @default(autoincrement())
+  orderId    String
+  productId  String
+  title      String
+  handle     String?
+  url        String?
+  price      Float
+  quantity   Int
+
+  order      Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([productId])
+}
+
+model ShopSettings {
+  id                 Int      @id @default(autoincrement())
+  shopDomain         String   @unique
+  aiDomains          Json
+  utmSources         Json
+  utmMediumKeywords  Json
+  orderTagPrefix     String
+  customerTag        String
+  writeOrderTags     Boolean  @default(false)
+  writeCustomerTags  Boolean  @default(false)
+  taggingDryRun      Boolean  @default(true)
+  language           String   @default("中文")
+  timezone           String   @default("UTC")
+  gmvMetric          String   @default("current_total_price")
+  pipelineStatuses   Json?
+  lastOrdersWebhookAt DateTime?
+  lastBackfillAt     DateTime?
+  lastTaggingAt      DateTime?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 }

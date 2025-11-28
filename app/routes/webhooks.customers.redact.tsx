@@ -3,15 +3,18 @@ import { authenticate } from "../shopify.server";
 import { extractGdprIdentifiers, redactCustomerRecords } from "../lib/gdpr.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { shop, topic } = await authenticate.webhook(request);
-  const payload = await request.json().catch(() => null);
-
-  console.log(`Received ${topic} webhook for ${shop}`);
-
-  if (!shop) return new Response();
+  let shop = "";
 
   try {
-    const { customerIds, orderIds, customerEmail } = extractGdprIdentifiers(payload);
+    const { shop: webhookShop, topic, payload } = await authenticate.webhook(request);
+    shop = webhookShop;
+    const webhookPayload = (payload || {}) as Record<string, unknown>;
+
+    console.log(`Received ${topic} webhook for ${shop}`);
+
+    if (!shop) return new Response();
+
+    const { customerIds, orderIds, customerEmail } = extractGdprIdentifiers(webhookPayload);
     if (!customerIds.length && !orderIds.length && customerEmail) {
       console.log("customers/redact received email only; no persisted customer ids to delete");
     }

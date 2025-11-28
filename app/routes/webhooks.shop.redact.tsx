@@ -3,19 +3,22 @@ import { authenticate } from "../shopify.server";
 import { wipeShopData } from "../lib/gdpr.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { shop, topic } = await authenticate.webhook(request);
-  const payload = await request.json().catch(() => null);
-
-  console.log(`Received ${topic} webhook for ${shop}`);
-
-  const shopDomain = (payload as any)?.shop_domain || shop;
-  if (!shopDomain) return new Response();
+  let shop = "";
 
   try {
+    const { shop: webhookShop, topic, payload } = await authenticate.webhook(request);
+    shop = webhookShop;
+    const webhookPayload = (payload || {}) as Record<string, unknown>;
+
+    console.log(`Received ${topic} webhook for ${shop}`);
+
+    const shopDomain = (webhookPayload as any)?.shop_domain || shop;
+    if (!shopDomain) return new Response();
+
     await wipeShopData(shopDomain);
   } catch (error) {
     console.error("shop/redact failed", {
-      shop: shopDomain,
+      shop: shop || (error as any)?.shop_domain,
       message: (error as Error).message,
     });
   }

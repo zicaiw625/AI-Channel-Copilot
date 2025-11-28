@@ -79,7 +79,15 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       throw new Error("Missing settings payload");
     }
 
-    const normalized = normalizeSettingsPayload(incoming.toString());
+    let normalized;
+    try {
+      normalized = normalizeSettingsPayload(incoming.toString());
+    } catch (parseError) {
+      return json(
+        { ok: false, message: "设置格式无效，请刷新后重试" },
+        { status: 400 },
+      );
+    }
     const existing = await getSettings(shopDomain);
     const merged = {
       ...existing,
@@ -272,7 +280,9 @@ export default function SettingsAndExport() {
               : "设置已保存";
         shopify.toast.show?.(message);
       } else {
-        shopify.toast.show?.("保存失败，请检查配置或稍后重试");
+        shopify.toast.show?.(
+          fetcher.data.message || "保存失败，请检查配置或稍后重试",
+        );
         if (import.meta.env.DEV && fetcher.data.message) {
           // eslint-disable-next-line no-console
           console.error("Save settings failed", fetcher.data.message);

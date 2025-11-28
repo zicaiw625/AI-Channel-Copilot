@@ -32,11 +32,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const displayTimezone = settings.timezones[0] || "UTC";
   const language = settings.languages[0] || "中文";
   const currency = settings.primaryCurrency || "USD";
-  const calculationTimezone = "UTC";
+  const calculationTimezone = displayTimezone || "UTC";
   const dateRange = resolveDateRange(rangeParam, new Date(), from, to, calculationTimezone);
 
   let dataSource: "live" | "demo" | "stored" = "live";
   let orders = await loadOrdersFromDb(shopDomain, dateRange);
+  let clamped = false;
 
   if (orders.length > 0) {
     dataSource = "stored";
@@ -44,6 +45,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     try {
       const fetched = await fetchOrdersForRange(admin, dateRange, settings);
       orders = fetched.orders;
+      clamped = fetched.clamped;
       if (orders.length > 0) {
         await persistOrders(shopDomain, orders);
         dataSource = "live";
@@ -84,6 +86,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           ? settings.pipelineStatuses
           : defaultSettings.pipelineStatuses,
     },
+    clamped,
   };
 };
 
@@ -107,6 +110,7 @@ export default function Index() {
     timezone,
     language,
     pipeline,
+    clamped,
   } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
   const location = useLocation();
@@ -240,7 +244,7 @@ export default function Index() {
               <span>同步时间：{timeFormatter.format(new Date(overview.lastSyncedAt))}</span>
               <span>区间：{dateRange.label}</span>
               <span>
-                数据口径：订单 {gmvMetric} · 新客=首单客户 · GMV 仅基于订单字段
+                数据口径：订单 {gmvMetric} · 新客=首单客户（仅限当前时间范围） · GMV 仅基于订单字段
               </span>
               <span>
                 数据源：
@@ -251,6 +255,11 @@ export default function Index() {
                     : "Demo 样例（未检索到 AI 订单）"}
                 （live=实时 API，stored=本地缓存，demo=演示数据）
               </span>
+              {clamped && (
+                <span>
+                  提示：已自动截断为最近 90 天内的订单，避免超长时间窗口导致补拉过慢。
+                </span>
+              )}
               <span>
                 计算时区：{calculationTimezone} · 展示时区：{timezone} · 货币：{currency}
               </span>

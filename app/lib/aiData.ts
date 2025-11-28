@@ -193,6 +193,28 @@ const formatDateOnly = (date: Date, timeZone?: string) =>
     day: "2-digit",
   }).format(date);
 
+const toZonedDate = (date: Date, timeZone?: string) => {
+  if (!timeZone) return new Date(date);
+
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    Number(parts.find((part) => part.type === type)?.value || 0);
+
+  return new Date(
+    Date.UTC(get("year"), get("month") - 1, get("day"), get("hour"), get("minute"), get("second")),
+  );
+};
+
 const parseDateInput = (value?: string | null) => {
   if (!value) return null;
   const parsed = new Date(value);
@@ -200,14 +222,14 @@ const parseDateInput = (value?: string | null) => {
   return parsed;
 };
 
-const startOfUtcDay = (date: Date) => {
-  const copy = new Date(date);
+const startOfDay = (date: Date, timeZone?: string) => {
+  const copy = toZonedDate(date, timeZone);
   copy.setUTCHours(0, 0, 0, 0);
   return copy;
 };
 
-const endOfUtcDay = (date: Date) => {
-  const copy = new Date(date);
+const endOfDay = (date: Date, timeZone?: string) => {
+  const copy = toZonedDate(date, timeZone);
   copy.setUTCHours(23, 59, 59, 999);
   return copy;
 };
@@ -228,8 +250,8 @@ export const resolveDateRange = (
     if (start && end) {
       const [rangeStart, rangeEnd] =
         start.getTime() <= end.getTime() ? [start, end] : [end, start];
-      const normalizedStart = startOfUtcDay(rangeStart);
-      const normalizedEnd = endOfUtcDay(rangeEnd);
+      const normalizedStart = startOfDay(rangeStart, timeZone);
+      const normalizedEnd = endOfDay(rangeEnd, timeZone);
       const days = Math.max(
         1,
         Math.round((normalizedEnd.getTime() - normalizedStart.getTime()) / 86_400_000) + 1,
@@ -247,8 +269,8 @@ export const resolveDateRange = (
   }
 
   const preset = timeRanges[baseKey === "custom" ? DEFAULT_RANGE_KEY : baseKey] || timeRanges[DEFAULT_RANGE_KEY];
-  const end = endOfUtcDay(nowDate);
-  const start = startOfUtcDay(end);
+  const end = endOfDay(nowDate, timeZone);
+  const start = startOfDay(end, timeZone);
   start.setUTCDate(start.getUTCDate() - (preset.days - 1));
 
   return {
@@ -1142,7 +1164,7 @@ const formatDateLabel = (date: Date, bucket: TrendBucket, timeZone?: string) => 
   }
 
   if (bucket === "week") {
-    const startOfWeek = startOfUtcDay(date);
+    const startOfWeek = startOfDay(date, timeZone);
     const day = startOfWeek.getUTCDay();
     const diff = (day + 6) % 7;
     startOfWeek.setUTCDate(startOfWeek.getUTCDate() - diff);
@@ -1272,7 +1294,7 @@ const buildTrend = (
   >();
 
   ordersInRange.forEach((order) => {
-    const bucketStart = startOfUtcDay(new Date(order.createdAt));
+    const bucketStart = startOfDay(new Date(order.createdAt), timeZone);
 
     if (bucket === "week") {
       const day = bucketStart.getUTCDay();

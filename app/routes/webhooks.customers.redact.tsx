@@ -24,6 +24,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       shop,
       message: (error as Error).message,
     });
+
+    return new Response(undefined, { status: 202 });
   }
 
   return new Response();

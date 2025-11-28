@@ -156,11 +156,12 @@ export const fetchOrdersForRange = async (
   admin: AdminGraphqlClient,
   range: DateRange,
   settings: SettingsDefaults = defaultSettings,
-): Promise<{ orders: OrderRecord[]; start: Date; end: Date }> => {
+): Promise<{ orders: OrderRecord[]; start: Date; end: Date; clamped: boolean }> => {
   const lowerBound = new Date();
   lowerBound.setUTCDate(lowerBound.getUTCDate() - MAX_BACKFILL_DAYS);
   lowerBound.setUTCHours(0, 0, 0, 0);
   const effectiveStart = range.start < lowerBound ? lowerBound : range.start;
+  const clamped = range.start < lowerBound;
   const search = `created_at:>=${effectiveStart.toISOString()} created_at:<=${range.end.toISOString()}`;
   const records: OrderRecord[] = [];
 
@@ -184,7 +185,7 @@ export const fetchOrdersForRange = async (
     }
   } while (after);
 
-  return { orders: records, start: effectiveStart, end: range.end };
+  return { orders: records, start: effectiveStart, end: range.end, clamped };
 };
 
 export const fetchOrderById = async (

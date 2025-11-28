@@ -34,7 +34,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   let settings = await getSettings(shopDomain);
   settings = await syncShopPreferences(admin, shopDomain, settings);
   const displayTimezone = settings.timezones[0] || "UTC";
-  const calculationTimezone = "UTC";
+  const calculationTimezone = displayTimezone || "UTC";
   const exportRange = (url.searchParams.get("range") as TimeRangeKey) || "90d";
   const range: DateRange = resolveDateRange(
     exportRange,
@@ -45,11 +45,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   );
 
   let orders = await loadOrdersFromDb(shopDomain, range);
+  let clamped = false;
 
   if (orders.length === 0) {
     try {
       const fetched = await fetchOrdersForRange(admin, range, settings);
       orders = fetched.orders;
+      clamped = fetched.clamped;
       if (orders.length > 0) {
         await persistOrders(shopDomain, orders);
       }
@@ -62,7 +64,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     ? buildDashboardFromOrders(orders, range, settings.gmvMetric, displayTimezone).exports
     : buildDashboardData(range, settings.gmvMetric, displayTimezone).exports;
 
-  return { settings, exports, exportRange };
+  return { settings, exports, exportRange, clamped };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -94,7 +96,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     };
 
     await saveSettings(shopDomain, merged);
-    const calculationTimezone = "UTC";
+    const calculationTimezone = merged.timezones[0] || "UTC";
     const range: DateRange = resolveDateRange(
       "90d",
       new Date(),
@@ -139,7 +141,7 @@ const isValidDomain = (value: string) => /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(value.
 const isValidUtmSource = (value: string) => /^[a-z0-9_-]+$/i.test(value.trim());
 
 export default function SettingsAndExport() {
-  const { settings, exports, exportRange } = useLoaderData<typeof loader>();
+  const { settings, exports, exportRange, clamped } = useLoaderData<typeof loader>();
   const shopify = useAppBridge();
   const fetcher = useFetcher<typeof action>();
   const navigate = useNavigate();
@@ -300,6 +302,7 @@ export default function SettingsAndExport() {
           <span>最近补拉：{settings.lastBackfillAt ? new Date(settings.lastBackfillAt).toLocaleString() : "暂无"}</span>
           <span>最近标签写回：{settings.lastTaggingAt ? new Date(settings.lastTaggingAt).toLocaleString() : "暂无 / 模拟"}</span>
           <span>店铺货币：{settings.primaryCurrency || "USD"}</span>
+          {clamped && <span>提示：导出/补拉已限制为最近 90 天内的订单窗口。</span>}
         </div>
         <div className={styles.inlineActions}>
           <button

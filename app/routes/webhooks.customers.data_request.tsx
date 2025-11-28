@@ -1,6 +1,10 @@
 import type { ActionFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
-import { describeCustomerFootprint, extractGdprIdentifiers } from "../lib/gdpr.server";
+import {
+  collectCustomerData,
+  describeCustomerFootprint,
+  extractGdprIdentifiers,
+} from "../lib/gdpr.server";
 
 const jsonResponse = (payload: Record<string, unknown>) =>
   new Response(JSON.stringify(payload), {
@@ -20,7 +24,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     if (!shop) return jsonResponse({ ok: true, message: "Missing shop domain" });
 
-    const { customerIds, customerEmail } = extractGdprIdentifiers(webhookPayload);
+    const { customerIds, customerEmail, orderIds } = extractGdprIdentifiers(webhookPayload);
     const footprint = await describeCustomerFootprint(shop, customerIds);
     if (!footprint.hasData) {
       return jsonResponse({
@@ -31,9 +35,19 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       });
     }
 
+    const exportData = await collectCustomerData(shop, customerIds, orderIds);
+
     return jsonResponse({
       ok: true,
       message: `Stored ${footprint.orders} orders / ${footprint.customers} customer rows linked to this customer. No personal data beyond Shopify IDs, referrers, and landing pages is persisted.`,
+      export: {
+        generatedAt: new Date().toISOString(),
+        shop,
+        customerEmail,
+        customerIds,
+        orders: exportData.orders,
+        customers: exportData.customers,
+      },
     });
   } catch (error) {
     console.error("customers/data_request failed", {

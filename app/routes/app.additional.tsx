@@ -34,7 +34,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   let settings = await getSettings(shopDomain);
   settings = await syncShopPreferences(admin, shopDomain, settings);
   const displayTimezone = settings.timezones[0] || "UTC";
-  const calculationTimezone = "UTC";
+  const calculationTimezone = displayTimezone || "UTC";
   const exportRange = (url.searchParams.get("range") as TimeRangeKey) || "90d";
   const range: DateRange = resolveDateRange(
     exportRange,
@@ -94,7 +94,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     };
 
     await saveSettings(shopDomain, merged);
-    const calculationTimezone = "UTC";
+    const calculationTimezone = merged.timezones[0] || "UTC";
     const range: DateRange = resolveDateRange(
       "90d",
       new Date(),

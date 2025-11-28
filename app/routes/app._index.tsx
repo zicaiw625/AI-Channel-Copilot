@@ -32,7 +32,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const displayTimezone = settings.timezones[0] || "UTC";
   const language = settings.languages[0] || "中文";
   const currency = settings.primaryCurrency || "USD";
-  const calculationTimezone = "UTC";
+  const calculationTimezone = displayTimezone || "UTC";
   const dateRange = resolveDateRange(rangeParam, new Date(), from, to, calculationTimezone);
 
   let dataSource: "live" | "demo" | "stored" = "live";

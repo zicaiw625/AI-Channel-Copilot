@@ -37,6 +37,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   let dataSource: "live" | "demo" | "stored" = "live";
   let orders = await loadOrdersFromDb(shopDomain, dateRange);
+  let clamped = false;
 
   if (orders.length > 0) {
     dataSource = "stored";
@@ -44,6 +45,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     try {
       const fetched = await fetchOrdersForRange(admin, dateRange, settings);
       orders = fetched.orders;
+      clamped = fetched.clamped;
       if (orders.length > 0) {
         await persistOrders(shopDomain, orders);
         dataSource = "live";
@@ -84,6 +86,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           ? settings.pipelineStatuses
           : defaultSettings.pipelineStatuses,
     },
+    clamped,
   };
 };
 
@@ -107,6 +110,7 @@ export default function Index() {
     timezone,
     language,
     pipeline,
+    clamped,
   } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
   const location = useLocation();
@@ -251,6 +255,11 @@ export default function Index() {
                     : "Demo 样例（未检索到 AI 订单）"}
                 （live=实时 API，stored=本地缓存，demo=演示数据）
               </span>
+              {clamped && (
+                <span>
+                  提示：已自动截断为最近 90 天内的订单，避免超长时间窗口导致补拉过慢。
+                </span>
+              )}
               <span>
                 计算时区：{calculationTimezone} · 展示时区：{timezone} · 货币：{currency}
               </span>

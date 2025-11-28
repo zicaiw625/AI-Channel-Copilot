@@ -45,11 +45,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   );
 
   let orders = await loadOrdersFromDb(shopDomain, range);
+  let clamped = false;
 
   if (orders.length === 0) {
     try {
       const fetched = await fetchOrdersForRange(admin, range, settings);
       orders = fetched.orders;
+      clamped = fetched.clamped;
       if (orders.length > 0) {
         await persistOrders(shopDomain, orders);
       }
@@ -62,7 +64,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     ? buildDashboardFromOrders(orders, range, settings.gmvMetric, displayTimezone).exports
     : buildDashboardData(range, settings.gmvMetric, displayTimezone).exports;
 
-  return { settings, exports, exportRange };
+  return { settings, exports, exportRange, clamped };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -77,7 +79,15 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       throw new Error("Missing settings payload");
     }
 
-    const normalized = normalizeSettingsPayload(incoming.toString());
+    let normalized;
+    try {
+      normalized = normalizeSettingsPayload(incoming.toString());
+    } catch (parseError) {
+      return json(
+        { ok: false, message: "设置格式无效，请刷新后重试" },
+        { status: 400 },
+      );
+    }
     const existing = await getSettings(shopDomain);
     const merged = {
       ...existing,
@@ -139,7 +149,7 @@ const isValidDomain = (value: string) => /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(value.
 const isValidUtmSource = (value: string) => /^[a-z0-9_-]+$/i.test(value.trim());
 
 export default function SettingsAndExport() {
-  const { settings, exports, exportRange } = useLoaderData<typeof loader>();
+  const { settings, exports, exportRange, clamped } = useLoaderData<typeof loader>();
   const shopify = useAppBridge();
   const fetcher = useFetcher<typeof action>();
   const navigate = useNavigate();
@@ -270,7 +280,9 @@ export default function SettingsAndExport() {
               : "设置已保存";
         shopify.toast.show?.(message);
       } else {
-        shopify.toast.show?.("保存失败，请检查配置或稍后重试");
+        shopify.toast.show?.(
+          fetcher.data.message || "保存失败，请检查配置或稍后重试",
+        );
         if (import.meta.env.DEV && fetcher.data.message) {
           // eslint-disable-next-line no-console
           console.error("Save settings failed", fetcher.data.message);
@@ -300,6 +312,7 @@ export default function SettingsAndExport() {
           <span>最近补拉：{settings.lastBackfillAt ? new Date(settings.lastBackfillAt).toLocaleString() : "暂无"}</span>
           <span>最近标签写回：{settings.lastTaggingAt ? new Date(settings.lastTaggingAt).toLocaleString() : "暂无 / 模拟"}</span>
           <span>店铺货币：{settings.primaryCurrency || "USD"}</span>
+          {clamped && <span>提示：导出/补拉已限制为最近 90 天内的订单窗口。</span>}
         </div>
         <div className={styles.inlineActions}>
           <button

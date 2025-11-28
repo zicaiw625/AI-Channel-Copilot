@@ -3,19 +3,34 @@ import { authenticate } from "../shopify.server";
 import db from "../db.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
+  let shopDomain = "";
+
+  try {
     const { payload, session, topic, shop } = await authenticate.webhook(request);
+    shopDomain = shop;
     console.log(`Received ${topic} webhook for ${shop}`);
 
-    const current = payload.current as string[];
-    if (session) {
-        await db.session.update({   
-            where: {
-                id: session.id
-            },
-            data: {
-                scope: current.toString(),
-            },
-        });
+    const current = Array.isArray((payload as any)?.current)
+      ? ((payload as any).current as string[])
+      : [];
+
+    if (session && current.length) {
+      await db.session.update({
+        where: {
+          id: session.id,
+        },
+        data: {
+          scope: current.toString(),
+        },
+      });
     }
+
     return new Response();
+  } catch (error) {
+    console.error("app/scopes_update webhook failed", {
+      shop: shopDomain,
+      message: (error as Error).message,
+    });
+    return new Response(undefined, { status: 202 });
+  }
 };

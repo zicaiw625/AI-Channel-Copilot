@@ -1,5 +1,6 @@
 import prisma from "../db.server";
 import { defaultSettings, type AiDomainRule, type PipelineStatus, type SettingsDefaults, type UtmSourceRule } from "./aiData";
+import { getPlatform, isDemoMode } from "./runtime.server";
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 
 const tableMissing = (error: unknown) =>
@@ -18,6 +19,8 @@ const SHOP_PREFS_QUERY = `#graphql
   }
 `;
 
+const platform = getPlatform();
+
 const mapRecordToSettings = (record: {
   aiDomains: unknown;
   utmSources: unknown;
@@ -31,6 +34,7 @@ const mapRecordToSettings = (record: {
   language: string;
   timezone: string;
   pipelineStatuses?: unknown;
+  aiExposurePreferences?: unknown;
   lastOrdersWebhookAt?: Date | null;
   lastBackfillAt?: Date | null;
   lastTaggingAt?: Date | null;
@@ -50,6 +54,20 @@ const mapRecordToSettings = (record: {
     writeCustomerTags: record.writeCustomerTags,
     dryRun: record.taggingDryRun ?? true,
   },
+  exposurePreferences: {
+    exposeProducts:
+      typeof (record.aiExposurePreferences as any)?.exposeProducts === "boolean"
+        ? (record.aiExposurePreferences as any).exposeProducts
+        : defaultSettings.exposurePreferences.exposeProducts,
+    exposeCollections:
+      typeof (record.aiExposurePreferences as any)?.exposeCollections === "boolean"
+        ? (record.aiExposurePreferences as any).exposeCollections
+        : defaultSettings.exposurePreferences.exposeCollections,
+    exposeBlogs:
+      typeof (record.aiExposurePreferences as any)?.exposeBlogs === "boolean"
+        ? (record.aiExposurePreferences as any).exposeBlogs
+        : defaultSettings.exposurePreferences.exposeBlogs,
+  },
   languages: [record.language, ...defaultSettings.languages.filter((l) => l !== record.language)],
   timezones: [record.timezone, ...defaultSettings.timezones.filter((t) => t !== record.timezone)],
   pipelineStatuses:
@@ -61,10 +79,12 @@ const mapRecordToSettings = (record: {
 });
 
 export const getSettings = async (shopDomain: string): Promise<SettingsDefaults> => {
-  if (!shopDomain) return defaultSettings;
+  if (!shopDomain || isDemoMode()) return defaultSettings;
 
   try {
-    const record = await prisma.shopSettings.findUnique({ where: { shopDomain } });
+    const record = await prisma.shopSettings.findUnique({
+      where: { shopDomain_platform: { shopDomain, platform } },
+    });
     if (!record) return defaultSettings;
     return mapRecordToSettings(record);
   } catch (error) {
@@ -132,7 +152,7 @@ export const saveSettings = async (
   shopDomain: string,
   payload: SettingsDefaults,
 ): Promise<SettingsDefaults> => {
-  if (!shopDomain) return payload;
+  if (!shopDomain || isDemoMode()) return payload;
 
   try {
     const primaryCurrency = payload.primaryCurrency || defaultSettings.primaryCurrency || "USD";
@@ -150,6 +170,7 @@ export const saveSettings = async (
       language: payload.languages[0] || "中文",
       timezone: payload.timezones[0] || "UTC",
       pipelineStatuses: payload.pipelineStatuses,
+      aiExposurePreferences: payload.exposurePreferences,
     };
 
     const withOptionalsCreate = {
@@ -161,17 +182,21 @@ export const saveSettings = async (
         : null,
     };
 
-    const updateOptionals: Record<string, Date | null | undefined | PipelineStatus[]> = {};
+    const updateOptionals: Record<
+      string,
+      Date | null | undefined | PipelineStatus[] | SettingsDefaults["exposurePreferences"]
+    > = {};
     if (payload.lastBackfillAt) updateOptionals.lastBackfillAt = new Date(payload.lastBackfillAt);
     if (payload.lastTaggingAt) updateOptionals.lastTaggingAt = new Date(payload.lastTaggingAt);
     if (payload.lastOrdersWebhookAt) {
       updateOptionals.lastOrdersWebhookAt = new Date(payload.lastOrdersWebhookAt);
     }
-      if (payload.pipelineStatuses) updateOptionals.pipelineStatuses = payload.pipelineStatuses;
+    if (payload.pipelineStatuses) updateOptionals.pipelineStatuses = payload.pipelineStatuses;
+    if (payload.exposurePreferences) updateOptionals.aiExposurePreferences = payload.exposurePreferences;
 
     await prisma.shopSettings.upsert({
-      where: { shopDomain },
-      create: { shopDomain, ...withOptionalsCreate },
+      where: { shopDomain_platform: { shopDomain, platform } },
+      create: { shopDomain, platform, ...withOptionalsCreate },
       update: { ...baseData, ...updateOptionals },
     });
   } catch (error) {
@@ -192,11 +217,11 @@ export const markActivity = async (
     pipelineStatuses: PipelineStatus[];
   }>,
 ) => {
-  if (!shopDomain) return;
+  if (!shopDomain || isDemoMode()) return;
 
   try {
     await prisma.shopSettings.update({
-      where: { shopDomain },
+      where: { shopDomain_platform: { shopDomain, platform } },
       data: {
         ...(updates.lastOrdersWebhookAt ? { lastOrdersWebhookAt: updates.lastOrdersWebhookAt } : {}),
         ...(updates.lastBackfillAt ? { lastBackfillAt: updates.lastBackfillAt } : {}),
@@ -226,10 +251,10 @@ export const updatePipelineStatuses = async (
 };
 
 export const deleteSettings = async (shopDomain: string) => {
-  if (!shopDomain) return;
+  if (!shopDomain || isDemoMode()) return;
 
   try {
-    await prisma.shopSettings.delete({ where: { shopDomain } });
+    await prisma.shopSettings.delete({ where: { shopDomain_platform: { shopDomain, platform } } });
   } catch (error) {
     if (!tableMissing(error)) {
       throw error;
@@ -275,6 +300,20 @@ export const normalizeSettingsPayload = (incoming: unknown): SettingsDefaults =>
         typeof parsed.tagging?.dryRun === "boolean"
           ? parsed.tagging.dryRun
           : defaultSettings.tagging.dryRun,
+    },
+    exposurePreferences: {
+      exposeProducts:
+        typeof parsed.exposurePreferences?.exposeProducts === "boolean"
+          ? parsed.exposurePreferences.exposeProducts
+          : defaultSettings.exposurePreferences.exposeProducts,
+      exposeCollections:
+        typeof parsed.exposurePreferences?.exposeCollections === "boolean"
+          ? parsed.exposurePreferences.exposeCollections
+          : defaultSettings.exposurePreferences.exposeCollections,
+      exposeBlogs:
+        typeof parsed.exposurePreferences?.exposeBlogs === "boolean"
+          ? parsed.exposurePreferences.exposeBlogs
+          : defaultSettings.exposurePreferences.exposeBlogs,
     },
     languages: parsed.languages && parsed.languages.length
       ? parsed.languages

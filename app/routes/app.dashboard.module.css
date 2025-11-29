@@ -362,6 +362,16 @@
   border-radius: 10px;
 }
 
+.lowSampleNotice {
+  margin: 0.6rem 0;
+  padding: 0.65rem 0.75rem;
+  background: #fff7ed;
+  border: 1px solid #fdba74;
+  color: #b45309;
+  border-radius: 10px;
+  font-weight: 700;
+}
+
 .callout {
   display: flex;
   align-items: center;

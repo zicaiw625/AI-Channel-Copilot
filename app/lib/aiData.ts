@@ -120,6 +120,12 @@ export type TaggingSettings = {
   dryRun?: boolean;
 };
 
+export type ExposurePreferences = {
+  exposeProducts: boolean;
+  exposeCollections: boolean;
+  exposeBlogs: boolean;
+};
+
 export type SettingsDefaults = {
   aiDomains: AiDomainRule[];
   utmSources: UtmSourceRule[];
@@ -127,6 +133,7 @@ export type SettingsDefaults = {
   gmvMetric: "current_total_price" | "subtotal_price";
   primaryCurrency?: string;
   tagging: TaggingSettings;
+  exposurePreferences: ExposurePreferences;
   languages: string[];
   timezones: string[];
   pipelineStatuses: PipelineStatus[];
@@ -913,6 +920,11 @@ export const defaultSettings: SettingsDefaults = {
     writeCustomerTags: false,
     dryRun: true,
   },
+  exposurePreferences: {
+    exposeProducts: false,
+    exposeCollections: false,
+    exposeBlogs: false,
+  },
   languages: ["中文", "English"],
   timezones: ["UTC", "America/Los_Angeles", "Asia/Shanghai", "Europe/London"],
   pipelineStatuses: defaultPipelineStatuses,
@@ -924,6 +936,8 @@ export type DetectionConfig = {
   utmMediumKeywords: string[];
   tagPrefix?: string;
 };
+
+export const LOW_SAMPLE_THRESHOLD = 5;
 
 const normalizeDomain = (domain?: string | null) =>
   (domain || "").replace(/^https?:\/\//, "").replace(/^www\./, "").toLowerCase();
@@ -1471,37 +1485,37 @@ const buildOrdersCsv = (
 ) => {
   const aiOrders = ordersInRange.filter((order) => order.aiSource);
   const header = [
-    "order_id",
     "order_name",
-    "created_at",
-    "ai_source",
+    "placed_at",
+    "ai_channel",
     "gmv",
     "gmv_metric",
-    "customer_id",
-    "new_customer",
     "referrer",
+    "landing_page",
     "source_name",
     "utm_source",
     "utm_medium",
-    "landing_page",
     "detection",
+    "order_id",
+    "customer_id",
+    "new_customer",
   ];
 
   const rows = aiOrders.map((order) => [
-    order.id,
     order.name,
     order.createdAt,
     order.aiSource,
     orderValueByMetric(order, metric),
     metric,
-    order.customerId,
-    order.isNewCustomer ? "true" : "false",
     order.referrer,
+    order.landingPage,
     order.sourceName || "",
     order.utmSource || "",
     order.utmMedium || "",
-    order.landingPage,
     order.detection,
+    order.id,
+    order.customerId,
+    order.isNewCustomer ? "true" : "false",
   ]);
 
   return [header, ...rows].map((cells) => cells.map(toCsvValue).join(",")).join("\n");
@@ -1509,33 +1523,33 @@ const buildOrdersCsv = (
 
 const buildProductsCsv = (products: ProductRow[]) => {
   const header = [
-    "product_id",
     "product_title",
-    "handle",
     "ai_orders",
     "ai_gmv",
     "ai_share",
     "top_ai_channel",
     "product_url",
+    "product_id",
+    "handle",
   ];
 
   const rows = products.map((product) => [
-    product.id,
     product.title,
-    product.handle,
     product.aiOrders,
     product.aiGMV,
     (product.aiShare * 100).toFixed(1) + "%",
     product.topChannel ?? "",
     product.url,
+    product.id,
+    product.handle,
   ]);
 
   return [header, ...rows].map((cells) => cells.map(toCsvValue).join(",")).join("\n");
 };
 
 const buildSampleNote = (overview: OverviewMetrics) => {
-  if (overview.aiOrders < 5) {
-    return "AI 渠道订单量当前较低，指标仅供参考。";
+  if (overview.aiOrders < LOW_SAMPLE_THRESHOLD) {
+    return "AI 渠道订单量当前较低（<5），所有指标仅供参考。";
   }
 
   return null;

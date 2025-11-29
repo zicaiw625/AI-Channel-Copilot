@@ -6,18 +6,21 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import {
   channelList,
   defaultSettings,
-  buildDashboardData,
-  buildDashboardFromOrders,
   resolveDateRange,
   timeRanges,
   type AIChannel,
   type TimeRangeKey,
+  LOW_SAMPLE_THRESHOLD,
 } from "../lib/aiData";
 import { fetchOrdersForRange } from "../lib/shopifyOrders.server";
 import { getSettings, markActivity, syncShopPreferences } from "../lib/settings.server";
 import { loadOrdersFromDb, persistOrders } from "../lib/persistence.server";
 import { authenticate } from "../shopify.server";
 import styles from "./app.dashboard.module.css";
+import { allowDemoData } from "../lib/runtime.server";
+import { getAiDashboardData } from "../lib/aiQueries.server";
+
+const BACKFILL_COOLDOWN_MINUTES = 30;
 
 const BACKFILL_COOLDOWN_MINUTES = 30;
 
@@ -38,10 +41,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const dateRange = resolveDateRange(rangeParam, new Date(), from, to, calculationTimezone);
   const lastBackfillAt = settings.lastBackfillAt ? new Date(settings.lastBackfillAt) : null;
 
-  let dataSource: "live" | "demo" | "stored" = "live";
+  let dataSource: "live" | "demo" | "stored" | "empty" = "live";
   let orders = await loadOrdersFromDb(shopDomain, dateRange);
   let clamped = false;
   let backfillSuppressed = false;
+  const demoAllowed = allowDemoData();
 
   if (orders.length > 0) {
     dataSource = "stored";
@@ -68,19 +72,21 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           await markActivity(shopDomain, { lastBackfillAt: new Date() });
           dataSource = "live";
         } else {
-          dataSource = "demo";
+          dataSource = demoAllowed ? "demo" : "empty";
         }
       } catch (error) {
         console.error("Failed to load Shopify orders", error);
-        dataSource = "demo";
+        dataSource = demoAllowed ? "demo" : "empty";
       }
     }
   }
 
-  const useDemoData = dataSource === "demo";
-  const data = useDemoData
-    ? buildDashboardData(dateRange, settings.gmvMetric, displayTimezone)
-    : buildDashboardFromOrders(orders, dateRange, settings.gmvMetric, displayTimezone);
+  const useDemoData = demoAllowed && dataSource === "demo";
+  const { data } = await getAiDashboardData(shopDomain, dateRange, settings, {
+    timezone: displayTimezone,
+    allowDemo: useDemoData,
+    orders,
+  });
 
   const dataLastUpdated = (() => {
     const timestamps = [settings.lastOrdersWebhookAt, settings.lastBackfillAt].filter(Boolean);
@@ -194,6 +200,7 @@ export default function Index() {
     sampleNote,
     exports: exportData,
   } = data;
+  const isLowSample = overview.aiOrders < LOW_SAMPLE_THRESHOLD;
 
   const trendScopes = useMemo(
     () => [
@@ -266,6 +273,11 @@ export default function Index() {
             <div className={styles.badgeRow}>
               <span className={styles.badge}>v0.1 内测 · Referrer + UTM</span>
               <span className={styles.badgeSecondary}>保守识别 · Shopify Orders</span>
+              {isLowSample && (
+                <span className={styles.badgeSecondary}>
+                  样本 < {LOW_SAMPLE_THRESHOLD} · 指标仅供参考
+                </span>
+              )}
             </div>
             <h1 className={styles.heading}>AI 渠道基础仪表盘</h1>
             <p className={styles.subheading}>
@@ -292,7 +304,9 @@ export default function Index() {
                   ? "Shopify 实时订单"
                   : dataSource === "stored"
                     ? "已缓存的店铺订单"
-                    : "Demo 样例（未检索到 AI 订单）"}
+                    : dataSource === "demo"
+                      ? "Demo 样例（未检索到 AI 订单）"
+                      : "暂无数据（未启用演示数据）"}
                 （live=实时 API，stored=本地缓存，demo=演示数据）
               </span>
               {clamped && (
@@ -331,18 +345,23 @@ export default function Index() {
                 当前店铺暂无可识别的 AI 渠道订单，以下为演示数据。可检查时间范围、referrer/UTM 规则，或延长观测窗口后再试。
               </div>
             )}
+            {dataSource === "empty" && (
+              <div className={styles.warning}>
+                暂未检索到符合条件的订单，且已关闭演示数据。可等待 webhook/backfill 完成或延长时间范围后重试。
+              </div>
+            )}
             </div>
             <div className={styles.actions}>
               <div className={styles.rangePills}>
                 {(Object.keys(timeRanges) as TimeRangeKey[]).map((key) => (
                   <button
-                  key={key}
-                  className={`${styles.pill} ${range === key ? styles.pillActive : ""}`}
-                  onClick={() => setRange(key)}
-                  type="button"
-                >
-                  {timeRanges[key].label}
-                </button>
+                    key={key}
+                    className={`${styles.pill} ${range === key ? styles.pillActive : ""}`}
+                    onClick={() => setRange(key)}
+                    type="button"
+                  >
+                    {timeRanges[key].label}
+                  </button>
                 ))}
               </div>
               <div className={styles.customRange}>
@@ -410,6 +429,11 @@ export default function Index() {
             </p>
           </div>
         </div>
+        {isLowSample && (
+          <div className={styles.lowSampleNotice}>
+            样本 < {LOW_SAMPLE_THRESHOLD}，所有指标仅供参考；延长时间范围后可获得更稳定的趋势。
+          </div>
+        )}
 
         <div className={styles.twoCol}>
           <div className={styles.card}>
@@ -474,7 +498,13 @@ export default function Index() {
                 <p className={styles.sectionLabel}>关键指标对比</p>
                 <h3 className={styles.sectionTitle}>整体 vs 各 AI 渠道</h3>
               </div>
-              <span className={styles.smallBadge}>样本 < 5 显示提示</span>
+              {isLowSample ? (
+                <span className={styles.smallBadge}>
+                  样本 < {LOW_SAMPLE_THRESHOLD} · 解读时请谨慎
+                </span>
+              ) : (
+                <span className={styles.smallBadge}>样本 >= {LOW_SAMPLE_THRESHOLD}</span>
+              )}
             </div>
             <div className={styles.tableWrap}>
               <table className={styles.table}>

@@ -1,5 +1,6 @@
 import { defaultSettings, mapShopifyOrderToRecord, type DateRange } from "./aiData";
 import type { OrderRecord, SettingsDefaults, ShopifyOrderNode } from "./aiData";
+import { getPlatform, isDemoMode } from "./runtime.server";
 
 const ORDERS_QUERY = `#graphql
   query OrdersForAiDashboard($first: Int!, $after: String, $query: String!) {
@@ -127,6 +128,8 @@ const MAX_BACKFILL_PAGES = 20;
 const MAX_BACKFILL_ORDERS = 1000;
 const MAX_BACKFILL_DAYS = 90;
 
+const platform = getPlatform();
+
 const fetchOrdersPage = async (
   admin: AdminGraphqlClient,
   query: string,
@@ -172,6 +175,23 @@ export const fetchOrdersForRange = async (
   hitPageLimit: boolean;
   hitOrderLimit: boolean;
 }> => {
+  if (isDemoMode()) {
+    console.info("[backfill] demo mode enabled; skipping Shopify fetch", {
+      platform,
+      shopDomain: context?.shopDomain,
+      intent: context?.intent,
+    });
+    return {
+      orders: [],
+      start: range.start,
+      end: range.end,
+      clamped: false,
+      pageCount: 0,
+      hitPageLimit: false,
+      hitOrderLimit: false,
+    };
+  }
+
   const lowerBound = new Date();
   lowerBound.setUTCDate(lowerBound.getUTCDate() - MAX_BACKFILL_DAYS);
   lowerBound.setUTCHours(0, 0, 0, 0);
@@ -184,6 +204,13 @@ export const fetchOrdersForRange = async (
   let guard = 0;
   let hitPageLimit = false;
   let hitOrderLimit = false;
+
+  console.info("[backfill] fetching orders", {
+    platform,
+    shopDomain: context?.shopDomain,
+    intent: context?.intent,
+    range: context?.rangeLabel || `${effectiveStart.toISOString()} to ${range.end.toISOString()}`,
+  });
 
   do {
     const json = await fetchOrdersPage(admin, search, after);
@@ -205,6 +232,7 @@ export const fetchOrdersForRange = async (
   } while (after);
 
   console.info("[backfill] fetched orders", {
+    platform,
     shopDomain: context?.shopDomain,
     intent: context?.intent,
     range: context?.rangeLabel || `${effectiveStart.toISOString()} to ${range.end.toISOString()}`,
@@ -231,6 +259,11 @@ export const fetchOrderById = async (
   id: string,
   settings: SettingsDefaults = defaultSettings,
 ): Promise<OrderRecord | null> => {
+  if (isDemoMode()) {
+    console.info("[webhook] demo mode enabled; skipping order fetch", { platform, id });
+    return null;
+  }
+
   const response = await admin.graphql(ORDER_QUERY, { variables: { id } });
   if (!response.ok) {
     const text = await response.text();

@@ -1,4 +1,5 @@
 import type { OrderRecord, SettingsDefaults } from "./aiData";
+import { getPlatform, isDemoMode } from "./runtime.server";
 
 type AdminGraphqlClient = {
   graphql: (query: string, options: { variables?: Record<string, unknown> }) => Promise<Response>;
@@ -30,11 +31,23 @@ const addTags = async (admin: AdminGraphqlClient, id: string, tags: string[]) =>
   }
 };
 
+const platform = getPlatform();
+
 export const applyAiTags = async (
   admin: AdminGraphqlClient,
   orders: OrderRecord[],
   settings: SettingsDefaults,
+  context?: { shopDomain?: string; intent?: string },
 ) => {
+  if (isDemoMode()) {
+    console.info("[tagging] demo mode active; skipping tag writes", {
+      platform,
+      shopDomain: context?.shopDomain,
+      intent: context?.intent,
+    });
+    return;
+  }
+
   const orderPrefix = settings.tagging.orderTagPrefix || "AI-Source";
   const customerTag = settings.tagging.customerTag || "AI-Customer";
   const dryRun = settings.tagging.dryRun;
@@ -63,6 +76,11 @@ export const applyAiTags = async (
         seenCustomers.add(order.customerId);
       }
     }
+  };
+
+  if (!dryRun) {
+    await runInBatches(orderTagTargets);
+    await runInBatches(customerTagTargets);
   }
 
   const runInBatches = async (targets: { id: string; tags: string[] }[]) => {
@@ -77,4 +95,14 @@ export const applyAiTags = async (
     await runInBatches(orderTagTargets);
     await runInBatches(customerTagTargets);
   }
+
+  console.info("[tagging] completed tagging batch", {
+    platform,
+    shopDomain: context?.shopDomain,
+    intent: context?.intent,
+    dryRun,
+    ordersAttempted: orders.length,
+    orderTagTargets: orderTagTargets.length,
+    customerTagTargets: customerTagTargets.length,
+  });
 };

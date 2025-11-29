@@ -3,6 +3,7 @@ import { applyAiTags } from "./tagging.server";
 import { fetchOrderById } from "./shopifyOrders.server";
 import { persistOrders } from "./persistence.server";
 import { getSettings, markActivity, updatePipelineStatuses } from "./settings.server";
+import { getPlatform, isDemoMode } from "./runtime.server";
 
 const setWebhookStatus = async (
   shopDomain: string,
@@ -26,10 +27,20 @@ const setWebhookStatus = async (
   });
 };
 
+const platform = getPlatform();
+
 export const handleOrderWebhook = async (request: Request, expectedTopic: string) => {
   let shopDomain = "";
 
   try {
+    if (isDemoMode()) {
+      console.info("[webhook] demo mode enabled; ignoring webhook", {
+        platform,
+        expectedTopic,
+      });
+      return new Response();
+    }
+
     const { admin, shop, topic, payload } = await authenticate.webhook(request);
     shopDomain = shop;
     const webhookPayload = (payload || {}) as Record<string, unknown>;
@@ -63,6 +74,14 @@ export const handleOrderWebhook = async (request: Request, expectedTopic: string
     await persistOrders(shop, [record]);
     await markActivity(shop, { lastOrdersWebhookAt: new Date() });
 
+    console.info("[webhook] order persisted", {
+      platform,
+      shop,
+      orderId: record.id,
+      aiSource: record.aiSource,
+      intent: expectedTopic,
+    });
+
     let webhookStatus: { status: "healthy" | "warning" | "info"; detail: string } = {
       status: "healthy",
       detail: `Received ${expectedTopic} at ${new Date().toISOString()}`,
@@ -70,7 +89,7 @@ export const handleOrderWebhook = async (request: Request, expectedTopic: string
 
     if (record.aiSource && (settings.tagging.writeOrderTags || settings.tagging.writeCustomerTags)) {
       try {
-        await applyAiTags(admin, [record], settings);
+        await applyAiTags(admin, [record], settings, { shopDomain: shop, intent: expectedTopic });
       } catch (error) {
         console.error("applyAiTags failed", {
           shop,
@@ -97,6 +116,7 @@ export const handleOrderWebhook = async (request: Request, expectedTopic: string
     console.error("Order webhook handler failed", {
       topic: expectedTopic,
       shop: shopDomain,
+      platform,
       message: (error as Error).message,
     });
     if (shopDomain) {

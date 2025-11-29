@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import type { SettingsDefaults } from "./aiData";
 import { fetchOrdersForRange } from "./shopifyOrders.server";
 import type { DateRange } from "./aiData";
@@ -7,20 +8,19 @@ import prisma from "../db.server";
 import { logger } from "./logger.server";
 import { MAX_BACKFILL_DURATION_MS, MAX_BACKFILL_ORDERS } from "./constants";
 
-type BackfillPayload = {
-  range: DateRange;
-  settings: SettingsDefaults;
-  options?: { maxOrders?: number; maxDurationMs?: number };
-  admin: { graphql: (query: string, options: { variables?: Record<string, unknown> }) => Promise<Response> };
+type BackfillDependencies = {
+  settings: SettingsDefaults | null;
+  admin:
+    | { graphql: (query: string, options: { variables?: Record<string, unknown> }) => Promise<Response> }
+    | null;
 };
 
-const payloads = new Map<number, BackfillPayload>();
 let processing = false;
 
-const dequeue = async () =>
+const dequeue = async (where: Prisma.BackfillJobWhereInput = {}) =>
   prisma.$transaction(async (tx) => {
     const pending = await tx.backfillJob.findFirst({
-      where: { status: "queued" },
+      where: { status: "queued", ...where },
       orderBy: { id: "asc" },
     });
 
@@ -54,32 +54,50 @@ const updateJobStatus = async (
   }
 };
 
-const processQueue = async () => {
+const processQueue = async (
+  resolveDependencies: (
+    job: NonNullable<Awaited<ReturnType<typeof dequeue>>>,
+  ) => Promise<BackfillDependencies>,
+  where: Prisma.BackfillJobWhereInput = {},
+) => {
   if (processing) return;
   processing = true;
 
   try {
     while (true) {
-      const job = await dequeue();
+      const job = await dequeue(where);
       if (!job) break;
 
-      const payload = payloads.get(job.id);
+      const range: DateRange = {
+        key: "custom",
+        label: job.range,
+        start: job.rangeStart,
+        end: job.rangeEnd,
+        days: Math.max(1, Math.round((job.rangeEnd.getTime() - job.rangeStart.getTime()) / 86_400_000)),
+      };
 
-      if (!payload) {
-        logger.warn("[backfill] missing payload for queued job", { jobId: job.id });
-        await updateJobStatus(job.id, "failed", { error: "missing payload" });
+      const { admin, settings } = await resolveDependencies(job);
+
+      if (!admin || !settings) {
+        logger.warn("[backfill] missing dependencies for queued job", {
+          jobId: job.id,
+          shopDomain: job.shopDomain,
+          hasAdmin: Boolean(admin),
+          hasSettings: Boolean(settings),
+        });
+        await updateJobStatus(job.id, "failed", { error: "missing dependencies" });
         continue;
       }
 
       try {
         const fetched = await fetchOrdersForRange(
-          payload.admin,
-          payload.range,
-          payload.settings,
-          { shopDomain: job.shopDomain, intent: "queued-backfill", rangeLabel: payload.range.label },
+          admin,
+          range,
+          settings,
+          { shopDomain: job.shopDomain, intent: "queued-backfill", rangeLabel: range.label },
           {
-            maxOrders: payload.options?.maxOrders ?? MAX_BACKFILL_ORDERS,
-            maxDurationMs: payload.options?.maxDurationMs ?? MAX_BACKFILL_DURATION_MS,
+            maxOrders: job.maxOrders ?? MAX_BACKFILL_ORDERS,
+            maxDurationMs: job.maxDurationMs ?? MAX_BACKFILL_DURATION_MS,
           },
         );
 
@@ -104,14 +122,12 @@ const processQueue = async () => {
           message,
         });
         await updateJobStatus(job.id, "failed", { error: message });
-      } finally {
-        payloads.delete(job.id);
       }
     }
   } finally {
     processing = false;
-    const pending = await prisma.backfillJob.count({ where: { status: "queued" } });
-    if (pending) void processQueue();
+    const pending = await prisma.backfillJob.count({ where: { status: "queued", ...where } });
+    if (pending) void processQueue(resolveDependencies, where);
   }
 };
 
@@ -125,10 +141,8 @@ export const describeBackfill = (shopDomain: string) =>
   });
 
 export const startBackfill = async (
-  admin: { graphql: (query: string, options: { variables?: Record<string, unknown> }) => Promise<Response> },
   shopDomain: string,
   range: DateRange,
-  settings: SettingsDefaults,
   options?: { maxOrders?: number; maxDurationMs?: number },
 ) => {
   if (!shopDomain) return { queued: false, reason: "missing shop domain" } as const;
@@ -141,11 +155,22 @@ export const startBackfill = async (
   }
 
   const job = await prisma.backfillJob.create({
-    data: { shopDomain, range: range.label },
+    data: {
+      shopDomain,
+      range: range.label,
+      rangeStart: range.start,
+      rangeEnd: range.end,
+      maxOrders: options?.maxOrders,
+      maxDurationMs: options?.maxDurationMs,
+    },
   });
-
-  payloads.set(job.id, { range, settings, admin, options });
-  void processQueue();
 
   return { queued: true as const };
 };
+
+export const processBackfillQueue = async (
+  resolveDependencies: (
+    job: NonNullable<Awaited<ReturnType<typeof dequeue>>>,
+  ) => Promise<BackfillDependencies>,
+  where: Prisma.BackfillJobWhereInput = {},
+) => processQueue(resolveDependencies, where);

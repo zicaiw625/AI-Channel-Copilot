@@ -3,7 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { type AIChannel, type DateRange, type OrderRecord } from "./aiData";
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 import { getPlatform, isDemoMode } from "./runtime.server";
-import { MAX_DASHBOARD_ORDERS } from "./constants";
+import { MAX_DASHBOARD_ORDERS, MAX_DETECTION_LENGTH } from "./constants";
 
 const tableMissing = (error: unknown) =>
   (error instanceof PrismaClientKnownRequestError && error.code === "P2021") ||
@@ -99,7 +99,7 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
             const aiSource = toAiEnum(order.aiSource);
             const createdAt = new Date(order.createdAt);
             const existingOrder = orderMap.get(order.id);
-            const detection = (order.detection || "").slice(0, 200);
+            const detection = (order.detection || "").slice(0, MAX_DETECTION_LENGTH);
 
             const orderData: Prisma.OrderUpsertArgs["create"] = {
               id: order.id,
@@ -306,7 +306,7 @@ export const loadOrdersFromDb = async (
       customerId: order.customerId ?? null,
       isNewCustomer: order.isNewCustomer,
       products: productMap[order.id] || [],
-      detection: order.detection || "",
+      detection: (order.detection || "").slice(0, MAX_DETECTION_LENGTH),
       signals: order.detectionSignals || [],
     }));
 

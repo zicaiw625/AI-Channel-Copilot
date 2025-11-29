@@ -2,7 +2,7 @@ import { json } from "react-router";
 import type { ActionFunctionArgs } from "react-router";
 
 import { resolveDateRange, type TimeRangeKey } from "../lib/aiData";
-import { startBackfill, describeBackfill } from "../lib/backfill.server";
+import { describeBackfill, processBackfillQueue, startBackfill } from "../lib/backfill.server";
 import { getSettings } from "../lib/settings.server";
 import { authenticate } from "../shopify.server";
 import { DEFAULT_RANGE_KEY, MAX_BACKFILL_DURATION_MS, MAX_BACKFILL_ORDERS } from "../lib/constants";
@@ -36,10 +36,15 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     });
   }
 
-  const result = await startBackfill(admin, shopDomain, dateRange, settings, {
+  const result = await startBackfill(shopDomain, dateRange, {
     maxOrders: MAX_BACKFILL_ORDERS,
     maxDurationMs: MAX_BACKFILL_DURATION_MS,
   });
+
+  void processBackfillQueue(
+    async () => ({ admin, settings }),
+    { shopDomain },
+  );
 
   return json({
     ok: true,

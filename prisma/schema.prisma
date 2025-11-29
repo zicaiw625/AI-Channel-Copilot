@@ -163,6 +163,10 @@ model BackfillJob {
   id            Int        @id @default(autoincrement())
   shopDomain    String
   range         String
+  rangeStart    DateTime   @default(now())
+  rangeEnd      DateTime   @default(now())
+  maxOrders     Int?
+  maxDurationMs Int?
   status        JobStatus  @default(queued)
   ordersFetched Int        @default(0)
   error         String?

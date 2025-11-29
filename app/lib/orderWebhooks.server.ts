@@ -95,6 +95,7 @@ export const handleOrderWebhook = async (request: Request, expectedTopic: string
       shop,
       orderId: record.id,
       aiSource: record.aiSource,
+      detection: record.detection?.slice(0, 160),
       intent: expectedTopic,
     });
 

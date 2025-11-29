@@ -68,7 +68,7 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
           utmSource: order.utmSource,
           utmMedium: order.utmMedium,
           sourceName: order.sourceName,
-          customerId: order.customerId || null,
+          customerId: order.customerId ?? null,
           isNewCustomer: order.isNewCustomer,
           createdAtLocal: createdAt,
         };
@@ -199,7 +199,7 @@ export const loadOrdersFromDb = async (
       utmMedium: order.utmMedium || undefined,
       sourceName: order.sourceName || undefined,
       tags: [],
-      customerId: order.customerId || "guest",
+      customerId: order.customerId ?? null,
       isNewCustomer: order.isNewCustomer,
       products: productMap[order.id] || [],
       detection: order.detection || "",

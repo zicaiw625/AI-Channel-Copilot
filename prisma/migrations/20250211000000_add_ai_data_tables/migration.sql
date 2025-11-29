@@ -1,25 +1,27 @@
 -- CreateTable
 CREATE TABLE "Customer" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "shopDomain" TEXT NOT NULL,
     "acquiredViaAi" BOOLEAN NOT NULL DEFAULT false,
-    "firstOrderAt" DATETIME,
-    "lastOrderAt" DATETIME,
+    "firstOrderAt" TIMESTAMP(3),
+    "lastOrderAt" TIMESTAMP(3),
     "orderCount" INTEGER NOT NULL DEFAULT 0,
-    "totalSpent" REAL NOT NULL DEFAULT 0,
+    "totalSpent" DOUBLE PRECISION NOT NULL DEFAULT 0,
     "firstAiOrderId" TEXT,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "Customer_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "Order" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "shopDomain" TEXT NOT NULL,
     "name" TEXT NOT NULL,
-    "createdAt" DATETIME NOT NULL,
-    "totalPrice" REAL NOT NULL,
-    "subtotalPrice" REAL,
+    "createdAt" TIMESTAMP(3) NOT NULL,
+    "totalPrice" DOUBLE PRECISION NOT NULL,
+    "subtotalPrice" DOUBLE PRECISION,
     "aiSource" TEXT,
     "detection" TEXT,
     "referrer" TEXT,
@@ -29,32 +31,36 @@ CREATE TABLE "Order" (
     "sourceName" TEXT,
     "customerId" TEXT,
     "isNewCustomer" BOOLEAN NOT NULL DEFAULT false,
-    "createdAtLocal" DATETIME,
-    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdAtLocal" TIMESTAMP(3),
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "Order_pkey" PRIMARY KEY ("id"),
     CONSTRAINT "Order_aiSource_check" CHECK ("aiSource" IN ('ChatGPT', 'Perplexity', 'Gemini', 'Copilot', 'Other_AI')),
-    CONSTRAINT "Order_customerId_fkey" FOREIGN KEY ("customerId") REFERENCES "Customer" ("id") ON DELETE SET NULL ON UPDATE CASCADE
+    CONSTRAINT "Order_customerId_fkey" FOREIGN KEY ("customerId") REFERENCES "Customer"("id") ON DELETE SET NULL ON UPDATE CASCADE
 );
 
 -- CreateTable
 CREATE TABLE "OrderProduct" (
-    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    "id" SERIAL NOT NULL,
     "orderId" TEXT NOT NULL,
     "productId" TEXT NOT NULL,
     "title" TEXT NOT NULL,
     "handle" TEXT,
     "url" TEXT,
-    "price" REAL NOT NULL,
+    "price" DOUBLE PRECISION NOT NULL,
     "quantity" INTEGER NOT NULL,
-    CONSTRAINT "OrderProduct_orderId_fkey" FOREIGN KEY ("orderId") REFERENCES "Order" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+
+    CONSTRAINT "OrderProduct_pkey" PRIMARY KEY ("id"),
+    CONSTRAINT "OrderProduct_orderId_fkey" FOREIGN KEY ("orderId") REFERENCES "Order"("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 -- CreateTable
 CREATE TABLE "ShopSettings" (
-    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    "id" SERIAL NOT NULL,
     "shopDomain" TEXT NOT NULL,
-    "aiDomains" JSON NOT NULL,
-    "utmSources" JSON NOT NULL,
-    "utmMediumKeywords" JSON NOT NULL,
+    "aiDomains" JSONB NOT NULL,
+    "utmSources" JSONB NOT NULL,
+    "utmMediumKeywords" JSONB NOT NULL,
     "orderTagPrefix" TEXT NOT NULL,
     "customerTag" TEXT NOT NULL,
     "writeOrderTags" BOOLEAN NOT NULL DEFAULT false,
@@ -62,8 +68,10 @@ CREATE TABLE "ShopSettings" (
     "language" TEXT NOT NULL DEFAULT '中文',
     "timezone" TEXT NOT NULL DEFAULT 'UTC',
     "gmvMetric" TEXT NOT NULL DEFAULT 'current_total_price',
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "ShopSettings_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateIndex

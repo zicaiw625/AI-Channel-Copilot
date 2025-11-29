@@ -25,7 +25,14 @@ const dequeue = async () => {
       data: { status: "processing", startedAt: new Date() },
     });
 
-    if (!claimed.count) return null;
+    if (!claimed.count) {
+      logger.debug("[webhook] failed to claim job", {
+        jobId: pending.id,
+        shopDomain: pending.shopDomain,
+        status: pending.status,
+      });
+      return null;
+    }
 
     return tx.webhookJob.findUnique({ where: { id: pending.id } });
   });

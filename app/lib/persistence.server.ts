@@ -56,6 +56,27 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
       for (const order of orders) {
         const aiSource = toAiEnum(order.aiSource);
         const createdAt = new Date(order.createdAt);
+        const existingCustomer = order.customerId
+          ? await tx.customer.findUnique({ where: { id: order.customerId } })
+          : null;
+
+        const isFirstKnownOrder =
+          !existingCustomer?.firstOrderAt || createdAt <= existingCustomer.firstOrderAt;
+
+        const nextFirstOrderAt = isFirstKnownOrder
+          ? createdAt
+          : existingCustomer?.firstOrderAt || createdAt;
+
+        const nextFirstOrderId = isFirstKnownOrder
+          ? order.id
+          : existingCustomer?.firstOrderId || null;
+
+        const acquiredViaAi = existingCustomer?.firstOrderId || existingCustomer?.firstOrderAt
+          ? existingCustomer.acquiredViaAi
+          : Boolean(order.aiSource);
+
+        const firstAiOrderId =
+          existingCustomer?.firstAiOrderId || (order.aiSource ? order.id : null);
 
         const orderData: Prisma.OrderUpsertArgs["create"] = {
           id: order.id,
@@ -75,6 +96,7 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
           sourceName: order.sourceName,
           customerId: order.customerId ?? null,
           isNewCustomer: order.isNewCustomer,
+          detectionSignals: order.signals,
           createdAtLocal: createdAt,
         };
 
@@ -102,10 +124,6 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
         }
 
         if (order.customerId) {
-          const existingCustomer = await tx.customer.findUnique({
-            where: { id: order.customerId },
-          });
-
           const priorOrderCount = existingCustomer?.orderCount ?? 0;
           const priorTotal = existingCustomer?.totalSpent ?? 0;
           const previousContribution =
@@ -117,10 +135,10 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
             ? Math.max(priorOrderCount, 1)
             : priorOrderCount + 1;
           const nextTotal = priorTotal - previousContribution + order.totalPrice;
-          const acquiredViaAi =
-            existingCustomer?.acquiredViaAi || Boolean(order.aiSource && order.isNewCustomer);
-          const firstAiOrderId =
-            existingCustomer?.firstAiOrderId || (order.aiSource ? order.id : null);
+          const nextLastOrderAt =
+            existingCustomer?.lastOrderAt && existingCustomer.lastOrderAt > createdAt
+              ? existingCustomer.lastOrderAt
+              : createdAt;
 
           await tx.customer.upsert({
             where: { id: order.customerId },
@@ -129,6 +147,7 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
               shopDomain,
               platform,
               firstOrderAt: createdAt,
+              firstOrderId: order.id,
               lastOrderAt: createdAt,
               orderCount: 1,
               totalSpent: order.totalPrice,
@@ -138,11 +157,9 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
             update: {
               shopDomain,
               platform,
-              firstOrderAt: existingCustomer?.firstOrderAt || createdAt,
-              lastOrderAt:
-                existingCustomer?.lastOrderAt && existingCustomer.lastOrderAt > createdAt
-                  ? existingCustomer.lastOrderAt
-                  : createdAt,
+              firstOrderAt: nextFirstOrderAt,
+              firstOrderId: nextFirstOrderId,
+              lastOrderAt: nextLastOrderAt,
               orderCount: nextOrderCount,
               totalSpent: nextTotal,
               acquiredViaAi,
@@ -227,6 +244,7 @@ export const loadOrdersFromDb = async (
       isNewCustomer: order.isNewCustomer,
       products: productMap[order.id] || [],
       detection: order.detection || "",
+      signals: order.detectionSignals || [],
     }));
   } catch (error) {
     if (tableMissing(error)) {

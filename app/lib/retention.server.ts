@@ -13,7 +13,8 @@ const parseEnvRetention = () => {
 };
 
 export const resolveRetentionMonths = (settings?: SettingsDefaults) => {
-  return settings?.retentionMonths || parseEnvRetention() || defaultSettings.retentionMonths || 6;
+  const candidate = settings?.retentionMonths || parseEnvRetention() || defaultSettings.retentionMonths || 6;
+  return Math.max(1, Math.floor(candidate));
 };
 
 const computeCutoff = (months: number) => {

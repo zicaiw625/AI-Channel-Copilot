@@ -21,6 +21,12 @@ const SHOP_PREFS_QUERY = `#graphql
 
 const platform = getPlatform();
 
+const clampRetention = (value?: number | null) => {
+  const numeric = typeof value === "number" ? Math.floor(value) : null;
+  if (!numeric || Number.isNaN(numeric)) return defaultSettings.retentionMonths ?? 6;
+  return Math.max(1, numeric);
+};
+
 const mapRecordToSettings = (record: {
   aiDomains: unknown;
   utmSources: unknown;
@@ -72,7 +78,7 @@ const mapRecordToSettings = (record: {
   },
   retentionMonths:
     typeof record.retentionMonths === "number"
-      ? record.retentionMonths
+      ? clampRetention(record.retentionMonths)
       : defaultSettings.retentionMonths,
   languages: [record.language, ...defaultSettings.languages.filter((l) => l !== record.language)],
   timezones: [record.timezone, ...defaultSettings.timezones.filter((t) => t !== record.timezone)],
@@ -174,7 +180,7 @@ export const saveSettings = async (
     writeOrderTags: payload.tagging.writeOrderTags,
     writeCustomerTags: payload.tagging.writeCustomerTags,
     taggingDryRun: payload.tagging.dryRun ?? true,
-    retentionMonths: payload.retentionMonths ?? defaultSettings.retentionMonths ?? 6,
+    retentionMonths: clampRetention(payload.retentionMonths ?? defaultSettings.retentionMonths ?? 6),
     language: payload.languages[0] || "中文",
     timezone: payload.timezones[0] || "UTC",
     pipelineStatuses: payload.pipelineStatuses,

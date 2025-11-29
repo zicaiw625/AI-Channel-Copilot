@@ -300,6 +300,10 @@ export default function SettingsAndExport() {
           控制 referrer / UTM 匹配规则、标签写回、语言时区，支持一键导出 AI 渠道订单和产品榜单
           CSV。所有演示数据均基于 v0.1 保守识别。
         </p>
+        <div className={styles.alert}>
+          <strong>AI 渠道识别为保守估计：</strong>依赖 referrer / UTM / 标签，部分 AI 会隐藏来源；仅统计站外 AI
+          点击到站并完成订单的链路，不代表 AI 渠道的全部曝光或 GMV。
+        </div>
         <p className={styles.helpText}>
           默认规则已覆盖 ChatGPT / Perplexity / Gemini / Copilot / Claude / DeepSeek 等常见 referrer 与
           utm_source（chatgpt、perplexity、gemini、copilot、deepseek、claude），安装后无需改动即可识别主流 AI 域名与 UTM。

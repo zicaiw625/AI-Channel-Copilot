@@ -240,6 +240,10 @@ export default function Index() {
               自动识别来自 ChatGPT / Perplexity / Gemini / Copilot 等 AI 助手的订单，给出保守
               GMV 估计与差异洞察。
             </p>
+            <div className={styles.warning}>
+              <strong>说明：</strong>AI 渠道识别为保守估计，依赖 referrer / UTM / 标签，部分 AI 会隐藏来源；
+              仅统计站外 AI 点击 → 到站 → 完成订单的链路，不含 AI 应用内曝光或自然流量。
+            </div>
             <div className={styles.metaRow}>
               <span>同步时间：{timeFormatter.format(new Date(overview.lastSyncedAt))}</span>
               <span>区间：{dateRange.label}</span>

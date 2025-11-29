@@ -60,7 +60,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       dataSource = "stored";
       backfillSuppressed = true;
     } else {
-      backfillAvailable = !isBackfillRunning(shopDomain);
+      backfillAvailable = !(await isBackfillRunning(shopDomain));
       dataSource = demoAllowed ? "demo" : "empty";
     }
   }

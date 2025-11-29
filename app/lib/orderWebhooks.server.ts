@@ -82,12 +82,15 @@ export const handleOrderWebhook = async (request: Request, expectedTopic: string
 
     const settings = await getSettings(shop);
 
-    enqueueWebhookJob({
+    await enqueueWebhookJob({
       shopDomain: shop,
       topic,
       intent: expectedTopic,
-      run: async () => {
-        const record = await fetchOrderById(admin, orderGid, settings, { shopDomain: shop });
+      payload: { orderGid, shopDomain: shop },
+      run: async (jobPayload) => {
+        const record = await fetchOrderById(admin, jobPayload.orderGid as string, settings, {
+          shopDomain: shop,
+        });
 
         if (!record) {
           await setWebhookStatus(shop, "warning", "Order not found for webhook payload");
@@ -148,7 +151,7 @@ export const handleOrderWebhook = async (request: Request, expectedTopic: string
     await setWebhookStatus(
       shop,
       "info",
-      `Queued ${expectedTopic} (${getWebhookQueueSize()} in-flight)`,
+      `Queued ${expectedTopic} (${await getWebhookQueueSize()} in-flight)`,
     );
 
     return new Response();

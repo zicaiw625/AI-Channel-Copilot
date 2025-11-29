@@ -20,8 +20,12 @@ const graphqlCounters = new Map<string, GraphqlCounter>();
 const ALERT_SAMPLE_MIN = 10;
 const ALERT_FAILURE_RATE = 0.2;
 const ALERT_COOLDOWN_MS = 60_000;
+const METRICS_ENDPOINT = process.env.METRICS_WEBHOOK_URL;
+const METRICS_TOKEN = process.env.METRICS_WEBHOOK_TOKEN;
+const METRICS_TIMEOUT_MS = 1500;
 
 let metricsSink: ((operation: string, metrics: GraphqlCounter) => void) | null = null;
+let metricsAlertedAt = 0;
 
 export const onGraphqlMetrics = (sink: ((operation: string, metrics: GraphqlCounter) => void) | null) => {
   metricsSink = sink;
@@ -75,6 +79,58 @@ export const recordGraphqlCall = (result: GraphqlCallResult) => {
 
   if (metricsSink) {
     metricsSink(result.operation, { ...entry });
+  }
+
+  void postGraphqlMetric(result, entry);
+};
+
+const postGraphqlMetric = async (result: GraphqlCallResult, snapshot: GraphqlCounter) => {
+  if (!METRICS_ENDPOINT) return;
+
+  const attempts = snapshot.success + snapshot.failure;
+  const failureRate = attempts ? snapshot.failure / attempts : 0;
+  const payload = {
+    source: "shopify_graphql",
+    operation: result.operation,
+    shopDomain: result.shopDomain,
+    durationMs: result.durationMs,
+    retries: result.retries,
+    status: result.status,
+    ok: result.ok,
+    error: result.error,
+    totals: {
+      success: snapshot.success,
+      failure: snapshot.failure,
+      retries: snapshot.retries,
+      failureRate,
+    },
+    timestamp: new Date().toISOString(),
+  };
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), METRICS_TIMEOUT_MS);
+
+  try {
+    await fetch(METRICS_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        ...(METRICS_TOKEN ? { authorization: `Bearer ${METRICS_TOKEN}` } : {}),
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+  } catch (error) {
+    const now = Date.now();
+    if (now - metricsAlertedAt > ALERT_COOLDOWN_MS) {
+      metricsAlertedAt = now;
+      console.warn("[observability] failed to forward graphql metric", {
+        operation: result.operation,
+        message: (error as Error).message,
+      });
+    }
+  } finally {
+    clearTimeout(timeout);
   }
 };
 

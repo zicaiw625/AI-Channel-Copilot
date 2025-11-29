@@ -27,6 +27,8 @@ import { applyAiTags } from "../lib/tagging.server";
 import { authenticate } from "../shopify.server";
 import styles from "./app.settings.module.css";
 
+const BACKFILL_COOLDOWN_MINUTES = 30;
+
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
   const url = new URL(request.url);
@@ -49,7 +51,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   if (orders.length === 0) {
     try {
-      const fetched = await fetchOrdersForRange(admin, range, settings);
+      const fetched = await fetchOrdersForRange(admin, range, settings, {
+        shopDomain,
+        intent: "settings-export",
+        rangeLabel: range.label,
+      });
       orders = fetched.orders;
       clamped = fetched.clamped;
       if (orders.length > 0) {
@@ -112,15 +118,34 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       undefined,
       calculationTimezone,
     );
+    const now = new Date();
+    const lastBackfillAt = merged.lastBackfillAt ? new Date(merged.lastBackfillAt) : null;
+    const withinCooldown =
+      lastBackfillAt &&
+      now.getTime() - lastBackfillAt.getTime() < BACKFILL_COOLDOWN_MINUTES * 60 * 1000;
 
     if (intent === "backfill") {
-      const { orders } = await fetchOrdersForRange(admin, range, merged);
+      if (withinCooldown) {
+        return json(
+          { ok: false, message: "距离上次补拉不足 30 分钟，已复用现有数据。" },
+          { status: 429 },
+        );
+      }
+      const { orders } = await fetchOrdersForRange(admin, range, merged, {
+        shopDomain,
+        intent: "settings-backfill",
+        rangeLabel: range.label,
+      });
       await persistOrders(shopDomain, orders);
       await markActivity(shopDomain, { lastBackfillAt: new Date() });
     }
 
     if (intent === "tag") {
-      const { orders } = await fetchOrdersForRange(admin, range, merged);
+      const { orders } = await fetchOrdersForRange(admin, range, merged, {
+        shopDomain,
+        intent: "settings-tagging",
+        rangeLabel: range.label,
+      });
       const aiOrders = orders.filter((order) => order.aiSource);
 
       if (merged.tagging.writeOrderTags || merged.tagging.writeCustomerTags) {

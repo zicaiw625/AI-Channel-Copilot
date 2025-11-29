@@ -21,6 +21,12 @@ const SHOP_PREFS_QUERY = `#graphql
 
 const platform = getPlatform();
 
+const clampRetention = (value?: number | null) => {
+  const numeric = typeof value === "number" ? Math.floor(value) : null;
+  if (!numeric || Number.isNaN(numeric)) return defaultSettings.retentionMonths ?? 6;
+  return Math.max(1, numeric);
+};
+
 const mapRecordToSettings = (record: {
   aiDomains: unknown;
   utmSources: unknown;
@@ -35,9 +41,11 @@ const mapRecordToSettings = (record: {
   timezone: string;
   pipelineStatuses?: unknown;
   aiExposurePreferences?: unknown;
+  retentionMonths?: number | null;
   lastOrdersWebhookAt?: Date | null;
   lastBackfillAt?: Date | null;
   lastTaggingAt?: Date | null;
+  lastCleanupAt?: Date | null;
   taggingDryRun?: boolean | null;
 }): SettingsDefaults => ({
   aiDomains: (record.aiDomains as AiDomainRule[]) || defaultSettings.aiDomains,
@@ -68,6 +76,10 @@ const mapRecordToSettings = (record: {
         ? (record.aiExposurePreferences as any).exposeBlogs
         : defaultSettings.exposurePreferences.exposeBlogs,
   },
+  retentionMonths:
+    typeof record.retentionMonths === "number"
+      ? clampRetention(record.retentionMonths)
+      : defaultSettings.retentionMonths,
   languages: [record.language, ...defaultSettings.languages.filter((l) => l !== record.language)],
   timezones: [record.timezone, ...defaultSettings.timezones.filter((t) => t !== record.timezone)],
   pipelineStatuses:
@@ -76,6 +88,7 @@ const mapRecordToSettings = (record: {
   lastOrdersWebhookAt: record.lastOrdersWebhookAt?.toISOString() || null,
   lastBackfillAt: record.lastBackfillAt?.toISOString() || null,
   lastTaggingAt: record.lastTaggingAt?.toISOString() || null,
+  lastCleanupAt: record.lastCleanupAt?.toISOString() || null,
 });
 
 export const getSettings = async (shopDomain: string): Promise<SettingsDefaults> => {
@@ -156,27 +169,29 @@ export const saveSettings = async (
 
   try {
     const primaryCurrency = payload.primaryCurrency || defaultSettings.primaryCurrency || "USD";
-    const baseData = {
-      aiDomains: payload.aiDomains,
-      utmSources: payload.utmSources,
-      utmMediumKeywords: payload.utmMediumKeywords,
-      gmvMetric: payload.gmvMetric,
-      primaryCurrency,
-      orderTagPrefix: payload.tagging.orderTagPrefix,
-      customerTag: payload.tagging.customerTag,
-      writeOrderTags: payload.tagging.writeOrderTags,
-      writeCustomerTags: payload.tagging.writeCustomerTags,
-      taggingDryRun: payload.tagging.dryRun ?? true,
-      language: payload.languages[0] || "中文",
-      timezone: payload.timezones[0] || "UTC",
-      pipelineStatuses: payload.pipelineStatuses,
-      aiExposurePreferences: payload.exposurePreferences,
-    };
+  const baseData = {
+    aiDomains: payload.aiDomains,
+    utmSources: payload.utmSources,
+    utmMediumKeywords: payload.utmMediumKeywords,
+    gmvMetric: payload.gmvMetric,
+    primaryCurrency,
+    orderTagPrefix: payload.tagging.orderTagPrefix,
+    customerTag: payload.tagging.customerTag,
+    writeOrderTags: payload.tagging.writeOrderTags,
+    writeCustomerTags: payload.tagging.writeCustomerTags,
+    taggingDryRun: payload.tagging.dryRun ?? true,
+    retentionMonths: clampRetention(payload.retentionMonths ?? defaultSettings.retentionMonths ?? 6),
+    language: payload.languages[0] || "中文",
+    timezone: payload.timezones[0] || "UTC",
+    pipelineStatuses: payload.pipelineStatuses,
+    aiExposurePreferences: payload.exposurePreferences,
+  };
 
     const withOptionalsCreate = {
       ...baseData,
       lastBackfillAt: payload.lastBackfillAt ? new Date(payload.lastBackfillAt) : null,
       lastTaggingAt: payload.lastTaggingAt ? new Date(payload.lastTaggingAt) : null,
+      lastCleanupAt: payload.lastCleanupAt ? new Date(payload.lastCleanupAt) : null,
       lastOrdersWebhookAt: payload.lastOrdersWebhookAt
         ? new Date(payload.lastOrdersWebhookAt)
         : null,
@@ -188,6 +203,7 @@ export const saveSettings = async (
     > = {};
     if (payload.lastBackfillAt) updateOptionals.lastBackfillAt = new Date(payload.lastBackfillAt);
     if (payload.lastTaggingAt) updateOptionals.lastTaggingAt = new Date(payload.lastTaggingAt);
+    if (payload.lastCleanupAt) updateOptionals.lastCleanupAt = new Date(payload.lastCleanupAt);
     if (payload.lastOrdersWebhookAt) {
       updateOptionals.lastOrdersWebhookAt = new Date(payload.lastOrdersWebhookAt);
     }
@@ -214,6 +230,7 @@ export const markActivity = async (
     lastOrdersWebhookAt: Date;
     lastBackfillAt: Date;
     lastTaggingAt: Date;
+    lastCleanupAt: Date;
     pipelineStatuses: PipelineStatus[];
   }>,
 ) => {
@@ -226,6 +243,7 @@ export const markActivity = async (
         ...(updates.lastOrdersWebhookAt ? { lastOrdersWebhookAt: updates.lastOrdersWebhookAt } : {}),
         ...(updates.lastBackfillAt ? { lastBackfillAt: updates.lastBackfillAt } : {}),
         ...(updates.lastTaggingAt ? { lastTaggingAt: updates.lastTaggingAt } : {}),
+        ...(updates.lastCleanupAt ? { lastCleanupAt: updates.lastCleanupAt } : {}),
         ...(updates.pipelineStatuses ? { pipelineStatuses: updates.pipelineStatuses } : {}),
       },
     });

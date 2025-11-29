@@ -1,6 +1,7 @@
 import { defaultSettings, mapShopifyOrderToRecord, type DateRange } from "./aiData";
 import type { OrderRecord, SettingsDefaults, ShopifyOrderNode } from "./aiData";
 import { getPlatform, isDemoMode } from "./runtime.server";
+import { recordGraphqlCall } from "./observability.server";
 
 const ORDERS_QUERY = `#graphql
   query OrdersForAiDashboard($first: Int!, $after: String, $query: String!) {
@@ -142,16 +143,36 @@ const graphqlWithRetry = async (
 ) => {
   let attempt = 0;
   let lastResponse: Response | null = null;
+  const startedAt = Date.now();
 
   while (attempt <= maxRetries) {
     const response = await admin.graphql(query, { variables });
-    if (response.ok) return response;
+    if (response.ok) {
+      recordGraphqlCall({
+        operation: context.operation,
+        shopDomain: context.shopDomain,
+        durationMs: Date.now() - startedAt,
+        retries: attempt,
+        status: response.status,
+        ok: true,
+      });
+      return response;
+    }
 
     lastResponse = response;
     const shouldRetry =
       response.status === 429 || response.status === 500 || response.status === 502 || response.status === 503;
     if (!shouldRetry || attempt === maxRetries) {
       const text = await response.text();
+      recordGraphqlCall({
+        operation: context.operation,
+        shopDomain: context.shopDomain,
+        durationMs: Date.now() - startedAt,
+        retries: attempt,
+        status: response.status,
+        ok: false,
+        error: text,
+      });
       throw new Error(
         `Shopify ${context.operation} failed: ${response.status} ${text} (attempt ${attempt + 1}/${
           maxRetries + 1
@@ -172,6 +193,15 @@ const graphqlWithRetry = async (
     attempt += 1;
   }
 
+  recordGraphqlCall({
+    operation: context.operation,
+    shopDomain: context.shopDomain,
+    durationMs: Date.now() - startedAt,
+    retries: attempt,
+    status: lastResponse?.status,
+    ok: false,
+    error: "exhausted retries",
+  });
   throw new Error(
     `Shopify ${context.operation} failed after retries: ${lastResponse?.status ?? "unknown status"}`,
   );

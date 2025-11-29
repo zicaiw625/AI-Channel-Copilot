@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
-import { Link, useLoaderData, useLocation, useNavigate } from "react-router";
+import { Link, useFetcher, useLoaderData, useLocation, useNavigate } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 
 import {
@@ -12,13 +12,13 @@ import {
   type TimeRangeKey,
   LOW_SAMPLE_THRESHOLD,
 } from "../lib/aiData";
-import { fetchOrdersForRange } from "../lib/shopifyOrders.server";
-import { getSettings, markActivity, syncShopPreferences } from "../lib/settings.server";
-import { loadOrdersFromDb, persistOrders } from "../lib/persistence.server";
+import { getSettings, syncShopPreferences } from "../lib/settings.server";
+import { loadOrdersFromDb } from "../lib/persistence.server";
 import { authenticate } from "../shopify.server";
 import styles from "./app.dashboard.module.css";
 import { allowDemoData } from "../lib/runtime.server";
 import { getAiDashboardData } from "../lib/aiQueries.server";
+import { isBackfillRunning } from "../lib/backfill.server";
 
 const BACKFILL_COOLDOWN_MINUTES = 30;
 const BACKFILL_MAX_ORDERS = 250;
@@ -45,7 +45,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   let orders = await loadOrdersFromDb(shopDomain, dateRange);
   let clamped = false;
   let backfillSuppressed = false;
-  let backfillQueued = false;
+  let backfillAvailable = false;
   const demoAllowed = allowDemoData();
 
   if (orders.length > 0) {
@@ -60,36 +60,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       dataSource = "stored";
       backfillSuppressed = true;
     } else {
-      backfillQueued = true;
-      void (async () => {
-        try {
-          const fetched = await fetchOrdersForRange(
-            admin,
-            dateRange,
-            settings,
-            {
-              shopDomain,
-              intent: "dashboard-loader",
-              rangeLabel: dateRange.label,
-            },
-            { maxOrders: BACKFILL_MAX_ORDERS, maxDurationMs: BACKFILL_MAX_DURATION_MS },
-          );
-          if (fetched.orders.length > 0) {
-            await persistOrders(shopDomain, fetched.orders);
-            await markActivity(shopDomain, { lastBackfillAt: new Date() });
-          }
-          clamped = fetched.clamped;
-          if (fetched.hitDurationLimit) {
-            console.warn("[backfill] loader aborted due to duration cap", {
-              shopDomain,
-              range: fetched.start.toISOString(),
-            });
-          }
-        } catch (error) {
-          console.error("Failed to load Shopify orders", error);
-        }
-      })();
-
+      backfillAvailable = !isBackfillRunning(shopDomain);
       dataSource = demoAllowed ? "demo" : "empty";
     }
   }
@@ -125,7 +96,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     timezone: displayTimezone,
     language,
     backfillSuppressed,
-    backfillQueued,
+    backfillAvailable,
     dataLastUpdated,
     pipeline: {
       lastOrdersWebhookAt: settings.lastOrdersWebhookAt || null,
@@ -162,7 +133,7 @@ export default function Index() {
     pipeline,
     clamped,
     backfillSuppressed,
-    backfillQueued,
+    backfillAvailable,
     dataLastUpdated,
   } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
@@ -204,6 +175,14 @@ export default function Index() {
     setCustomFrom((dateRange.fromParam as string | undefined) || dateRange.start.slice(0, 10));
     setCustomTo((dateRange.toParam as string | undefined) || dateRange.end.slice(0, 10));
   }, [dateRange.end, dateRange.fromParam, dateRange.start, dateRange.toParam]);
+
+  const backfillFetcher = useFetcher<{ ok: boolean; queued: boolean; reason?: string; range?: string }>();
+  const triggerBackfill = useCallback(() => {
+    backfillFetcher.submit(
+      { range, from: dateRange.fromParam || "", to: dateRange.toParam || "" },
+      { method: "post", action: "/api/backfill" },
+    );
+  }, [backfillFetcher, dateRange.fromParam, dateRange.toParam, range]);
 
   const {
     overview,
@@ -308,7 +287,7 @@ export default function Index() {
               <span>
                 数据最近更新：{dataLastUpdated ? timeFormatter.format(new Date(dataLastUpdated)) : "暂无"}
                 {backfillSuppressed && "（30 分钟内已补拉，复用缓存数据）"}
-                {backfillQueued && "（后台回填中，当前展示缓存/演示数据）"}
+                {backfillAvailable && "（可手动触发后台补拉）"}
               </span>
               <span>区间：{dateRange.label}</span>
               <span>
@@ -355,6 +334,32 @@ export default function Index() {
                 ))}
               </div>
             </div>
+            {backfillAvailable && (
+              <div className={styles.callout}>
+                <p>
+                  暂未检索到符合条件的订单，可手动触发后台补拉（上限 {BACKFILL_MAX_ORDERS} 单，约
+                  {BACKFILL_MAX_DURATION_MS / 1000} 秒）。
+                </p>
+                <div className={styles.backfillRow}>
+                  <button
+                    className={styles.primaryButton}
+                    onClick={triggerBackfill}
+                    disabled={backfillFetcher.state !== "idle"}
+                  >
+                    {backfillFetcher.state === "idle" ? "后台补拉" : "后台补拉中..."}
+                  </button>
+                  {backfillFetcher.data && (
+                    <span className={styles.backfillStatus}>
+                      {backfillFetcher.data.queued
+                        ? `已触发后台任务（${backfillFetcher.data.range}）`
+                        : backfillFetcher.data.reason === "in-flight"
+                          ? "已有补拉在进行中，稍后刷新"
+                          : "无法触发补拉，请确认店铺会话"}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
             {dataSource === "demo" && (
               <div className={styles.callout}>
                 <span>提示</span>

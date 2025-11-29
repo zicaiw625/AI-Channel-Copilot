@@ -2,10 +2,13 @@ import prisma from "../db.server";
 import type { Prisma } from "@prisma/client";
 import { type AIChannel, type DateRange, type OrderRecord } from "./aiData";
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
+import { getPlatform, isDemoMode } from "./runtime.server";
 
 const tableMissing = (error: unknown) =>
   (error instanceof PrismaClientKnownRequestError && error.code === "P2021") ||
   (error instanceof Error && error.message.includes("not available"));
+
+const platform = getPlatform();
 
 const toAiEnum = (source: AIChannel | null): Prisma.AiSource | null => {
   switch (source) {
@@ -39,7 +42,7 @@ const ensureTables = () => {
 };
 
 export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) => {
-  if (!shopDomain || !orders.length) return { created: 0, updated: 0 };
+  if (!shopDomain || !orders.length || isDemoMode()) return { created: 0, updated: 0 };
 
   try {
     ensureTables();
@@ -57,6 +60,7 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
         const orderData: Prisma.OrderUpsertArgs["create"] = {
           id: order.id,
           shopDomain,
+          platform,
           name: order.name,
           createdAt,
           totalPrice: order.totalPrice,
@@ -96,21 +100,32 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
         }
 
         if (order.customerId) {
-          const existing = await tx.customer.findUnique({
+          const existingCustomer = await tx.customer.findUnique({
             where: { id: order.customerId },
           });
 
-          const nextOrderCount = (existing?.orderCount ?? 0) + 1;
-          const nextTotal = (existing?.totalSpent ?? 0) + order.totalPrice;
+          const priorOrderCount = existingCustomer?.orderCount ?? 0;
+          const priorTotal = existingCustomer?.totalSpent ?? 0;
+          const previousContribution =
+            existingOrder && existingOrder.customerId === order.customerId
+              ? existingOrder.totalPrice
+              : 0;
+
+          const nextOrderCount = existingOrder
+            ? Math.max(priorOrderCount, 1)
+            : priorOrderCount + 1;
+          const nextTotal = priorTotal - previousContribution + order.totalPrice;
           const acquiredViaAi =
-            existing?.acquiredViaAi || Boolean(order.aiSource && order.isNewCustomer);
-          const firstAiOrderId = existing?.firstAiOrderId || (order.aiSource ? order.id : null);
+            existingCustomer?.acquiredViaAi || Boolean(order.aiSource && order.isNewCustomer);
+          const firstAiOrderId =
+            existingCustomer?.firstAiOrderId || (order.aiSource ? order.id : null);
 
           await tx.customer.upsert({
             where: { id: order.customerId },
             create: {
               id: order.customerId,
               shopDomain,
+              platform,
               firstOrderAt: createdAt,
               lastOrderAt: createdAt,
               orderCount: 1,
@@ -120,8 +135,12 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
             },
             update: {
               shopDomain,
-              firstOrderAt: existing?.firstOrderAt || createdAt,
-              lastOrderAt: createdAt,
+              platform,
+              firstOrderAt: existingCustomer?.firstOrderAt || createdAt,
+              lastOrderAt:
+                existingCustomer?.lastOrderAt && existingCustomer.lastOrderAt > createdAt
+                  ? existingCustomer.lastOrderAt
+                  : createdAt,
               orderCount: nextOrderCount,
               totalSpent: nextTotal,
               acquiredViaAi,
@@ -153,7 +172,7 @@ export const loadOrdersFromDb = async (
   shopDomain: string,
   range: DateRange,
 ): Promise<OrderRecord[]> => {
-  if (!shopDomain) return [];
+  if (!shopDomain || isDemoMode()) return [];
 
   try {
     const { orderModel, productModel } = ensureTables();
@@ -161,6 +180,7 @@ export const loadOrdersFromDb = async (
     const orders = await orderModel.findMany({
       where: {
         shopDomain,
+        platform,
         createdAt: { gte: range.start, lte: range.end },
       },
       orderBy: { createdAt: "desc" },
@@ -217,8 +237,8 @@ export const aggregateAiShare = async (shopDomain: string) => {
   try {
     const { orderModel } = ensureTables();
     const [totalOrders, aiOrders] = await Promise.all([
-      orderModel.count({ where: { shopDomain } }),
-      orderModel.count({ where: { shopDomain, aiSource: { not: null } } }),
+      orderModel.count({ where: { shopDomain, platform } }),
+      orderModel.count({ where: { shopDomain, platform, aiSource: { not: null } } }),
     ]);
     return { aiOrders, totalOrders };
   } catch (error) {

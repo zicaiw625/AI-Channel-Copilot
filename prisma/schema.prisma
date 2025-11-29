@@ -42,6 +42,7 @@ enum AiSource {
 model Customer {
   id               String   @id
   shopDomain       String
+  platform         String   @default("shopify")
   acquiredViaAi    Boolean  @default(false)
   firstOrderAt     DateTime?
   lastOrderAt      DateTime?
@@ -53,11 +54,13 @@ model Customer {
   orders           Order[]
 
   @@index([shopDomain])
+  @@index([shopDomain, platform])
 }
 
 model Order {
   id              String    @id
   shopDomain      String
+  platform        String    @default("shopify")
   name            String
   createdAt       DateTime
   totalPrice      Float
@@ -79,6 +82,7 @@ model Order {
 
   @@index([shopDomain, createdAt])
   @@index([shopDomain, aiSource])
+  @@index([shopDomain, platform])
 }
 
 model OrderProduct {
@@ -98,24 +102,29 @@ model OrderProduct {
 }
 
 model ShopSettings {
-  id                 Int      @id @default(autoincrement())
-  shopDomain         String   @unique
-  primaryCurrency    String   @default("USD")
-  aiDomains          Json
-  utmSources         Json
-  utmMediumKeywords  Json
-  orderTagPrefix     String
-  customerTag        String
-  writeOrderTags     Boolean  @default(false)
-  writeCustomerTags  Boolean  @default(false)
-  taggingDryRun      Boolean  @default(true)
-  language           String   @default("中文")
-  timezone           String   @default("UTC")
-  gmvMetric          String   @default("current_total_price")
-  pipelineStatuses   Json?
-  lastOrdersWebhookAt DateTime?
-  lastBackfillAt     DateTime?
-  lastTaggingAt      DateTime?
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  id                    Int      @id @default(autoincrement())
+  shopDomain            String
+  platform              String   @default("shopify")
+  primaryCurrency       String   @default("USD")
+  aiDomains             Json
+  utmSources            Json
+  utmMediumKeywords     Json
+  orderTagPrefix        String
+  customerTag           String
+  writeOrderTags        Boolean  @default(false)
+  writeCustomerTags     Boolean  @default(false)
+  taggingDryRun         Boolean  @default(true)
+  language              String   @default("中文")
+  timezone              String   @default("UTC")
+  gmvMetric             String   @default("current_total_price")
+  pipelineStatuses      Json?
+  aiExposurePreferences Json?
+  lastOrdersWebhookAt   DateTime?
+  lastBackfillAt        DateTime?
+  lastTaggingAt         DateTime?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([shopDomain, platform])
+  @@unique([shopDomain, platform], map: "shopDomain_platform")
 }

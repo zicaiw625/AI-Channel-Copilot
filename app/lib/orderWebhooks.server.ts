@@ -3,6 +3,7 @@ import { applyAiTags } from "./tagging.server";
 import { fetchOrderById } from "./shopifyOrders.server";
 import { persistOrders } from "./persistence.server";
 import { getSettings, markActivity, updatePipelineStatuses } from "./settings.server";
+import { getPlatform, isDemoMode } from "./runtime.server";
 
 const setWebhookStatus = async (
   shopDomain: string,
@@ -26,10 +27,20 @@ const setWebhookStatus = async (
   });
 };
 
+const platform = getPlatform();
+
 export const handleOrderWebhook = async (request: Request, expectedTopic: string) => {
   let shopDomain = "";
 
   try {
+    if (isDemoMode()) {
+      console.info("[webhook] demo mode enabled; ignoring webhook", {
+        platform,
+        expectedTopic,
+      });
+      return new Response();
+    }
+
     const { admin, shop, topic, payload } = await authenticate.webhook(request);
     shopDomain = shop;
     const webhookPayload = (payload || {}) as Record<string, unknown>;
@@ -38,7 +49,7 @@ export const handleOrderWebhook = async (request: Request, expectedTopic: string
 
     if (!admin || !shop) {
       await setWebhookStatus(shop, "warning", "Admin client unavailable for webhook processing");
-      return new Response("Admin client unavailable", { status: 202 });
+      return new Response("Admin client unavailable", { status: 500 });
     }
 
     const orderGid =
@@ -49,20 +60,36 @@ export const handleOrderWebhook = async (request: Request, expectedTopic: string
 
     if (!orderGid) {
       await setWebhookStatus(shop, "warning", "Missing order id in webhook payload");
-      return new Response("Missing order id", { status: 200 });
+      return new Response("Missing order id", { status: 400 });
     }
 
     const settings = await getSettings(shop);
     const record = await fetchOrderById(admin, orderGid, settings);
 
-    if (!record) return new Response();
+    if (!record) {
+      await setWebhookStatus(shop, "warning", "Order not found for webhook payload");
+      return new Response("Order not found", { status: 404 });
+    }
 
     await persistOrders(shop, [record]);
     await markActivity(shop, { lastOrdersWebhookAt: new Date() });
 
+    console.info("[webhook] order persisted", {
+      platform,
+      shop,
+      orderId: record.id,
+      aiSource: record.aiSource,
+      intent: expectedTopic,
+    });
+
+    let webhookStatus: { status: "healthy" | "warning" | "info"; detail: string } = {
+      status: "healthy",
+      detail: `Received ${expectedTopic} at ${new Date().toISOString()}`,
+    };
+
     if (record.aiSource && (settings.tagging.writeOrderTags || settings.tagging.writeCustomerTags)) {
       try {
-        await applyAiTags(admin, [record], settings);
+        await applyAiTags(admin, [record], settings, { shopDomain: shop, intent: expectedTopic });
       } catch (error) {
         console.error("applyAiTags failed", {
           shop,
@@ -74,28 +101,31 @@ export const handleOrderWebhook = async (request: Request, expectedTopic: string
           "warning",
           "Tagging failed for latest order; check server logs and retry later.",
         );
+        webhookStatus = {
+          status: "warning",
+          detail: "Tagging failed for latest order; check server logs and retry later.",
+        };
       }
     }
 
-    await setWebhookStatus(
-      shop,
-      "healthy",
-      `Received ${expectedTopic} at ${new Date().toISOString()}`,
-    );
+    await setWebhookStatus(shop, webhookStatus.status, webhookStatus.detail);
+    // Only return 2xx responses after order persistence has completed to allow Shopify to retry
+    // any critical failures automatically.
     return new Response();
   } catch (error) {
     console.error("Order webhook handler failed", {
       topic: expectedTopic,
       shop: shopDomain,
+      platform,
       message: (error as Error).message,
     });
     if (shopDomain) {
       await setWebhookStatus(
         shopDomain,
         "warning",
-        "Webhook errored; Shopify retry suppressed, check server logs.",
+        "Webhook errored; Shopify will retry critical failures.",
       );
     }
-    return new Response(undefined, { status: 202 });
+    return new Response("Webhook processing failed", { status: 500 });
   }
 };

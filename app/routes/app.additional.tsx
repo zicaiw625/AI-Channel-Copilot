@@ -26,6 +26,9 @@ import { loadOrdersFromDb, persistOrders } from "../lib/persistence.server";
 import { applyAiTags } from "../lib/tagging.server";
 import { authenticate } from "../shopify.server";
 import styles from "./app.settings.module.css";
+import { allowDemoData, getPlatform } from "../lib/runtime.server";
+
+const BACKFILL_COOLDOWN_MINUTES = 30;
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
@@ -46,10 +49,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   let orders = await loadOrdersFromDb(shopDomain, range);
   let clamped = false;
+  const demoAllowed = allowDemoData();
 
   if (orders.length === 0) {
     try {
-      const fetched = await fetchOrdersForRange(admin, range, settings);
+      const fetched = await fetchOrdersForRange(admin, range, settings, {
+        shopDomain,
+        intent: "settings-export",
+        rangeLabel: range.label,
+      });
       orders = fetched.orders;
       clamped = fetched.clamped;
       if (orders.length > 0) {
@@ -62,7 +70,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   const exports = orders.length
     ? buildDashboardFromOrders(orders, range, settings.gmvMetric, displayTimezone).exports
-    : buildDashboardData(range, settings.gmvMetric, displayTimezone).exports;
+    : demoAllowed
+      ? buildDashboardData(range, settings.gmvMetric, displayTimezone).exports
+      : buildDashboardFromOrders([], range, settings.gmvMetric, displayTimezone).exports;
 
   return { settings, exports, exportRange, clamped };
 };
@@ -71,6 +81,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   try {
     const { session, admin } = await authenticate.admin(request);
     const shopDomain = session?.shop || "";
+    const platform = getPlatform();
     const formData = await request.formData();
     const intent = formData.get("intent") || "save";
     const incoming = formData.get("settings");
@@ -112,22 +123,58 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       undefined,
       calculationTimezone,
     );
+    const now = new Date();
+    const lastBackfillAt = merged.lastBackfillAt ? new Date(merged.lastBackfillAt) : null;
+    const withinCooldown =
+      lastBackfillAt &&
+      now.getTime() - lastBackfillAt.getTime() < BACKFILL_COOLDOWN_MINUTES * 60 * 1000;
 
     if (intent === "backfill") {
-      const { orders } = await fetchOrdersForRange(admin, range, merged);
-      await persistOrders(shopDomain, orders);
+      if (withinCooldown) {
+        return json(
+          { ok: false, message: "距离上次补拉不足 30 分钟，已复用现有数据。" },
+          { status: 429 },
+        );
+      }
+      const { orders } = await fetchOrdersForRange(admin, range, merged, {
+        shopDomain,
+        intent: "settings-backfill",
+        rangeLabel: range.label,
+      });
+      const result = await persistOrders(shopDomain, orders);
       await markActivity(shopDomain, { lastBackfillAt: new Date() });
+      console.info("[backfill] settings-trigger completed", {
+        platform,
+        shopDomain,
+        intent,
+        fetched: orders.length,
+        created: result.created,
+        updated: result.updated,
+      });
     }
 
     if (intent === "tag") {
-      const { orders } = await fetchOrdersForRange(admin, range, merged);
+      const { orders } = await fetchOrdersForRange(admin, range, merged, {
+        shopDomain,
+        intent: "settings-tagging",
+        rangeLabel: range.label,
+      });
       const aiOrders = orders.filter((order) => order.aiSource);
 
       if (merged.tagging.writeOrderTags || merged.tagging.writeCustomerTags) {
-        await applyAiTags(admin, aiOrders, merged);
+        await applyAiTags(admin, aiOrders, merged, { shopDomain, intent: "settings-tagging" });
       }
-      await persistOrders(shopDomain, orders);
+      const result = await persistOrders(shopDomain, orders);
       await markActivity(shopDomain, { lastTaggingAt: new Date() });
+      console.info("[tagging] settings-trigger completed", {
+        platform,
+        shopDomain,
+        intent,
+        aiOrders: aiOrders.length,
+        totalOrders: orders.length,
+        created: result.created,
+        updated: result.updated,
+      });
     }
 
     return json({ ok: true, intent });
@@ -172,6 +219,9 @@ export default function SettingsAndExport() {
   );
 
   const [tagging, setTagging] = useState(settings.tagging);
+  const [exposurePreferences, setExposurePreferences] = useState(
+    settings.exposurePreferences,
+  );
   const [timezone, setTimezone] = useState(settings.timezones[0] || "UTC");
   const [language, setLanguage] = useState(settings.languages[0]);
   const [gmvMetric, setGmvMetric] = useState(settings.gmvMetric || "current_total_price");
@@ -258,6 +308,7 @@ export default function SettingsAndExport() {
       gmvMetric,
       primaryCurrency: settings.primaryCurrency,
       tagging,
+      exposurePreferences,
       languages: [language, ...settings.languages.filter((l) => l !== language)],
       timezones: [timezone, ...settings.timezones.filter((t) => t !== timezone)],
       pipelineStatuses: settings.pipelineStatuses,
@@ -300,6 +351,10 @@ export default function SettingsAndExport() {
           控制 referrer / UTM 匹配规则、标签写回、语言时区，支持一键导出 AI 渠道订单和产品榜单
           CSV。所有演示数据均基于 v0.1 保守识别。
         </p>
+        <div className={styles.alert}>
+          <strong>AI 渠道识别为保守估计：</strong>依赖 referrer / UTM / 标签，部分 AI 会隐藏来源；仅统计站外 AI
+          点击到站并完成订单的链路，不代表 AI 渠道的全部曝光或 GMV。
+        </div>
         <p className={styles.helpText}>
           默认规则已覆盖 ChatGPT / Perplexity / Gemini / Copilot / Claude / DeepSeek 等常见 referrer 与
           utm_source（chatgpt、perplexity、gemini、copilot、deepseek、claude），安装后无需改动即可识别主流 AI 域名与 UTM。
@@ -328,6 +383,7 @@ export default function SettingsAndExport() {
                     gmvMetric,
                     primaryCurrency: settings.primaryCurrency,
                     tagging,
+                    exposurePreferences,
                     languages: [language, ...settings.languages.filter((l) => l !== language)],
                     timezones: [timezone, ...settings.timezones.filter((t) => t !== timezone)],
                     pipelineStatuses: settings.pipelineStatuses,
@@ -493,6 +549,7 @@ export default function SettingsAndExport() {
                           gmvMetric,
                           primaryCurrency: settings.primaryCurrency,
                           tagging,
+                          exposurePreferences,
                           languages: [language, ...settings.languages.filter((l) => l !== language)],
                           timezones: [timezone, ...settings.timezones.filter((t) => t !== timezone)],
                           pipelineStatuses: settings.pipelineStatuses,
@@ -583,6 +640,67 @@ export default function SettingsAndExport() {
           <div className={styles.card}>
             <div className={styles.sectionHeader}>
               <div>
+                <p className={styles.sectionLabel}>llms.txt 偏好（预留）</p>
+                <h3 className={styles.sectionTitle}>希望向 AI 暴露的站点类型</h3>
+              </div>
+              <span className={styles.badge}>实验</span>
+            </div>
+            <p className={styles.helpText}>
+              仅存储偏好，不会改动店铺页面。未来生成 llms.txt 时会参考此配置；默认全部关闭以避免暴露不必要的内容。
+            </p>
+            <div className={styles.checkboxRow}>
+              <input
+                type="checkbox"
+                checked={exposurePreferences.exposeProducts}
+                onChange={(event) =>
+                  setExposurePreferences((prev) => ({
+                    ...prev,
+                    exposeProducts: event.target.checked,
+                  }))
+                }
+              />
+              <div>
+                <div className={styles.ruleTitle}>允许 AI 访问产品页</div>
+                <div className={styles.ruleMeta}>product_url / handle</div>
+              </div>
+            </div>
+            <div className={styles.checkboxRow}>
+              <input
+                type="checkbox"
+                checked={exposurePreferences.exposeCollections}
+                onChange={(event) =>
+                  setExposurePreferences((prev) => ({
+                    ...prev,
+                    exposeCollections: event.target.checked,
+                  }))
+                }
+              />
+              <div>
+                <div className={styles.ruleTitle}>允许 AI 访问合集/分类页</div>
+                <div className={styles.ruleMeta}>未来用于生成精选集合</div>
+              </div>
+            </div>
+            <div className={styles.checkboxRow}>
+              <input
+                type="checkbox"
+                checked={exposurePreferences.exposeBlogs}
+                onChange={(event) =>
+                  setExposurePreferences((prev) => ({
+                    ...prev,
+                    exposeBlogs: event.target.checked,
+                  }))
+                }
+              />
+              <div>
+                <div className={styles.ruleTitle}>允许 AI 访问博客内容</div>
+                <div className={styles.ruleMeta}>博客/内容页可选暴露</div>
+              </div>
+            </div>
+          </div>
+
+          <div className={styles.card}>
+            <div className={styles.sectionHeader}>
+              <div>
                 <p className={styles.sectionLabel}>语言 / 时区</p>
                 <h3 className={styles.sectionTitle}>展示偏好 & GMV 口径</h3>
               </div>
@@ -667,7 +785,8 @@ export default function SettingsAndExport() {
             <div className={styles.exportCard}>
               <h4>AI 渠道订单明细</h4>
               <p>
-                字段：订单号、时间、AI 渠道、GMV（按当前 GMV 口径）、GMV metric、客户 ID、新/老客、referrer、source_name、UTM、解析结果。
+                字段：订单号、下单时间、AI 渠道、GMV（按当前 GMV 口径）、referrer、landing_page、source_name、utm_source、utm_medium、解析结果
+                （附加 order_id / customer_id / new_customer 标记便于对照）。
               </p>
               <a
                 className={styles.primaryButton}
@@ -679,7 +798,7 @@ export default function SettingsAndExport() {
             </div>
             <div className={styles.exportCard}>
               <h4>Top Products from AI Channels</h4>
-              <p>字段：产品 ID、产品名、AI 订单数、AI GMV、AI 占比、Top 渠道、URL。</p>
+              <p>字段：产品名、AI 订单数、AI GMV、AI 占比、Top 渠道、URL（附产品 ID / handle 便于二次分析）。</p>
               <a
                 className={styles.secondaryButton}
                 href={toCsvHref(exports.productsCsv)}

@@ -1,5 +1,20 @@
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 import prisma from "../db.server";
+import type { Prisma } from "@prisma/client";
+
+type GdprWebhookPayload = {
+  shop_domain?: string;
+  customer_id?: string | number;
+  customerId?: string;
+  customer?: { id?: string; email?: string } | null;
+  customer_email?: string;
+  email?: string;
+  orders_to_redact?: (string | number)[];
+  orders_requested?: (string | number)[];
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value && typeof value === "object" && !Array.isArray(value));
 
 type GdprWebhookPayload = {
   shop_domain?: string;
@@ -119,8 +134,8 @@ export const collectCustomerData = async (
   if (!shopDomain) return { orders: [], customers: [] };
 
   try {
-    const orderFilter: any = { shopDomain };
-    const orFilters = [] as Record<string, unknown>[];
+    const orderFilter: Prisma.OrderWhereInput = { shopDomain };
+    const orFilters: Prisma.OrderWhereInput[] = [];
 
     if (customerIds.length) {
       orFilters.push({ customerId: { in: customerIds } });

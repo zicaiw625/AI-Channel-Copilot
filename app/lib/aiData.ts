@@ -18,6 +18,7 @@ type OrderLine = {
   handle: string;
   url: string;
   price: number;
+  currency: string;
   quantity: number;
 };
 
@@ -26,6 +27,7 @@ export type OrderRecord = {
   name: string;
   createdAt: string;
   totalPrice: number;
+  currency: string;
   subtotalPrice?: number;
   aiSource: AIChannel | null;
   referrer: string;
@@ -96,6 +98,7 @@ export type RawOrderRow = {
   createdAt: string;
   aiSource: AIChannel | null;
   totalPrice: number;
+  currency: string;
   referrer: string;
   landingPage: string;
   utmSource?: string;
@@ -297,6 +300,7 @@ const orders: OrderRecord[] = [
     name: "#4310",
     createdAt: daysAgo(2),
     totalPrice: 188,
+    currency: "USD",
     aiSource: "ChatGPT",
     referrer: "https://chat.openai.com/share/insight?id=4310",
     landingPage: `${storeUrl}/products/starter-kit?utm_source=chatgpt&utm_medium=ai-agent`,
@@ -313,6 +317,7 @@ const orders: OrderRecord[] = [
         handle: "starter-kit",
         url: `${storeUrl}/products/starter-kit`,
         price: 96,
+        currency: "USD",
         quantity: 1,
       },
       {
@@ -321,6 +326,7 @@ const orders: OrderRecord[] = [
         handle: "vitamin-c-drops",
         url: `${storeUrl}/products/vitamin-c-drops`,
         price: 92,
+        currency: "USD",
         quantity: 1,
       },
     ],
@@ -331,6 +337,7 @@ const orders: OrderRecord[] = [
     name: "#4304",
     createdAt: daysAgo(6),
     totalPrice: 96,
+    currency: "USD",
     aiSource: "Perplexity",
     referrer: "https://www.perplexity.ai/search?q=best+cleanser",
     landingPage: `${storeUrl}/products/calm-foam-cleanser?utm_source=perplexity&utm_medium=organic`,
@@ -347,6 +354,7 @@ const orders: OrderRecord[] = [
         handle: "calm-foam-cleanser",
         url: `${storeUrl}/products/calm-foam-cleanser`,
         price: 48,
+        currency: "USD",
         quantity: 2,
       },
     ],
@@ -357,6 +365,7 @@ const orders: OrderRecord[] = [
     name: "#4299",
     createdAt: daysAgo(11),
     totalPrice: 178,
+    currency: "USD",
     aiSource: null,
     referrer: "https://www.instagram.com/",
     landingPage: `${storeUrl}/products/hydra-barrier-cream?utm_source=instagram&utm_medium=paid-social`,
@@ -373,6 +382,7 @@ const orders: OrderRecord[] = [
         handle: "hydra-barrier-cream",
         url: `${storeUrl}/products/hydra-barrier-cream`,
         price: 124,
+        currency: "USD",
         quantity: 1,
       },
       {
@@ -381,6 +391,7 @@ const orders: OrderRecord[] = [
         handle: "enzyme-reset-mask",
         url: `${storeUrl}/products/enzyme-reset-mask`,
         price: 54,
+        currency: "USD",
         quantity: 1,
       },
     ],
@@ -391,6 +402,7 @@ const orders: OrderRecord[] = [
     name: "#4287",
     createdAt: daysAgo(25),
     totalPrice: 218,
+    currency: "USD",
     aiSource: "ChatGPT",
     referrer: "https://chat.openai.com/share/beauty-shortlist",
     landingPage: `${storeUrl}/products/ceramide-repair-serum`,
@@ -404,6 +416,7 @@ const orders: OrderRecord[] = [
         handle: "ceramide-repair-serum",
         url: `${storeUrl}/products/ceramide-repair-serum`,
         price: 109,
+        currency: "USD",
         quantity: 2,
       },
     ],
@@ -414,6 +427,7 @@ const orders: OrderRecord[] = [
     name: "#4291",
     createdAt: daysAgo(14),
     totalPrice: 178,
+    currency: "USD",
     aiSource: "Perplexity",
     referrer: "https://www.perplexity.ai/",
     landingPage: `${storeUrl}/products/hydra-barrier-cream?utm_source=perplexity&utm_medium=ai-agent`,
@@ -429,6 +443,7 @@ const orders: OrderRecord[] = [
         handle: "hydra-barrier-cream",
         url: `${storeUrl}/products/hydra-barrier-cream`,
         price: 124,
+        currency: "USD",
         quantity: 1,
       },
       {
@@ -437,6 +452,7 @@ const orders: OrderRecord[] = [
         handle: "enzyme-reset-mask",
         url: `${storeUrl}/products/enzyme-reset-mask`,
         price: 54,
+        currency: "USD",
         quantity: 1,
       },
     ],
@@ -447,6 +463,7 @@ const orders: OrderRecord[] = [
     name: "#4290",
     createdAt: daysAgo(20),
     totalPrice: 198,
+    currency: "USD",
     aiSource: null,
     referrer: "https://l.instagram.com/",
     landingPage: `${storeUrl}/products/starter-kit?utm_source=meta&utm_medium=retargeting`,
@@ -462,6 +479,7 @@ const orders: OrderRecord[] = [
         handle: "calm-foam-cleanser",
         url: `${storeUrl}/products/calm-foam-cleanser`,
         price: 48,
+        currency: "USD",
         quantity: 1,
       },
       {
@@ -470,6 +488,7 @@ const orders: OrderRecord[] = [
         handle: "enzyme-reset-mask",
         url: `${storeUrl}/products/enzyme-reset-mask`,
         price: 54,
+        currency: "USD",
         quantity: 1,
       },
       {
@@ -478,6 +497,7 @@ const orders: OrderRecord[] = [
         handle: "starter-kit",
         url: `${storeUrl}/products/starter-kit`,
         price: 96,
+        currency: "USD",
         quantity: 1,
       },
     ],
@@ -488,6 +508,7 @@ const orders: OrderRecord[] = [
     name: "#4301",
     createdAt: daysAgo(8),
     totalPrice: 124,
+    currency: "USD",
     aiSource: "Gemini",
     referrer: "https://gemini.google.com/app",
     landingPage: `${storeUrl}/products/hydra-barrier-cream?utm_source=gemini&utm_medium=assistant`,
@@ -503,6 +524,7 @@ const orders: OrderRecord[] = [
         handle: "hydra-barrier-cream",
         url: `${storeUrl}/products/hydra-barrier-cream`,
         price: 124,
+        currency: "USD",
         quantity: 1,
       },
     ],
@@ -513,6 +535,7 @@ const orders: OrderRecord[] = [
     name: "#4276",
     createdAt: daysAgo(45),
     totalPrice: 144,
+    currency: "USD",
     aiSource: "Gemini",
     referrer: "https://gemini.google.com/app/discover",
     landingPage: `${storeUrl}/products/starter-kit`,
@@ -526,6 +549,7 @@ const orders: OrderRecord[] = [
         handle: "calm-foam-cleanser",
         url: `${storeUrl}/products/calm-foam-cleanser`,
         price: 48,
+        currency: "USD",
         quantity: 1,
       },
       {
@@ -534,6 +558,7 @@ const orders: OrderRecord[] = [
         handle: "starter-kit",
         url: `${storeUrl}/products/starter-kit`,
         price: 96,
+        currency: "USD",
         quantity: 1,
       },
     ],
@@ -544,6 +569,7 @@ const orders: OrderRecord[] = [
     name: "#4281",
     createdAt: daysAgo(32),
     totalPrice: 188,
+    currency: "USD",
     aiSource: "Perplexity",
     referrer: "",
     landingPage: `${storeUrl}/products/vitamin-c-drops?utm_source=perplexity&utm_medium=ai-agent`,
@@ -559,6 +585,7 @@ const orders: OrderRecord[] = [
         handle: "vitamin-c-drops",
         url: `${storeUrl}/products/vitamin-c-drops`,
         price: 92,
+        currency: "USD",
         quantity: 1,
       },
       {
@@ -567,6 +594,7 @@ const orders: OrderRecord[] = [
         handle: "starter-kit",
         url: `${storeUrl}/products/starter-kit`,
         price: 96,
+        currency: "USD",
         quantity: 1,
       },
     ],
@@ -577,6 +605,7 @@ const orders: OrderRecord[] = [
     name: "#4289",
     createdAt: daysAgo(21),
     totalPrice: 156,
+    currency: "USD",
     aiSource: "Copilot",
     referrer: "https://copilot.microsoft.com/",
     landingPage: `${storeUrl}/products/enzyme-reset-mask?utm_source=copilot&utm_medium=ai-assistant`,
@@ -592,6 +621,7 @@ const orders: OrderRecord[] = [
         handle: "enzyme-reset-mask",
         url: `${storeUrl}/products/enzyme-reset-mask`,
         price: 54,
+        currency: "USD",
         quantity: 2,
       },
       {
@@ -600,6 +630,7 @@ const orders: OrderRecord[] = [
         handle: "calm-foam-cleanser",
         url: `${storeUrl}/products/calm-foam-cleanser`,
         price: 48,
+        currency: "USD",
         quantity: 1,
       },
     ],
@@ -610,6 +641,7 @@ const orders: OrderRecord[] = [
     name: "#4267",
     createdAt: daysAgo(60),
     totalPrice: 150,
+    currency: "USD",
     aiSource: "Copilot",
     referrer: "https://copilot.microsoft.com/chat",
     landingPage: `${storeUrl}/products/starter-kit`,
@@ -623,6 +655,7 @@ const orders: OrderRecord[] = [
         handle: "starter-kit",
         url: `${storeUrl}/products/starter-kit`,
         price: 96,
+        currency: "USD",
         quantity: 1,
       },
       {
@@ -631,6 +664,7 @@ const orders: OrderRecord[] = [
         handle: "enzyme-reset-mask",
         url: `${storeUrl}/products/enzyme-reset-mask`,
         price: 54,
+        currency: "USD",
         quantity: 1,
       },
     ],
@@ -641,6 +675,7 @@ const orders: OrderRecord[] = [
     name: "#4254",
     createdAt: daysAgo(70),
     totalPrice: 220,
+    currency: "USD",
     aiSource: "ChatGPT",
     referrer: "https://chat.openai.com/",
     landingPage: `${storeUrl}/products/hydra-barrier-cream?utm_source=chatgpt&utm_medium=assistant`,
@@ -656,6 +691,7 @@ const orders: OrderRecord[] = [
         handle: "hydra-barrier-cream",
         url: `${storeUrl}/products/hydra-barrier-cream`,
         price: 124,
+        currency: "USD",
         quantity: 1,
       },
       {
@@ -664,6 +700,7 @@ const orders: OrderRecord[] = [
         handle: "starter-kit",
         url: `${storeUrl}/products/starter-kit`,
         price: 96,
+        currency: "USD",
         quantity: 1,
       },
     ],
@@ -674,6 +711,7 @@ const orders: OrderRecord[] = [
     name: "#4241",
     createdAt: daysAgo(3),
     totalPrice: 146,
+    currency: "USD",
     aiSource: "Other-AI",
     referrer: "https://claude.ai/chat",
     landingPage: `${storeUrl}/products/vitamin-c-drops?utm_medium=ai-assistant`,
@@ -688,6 +726,7 @@ const orders: OrderRecord[] = [
         handle: "vitamin-c-drops",
         url: `${storeUrl}/products/vitamin-c-drops`,
         price: 92,
+        currency: "USD",
         quantity: 1,
       },
       {
@@ -696,6 +735,7 @@ const orders: OrderRecord[] = [
         handle: "enzyme-reset-mask",
         url: `${storeUrl}/products/enzyme-reset-mask`,
         price: 54,
+        currency: "USD",
         quantity: 1,
       },
     ],
@@ -706,6 +746,7 @@ const orders: OrderRecord[] = [
     name: "#4229",
     createdAt: daysAgo(85),
     totalPrice: 102,
+    currency: "USD",
     aiSource: "Other-AI",
     referrer: "https://deepseek.com/assistant",
     landingPage: `${storeUrl}/products/enzyme-reset-mask?utm_source=deepseek`,
@@ -720,6 +761,7 @@ const orders: OrderRecord[] = [
         handle: "calm-foam-cleanser",
         url: `${storeUrl}/products/calm-foam-cleanser`,
         price: 48,
+        currency: "USD",
         quantity: 1,
       },
       {
@@ -728,6 +770,7 @@ const orders: OrderRecord[] = [
         handle: "enzyme-reset-mask",
         url: `${storeUrl}/products/enzyme-reset-mask`,
         price: 54,
+        currency: "USD",
         quantity: 1,
       },
     ],
@@ -738,6 +781,7 @@ const orders: OrderRecord[] = [
     name: "#4309",
     createdAt: daysAgo(1),
     totalPrice: 96,
+    currency: "USD",
     aiSource: null,
     referrer: "https://t.co/brand-email",
     landingPage: `${storeUrl}/products/starter-kit?utm_source=email&utm_medium=crm`,
@@ -753,6 +797,7 @@ const orders: OrderRecord[] = [
         handle: "starter-kit",
         url: `${storeUrl}/products/starter-kit`,
         price: 96,
+        currency: "USD",
         quantity: 1,
       },
     ],
@@ -763,6 +808,7 @@ const orders: OrderRecord[] = [
     name: "#4306",
     createdAt: daysAgo(4),
     totalPrice: 102,
+    currency: "USD",
     aiSource: null,
     referrer: "https://www.google.com/",
     landingPage: `${storeUrl}/products/enzyme-reset-mask?utm_source=google&utm_medium=organic`,
@@ -778,6 +824,7 @@ const orders: OrderRecord[] = [
         handle: "calm-foam-cleanser",
         url: `${storeUrl}/products/calm-foam-cleanser`,
         price: 48,
+        currency: "USD",
         quantity: 1,
       },
       {
@@ -786,6 +833,7 @@ const orders: OrderRecord[] = [
         handle: "enzyme-reset-mask",
         url: `${storeUrl}/products/enzyme-reset-mask`,
         price: 54,
+        currency: "USD",
         quantity: 1,
       },
     ],
@@ -796,6 +844,7 @@ const orders: OrderRecord[] = [
     name: "#4269",
     createdAt: daysAgo(50),
     totalPrice: 233,
+    currency: "USD",
     aiSource: null,
     referrer: "https://www.reddit.com/",
     landingPage: `${storeUrl}/products/hydra-barrier-cream?utm_source=reddit&utm_medium=organic`,
@@ -811,6 +860,7 @@ const orders: OrderRecord[] = [
         handle: "hydra-barrier-cream",
         url: `${storeUrl}/products/hydra-barrier-cream`,
         price: 124,
+        currency: "USD",
         quantity: 1,
       },
       {
@@ -819,6 +869,7 @@ const orders: OrderRecord[] = [
         handle: "ceramide-repair-serum",
         url: `${storeUrl}/products/ceramide-repair-serum`,
         price: 109,
+        currency: "USD",
         quantity: 1,
       },
     ],
@@ -829,6 +880,7 @@ const orders: OrderRecord[] = [
     name: "#4295",
     createdAt: daysAgo(12),
     totalPrice: 216,
+    currency: "USD",
     aiSource: null,
     referrer: "https://www.bing.com/",
     landingPage: `${storeUrl}/products/hydra-barrier-cream?utm_source=bing&utm_medium=seo`,
@@ -844,6 +896,7 @@ const orders: OrderRecord[] = [
         handle: "hydra-barrier-cream",
         url: `${storeUrl}/products/hydra-barrier-cream`,
         price: 124,
+        currency: "USD",
         quantity: 1,
       },
       {
@@ -852,6 +905,7 @@ const orders: OrderRecord[] = [
         handle: "vitamin-c-drops",
         url: `${storeUrl}/products/vitamin-c-drops`,
         price: 92,
+        currency: "USD",
         quantity: 1,
       },
     ],
@@ -1053,7 +1107,7 @@ const extractUtm = (...urls: (string | null | undefined)[]) => {
   return { utmSource, utmMedium };
 };
 
-const detectAiFromFields = (
+export const detectAiFromFields = (
   referrer: string,
   landingPage: string,
   utmSource: string | undefined,
@@ -1461,6 +1515,7 @@ const buildRecentOrders = (
       createdAt: order.createdAt,
       aiSource: order.aiSource,
       totalPrice: orderValueByMetric(order, metric),
+      currency: order.currency,
       referrer: order.referrer,
       landingPage: order.landingPage,
       utmSource: order.utmSource,
@@ -1598,6 +1653,7 @@ export const buildDashboardData = (
 type ShopifyMoneySet = {
   shopMoney?: {
     amount?: string | null;
+    currencyCode?: string | null;
   } | null;
 };
 
@@ -1645,6 +1701,8 @@ export const mapShopifyOrderToRecord = (
   const subtotalRaw = order.currentSubtotalPriceSet?.shopMoney?.amount;
   const subtotalPrice =
     subtotalRaw === undefined || subtotalRaw === null ? undefined : parseFloat(subtotalRaw);
+  const currency =
+    order.currentTotalPriceSet?.shopMoney?.currencyCode || config.primaryCurrency || "USD";
   const referrer = order.referringSite || "";
   const landingPage = order.landingPageUrl || "";
   const { utmSource, utmMedium } = extractUtm(referrer, landingPage);
@@ -1676,6 +1734,7 @@ export const mapShopifyOrderToRecord = (
         handle,
         url,
         price: parseFloat(node.originalUnitPriceSet?.shopMoney?.amount || "0"),
+        currency: node.originalUnitPriceSet?.shopMoney?.currencyCode || currency,
         quantity: node.quantity,
       };
     }) || [];
@@ -1690,6 +1749,7 @@ export const mapShopifyOrderToRecord = (
     name: order.name,
     createdAt: order.createdAt,
     totalPrice,
+    currency,
     subtotalPrice,
     aiSource,
     referrer,

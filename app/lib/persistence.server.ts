@@ -64,6 +64,7 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
           name: order.name,
           createdAt,
           totalPrice: order.totalPrice,
+          currency: order.currency,
           subtotalPrice: order.subtotalPrice ?? order.totalPrice,
           aiSource,
           detection: order.detection,
@@ -94,6 +95,7 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
               handle: line.handle || null,
               url: line.url || null,
               price: line.price,
+              currency: line.currency,
               quantity: line.quantity,
             })),
           });
@@ -201,6 +203,7 @@ export const loadOrdersFromDb = async (
         handle: item.handle || "",
         url: item.url || "",
         price: item.price,
+        currency: item.currency,
         quantity: item.quantity,
       });
       return acc;
@@ -211,6 +214,7 @@ export const loadOrdersFromDb = async (
       name: order.name,
       createdAt: order.createdAt.toISOString(),
       totalPrice: order.totalPrice,
+      currency: order.currency,
       subtotalPrice: order.subtotalPrice ?? undefined,
       aiSource: fromAiEnum(order.aiSource),
       referrer: order.referrer || "",

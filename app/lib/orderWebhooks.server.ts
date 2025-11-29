@@ -29,6 +29,26 @@ const setWebhookStatus = async (
 
 const platform = getPlatform();
 
+type OrderWebhookPayload = {
+  admin_graphql_api_id?: unknown;
+  id?: unknown;
+};
+
+const normalizeOrderGid = (value: unknown): string | null => {
+  if (typeof value === "string" && value.trim()) return value.trim();
+  if (typeof value === "number") return `gid://shopify/Order/${value}`;
+  return null;
+};
+
+const extractOrderGid = (payload: Record<string, unknown>): string | null => {
+  const typed = payload as OrderWebhookPayload;
+  return (
+    normalizeOrderGid(typed.admin_graphql_api_id) ||
+    normalizeOrderGid(typed.id) ||
+    null
+  );
+};
+
 export const handleOrderWebhook = async (request: Request, expectedTopic: string) => {
   let shopDomain = "";
 
@@ -52,11 +72,7 @@ export const handleOrderWebhook = async (request: Request, expectedTopic: string
       return new Response("Admin client unavailable", { status: 500 });
     }
 
-    const orderGid =
-      (webhookPayload as any)?.admin_graphql_api_id ||
-      ((webhookPayload as any)?.id
-        ? `gid://shopify/Order/${(webhookPayload as any).id}`
-        : null);
+    const orderGid = extractOrderGid(webhookPayload);
 
     if (!orderGid) {
       await setWebhookStatus(shop, "warning", "Missing order id in webhook payload");

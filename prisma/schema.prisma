@@ -39,11 +39,19 @@ enum AiSource {
   Other_AI
 }
 
+enum JobStatus {
+  queued
+  processing
+  completed
+  failed
+}
+
 model Customer {
   id               String   @id
   shopDomain       String
   platform         String   @default("shopify")
   acquiredViaAi    Boolean  @default(false)
+  firstOrderId     String?
   firstOrderAt     DateTime?
   lastOrderAt      DateTime?
   orderCount       Int      @default(0)
@@ -68,6 +76,7 @@ model Order {
   subtotalPrice   Float?
   aiSource        AiSource?
   detection       String?
+  detectionSignals Json?
   referrer        String?
   landingPage     String?
   utmSource       String?
@@ -121,7 +130,9 @@ model ShopSettings {
   gmvMetric             String   @default("current_total_price")
   pipelineStatuses      Json?
   aiExposurePreferences Json?
+  retentionMonths       Int      @default(6)
   lastOrdersWebhookAt   DateTime?
+  lastCleanupAt         DateTime?
   lastBackfillAt        DateTime?
   lastTaggingAt         DateTime?
   createdAt             DateTime @default(now())
@@ -129,4 +140,35 @@ model ShopSettings {
 
   @@index([shopDomain, platform])
   @@unique([shopDomain, platform], map: "shopDomain_platform")
+}
+
+model WebhookJob {
+  id         Int        @id @default(autoincrement())
+  shopDomain String
+  topic      String
+  intent     String
+  payload    Json
+  status     JobStatus  @default(queued)
+  error      String?
+  createdAt  DateTime   @default(now())
+  startedAt  DateTime?
+  finishedAt DateTime?
+
+  @@index([shopDomain])
+  @@index([status])
+}
+
+model BackfillJob {
+  id            Int        @id @default(autoincrement())
+  shopDomain    String
+  range         String
+  status        JobStatus  @default(queued)
+  ordersFetched Int        @default(0)
+  error         String?
+  createdAt     DateTime   @default(now())
+  startedAt     DateTime?
+  finishedAt    DateTime?
+
+  @@index([shopDomain])
+  @@index([status])
 }

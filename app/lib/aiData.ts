@@ -34,7 +34,7 @@ export type OrderRecord = {
   utmMedium?: string;
   sourceName?: string;
   tags?: string[];
-  customerId: string;
+  customerId: string | null;
   isNewCustomer: boolean;
   products: OrderLine[];
   detection: string;
@@ -100,7 +100,7 @@ export type RawOrderRow = {
   landingPage: string;
   utmSource?: string;
   utmMedium?: string;
-  customerId: string;
+  customerId: string | null;
   sourceName?: string;
   isNewCustomer: boolean;
   detection: string;
@@ -1252,6 +1252,7 @@ const buildComparison = (
     const gmv = sumGMVByMetric(scopedOrders, metric);
     const ordersCount = scopedOrders.length;
     const customers = scopedOrders.reduce<Record<string, number>>((acc, order) => {
+      if (!order.customerId) return acc;
       acc[order.customerId] = (acc[order.customerId] || 0) + 1;
       return acc;
     }, {});
@@ -1683,7 +1684,7 @@ export const mapShopifyOrderToRecord = (
     utmMedium,
     sourceName: order.sourceName || undefined,
     tags: order.tags || [],
-    customerId: order.customer?.id ?? "guest",
+    customerId: order.customer?.id ?? null,
     isNewCustomer,
     products,
     detection,

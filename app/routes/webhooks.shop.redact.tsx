@@ -1,6 +1,7 @@
 import type { ActionFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import { wipeShopData } from "../lib/gdpr.server";
+import { logger } from "../lib/logger.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   let shop = "";
@@ -13,7 +14,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         ? (payload as Record<string, unknown>)
         : {};
 
-    console.log(`Received ${topic} webhook for ${shop}`);
+    logger.info(`Received ${topic} webhook`, { shopDomain: shop, topic });
 
     const shopDomain =
       typeof webhookPayload.shop_domain === "string" && webhookPayload.shop_domain
@@ -23,10 +24,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     await wipeShopData(shopDomain);
   } catch (error) {
-    console.error("shop/redact failed", {
-      shop: shop || (error as { shop_domain?: string } | Error)?.shop_domain,
-      message: (error as Error).message,
-    });
+    logger.error(
+      "shop/redact failed",
+      { shopDomain: shop || (error as { shop_domain?: string } | Error)?.shop_domain, topic },
+      { message: (error as Error).message },
+    );
 
     return new Response(undefined, { status: 202 });
   }

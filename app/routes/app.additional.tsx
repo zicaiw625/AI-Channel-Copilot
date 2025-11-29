@@ -33,6 +33,7 @@ import {
   MAX_BACKFILL_DURATION_MS,
   MAX_BACKFILL_ORDERS,
 } from "../lib/constants";
+import { logger } from "../lib/logger.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
@@ -75,9 +76,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
+  let shopDomain = "";
   try {
     const { session, admin } = await authenticate.admin(request);
-    const shopDomain = session?.shop || "";
+    shopDomain = session?.shop || "";
     const platform = getPlatform();
     const formData = await request.formData();
     const intent = formData.get("intent") || "save";
@@ -140,14 +142,15 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       });
       const result = await persistOrders(shopDomain, orders);
       await markActivity(shopDomain, { lastBackfillAt: new Date() });
-      console.info("[backfill] settings-trigger completed", {
-        platform,
-        shopDomain,
-        intent,
-        fetched: orders.length,
-        created: result.created,
-        updated: result.updated,
-      });
+      logger.info(
+        "[backfill] settings-trigger completed",
+        { platform, shopDomain, intent },
+        {
+          fetched: orders.length,
+          created: result.created,
+          updated: result.updated,
+        },
+      );
     }
 
     if (intent === "tag") {
@@ -163,20 +166,21 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       }
       const result = await persistOrders(shopDomain, orders);
       await markActivity(shopDomain, { lastTaggingAt: new Date() });
-      console.info("[tagging] settings-trigger completed", {
-        platform,
-        shopDomain,
-        intent,
-        aiOrders: aiOrders.length,
-        totalOrders: orders.length,
-        created: result.created,
-        updated: result.updated,
-      });
+      logger.info(
+        "[tagging] settings-trigger completed",
+        { platform, shopDomain, intent },
+        {
+          aiOrders: aiOrders.length,
+          totalOrders: orders.length,
+          created: result.created,
+          updated: result.updated,
+        },
+      );
     }
 
     return json({ ok: true, intent });
   } catch (error) {
-    console.error("Failed to save settings", {
+    logger.error("Failed to save settings", { shopDomain }, {
       message: (error as Error).message,
     });
     return json(
@@ -331,10 +335,6 @@ export default function SettingsAndExport() {
         shopify.toast.show?.(
           fetcher.data.message || "保存失败，请检查配置或稍后重试",
         );
-        if (import.meta.env.DEV && fetcher.data.message) {
-          // eslint-disable-next-line no-console
-          console.error("Save settings failed", fetcher.data.message);
-        }
       }
     }
   }, [fetcher.data, shopify]);

@@ -1,3 +1,5 @@
+import { logger } from "./logger.server";
+
 export type GraphqlCallResult = {
   operation: string;
   shopDomain?: string;
@@ -47,16 +49,18 @@ export const recordGraphqlCall = (result: GraphqlCallResult) => {
   graphqlCounters.set(key, entry);
 
   if (!result.ok || entry.failure % 5 === 0) {
-    console.info("[shopify][graphql] metrics", {
-      operation: result.operation,
-      shopDomain: result.shopDomain,
-      durationMs: result.durationMs,
-      retries: result.retries,
-      status: result.status,
-      success: entry.success,
-      failure: entry.failure,
-      lastError: entry.lastError,
-    });
+    logger.info(
+      "[shopify][graphql] metrics",
+      { operation: result.operation, shopDomain: result.shopDomain },
+      {
+        durationMs: result.durationMs,
+        retries: result.retries,
+        status: result.status,
+        success: entry.success,
+        failure: entry.failure,
+        lastError: entry.lastError,
+      },
+    );
   }
 
   const attempts = entry.success + entry.failure;
@@ -68,13 +72,16 @@ export const recordGraphqlCall = (result: GraphqlCallResult) => {
 
   if (shouldAlert) {
     entry.lastAlertAt = Date.now();
-    console.warn("[shopify][graphql] elevated failure rate", {
-      operation: result.operation,
-      failureRate: Number(failureRate.toFixed(2)),
-      attempts,
-      success: entry.success,
-      failure: entry.failure,
-    });
+    logger.warn(
+      "[shopify][graphql] elevated failure rate",
+      { operation: result.operation, shopDomain: result.shopDomain },
+      {
+        failureRate: Number(failureRate.toFixed(2)),
+        attempts,
+        success: entry.success,
+        failure: entry.failure,
+      },
+    );
   }
 
   if (metricsSink) {
@@ -124,10 +131,11 @@ const postGraphqlMetric = async (result: GraphqlCallResult, snapshot: GraphqlCou
     const now = Date.now();
     if (now - metricsAlertedAt > ALERT_COOLDOWN_MS) {
       metricsAlertedAt = now;
-      console.warn("[observability] failed to forward graphql metric", {
-        operation: result.operation,
-        message: (error as Error).message,
-      });
+      logger.warn(
+        "[observability] failed to forward graphql metric",
+        { operation: result.operation, shopDomain: result.shopDomain },
+        { message: (error as Error).message },
+      );
     }
   } finally {
     clearTimeout(timeout);

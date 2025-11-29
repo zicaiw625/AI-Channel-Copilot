@@ -2,6 +2,7 @@ import prisma from "../db.server";
 import { defaultSettings, type AiDomainRule, type PipelineStatus, type SettingsDefaults, type UtmSourceRule } from "./aiData";
 import { getPlatform, isDemoMode } from "./runtime.server";
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
+import { logger } from "./logger.server";
 
 const tableMissing = (error: unknown) =>
   error instanceof PrismaClientKnownRequestError && error.code === "P2021";
@@ -154,15 +155,16 @@ export const syncShopPreferences = async (
       changed = true;
     }
 
-    if (changed) {
+  if (changed) {
       await saveSettings(shopDomain, next);
       return next;
     }
   } catch (error) {
-    console.error("Failed to sync shop preferences", {
-      shop: shopDomain,
-      message: (error as Error).message,
-    });
+    logger.error(
+      "Failed to sync shop preferences",
+      { shopDomain, platform },
+      { message: (error as Error).message },
+    );
   }
 
   return settings;

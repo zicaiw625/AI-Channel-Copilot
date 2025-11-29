@@ -1,5 +1,6 @@
 import type { OrderRecord, SettingsDefaults } from "./aiData";
 import { getPlatform, isDemoMode } from "./runtime.server";
+import { logger } from "./logger.server";
 
 type AdminGraphqlClient = {
   graphql: (query: string, options: { variables?: Record<string, unknown> }) => Promise<Response>;
@@ -40,11 +41,10 @@ export const applyAiTags = async (
   context?: { shopDomain?: string; intent?: string },
 ) => {
   if (isDemoMode()) {
-    console.info("[tagging] demo mode active; skipping tag writes", {
-      platform,
-      shopDomain: context?.shopDomain,
-      intent: context?.intent,
-    });
+    logger.info(
+      "[tagging] demo mode active; skipping tag writes",
+      { platform, shopDomain: context?.shopDomain, intent: context?.intent },
+    );
     return;
   }
 
@@ -91,13 +91,14 @@ export const applyAiTags = async (
     await runInBatches(customerTagTargets);
   }
 
-  console.info("[tagging] completed tagging batch", {
-    platform,
-    shopDomain: context?.shopDomain,
-    intent: context?.intent,
-    dryRun,
-    ordersAttempted: orders.length,
-    orderTagTargets: orderTagTargets.length,
-    customerTagTargets: customerTagTargets.length,
-  });
+  logger.info(
+    "[tagging] completed tagging batch",
+    { platform, shopDomain: context?.shopDomain, intent: context?.intent },
+    {
+      dryRun,
+      ordersAttempted: orders.length,
+      orderTagTargets: orderTagTargets.length,
+      customerTagTargets: customerTagTargets.length,
+    },
+  );
 };

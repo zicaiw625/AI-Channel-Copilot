@@ -3,106 +3,65 @@ import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { Link, useFetcher, useLoaderData, useLocation, useNavigate } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 
-import {
-  channelList,
-  defaultSettings,
-  resolveDateRange,
-  timeRanges,
-  type AIChannel,
-  type TimeRangeKey,
-  LOW_SAMPLE_THRESHOLD,
-} from "../lib/aiData";
+import { channelList, defaultSettings, timeRanges, type AIChannel, LOW_SAMPLE_THRESHOLD } from "../lib/aiData";
 import { getSettings, syncShopPreferences } from "../lib/settings.server";
-import { loadOrdersFromDb } from "../lib/persistence.server";
 import { authenticate } from "../shopify.server";
 import styles from "./app.dashboard.module.css";
-import { allowDemoData } from "../lib/runtime.server";
 import { getAiDashboardData } from "../lib/aiQueries.server";
-import { isBackfillRunning } from "../lib/backfill.server";
 import { ensureRetentionOncePerDay } from "../lib/retention.server";
-
-const BACKFILL_COOLDOWN_MINUTES = 30;
-const BACKFILL_MAX_ORDERS = 250;
-const BACKFILL_MAX_DURATION_MS = 3500;
+import {
+  DEFAULT_RANGE_KEY,
+  DEFAULT_RETENTION_MONTHS,
+  MAX_DASHBOARD_ORDERS,
+  MAX_BACKFILL_DURATION_MS,
+  MAX_BACKFILL_ORDERS,
+} from "../lib/constants";
+import { loadDashboardContext } from "../lib/dashboardContext.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
-  const url = new URL(request.url);
-  const rangeParam = (url.searchParams.get("range") as TimeRangeKey) || "30d";
-  const from = url.searchParams.get("from");
-  const to = url.searchParams.get("to");
-
   const shopDomain = session?.shop || "";
+  const url = new URL(request.url);
+
   let settings = await getSettings(shopDomain);
   settings = await syncShopPreferences(admin, shopDomain, settings);
-  const displayTimezone = settings.timezones[0] || "UTC";
-  const language = settings.languages[0] || "中文";
-  const currency = settings.primaryCurrency || "USD";
-  const calculationTimezone = displayTimezone || "UTC";
-  const dateRange = resolveDateRange(rangeParam, new Date(), from, to, calculationTimezone);
-  const lastBackfillAt = settings.lastBackfillAt ? new Date(settings.lastBackfillAt) : null;
 
   await ensureRetentionOncePerDay(shopDomain, settings);
 
-  let dataSource: "live" | "demo" | "stored" | "empty" = "live";
-  let orders = await loadOrdersFromDb(shopDomain, dateRange);
-  let clamped = false;
-  let backfillSuppressed = false;
-  let backfillAvailable = false;
-  const demoAllowed = allowDemoData();
-
-  if (orders.length > 0) {
-    dataSource = "stored";
-  } else {
-    const now = new Date();
-    const withinCooldown =
-      lastBackfillAt &&
-      now.getTime() - lastBackfillAt.getTime() < BACKFILL_COOLDOWN_MINUTES * 60 * 1000;
-
-    if (withinCooldown) {
-      dataSource = "stored";
-      backfillSuppressed = true;
-    } else {
-      backfillAvailable = !(await isBackfillRunning(shopDomain));
-      dataSource = demoAllowed ? "demo" : "empty";
-    }
-  }
-
-  const useDemoData = demoAllowed && dataSource === "demo";
-  const { data } = await getAiDashboardData(shopDomain, dateRange, settings, {
-    timezone: displayTimezone,
-    allowDemo: useDemoData,
-    orders,
+  const context = await loadDashboardContext({
+    shopDomain,
+    admin,
+    settings,
+    url,
+    defaultRangeKey: DEFAULT_RANGE_KEY,
+    includeBackfillState: true,
   });
 
-  const dataLastUpdated = (() => {
-    const timestamps = [settings.lastOrdersWebhookAt, settings.lastBackfillAt].filter(Boolean);
-    if (!timestamps.length) return null;
-    const latest = timestamps
-      .map((value) => new Date(value as string))
-      .sort((a, b) => b.getTime() - a.getTime())[0];
-    return latest.toISOString();
-  })();
+  const { data } = await getAiDashboardData(shopDomain, context.dateRange, settings, {
+    timezone: context.displayTimezone,
+    allowDemo: context.dataSource === "demo",
+    orders: context.orders,
+  });
 
   return {
-    range: dateRange.key,
+    range: context.dateRange.key,
     dateRange: {
-      ...dateRange,
-      start: dateRange.start.toISOString(),
-      end: dateRange.end.toISOString(),
+      ...context.dateRange,
+      start: context.dateRange.start.toISOString(),
+      end: context.dateRange.end.toISOString(),
     },
     data,
-    dataSource,
+    dataSource: context.dataSource,
     gmvMetric: settings.gmvMetric,
-    currency,
-    calculationTimezone,
-    timezone: displayTimezone,
-    language,
-    retentionMonths: settings.retentionMonths || 6,
+    currency: context.currency,
+    calculationTimezone: context.calculationTimezone,
+    timezone: context.displayTimezone,
+    language: context.language,
+    retentionMonths: settings.retentionMonths || DEFAULT_RETENTION_MONTHS,
     lastCleanupAt: settings.lastCleanupAt || null,
-    backfillSuppressed,
-    backfillAvailable,
-    dataLastUpdated,
+    backfillSuppressed: context.backfillSuppressed,
+    backfillAvailable: context.backfillAvailable,
+    dataLastUpdated: context.dataLastUpdated,
     pipeline: {
       lastOrdersWebhookAt: settings.lastOrdersWebhookAt || null,
       lastBackfillAt: settings.lastBackfillAt || null,
@@ -112,7 +71,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           ? settings.pipelineStatuses
           : defaultSettings.pipelineStatuses,
     },
-    clamped,
+    clamped: context.clamped,
   };
 };
 
@@ -372,11 +331,7 @@ export default function Index() {
                       : "暂无数据（未启用演示数据）"}
                 （live=实时 API，stored=本地缓存，demo=演示数据）
               </span>
-              {clamped && (
-                <span>
-                  提示：已自动截断为最近 90 天内的订单，避免超长时间窗口导致补拉过慢。
-                </span>
-              )}
+              {clamped && <span>提示：已截断为最近 {MAX_DASHBOARD_ORDERS} 笔订单样本。</span>}
               <span>
                 计算时区：{calculationTimezone} · 展示时区：{timezone} · 货币：{currency}
               </span>

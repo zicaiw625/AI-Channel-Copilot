@@ -2,6 +2,11 @@ import { defaultSettings, mapShopifyOrderToRecord, type DateRange } from "./aiDa
 import type { OrderRecord, SettingsDefaults, ShopifyOrderNode } from "./aiData";
 import { getPlatform, isDemoMode } from "./runtime.server";
 import { recordGraphqlCall } from "./observability.server";
+import {
+  MAX_BACKFILL_DAYS,
+  MAX_BACKFILL_DURATION_MS,
+  MAX_BACKFILL_ORDERS,
+} from "./constants";
 
 const ORDERS_QUERY = `#graphql
   query OrdersForAiDashboard($first: Int!, $after: String, $query: String!) {
@@ -129,9 +134,6 @@ type AdminGraphqlClient = {
 };
 
 const MAX_BACKFILL_PAGES = 20;
-const MAX_BACKFILL_ORDERS = 1000;
-const MAX_BACKFILL_DAYS = 90;
-const MAX_BACKFILL_DURATION_MS = 5000;
 const DEFAULT_GRAPHQL_TIMEOUT_MS = 4500;
 
 const platform = getPlatform();

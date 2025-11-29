@@ -18,7 +18,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   try {
     const { shop: webhookShop, topic, payload } = await authenticate.webhook(request);
     shop = webhookShop;
-    const webhookPayload = (payload || {}) as Record<string, unknown>;
+    const webhookPayload =
+      payload && typeof payload === "object" && !Array.isArray(payload)
+        ? (payload as Record<string, unknown>)
+        : {};
 
     console.log(`Received ${topic} webhook for ${shop}`);
 

@@ -29,6 +29,26 @@ const setWebhookStatus = async (
 
 const platform = getPlatform();
 
+type OrderWebhookPayload = {
+  admin_graphql_api_id?: unknown;
+  id?: unknown;
+};
+
+const normalizeOrderGid = (value: unknown): string | null => {
+  if (typeof value === "string" && value.trim()) return value.trim();
+  if (typeof value === "number") return `gid://shopify/Order/${value}`;
+  return null;
+};
+
+const extractOrderGid = (payload: Record<string, unknown>): string | null => {
+  const typed = payload as OrderWebhookPayload;
+  return (
+    normalizeOrderGid(typed.admin_graphql_api_id) ||
+    normalizeOrderGid(typed.id) ||
+    null
+  );
+};
+
 export const handleOrderWebhook = async (request: Request, expectedTopic: string) => {
   let shopDomain = "";
 
@@ -52,11 +72,7 @@ export const handleOrderWebhook = async (request: Request, expectedTopic: string
       return new Response("Admin client unavailable", { status: 500 });
     }
 
-    const orderGid =
-      (webhookPayload as any)?.admin_graphql_api_id ||
-      ((webhookPayload as any)?.id
-        ? `gid://shopify/Order/${(webhookPayload as any).id}`
-        : null);
+    const orderGid = extractOrderGid(webhookPayload);
 
     if (!orderGid) {
       await setWebhookStatus(shop, "warning", "Missing order id in webhook payload");
@@ -64,7 +80,7 @@ export const handleOrderWebhook = async (request: Request, expectedTopic: string
     }
 
     const settings = await getSettings(shop);
-    const record = await fetchOrderById(admin, orderGid, settings);
+    const record = await fetchOrderById(admin, orderGid, settings, { shopDomain: shop });
 
     if (!record) {
       await setWebhookStatus(shop, "warning", "Order not found for webhook payload");
@@ -87,28 +103,39 @@ export const handleOrderWebhook = async (request: Request, expectedTopic: string
       detail: `Received ${expectedTopic} at ${new Date().toISOString()}`,
     };
 
+    await setWebhookStatus(shop, webhookStatus.status, webhookStatus.detail);
     if (record.aiSource && (settings.tagging.writeOrderTags || settings.tagging.writeCustomerTags)) {
-      try {
-        await applyAiTags(admin, [record], settings, { shopDomain: shop, intent: expectedTopic });
-      } catch (error) {
-        console.error("applyAiTags failed", {
-          shop,
-          topic,
-          message: (error as Error).message,
-        });
-        await setWebhookStatus(
-          shop,
-          "warning",
-          "Tagging failed for latest order; check server logs and retry later.",
-        );
-        webhookStatus = {
-          status: "warning",
-          detail: "Tagging failed for latest order; check server logs and retry later.",
-        };
-      }
+      const taggingStart = Date.now();
+      void (async () => {
+        try {
+          await applyAiTags(admin, [record], settings, { shopDomain: shop, intent: expectedTopic });
+          await markActivity(shop, { lastTaggingAt: new Date() });
+          await setWebhookStatus(shop, "healthy", "Latest order tagged successfully.");
+        } catch (error) {
+          console.error("applyAiTags failed", {
+            shop,
+            topic,
+            message: (error as Error).message,
+          });
+          await setWebhookStatus(
+            shop,
+            "warning",
+            "Tagging failed for latest order; check server logs and retry later.",
+          );
+        } finally {
+          const elapsed = Date.now() - taggingStart;
+          if (elapsed > 4500) {
+            console.warn("[webhook] tagging exceeded threshold", {
+              platform,
+              shop,
+              elapsedMs: elapsed,
+              topic,
+            });
+          }
+        }
+      })();
     }
 
-    await setWebhookStatus(shop, webhookStatus.status, webhookStatus.detail);
     // Only return 2xx responses after order persistence has completed to allow Shopify to retry
     // any critical failures automatically.
     return new Response();

@@ -8,11 +8,17 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   try {
     const { shop: webhookShop, topic, payload } = await authenticate.webhook(request);
     shop = webhookShop;
-    const webhookPayload = (payload || {}) as Record<string, unknown>;
+    const webhookPayload =
+      payload && typeof payload === "object" && !Array.isArray(payload)
+        ? (payload as Record<string, unknown>)
+        : {};
 
     console.log(`Received ${topic} webhook for ${shop}`);
 
-    const shopDomain = (webhookPayload as any)?.shop_domain || shop;
+    const shopDomain =
+      typeof webhookPayload.shop_domain === "string" && webhookPayload.shop_domain
+        ? webhookPayload.shop_domain
+        : shop;
     if (!shopDomain) return new Response();
 
     await wipeShopData(shopDomain);

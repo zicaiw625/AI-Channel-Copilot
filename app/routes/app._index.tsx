@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
-import { Link, useLoaderData, useLocation, useNavigate } from "react-router";
+import { Link, useFetcher, useLoaderData, useLocation, useNavigate } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 
 import {
@@ -12,17 +12,17 @@ import {
   type TimeRangeKey,
   LOW_SAMPLE_THRESHOLD,
 } from "../lib/aiData";
-import { fetchOrdersForRange } from "../lib/shopifyOrders.server";
-import { getSettings, markActivity, syncShopPreferences } from "../lib/settings.server";
-import { loadOrdersFromDb, persistOrders } from "../lib/persistence.server";
+import { getSettings, syncShopPreferences } from "../lib/settings.server";
+import { loadOrdersFromDb } from "../lib/persistence.server";
 import { authenticate } from "../shopify.server";
 import styles from "./app.dashboard.module.css";
 import { allowDemoData } from "../lib/runtime.server";
 import { getAiDashboardData } from "../lib/aiQueries.server";
+import { isBackfillRunning } from "../lib/backfill.server";
 
 const BACKFILL_COOLDOWN_MINUTES = 30;
-
-const BACKFILL_COOLDOWN_MINUTES = 30;
+const BACKFILL_MAX_ORDERS = 250;
+const BACKFILL_MAX_DURATION_MS = 3500;
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
@@ -45,6 +45,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   let orders = await loadOrdersFromDb(shopDomain, dateRange);
   let clamped = false;
   let backfillSuppressed = false;
+  let backfillAvailable = false;
   const demoAllowed = allowDemoData();
 
   if (orders.length > 0) {
@@ -59,25 +60,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       dataSource = "stored";
       backfillSuppressed = true;
     } else {
-      try {
-        const fetched = await fetchOrdersForRange(admin, dateRange, settings, {
-          shopDomain,
-          intent: "dashboard-loader",
-          rangeLabel: dateRange.label,
-        });
-        orders = fetched.orders;
-        clamped = fetched.clamped;
-        if (orders.length > 0) {
-          await persistOrders(shopDomain, orders);
-          await markActivity(shopDomain, { lastBackfillAt: new Date() });
-          dataSource = "live";
-        } else {
-          dataSource = demoAllowed ? "demo" : "empty";
-        }
-      } catch (error) {
-        console.error("Failed to load Shopify orders", error);
-        dataSource = demoAllowed ? "demo" : "empty";
-      }
+      backfillAvailable = !isBackfillRunning(shopDomain);
+      dataSource = demoAllowed ? "demo" : "empty";
     }
   }
 
@@ -112,6 +96,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     timezone: displayTimezone,
     language,
     backfillSuppressed,
+    backfillAvailable,
     dataLastUpdated,
     pipeline: {
       lastOrdersWebhookAt: settings.lastOrdersWebhookAt || null,
@@ -148,6 +133,7 @@ export default function Index() {
     pipeline,
     clamped,
     backfillSuppressed,
+    backfillAvailable,
     dataLastUpdated,
   } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
@@ -189,6 +175,14 @@ export default function Index() {
     setCustomFrom((dateRange.fromParam as string | undefined) || dateRange.start.slice(0, 10));
     setCustomTo((dateRange.toParam as string | undefined) || dateRange.end.slice(0, 10));
   }, [dateRange.end, dateRange.fromParam, dateRange.start, dateRange.toParam]);
+
+  const backfillFetcher = useFetcher<{ ok: boolean; queued: boolean; reason?: string; range?: string }>();
+  const triggerBackfill = useCallback(() => {
+    backfillFetcher.submit(
+      { range, from: dateRange.fromParam || "", to: dateRange.toParam || "" },
+      { method: "post", action: "/api/backfill" },
+    );
+  }, [backfillFetcher, dateRange.fromParam, dateRange.toParam, range]);
 
   const {
     overview,
@@ -288,15 +282,16 @@ export default function Index() {
               <strong>说明：</strong>AI 渠道识别为保守估计，依赖 referrer / UTM / 标签，部分 AI 会隐藏来源；
               仅统计站外 AI 点击 → 到站 → 完成订单的链路，不含 AI 应用内曝光或自然流量。
             </div>
-          <div className={styles.metaRow}>
-            <span>同步时间：{timeFormatter.format(new Date(overview.lastSyncedAt))}</span>
-            <span>
-              数据最近更新：{dataLastUpdated ? timeFormatter.format(new Date(dataLastUpdated)) : "暂无"}
-              {backfillSuppressed && "（30 分钟内已补拉，复用缓存数据）"}
-            </span>
-            <span>区间：{dateRange.label}</span>
-            <span>
-              数据口径：订单 {gmvMetric} · 新客=首单客户（仅限当前时间范围） · GMV 仅基于订单字段
+            <div className={styles.metaRow}>
+              <span>同步时间：{timeFormatter.format(new Date(overview.lastSyncedAt))}</span>
+              <span>
+                数据最近更新：{dataLastUpdated ? timeFormatter.format(new Date(dataLastUpdated)) : "暂无"}
+                {backfillSuppressed && "（30 分钟内已补拉，复用缓存数据）"}
+                {backfillAvailable && "（可手动触发后台补拉）"}
+              </span>
+              <span>区间：{dateRange.label}</span>
+              <span>
+                数据口径：订单 {gmvMetric} · 新客=首单客户（仅限当前时间范围） · GMV 仅基于订单字段
               </span>
               <span>
                 数据源：
@@ -339,6 +334,32 @@ export default function Index() {
                 ))}
               </div>
             </div>
+            {backfillAvailable && (
+              <div className={styles.callout}>
+                <p>
+                  暂未检索到符合条件的订单，可手动触发后台补拉（上限 {BACKFILL_MAX_ORDERS} 单，约
+                  {BACKFILL_MAX_DURATION_MS / 1000} 秒）。
+                </p>
+                <div className={styles.backfillRow}>
+                  <button
+                    className={styles.primaryButton}
+                    onClick={triggerBackfill}
+                    disabled={backfillFetcher.state !== "idle"}
+                  >
+                    {backfillFetcher.state === "idle" ? "后台补拉" : "后台补拉中..."}
+                  </button>
+                  {backfillFetcher.data && (
+                    <span className={styles.backfillStatus}>
+                      {backfillFetcher.data.queued
+                        ? `已触发后台任务（${backfillFetcher.data.range}）`
+                        : backfillFetcher.data.reason === "in-flight"
+                          ? "已有补拉在进行中，稍后刷新"
+                          : "无法触发补拉，请确认店铺会话"}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
             {dataSource === "demo" && (
               <div className={styles.callout}>
                 <span>提示</span>

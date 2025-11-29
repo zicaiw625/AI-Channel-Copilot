@@ -64,6 +64,7 @@ model Order {
   name            String
   createdAt       DateTime
   totalPrice      Float
+  currency        String   @default("USD")
   subtotalPrice   Float?
   aiSource        AiSource?
   detection       String?
@@ -93,6 +94,7 @@ model OrderProduct {
   handle     String?
   url        String?
   price      Float
+  currency   String   @default("USD")
   quantity   Int
 
   order      Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)

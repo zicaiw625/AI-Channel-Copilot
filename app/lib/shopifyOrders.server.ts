@@ -2,6 +2,12 @@ import { defaultSettings, mapShopifyOrderToRecord, type DateRange } from "./aiDa
 import type { OrderRecord, SettingsDefaults, ShopifyOrderNode } from "./aiData";
 import { getPlatform, isDemoMode } from "./runtime.server";
 import { recordGraphqlCall } from "./observability.server";
+import {
+  MAX_BACKFILL_DAYS,
+  MAX_BACKFILL_DURATION_MS,
+  MAX_BACKFILL_ORDERS,
+} from "./constants";
+import { logger } from "./logger.server";
 
 const ORDERS_QUERY = `#graphql
   query OrdersForAiDashboard($first: Int!, $after: String, $query: String!) {
@@ -129,9 +135,6 @@ type AdminGraphqlClient = {
 };
 
 const MAX_BACKFILL_PAGES = 20;
-const MAX_BACKFILL_ORDERS = 1000;
-const MAX_BACKFILL_DAYS = 90;
-const MAX_BACKFILL_DURATION_MS = 5000;
 const DEFAULT_GRAPHQL_TIMEOUT_MS = 4500;
 
 const platform = getPlatform();
@@ -184,12 +187,13 @@ const graphqlWithRetry = async (
           ok: false,
           error: text,
         });
-        console.error("[shopify] graphql request failed", {
+        logger.error("[shopify] graphql request failed", {
           platform,
           shopDomain: context.shopDomain,
           operation: context.operation,
           status: response.status,
           message: text,
+          jobType: "shopify-graphql",
         });
         throw new Error(
           `Shopify ${context.operation} failed: ${response.status} ${text} (attempt ${attempt + 1}/${
@@ -199,13 +203,14 @@ const graphqlWithRetry = async (
       }
 
       const delay = 200 * 2 ** attempt;
-      console.warn("[shopify] retrying graphql", {
+      logger.warn("[shopify] retrying graphql", {
         platform,
         shopDomain: context.shopDomain,
         operation: context.operation,
         attempt: attempt + 1,
         status: response.status,
         delay,
+        jobType: "shopify-graphql",
       });
       await sleep(delay);
     } catch (error) {
@@ -227,12 +232,13 @@ const graphqlWithRetry = async (
       });
 
       if (!shouldRetry) {
-        console.error("[shopify] graphql request failed", {
+        logger.error("[shopify] graphql request failed", {
           platform,
           shopDomain: context.shopDomain,
           operation: context.operation,
           status: lastResponse?.status,
           message,
+          jobType: "shopify-graphql",
         });
         throw new Error(
           `Shopify ${context.operation} failed: ${message} (attempt ${attempt + 1}/${maxRetries + 1})`,
@@ -240,13 +246,14 @@ const graphqlWithRetry = async (
       }
 
       const delay = 200 * 2 ** attempt;
-      console.warn("[shopify] retrying graphql", {
+      logger.warn("[shopify] retrying graphql", {
         platform,
         shopDomain: context.shopDomain,
         operation: context.operation,
         attempt: attempt + 1,
         status: lastResponse?.status || "timeout",
         delay,
+        jobType: "shopify-graphql",
       });
       await sleep(delay);
     }
@@ -314,10 +321,11 @@ export const fetchOrdersForRange = async (
   hitDurationLimit: boolean;
 }> => {
   if (isDemoMode()) {
-    console.info("[backfill] demo mode enabled; skipping Shopify fetch", {
+    logger.info("[backfill] demo mode enabled; skipping Shopify fetch", {
       platform,
       shopDomain: context?.shopDomain,
       intent: context?.intent,
+      jobType: "backfill",
     });
     return {
       orders: [],
@@ -348,11 +356,12 @@ export const fetchOrdersForRange = async (
   let hitDurationLimit = false;
   const startedAt = Date.now();
 
-  console.info("[backfill] fetching orders", {
+  logger.info("[backfill] fetching orders", {
     platform,
     shopDomain: context?.shopDomain,
     intent: context?.intent,
     range: context?.rangeLabel || `${effectiveStart.toISOString()} to ${range.end.toISOString()}`,
+    jobType: "backfill",
   });
 
   do {
@@ -379,7 +388,7 @@ export const fetchOrdersForRange = async (
     }
   } while (after);
 
-  console.info("[backfill] fetched orders", {
+  logger.info("[backfill] fetched orders", {
     platform,
     shopDomain: context?.shopDomain,
     intent: context?.intent,
@@ -392,6 +401,7 @@ export const fetchOrdersForRange = async (
     hitDurationLimit,
     maxOrders,
     maxDuration,
+    jobType: "backfill",
   });
 
   return {
@@ -413,7 +423,7 @@ export const fetchOrderById = async (
   context?: FetchContext,
 ): Promise<OrderRecord | null> => {
   if (isDemoMode()) {
-    console.info("[webhook] demo mode enabled; skipping order fetch", { platform, id });
+    logger.info("[webhook] demo mode enabled; skipping order fetch", { platform, id, jobType: "webhook" });
     return null;
   }
 

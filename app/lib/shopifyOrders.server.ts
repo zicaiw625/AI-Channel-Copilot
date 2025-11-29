@@ -127,22 +127,68 @@ type AdminGraphqlClient = {
 const MAX_BACKFILL_PAGES = 20;
 const MAX_BACKFILL_ORDERS = 1000;
 const MAX_BACKFILL_DAYS = 90;
+const MAX_BACKFILL_DURATION_MS = 5000;
 
 const platform = getPlatform();
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const graphqlWithRetry = async (
+  admin: AdminGraphqlClient,
+  query: string,
+  variables: Record<string, unknown>,
+  context: { operation: string; shopDomain?: string },
+  maxRetries = 2,
+) => {
+  let attempt = 0;
+  let lastResponse: Response | null = null;
+
+  while (attempt <= maxRetries) {
+    const response = await admin.graphql(query, { variables });
+    if (response.ok) return response;
+
+    lastResponse = response;
+    const shouldRetry =
+      response.status === 429 || response.status === 500 || response.status === 502 || response.status === 503;
+    if (!shouldRetry || attempt === maxRetries) {
+      const text = await response.text();
+      throw new Error(
+        `Shopify ${context.operation} failed: ${response.status} ${text} (attempt ${attempt + 1}/${
+          maxRetries + 1
+        })`,
+      );
+    }
+
+    const delay = 200 * 2 ** attempt;
+    console.warn("[shopify] retrying graphql", {
+      platform,
+      shopDomain: context.shopDomain,
+      operation: context.operation,
+      attempt: attempt + 1,
+      status: response.status,
+      delay,
+    });
+    await sleep(delay);
+    attempt += 1;
+  }
+
+  throw new Error(
+    `Shopify ${context.operation} failed after retries: ${lastResponse?.status ?? "unknown status"}`,
+  );
+};
 
 const fetchOrdersPage = async (
   admin: AdminGraphqlClient,
   query: string,
-  after?: string,
+  after: string | undefined,
+  context: FetchContext,
 ) => {
-  const response = await admin.graphql(ORDERS_QUERY, {
-    variables: { first: 50, after, query },
-  });
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`Shopify orders query failed: ${response.status} ${text}`);
-  }
+  const response = await graphqlWithRetry(
+    admin,
+    ORDERS_QUERY,
+    { first: 50, after, query },
+    { operation: "orders query", shopDomain: context.shopDomain },
+  );
 
   return (await response.json()) as {
     data?: {
@@ -166,6 +212,7 @@ export const fetchOrdersForRange = async (
   range: DateRange,
   settings: SettingsDefaults = defaultSettings,
   context?: FetchContext,
+  options?: { maxOrders?: number; maxDurationMs?: number },
 ): Promise<{
   orders: OrderRecord[];
   start: Date;
@@ -174,6 +221,7 @@ export const fetchOrdersForRange = async (
   pageCount: number;
   hitPageLimit: boolean;
   hitOrderLimit: boolean;
+  hitDurationLimit: boolean;
 }> => {
   if (isDemoMode()) {
     console.info("[backfill] demo mode enabled; skipping Shopify fetch", {
@@ -189,9 +237,12 @@ export const fetchOrdersForRange = async (
       pageCount: 0,
       hitPageLimit: false,
       hitOrderLimit: false,
+      hitDurationLimit: false,
     };
   }
 
+  const maxOrders = options?.maxOrders ?? MAX_BACKFILL_ORDERS;
+  const maxDuration = options?.maxDurationMs ?? MAX_BACKFILL_DURATION_MS;
   const lowerBound = new Date();
   lowerBound.setUTCDate(lowerBound.getUTCDate() - MAX_BACKFILL_DAYS);
   lowerBound.setUTCHours(0, 0, 0, 0);
@@ -204,6 +255,8 @@ export const fetchOrdersForRange = async (
   let guard = 0;
   let hitPageLimit = false;
   let hitOrderLimit = false;
+  let hitDurationLimit = false;
+  const startedAt = Date.now();
 
   console.info("[backfill] fetching orders", {
     platform,
@@ -213,7 +266,12 @@ export const fetchOrdersForRange = async (
   });
 
   do {
-    const json = await fetchOrdersPage(admin, search, after);
+    if (Date.now() - startedAt > maxDuration) {
+      hitDurationLimit = true;
+      break;
+    }
+
+    const json = await fetchOrdersPage(admin, search, after, context || {});
     const page = json.data?.orders;
     if (!page) break;
 
@@ -223,10 +281,10 @@ export const fetchOrdersForRange = async (
 
     after = page.pageInfo.hasNextPage ? page.pageInfo.endCursor || undefined : undefined;
     guard += 1;
-    if (guard >= MAX_BACKFILL_PAGES || records.length >= MAX_BACKFILL_ORDERS) {
+    if (guard >= MAX_BACKFILL_PAGES || records.length >= maxOrders) {
       // Avoid runaway pagination in extreme cases.
       hitPageLimit = guard >= MAX_BACKFILL_PAGES;
-      hitOrderLimit = records.length >= MAX_BACKFILL_ORDERS;
+      hitOrderLimit = records.length >= maxOrders;
       break;
     }
   } while (after);
@@ -241,6 +299,9 @@ export const fetchOrdersForRange = async (
     clamped,
     hitPageLimit,
     hitOrderLimit,
+    hitDurationLimit,
+    maxOrders,
+    maxDuration,
   });
 
   return {
@@ -251,6 +312,7 @@ export const fetchOrdersForRange = async (
     pageCount: guard,
     hitPageLimit,
     hitOrderLimit,
+    hitDurationLimit,
   };
 };
 
@@ -258,17 +320,19 @@ export const fetchOrderById = async (
   admin: AdminGraphqlClient,
   id: string,
   settings: SettingsDefaults = defaultSettings,
+  context?: FetchContext,
 ): Promise<OrderRecord | null> => {
   if (isDemoMode()) {
     console.info("[webhook] demo mode enabled; skipping order fetch", { platform, id });
     return null;
   }
 
-  const response = await admin.graphql(ORDER_QUERY, { variables: { id } });
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`Shopify order query failed: ${response.status} ${text}`);
-  }
+  const response = await graphqlWithRetry(
+    admin,
+    ORDER_QUERY,
+    { id },
+    { operation: "order query", shopDomain: context?.shopDomain },
+  );
 
   const json = (await response.json()) as { data?: { order?: ShopifyOrderNode | null } };
   if (!json.data?.order) return null;

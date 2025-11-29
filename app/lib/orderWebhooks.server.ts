@@ -64,7 +64,7 @@ export const handleOrderWebhook = async (request: Request, expectedTopic: string
     }
 
     const settings = await getSettings(shop);
-    const record = await fetchOrderById(admin, orderGid, settings);
+    const record = await fetchOrderById(admin, orderGid, settings, { shopDomain: shop });
 
     if (!record) {
       await setWebhookStatus(shop, "warning", "Order not found for webhook payload");
@@ -87,28 +87,39 @@ export const handleOrderWebhook = async (request: Request, expectedTopic: string
       detail: `Received ${expectedTopic} at ${new Date().toISOString()}`,
     };
 
+    await setWebhookStatus(shop, webhookStatus.status, webhookStatus.detail);
     if (record.aiSource && (settings.tagging.writeOrderTags || settings.tagging.writeCustomerTags)) {
-      try {
-        await applyAiTags(admin, [record], settings, { shopDomain: shop, intent: expectedTopic });
-      } catch (error) {
-        console.error("applyAiTags failed", {
-          shop,
-          topic,
-          message: (error as Error).message,
-        });
-        await setWebhookStatus(
-          shop,
-          "warning",
-          "Tagging failed for latest order; check server logs and retry later.",
-        );
-        webhookStatus = {
-          status: "warning",
-          detail: "Tagging failed for latest order; check server logs and retry later.",
-        };
-      }
+      const taggingStart = Date.now();
+      void (async () => {
+        try {
+          await applyAiTags(admin, [record], settings, { shopDomain: shop, intent: expectedTopic });
+          await markActivity(shop, { lastTaggingAt: new Date() });
+          await setWebhookStatus(shop, "healthy", "Latest order tagged successfully.");
+        } catch (error) {
+          console.error("applyAiTags failed", {
+            shop,
+            topic,
+            message: (error as Error).message,
+          });
+          await setWebhookStatus(
+            shop,
+            "warning",
+            "Tagging failed for latest order; check server logs and retry later.",
+          );
+        } finally {
+          const elapsed = Date.now() - taggingStart;
+          if (elapsed > 4500) {
+            console.warn("[webhook] tagging exceeded threshold", {
+              platform,
+              shop,
+              elapsedMs: elapsed,
+              topic,
+            });
+          }
+        }
+      })();
     }
 
-    await setWebhookStatus(shop, webhookStatus.status, webhookStatus.detail);
     // Only return 2xx responses after order persistence has completed to allow Shopify to retry
     // any critical failures automatically.
     return new Response();

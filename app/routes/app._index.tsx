@@ -21,8 +21,8 @@ import { allowDemoData } from "../lib/runtime.server";
 import { getAiDashboardData } from "../lib/aiQueries.server";
 
 const BACKFILL_COOLDOWN_MINUTES = 30;
-
-const BACKFILL_COOLDOWN_MINUTES = 30;
+const BACKFILL_MAX_ORDERS = 250;
+const BACKFILL_MAX_DURATION_MS = 3500;
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
@@ -45,6 +45,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   let orders = await loadOrdersFromDb(shopDomain, dateRange);
   let clamped = false;
   let backfillSuppressed = false;
+  let backfillQueued = false;
   const demoAllowed = allowDemoData();
 
   if (orders.length > 0) {
@@ -59,25 +60,37 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       dataSource = "stored";
       backfillSuppressed = true;
     } else {
-      try {
-        const fetched = await fetchOrdersForRange(admin, dateRange, settings, {
-          shopDomain,
-          intent: "dashboard-loader",
-          rangeLabel: dateRange.label,
-        });
-        orders = fetched.orders;
-        clamped = fetched.clamped;
-        if (orders.length > 0) {
-          await persistOrders(shopDomain, orders);
-          await markActivity(shopDomain, { lastBackfillAt: new Date() });
-          dataSource = "live";
-        } else {
-          dataSource = demoAllowed ? "demo" : "empty";
+      backfillQueued = true;
+      void (async () => {
+        try {
+          const fetched = await fetchOrdersForRange(
+            admin,
+            dateRange,
+            settings,
+            {
+              shopDomain,
+              intent: "dashboard-loader",
+              rangeLabel: dateRange.label,
+            },
+            { maxOrders: BACKFILL_MAX_ORDERS, maxDurationMs: BACKFILL_MAX_DURATION_MS },
+          );
+          if (fetched.orders.length > 0) {
+            await persistOrders(shopDomain, fetched.orders);
+            await markActivity(shopDomain, { lastBackfillAt: new Date() });
+          }
+          clamped = fetched.clamped;
+          if (fetched.hitDurationLimit) {
+            console.warn("[backfill] loader aborted due to duration cap", {
+              shopDomain,
+              range: fetched.start.toISOString(),
+            });
+          }
+        } catch (error) {
+          console.error("Failed to load Shopify orders", error);
         }
-      } catch (error) {
-        console.error("Failed to load Shopify orders", error);
-        dataSource = demoAllowed ? "demo" : "empty";
-      }
+      })();
+
+      dataSource = demoAllowed ? "demo" : "empty";
     }
   }
 
@@ -112,6 +125,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     timezone: displayTimezone,
     language,
     backfillSuppressed,
+    backfillQueued,
     dataLastUpdated,
     pipeline: {
       lastOrdersWebhookAt: settings.lastOrdersWebhookAt || null,
@@ -148,6 +162,7 @@ export default function Index() {
     pipeline,
     clamped,
     backfillSuppressed,
+    backfillQueued,
     dataLastUpdated,
   } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
@@ -288,15 +303,16 @@ export default function Index() {
               <strong>说明：</strong>AI 渠道识别为保守估计，依赖 referrer / UTM / 标签，部分 AI 会隐藏来源；
               仅统计站外 AI 点击 → 到站 → 完成订单的链路，不含 AI 应用内曝光或自然流量。
             </div>
-          <div className={styles.metaRow}>
-            <span>同步时间：{timeFormatter.format(new Date(overview.lastSyncedAt))}</span>
-            <span>
-              数据最近更新：{dataLastUpdated ? timeFormatter.format(new Date(dataLastUpdated)) : "暂无"}
-              {backfillSuppressed && "（30 分钟内已补拉，复用缓存数据）"}
-            </span>
-            <span>区间：{dateRange.label}</span>
-            <span>
-              数据口径：订单 {gmvMetric} · 新客=首单客户（仅限当前时间范围） · GMV 仅基于订单字段
+            <div className={styles.metaRow}>
+              <span>同步时间：{timeFormatter.format(new Date(overview.lastSyncedAt))}</span>
+              <span>
+                数据最近更新：{dataLastUpdated ? timeFormatter.format(new Date(dataLastUpdated)) : "暂无"}
+                {backfillSuppressed && "（30 分钟内已补拉，复用缓存数据）"}
+                {backfillQueued && "（后台回填中，当前展示缓存/演示数据）"}
+              </span>
+              <span>区间：{dateRange.label}</span>
+              <span>
+                数据口径：订单 {gmvMetric} · 新客=首单客户（仅限当前时间范围） · GMV 仅基于订单字段
               </span>
               <span>
                 数据源：

@@ -54,6 +54,8 @@ const ensureTables = () => {
   return cachedModels;
 };
 
+const models = ensureTables();
+
 export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) => {
   if (!shopDomain || !orders.length || isDemoMode()) return { created: 0, updated: 0 };
 
@@ -65,8 +67,6 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
   }
 
   try {
-    ensureTables();
-
     let created = 0;
     let updated = 0;
 
@@ -256,7 +256,7 @@ export const loadOrdersFromDb = async (
   if (!shopDomain || isDemoMode()) return { orders: [], clamped: false };
 
   try {
-    const { orderModel, productModel } = ensureTables();
+    const { orderModel, productModel } = models;
 
     const orders = await orderModel.findMany({
       where: {
@@ -270,7 +270,7 @@ export const loadOrdersFromDb = async (
 
     if (!orders.length) return { orders: [], clamped: false };
 
-    const orderIds = orders.map((o: any) => o.id);
+    const orderIds = orders.map((order) => order.id);
     const products = await productModel.findMany({
       where: { orderId: { in: orderIds } },
     });
@@ -289,7 +289,7 @@ export const loadOrdersFromDb = async (
       return acc;
     }, {});
 
-    const mappedOrders = orders.map((order: any) => ({
+    const mappedOrders = orders.map((order) => ({
       id: order.id,
       name: order.name,
       createdAt: order.createdAt.toISOString(),
@@ -322,7 +322,7 @@ export const loadOrdersFromDb = async (
 export const aggregateAiShare = async (shopDomain: string) => {
   if (!shopDomain) return { aiOrders: 0, totalOrders: 0 };
   try {
-    const { orderModel } = ensureTables();
+    const { orderModel } = models;
     const [totalOrders, aiOrders] = await Promise.all([
       orderModel.count({ where: { shopDomain, platform } }),
       orderModel.count({ where: { shopDomain, platform, aiSource: { not: null } } }),
@@ -337,10 +337,5 @@ export const aggregateAiShare = async (shopDomain: string) => {
 };
 
 export const hasAnyTables = () => {
-  try {
-    ensureTables();
-    return true;
-  } catch {
-    return false;
-  }
+  return Boolean(models);
 };

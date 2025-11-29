@@ -96,6 +96,7 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
           sourceName: order.sourceName,
           customerId: order.customerId ?? null,
           isNewCustomer: order.isNewCustomer,
+          detectionSignals: order.signals,
           createdAtLocal: createdAt,
         };
 
@@ -243,6 +244,7 @@ export const loadOrdersFromDb = async (
       isNewCustomer: order.isNewCustomer,
       products: productMap[order.id] || [],
       detection: order.detection || "",
+      signals: order.detectionSignals || [],
     }));
   } catch (error) {
     if (tableMissing(error)) {

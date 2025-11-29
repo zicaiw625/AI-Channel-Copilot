@@ -69,6 +69,7 @@ model Order {
   subtotalPrice   Float?
   aiSource        AiSource?
   detection       String?
+  detectionSignals Json?
   referrer        String?
   landingPage     String?
   utmSource       String?

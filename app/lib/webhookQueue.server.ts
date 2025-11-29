@@ -35,10 +35,14 @@ const updateJobStatus = async (
   status: "completed" | "failed",
   error?: string,
 ) => {
-  await prisma.webhookJob.update({
+  const result = await prisma.webhookJob.updateMany({
     where: { id },
     data: { status, finishedAt: new Date(), ...(error ? { error } : {}) },
   });
+
+  if (!result.count) {
+    console.warn("[webhook] attempted to update missing job", { id, status });
+  }
 };
 
 const processQueue = async (handlers: Map<string, WebhookJob["run"]>) => {

@@ -1,0 +1,11 @@
+const fromEnv = (key: string, fallback: number) => {
+  const value = Number(process.env[key]);
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+};
+
+export const DEFAULT_RANGE_KEY = "30d" as const;
+export const MAX_DASHBOARD_ORDERS = fromEnv("MAX_DASHBOARD_ORDERS", 5000);
+export const MAX_BACKFILL_ORDERS = fromEnv("MAX_BACKFILL_ORDERS", 1000);
+export const MAX_BACKFILL_DAYS = fromEnv("MAX_BACKFILL_DAYS", 90);
+export const MAX_BACKFILL_DURATION_MS = fromEnv("MAX_BACKFILL_DURATION_MS", 5000);
+export const BACKFILL_TAGGING_BATCH_SIZE = fromEnv("BACKFILL_TAGGING_BATCH_SIZE", 25);

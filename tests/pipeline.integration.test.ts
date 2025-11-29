@@ -106,7 +106,7 @@ describe("orders webhook to dashboard integration", () => {
     } as any;
 
     vi.mocked(getAiDashboardData).mockResolvedValue({ data: dashboardData, orders: dashboardData.recentOrders });
-    vi.mocked(loadOrdersFromDb).mockResolvedValue(dashboardData.recentOrders as any);
+    vi.mocked(loadOrdersFromDb).mockResolvedValue({ orders: dashboardData.recentOrders as any, clamped: false });
     mockAdminAuth.mockResolvedValue({ admin: {}, session: { shop: shopDomain } });
 
     const loaderResult = await dashboardLoader({ request: new Request("http://test/app") } as any);

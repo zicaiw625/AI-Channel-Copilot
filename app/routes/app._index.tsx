@@ -20,6 +20,7 @@ import { allowDemoData } from "../lib/runtime.server";
 import { getAiDashboardData } from "../lib/aiQueries.server";
 import { isBackfillRunning } from "../lib/backfill.server";
 import { ensureRetentionOncePerDay } from "../lib/retention.server";
+import { MAX_DASHBOARD_ORDERS } from "../lib/constants";
 
 const BACKFILL_COOLDOWN_MINUTES = 30;
 const BACKFILL_MAX_ORDERS = 250;
@@ -45,8 +46,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   await ensureRetentionOncePerDay(shopDomain, settings);
 
   let dataSource: "live" | "demo" | "stored" | "empty" = "live";
-  let orders = await loadOrdersFromDb(shopDomain, dateRange);
-  let clamped = false;
+  const { orders: storedOrders, clamped } = await loadOrdersFromDb(shopDomain, dateRange);
+  let orders = storedOrders;
   let backfillSuppressed = false;
   let backfillAvailable = false;
   const demoAllowed = allowDemoData();
@@ -372,11 +373,7 @@ export default function Index() {
                       : "暂无数据（未启用演示数据）"}
                 （live=实时 API，stored=本地缓存，demo=演示数据）
               </span>
-              {clamped && (
-                <span>
-                  提示：已自动截断为最近 90 天内的订单，避免超长时间窗口导致补拉过慢。
-                </span>
-              )}
+              {clamped && <span>提示：已截断为最近 {MAX_DASHBOARD_ORDERS} 笔订单样本。</span>}
               <span>
                 计算时区：{calculationTimezone} · 展示时区：{timezone} · 货币：{currency}
               </span>

@@ -23,7 +23,11 @@ export const getAiDashboardData = async (
   options: DashboardQueryOptions = {},
 ): Promise<{ data: DashboardData; orders: OrderRecord[] }> => {
   const useDemo = options.allowDemo ?? allowDemoData();
-  const orders = options.orders ?? (shopDomain ? await loadOrdersFromDb(shopDomain, range) : []);
+  const { orders, clamped } = options.orders
+    ? { orders: options.orders, clamped: false }
+    : shopDomain
+      ? await loadOrdersFromDb(shopDomain, range)
+      : { orders: [], clamped: false };
 
   const data = orders.length
     ? buildDashboardFromOrders(
@@ -43,7 +47,7 @@ export const getAiDashboardData = async (
           settings.primaryCurrency,
         );
 
-  return { data, orders };
+  return { data: { ...data, sampleNote: clamped ? "数据为截断样本，建议缩短时间范围" : data.sampleNote }, orders };
 };
 
 export const getAiOverview = async (

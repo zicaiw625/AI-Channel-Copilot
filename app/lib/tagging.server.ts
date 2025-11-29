@@ -76,6 +76,11 @@ export const applyAiTags = async (
         seenCustomers.add(order.customerId);
       }
     }
+  };
+
+  if (!dryRun) {
+    await runInBatches(orderTagTargets);
+    await runInBatches(customerTagTargets);
   }
 
   const runInBatches = async (targets: { id: string; tags: string[] }[]) => {

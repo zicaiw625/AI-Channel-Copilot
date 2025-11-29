@@ -22,6 +22,8 @@ import { getAiDashboardData } from "../lib/aiQueries.server";
 
 const BACKFILL_COOLDOWN_MINUTES = 30;
 
+const BACKFILL_COOLDOWN_MINUTES = 30;
+
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
   const url = new URL(request.url);

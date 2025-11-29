@@ -3,6 +3,7 @@ import { defaultSettings, type SettingsDefaults } from "./aiData";
 import { getPlatform } from "./runtime.server";
 import { markActivity } from "./settings.server";
 import { DEFAULT_RETENTION_MONTHS } from "./constants";
+import { logger } from "./logger.server";
 
 const platform = getPlatform();
 
@@ -39,12 +40,13 @@ export const pruneHistoricalData = async (shopDomain: string, months: number) =>
 
   await markActivity(shopDomain, { lastCleanupAt: new Date() });
 
-  console.info("[retention] cleanup complete", {
+  logger.info("[retention] cleanup complete", {
     platform,
-    shop: shopDomain,
+    shopDomain,
     cutoff: cutoff.toISOString(),
     deletedOrders: deletedOrders.count,
     deletedCustomers: deletedCustomers.count,
+    jobType: "retention",
   });
 
   return { cutoff, deletedOrders: deletedOrders.count, deletedCustomers: deletedCustomers.count };

@@ -40,6 +40,7 @@ export type OrderRecord = {
   isNewCustomer: boolean;
   products: OrderLine[];
   detection: string;
+  signals: string[];
 };
 
 export type OverviewMetrics = {
@@ -108,6 +109,7 @@ export type RawOrderRow = {
   sourceName?: string;
   isNewCustomer: boolean;
   detection: string;
+  signals: string[];
 };
 
 export type PipelineStatus = {
@@ -295,7 +297,7 @@ export const resolveDateRange = (
   };
 };
 
-const orders: OrderRecord[] = [
+const seedOrders: (Omit<OrderRecord, "signals"> & { signals?: string[] })[] = [
   {
     id: "4310",
     name: "#4310",
@@ -914,6 +916,11 @@ const orders: OrderRecord[] = [
   },
 ];
 
+const orders: OrderRecord[] = seedOrders.map((order) => ({
+  ...order,
+  signals: order.signals ?? [],
+}));
+
 const defaultAiDomains: AiDomainRule[] = [
   { domain: "chat.openai.com", channel: "ChatGPT", source: "default" },
   { domain: "chatgpt.com", channel: "ChatGPT", source: "default" },
@@ -1121,7 +1128,7 @@ export const detectAiFromFields = (
     utmMediumKeywords: defaultUtmMediums,
     tagPrefix: "AI-Source",
   },
-): { aiSource: AIChannel | null; detection: string } => {
+): { aiSource: AIChannel | null; detection: string; signals: string[] } => {
   const refUrl = safeUrl(referrer);
   const landingUrl = safeUrl(landingPage);
   const refDomain = extractHostname(referrer);
@@ -1130,7 +1137,7 @@ export const detectAiFromFields = (
 
   const bingCopilotReason = detectCopilotFromBing(refUrl) || detectCopilotFromBing(landingUrl);
   if (bingCopilotReason) {
-    return { aiSource: "Copilot", detection: `${bingCopilotReason} · 高置信度` };
+    return { aiSource: "Copilot", detection: `${bingCopilotReason} · 高置信度`, signals: [] };
   }
 
   const domainHit = config.aiDomains.find(
@@ -1157,6 +1164,7 @@ export const detectAiFromFields = (
     return {
       aiSource: domainHit.channel as AIChannel,
       detection: `${signals.join(" + ")} · 置信度高${conflictNote}`,
+      signals,
     };
   }
 
@@ -1165,6 +1173,7 @@ export const detectAiFromFields = (
     return {
       aiSource: utmMatch.channel,
       detection: `${signals.join(" + ")} · 置信度中等（缺少 referrer）`,
+      signals,
     };
   }
 
@@ -1179,11 +1188,12 @@ export const detectAiFromFields = (
     return {
       aiSource: "Other-AI",
       detection: `${signals.join(" + ")} · 置信度低：仅命中 medium 关键词(${mediumHit})`,
+      signals,
     };
   }
 
   const noteHit = detectFromNoteAttributes(noteAttributes, config.utmSources);
-  if (noteHit) return noteHit;
+  if (noteHit) return { ...noteHit, signals: [] };
 
   const tagPrefix = config.tagPrefix || "AI-Source";
   const tagMatch = tags?.find((tag) => tag.startsWith(tagPrefix));
@@ -1195,6 +1205,7 @@ export const detectAiFromFields = (
     return {
       aiSource: channel,
       detection: `Detected by existing tag ${tagMatch} · 置信度中等`,
+      signals: ["existing tag"],
     };
   }
 
@@ -1203,6 +1214,7 @@ export const detectAiFromFields = (
     detection: `未检测到 AI 信号（referrer=${refDomain || "—"}, utm_source=${
       utmSource || "—"
     }, landing=${landingDomain || "—"}） · 置信度低`,
+    signals,
   };
 };
 
@@ -1546,6 +1558,7 @@ const buildRecentOrders = (
       sourceName: order.sourceName,
       isNewCustomer: order.isNewCustomer,
       detection: order.detection,
+      signals: order.signals,
     }));
 
 const toCsvValue = (value: string | number | null | undefined) => {
@@ -1744,7 +1757,7 @@ export const mapShopifyOrderToRecord = (
   const landingPage = order.landingPageUrl || "";
   const { utmSource, utmMedium } = extractUtm(referrer, landingPage);
 
-  const { aiSource, detection } = detectAiFromFields(
+  const { aiSource, detection, signals } = detectAiFromFields(
     referrer,
     landingPage,
     utmSource,
@@ -1799,5 +1812,6 @@ export const mapShopifyOrderToRecord = (
     isNewCustomer,
     products,
     detection,
+    signals,
   };
 };

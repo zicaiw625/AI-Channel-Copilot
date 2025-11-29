@@ -96,15 +96,25 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
         }
 
         if (order.customerId) {
-          const existing = await tx.customer.findUnique({
+          const existingCustomer = await tx.customer.findUnique({
             where: { id: order.customerId },
           });
 
-          const nextOrderCount = (existing?.orderCount ?? 0) + 1;
-          const nextTotal = (existing?.totalSpent ?? 0) + order.totalPrice;
+          const priorOrderCount = existingCustomer?.orderCount ?? 0;
+          const priorTotal = existingCustomer?.totalSpent ?? 0;
+          const previousContribution =
+            existingOrder && existingOrder.customerId === order.customerId
+              ? existingOrder.totalPrice
+              : 0;
+
+          const nextOrderCount = existingOrder
+            ? Math.max(priorOrderCount, 1)
+            : priorOrderCount + 1;
+          const nextTotal = priorTotal - previousContribution + order.totalPrice;
           const acquiredViaAi =
-            existing?.acquiredViaAi || Boolean(order.aiSource && order.isNewCustomer);
-          const firstAiOrderId = existing?.firstAiOrderId || (order.aiSource ? order.id : null);
+            existingCustomer?.acquiredViaAi || Boolean(order.aiSource && order.isNewCustomer);
+          const firstAiOrderId =
+            existingCustomer?.firstAiOrderId || (order.aiSource ? order.id : null);
 
           await tx.customer.upsert({
             where: { id: order.customerId },
@@ -120,8 +130,11 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
             },
             update: {
               shopDomain,
-              firstOrderAt: existing?.firstOrderAt || createdAt,
-              lastOrderAt: createdAt,
+              firstOrderAt: existingCustomer?.firstOrderAt || createdAt,
+              lastOrderAt:
+                existingCustomer?.lastOrderAt && existingCustomer.lastOrderAt > createdAt
+                  ? existingCustomer.lastOrderAt
+                  : createdAt,
               orderCount: nextOrderCount,
               totalSpent: nextTotal,
               acquiredViaAi,

@@ -62,20 +62,27 @@ const mapRecordToSettings = (record: {
     writeCustomerTags: record.writeCustomerTags,
     dryRun: record.taggingDryRun ?? true,
   },
-  exposurePreferences: {
-    exposeProducts:
-      typeof (record.aiExposurePreferences as any)?.exposeProducts === "boolean"
-        ? (record.aiExposurePreferences as any).exposeProducts
-        : defaultSettings.exposurePreferences.exposeProducts,
-    exposeCollections:
-      typeof (record.aiExposurePreferences as any)?.exposeCollections === "boolean"
-        ? (record.aiExposurePreferences as any).exposeCollections
-        : defaultSettings.exposurePreferences.exposeCollections,
-    exposeBlogs:
-      typeof (record.aiExposurePreferences as any)?.exposeBlogs === "boolean"
-        ? (record.aiExposurePreferences as any).exposeBlogs
-        : defaultSettings.exposurePreferences.exposeBlogs,
-  },
+  exposurePreferences: (() => {
+    const preferences = record.aiExposurePreferences as
+      | SettingsDefaults["exposurePreferences"]
+      | null
+      | undefined;
+
+    return {
+      exposeProducts:
+        typeof preferences?.exposeProducts === "boolean"
+          ? preferences.exposeProducts
+          : defaultSettings.exposurePreferences.exposeProducts,
+      exposeCollections:
+        typeof preferences?.exposeCollections === "boolean"
+          ? preferences.exposeCollections
+          : defaultSettings.exposurePreferences.exposeCollections,
+      exposeBlogs:
+        typeof preferences?.exposeBlogs === "boolean"
+          ? preferences.exposeBlogs
+          : defaultSettings.exposurePreferences.exposeBlogs,
+    };
+  })(),
   retentionMonths:
     typeof record.retentionMonths === "number"
       ? clampRetention(record.retentionMonths)

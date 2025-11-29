@@ -10,8 +10,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     shopDomain = shop;
     console.log(`Received ${topic} webhook for ${shop}`);
 
-    const current = Array.isArray((payload as any)?.current)
-      ? ((payload as any).current as string[])
+    const currentRaw = (payload as { current?: unknown }).current;
+    const current = Array.isArray(currentRaw)
+      ? currentRaw.filter((value): value is string => typeof value === "string")
       : [];
 
     if (session && current.length) {

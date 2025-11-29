@@ -24,7 +24,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     await wipeShopData(shopDomain);
   } catch (error) {
     console.error("shop/redact failed", {
-      shop: shop || (error as any)?.shop_domain,
+      shop: shop || (error as { shop_domain?: string } | Error)?.shop_domain,
       message: (error as Error).message,
     });
 

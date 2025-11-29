@@ -3,6 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { type AIChannel, type DateRange, type OrderRecord } from "./aiData";
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 import { getPlatform, isDemoMode } from "./runtime.server";
+import { MAX_DASHBOARD_ORDERS } from "./constants";
 
 const tableMissing = (error: unknown) =>
   (error instanceof PrismaClientKnownRequestError && error.code === "P2021") ||
@@ -33,13 +34,27 @@ const fromAiEnum = (source: Prisma.AiSource | null): AIChannel | null => {
   return source as AIChannel;
 };
 
-const ensureTables = () => {
-  const orderModel = prisma.order;
-  const customerModel = prisma.customer;
-  const productModel = prisma.orderProduct;
+let cachedModels:
+  | {
+      orderModel: typeof prisma.order;
+      customerModel: typeof prisma.customer;
+      productModel: typeof prisma.orderProduct;
+    }
+  | null = null;
 
-  return { orderModel, customerModel, productModel };
+const ensureTables = () => {
+  if (!cachedModels) {
+    const orderModel = prisma.order;
+    const customerModel = prisma.customer;
+    const productModel = prisma.orderProduct;
+
+    cachedModels = { orderModel, customerModel, productModel };
+  }
+
+  return cachedModels;
 };
+
+const models = ensureTables();
 
 export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) => {
   if (!shopDomain || !orders.length || isDemoMode()) return { created: 0, updated: 0 };
@@ -52,8 +67,6 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
   }
 
   try {
-    ensureTables();
-
     let created = 0;
     let updated = 0;
 
@@ -86,6 +99,7 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
             const aiSource = toAiEnum(order.aiSource);
             const createdAt = new Date(order.createdAt);
             const existingOrder = orderMap.get(order.id);
+            const detection = (order.detection || "").slice(0, 200);
 
             const orderData: Prisma.OrderUpsertArgs["create"] = {
               id: order.id,
@@ -97,7 +111,7 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
               currency: order.currency,
               subtotalPrice: order.subtotalPrice ?? order.totalPrice,
               aiSource,
-              detection: order.detection,
+              detection,
               referrer: order.referrer,
               landingPage: order.landingPage,
               utmSource: order.utmSource,
@@ -238,11 +252,11 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
 export const loadOrdersFromDb = async (
   shopDomain: string,
   range: DateRange,
-): Promise<OrderRecord[]> => {
-  if (!shopDomain || isDemoMode()) return [];
+): Promise<{ orders: OrderRecord[]; clamped: boolean }> => {
+  if (!shopDomain || isDemoMode()) return { orders: [], clamped: false };
 
   try {
-    const { orderModel, productModel } = ensureTables();
+    const { orderModel, productModel } = models;
 
     const orders = await orderModel.findMany({
       where: {
@@ -251,11 +265,12 @@ export const loadOrdersFromDb = async (
         createdAt: { gte: range.start, lte: range.end },
       },
       orderBy: { createdAt: "desc" },
+      take: MAX_DASHBOARD_ORDERS,
     });
 
-    if (!orders.length) return [];
+    if (!orders.length) return { orders: [], clamped: false };
 
-    const orderIds = orders.map((o: any) => o.id);
+    const orderIds = orders.map((order) => order.id);
     const products = await productModel.findMany({
       where: { orderId: { in: orderIds } },
     });
@@ -274,7 +289,7 @@ export const loadOrdersFromDb = async (
       return acc;
     }, {});
 
-    return orders.map((order: any) => ({
+    const mappedOrders = orders.map((order) => ({
       id: order.id,
       name: order.name,
       createdAt: order.createdAt.toISOString(),
@@ -294,9 +309,11 @@ export const loadOrdersFromDb = async (
       detection: order.detection || "",
       signals: order.detectionSignals || [],
     }));
+
+    return { orders: mappedOrders, clamped: orders.length >= MAX_DASHBOARD_ORDERS };
   } catch (error) {
     if (tableMissing(error)) {
-      return [];
+      return { orders: [], clamped: false };
     }
     throw error;
   }
@@ -305,7 +322,7 @@ export const loadOrdersFromDb = async (
 export const aggregateAiShare = async (shopDomain: string) => {
   if (!shopDomain) return { aiOrders: 0, totalOrders: 0 };
   try {
-    const { orderModel } = ensureTables();
+    const { orderModel } = models;
     const [totalOrders, aiOrders] = await Promise.all([
       orderModel.count({ where: { shopDomain, platform } }),
       orderModel.count({ where: { shopDomain, platform, aiSource: { not: null } } }),
@@ -320,10 +337,5 @@ export const aggregateAiShare = async (shopDomain: string) => {
 };
 
 export const hasAnyTables = () => {
-  try {
-    ensureTables();
-    return true;
-  } catch {
-    return false;
-  }
+  return Boolean(models);
 };

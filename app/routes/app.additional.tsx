@@ -8,10 +8,9 @@ import {
   buildDashboardData,
   buildDashboardFromOrders,
   channelList,
-  resolveDateRange,
   type AIChannel,
   type AiDomainRule,
-  type DateRange,
+  type TimeRangeKey,
   type UtmSourceRule,
 } from "../lib/aiData";
 import { fetchOrdersForRange } from "../lib/shopifyOrders.server";
@@ -22,15 +21,19 @@ import {
   saveSettings,
   syncShopPreferences,
 } from "../lib/settings.server";
-import { loadOrdersFromDb, persistOrders } from "../lib/persistence.server";
+import { persistOrders } from "../lib/persistence.server";
 import { applyAiTags } from "../lib/tagging.server";
 import { authenticate } from "../shopify.server";
 import styles from "./app.settings.module.css";
 import { allowDemoData, getPlatform } from "../lib/runtime.server";
-
-const BACKFILL_COOLDOWN_MINUTES = 30;
-
-const BACKFILL_COOLDOWN_MINUTES = 30;
+import { loadDashboardContext } from "../lib/dashboardContext.server";
+import {
+  BACKFILL_COOLDOWN_MINUTES,
+  DEFAULT_RANGE_KEY,
+  MAX_BACKFILL_DURATION_MS,
+  MAX_BACKFILL_ORDERS,
+} from "../lib/constants";
+import { logger } from "../lib/logger.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
@@ -38,63 +41,45 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const shopDomain = session?.shop || "";
   let settings = await getSettings(shopDomain);
   settings = await syncShopPreferences(admin, shopDomain, settings);
-  const displayTimezone = settings.timezones[0] || "UTC";
-  const calculationTimezone = displayTimezone || "UTC";
   const exportRange = (url.searchParams.get("range") as TimeRangeKey) || "90d";
-  const range: DateRange = resolveDateRange(
-    exportRange,
-    new Date(),
-    undefined,
-    undefined,
-    calculationTimezone,
-  );
-
-  let orders = await loadOrdersFromDb(shopDomain, range);
-  let clamped = false;
   const demoAllowed = allowDemoData();
 
-  if (orders.length === 0) {
-    try {
-      const fetched = await fetchOrdersForRange(admin, range, settings, {
-        shopDomain,
-        intent: "settings-export",
-        rangeLabel: range.label,
-      });
-      orders = fetched.orders;
-      clamped = fetched.clamped;
-      if (orders.length > 0) {
-        await persistOrders(shopDomain, orders);
-      }
-    } catch (error) {
-      console.error("Failed to load Shopify orders for export", error);
-    }
-  }
+  const { dateRange, orders, clamped, displayTimezone } = await loadDashboardContext({
+    shopDomain,
+    admin,
+    settings,
+    url,
+    defaultRangeKey: (exportRange as TimeRangeKey) || DEFAULT_RANGE_KEY,
+    fallbackToShopify: true,
+    fallbackIntent: "settings-export",
+  });
 
   const exports = orders.length
     ? buildDashboardFromOrders(
         orders,
-        range,
+        dateRange,
         settings.gmvMetric,
         displayTimezone,
         settings.primaryCurrency,
       ).exports
     : demoAllowed
-      ? buildDashboardData(range, settings.gmvMetric, displayTimezone, settings.primaryCurrency).exports
+      ? buildDashboardData(dateRange, settings.gmvMetric, displayTimezone, settings.primaryCurrency).exports
       : buildDashboardFromOrders(
           [],
-          range,
+          dateRange,
           settings.gmvMetric,
           displayTimezone,
           settings.primaryCurrency,
         ).exports;
 
-  return { settings, exports, exportRange, clamped };
+  return { settings, exports, exportRange, clamped, displayTimezone };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
+  let shopDomain = "";
   try {
     const { session, admin } = await authenticate.admin(request);
-    const shopDomain = session?.shop || "";
+    shopDomain = session?.shop || "";
     const platform = getPlatform();
     const formData = await request.formData();
     const intent = formData.get("intent") || "save";
@@ -157,14 +142,15 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       });
       const result = await persistOrders(shopDomain, orders);
       await markActivity(shopDomain, { lastBackfillAt: new Date() });
-      console.info("[backfill] settings-trigger completed", {
-        platform,
-        shopDomain,
-        intent,
-        fetched: orders.length,
-        created: result.created,
-        updated: result.updated,
-      });
+      logger.info(
+        "[backfill] settings-trigger completed",
+        { platform, shopDomain, intent },
+        {
+          fetched: orders.length,
+          created: result.created,
+          updated: result.updated,
+        },
+      );
     }
 
     if (intent === "tag") {
@@ -180,20 +166,21 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       }
       const result = await persistOrders(shopDomain, orders);
       await markActivity(shopDomain, { lastTaggingAt: new Date() });
-      console.info("[tagging] settings-trigger completed", {
-        platform,
-        shopDomain,
-        intent,
-        aiOrders: aiOrders.length,
-        totalOrders: orders.length,
-        created: result.created,
-        updated: result.updated,
-      });
+      logger.info(
+        "[tagging] settings-trigger completed",
+        { platform, shopDomain, intent },
+        {
+          aiOrders: aiOrders.length,
+          totalOrders: orders.length,
+          created: result.created,
+          updated: result.updated,
+        },
+      );
     }
 
     return json({ ok: true, intent });
   } catch (error) {
-    console.error("Failed to save settings", {
+    logger.error("Failed to save settings", { shopDomain }, {
       message: (error as Error).message,
     });
     return json(
@@ -348,10 +335,6 @@ export default function SettingsAndExport() {
         shopify.toast.show?.(
           fetcher.data.message || "保存失败，请检查配置或稍后重试",
         );
-        if (import.meta.env.DEV && fetcher.data.message) {
-          // eslint-disable-next-line no-console
-          console.error("Save settings failed", fetcher.data.message);
-        }
       }
     }
   }, [fetcher.data, shopify]);
@@ -414,6 +397,9 @@ export default function SettingsAndExport() {
         <div className={styles.alert}>
           当前版本针对单次 Backfill 做了保护：最多回拉 90 天 / 1000 笔订单。日订单量较大的店铺请拆分时间窗口分批回填，避免 webhook 漏数。
         </div>
+        <p className={styles.helpText}>
+          补拉任务可能需要执行多次才能覆盖所有历史数据，特别是日订单量高或区间较长的店铺，请拆分时间段循环触发。
+        </p>
       </div>
 
         <div className={styles.gridTwo}>

@@ -1,4 +1,5 @@
 import prisma from "../db.server";
+import { logger, type LogContext } from "./logger.server";
 
 type WebhookJob = {
   shopDomain: string;
@@ -35,10 +36,18 @@ const updateJobStatus = async (
   status: "completed" | "failed",
   error?: string,
 ) => {
-  await prisma.webhookJob.update({
+  const result = await prisma.webhookJob.updateMany({
     where: { id },
     data: { status, finishedAt: new Date(), ...(error ? { error } : {}) },
   });
+
+  if (!result.count) {
+    logger.warn("[webhook] soft warning: attempted to update missing job", {
+      jobId: id,
+      jobType: "webhook",
+      intent: status,
+    });
+  }
 };
 
 const processQueue = async (handlers: Map<string, WebhookJob["run"]>) => {
@@ -53,12 +62,15 @@ const processQueue = async (handlers: Map<string, WebhookJob["run"]>) => {
       const startedAt = Date.now();
       const handler = handlers.get(job.intent);
 
+      const context: LogContext = {
+        shopDomain: job.shopDomain,
+        jobId: job.id,
+        jobType: "webhook",
+        intent: job.intent,
+      };
+
       if (!handler) {
-        console.warn("[webhook] no handler registered", {
-          shop: job.shopDomain,
-          topic: job.topic,
-          intent: job.intent,
-        });
+        logger.warn("[webhook] no handler registered", context, { topic: job.topic });
         await updateJobStatus(job.id, "failed", "no handler registered");
         continue;
       }
@@ -66,18 +78,14 @@ const processQueue = async (handlers: Map<string, WebhookJob["run"]>) => {
       try {
         await handler(job.payload as Record<string, unknown>);
         await updateJobStatus(job.id, "completed");
-        console.info("[webhook] job completed", {
-          shop: job.shopDomain,
+        logger.info("[webhook] job completed", context, {
           topic: job.topic,
-          intent: job.intent,
           elapsedMs: Date.now() - startedAt,
         });
       } catch (error) {
         await updateJobStatus(job.id, "failed", (error as Error).message);
-        console.error("[webhook] job failed", {
-          shop: job.shopDomain,
+        logger.error("[webhook] job failed", context, {
           topic: job.topic,
-          intent: job.intent,
           message: (error as Error).message,
         });
       }
@@ -116,7 +124,10 @@ export const enqueueWebhookJob = async (job: WebhookJob) => {
   });
 
   if (!handlers.has(job.intent)) {
-    console.warn("[webhook] enqueued job without registered handler", { intent: job.intent });
+    logger.warn("[webhook] enqueued job without registered handler", {
+      jobType: "webhook",
+      intent: job.intent,
+    });
   }
 
   void processQueue(handlers);

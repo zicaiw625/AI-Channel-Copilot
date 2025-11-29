@@ -1,6 +1,7 @@
 import type { ActionFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
+import { logger } from "../lib/logger.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   let shopDomain = "";
@@ -8,10 +9,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   try {
     const { payload, session, topic, shop } = await authenticate.webhook(request);
     shopDomain = shop;
-    console.log(`Received ${topic} webhook for ${shop}`);
+    logger.info(`Received ${topic} webhook`, { shopDomain: shop, topic });
 
-    const current = Array.isArray((payload as any)?.current)
-      ? ((payload as any).current as string[])
+    const currentRaw = (payload as { current?: unknown }).current;
+    const current = Array.isArray(currentRaw)
+      ? currentRaw.filter((value): value is string => typeof value === "string")
       : [];
 
     if (session && current.length) {
@@ -27,8 +29,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     return new Response();
   } catch (error) {
-    console.error("app/scopes_update webhook failed", {
-      shop: shopDomain,
+    logger.error("app/scopes_update webhook failed", { shopDomain, topic }, {
       message: (error as Error).message,
     });
     return new Response(undefined, { status: 202 });

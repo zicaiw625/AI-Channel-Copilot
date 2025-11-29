@@ -5,6 +5,7 @@ import {
   describeCustomerFootprint,
   extractGdprIdentifiers,
 } from "../lib/gdpr.server";
+import { logger } from "../lib/logger.server";
 
 const jsonResponse = (payload: Record<string, unknown>) =>
   new Response(JSON.stringify(payload), {
@@ -23,7 +24,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         ? (payload as Record<string, unknown>)
         : {};
 
-    console.log(`Received ${topic} webhook for ${shop}`);
+    logger.info(`Received ${topic} webhook`, { shopDomain: shop, topic });
 
     if (!shop) return jsonResponse({ ok: true, message: "Missing shop domain" });
 
@@ -53,8 +54,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       },
     });
   } catch (error) {
-    console.error("customers/data_request failed", {
-      shop,
+    logger.error("customers/data_request failed", { shopDomain: shop, topic }, {
       message: (error as Error).message,
     });
     return jsonResponse({

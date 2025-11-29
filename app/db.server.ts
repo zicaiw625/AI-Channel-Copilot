@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { requireEnv } from "./lib/env.server";
+import { logger } from "./lib/logger.server";
 
 declare global {
   // eslint-disable-next-line no-var
@@ -15,7 +16,7 @@ const validateDatabaseSecurity = () => {
   try {
     parsed = new URL(databaseUrl);
   } catch (error) {
-    console.warn("[db] Unable to parse DATABASE_URL for security checks", error);
+    logger.warn("[db] Unable to parse DATABASE_URL for security checks", undefined, { error });
     return;
   }
 
@@ -42,7 +43,10 @@ const validateDatabaseSecurity = () => {
   }
 
   if (!hasTls && process.env.NODE_ENV !== "production") {
-    console.warn("[db] DATABASE_URL missing ssl/sslmode; enable TLS for non-local databases.");
+    logger.warn(
+      "[db] DATABASE_URL missing ssl/sslmode; enable TLS for non-local databases.",
+      { host },
+    );
   }
 };
 

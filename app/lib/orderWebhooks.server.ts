@@ -5,6 +5,7 @@ import { persistOrders } from "./persistence.server";
 import { getSettings, markActivity, updatePipelineStatuses } from "./settings.server";
 import { getPlatform, isDemoMode } from "./runtime.server";
 import { enqueueWebhookJob, getWebhookQueueSize } from "./webhookQueue.server";
+import { logger } from "./logger.server";
 
 const setWebhookStatus = async (
   shopDomain: string,
@@ -55,10 +56,7 @@ export const handleOrderWebhook = async (request: Request, expectedTopic: string
 
   try {
     if (isDemoMode()) {
-      console.info("[webhook] demo mode enabled; ignoring webhook", {
-        platform,
-        expectedTopic,
-      });
+      logger.info("[webhook] demo mode enabled; ignoring webhook", { platform, expectedTopic });
       return new Response();
     }
 
@@ -66,7 +64,7 @@ export const handleOrderWebhook = async (request: Request, expectedTopic: string
     shopDomain = shop;
     const webhookPayload = (payload || {}) as Record<string, unknown>;
 
-    console.log(`Received ${topic} webhook for ${shop}`);
+    logger.info("[webhook] received", { shopDomain: shop, topic });
 
     if (topic !== expectedTopic) {
       await setWebhookStatus(shop, "warning", `Unexpected topic ${topic}`);
@@ -85,72 +83,76 @@ export const handleOrderWebhook = async (request: Request, expectedTopic: string
       return new Response("Missing order id", { status: 400 });
     }
 
-    const settings = await getSettings(shop);
+    const handler = async (jobPayload: Record<string, unknown>) => {
+      const jobOrderGid = jobPayload.orderGid as string;
+      const jobShopDomain = (jobPayload.shopDomain as string) || shop;
+      const settings = await getSettings(jobShopDomain);
+
+      const record = await fetchOrderById(admin, jobOrderGid, settings, {
+        shopDomain: jobShopDomain,
+      });
+
+      if (!record) {
+        await setWebhookStatus(jobShopDomain, "warning", "Order not found for webhook payload");
+        return;
+      }
+
+      await persistOrders(jobShopDomain, [record]);
+      await markActivity(jobShopDomain, { lastOrdersWebhookAt: new Date() });
+
+      logger.info("[webhook] order persisted", {
+        platform,
+        shop: jobShopDomain,
+        orderId: record.id,
+        aiSource: record.aiSource,
+        detection: record.detection?.slice(0, 160),
+        signals: record.signals?.slice(0, 5),
+        intent: expectedTopic,
+      });
+
+      await setWebhookStatus(
+        jobShopDomain,
+        "healthy",
+        `Processed ${expectedTopic} at ${new Date().toISOString()}`,
+      );
+
+      if (record.aiSource && (settings.tagging.writeOrderTags || settings.tagging.writeCustomerTags)) {
+        const taggingStart = Date.now();
+        try {
+          await applyAiTags(admin, [record], settings, { shopDomain: jobShopDomain, intent: expectedTopic });
+          await markActivity(jobShopDomain, { lastTaggingAt: new Date() });
+          await setWebhookStatus(jobShopDomain, "healthy", "Latest order tagged successfully.");
+        } catch (error) {
+          logger.error("applyAiTags failed", {
+            shop: jobShopDomain,
+            topic,
+            message: (error as Error).message,
+          });
+          await setWebhookStatus(
+            jobShopDomain,
+            "warning",
+            "Tagging failed for latest order; check server logs and retry later.",
+          );
+        } finally {
+          const elapsed = Date.now() - taggingStart;
+          if (elapsed > 4500) {
+            logger.warn("[webhook] tagging exceeded threshold", {
+              platform,
+              shop: jobShopDomain,
+              elapsedMs: elapsed,
+              topic,
+            });
+          }
+        }
+      }
+    };
 
     await enqueueWebhookJob({
       shopDomain: shop,
       topic,
       intent: expectedTopic,
       payload: { orderGid, shopDomain: shop },
-      run: async (jobPayload) => {
-        const record = await fetchOrderById(admin, jobPayload.orderGid as string, settings, {
-          shopDomain: shop,
-        });
-
-        if (!record) {
-          await setWebhookStatus(shop, "warning", "Order not found for webhook payload");
-          return;
-        }
-
-        await persistOrders(shop, [record]);
-        await markActivity(shop, { lastOrdersWebhookAt: new Date() });
-
-        console.info("[webhook] order persisted", {
-          platform,
-          shop,
-          orderId: record.id,
-          aiSource: record.aiSource,
-          detection: record.detection?.slice(0, 160),
-          signals: record.signals?.slice(0, 5),
-          intent: expectedTopic,
-        });
-
-        await setWebhookStatus(
-          shop,
-          "healthy",
-          `Processed ${expectedTopic} at ${new Date().toISOString()}`,
-        );
-
-        if (record.aiSource && (settings.tagging.writeOrderTags || settings.tagging.writeCustomerTags)) {
-          const taggingStart = Date.now();
-          try {
-            await applyAiTags(admin, [record], settings, { shopDomain: shop, intent: expectedTopic });
-            await markActivity(shop, { lastTaggingAt: new Date() });
-            await setWebhookStatus(shop, "healthy", "Latest order tagged successfully.");
-          } catch (error) {
-            console.error("applyAiTags failed", {
-              shop,
-              topic,
-              message: (error as Error).message,
-            });
-            await setWebhookStatus(
-              shop,
-              "warning",
-              "Tagging failed for latest order; check server logs and retry later.",
-            );
-          } finally {
-            const elapsed = Date.now() - taggingStart;
-            if (elapsed > 4500) {
-              console.warn("[webhook] tagging exceeded threshold", {
-                platform,
-                shop,
-                elapsedMs: elapsed,
-                topic,
-              });
-            }
-          }
-        }
-      },
+      run: handler,
     });
 
     await setWebhookStatus(
@@ -161,7 +163,7 @@ export const handleOrderWebhook = async (request: Request, expectedTopic: string
 
     return new Response();
   } catch (error) {
-    console.error("Order webhook handler failed", {
+    logger.error("Order webhook handler failed", {
       topic: expectedTopic,
       shop: shopDomain,
       platform,

@@ -1,6 +1,7 @@
 import type { ActionFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import { wipeShopData } from "../lib/gdpr.server";
+import { logger } from "../lib/logger.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   let shop = "";
@@ -10,7 +11,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     shop = webhookShop;
     const shopDomain = shop || (payload as Record<string, unknown> | null)?.shop_domain;
 
-    console.log(`Received ${topic} webhook for ${shopDomain || shop}`);
+    logger.info(`Received ${topic} webhook`, { shopDomain: shopDomain || shop, topic });
 
     // Webhook requests can trigger multiple times and after an app has already been uninstalled.
     // If this webhook already ran, the session may have been deleted previously.
@@ -20,8 +21,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     return new Response();
   } catch (error) {
-    console.error("app/uninstalled webhook failed", {
-      shop,
+    logger.error("app/uninstalled webhook failed", { shopDomain: shop, topic }, {
       message: (error as Error).message,
     });
 

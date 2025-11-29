@@ -110,6 +110,7 @@ describe("Order mapping and aggregation", () => {
         isNewCustomer: true,
         products: [],
         detection: "referrer match",
+        signals: [],
         tags: [],
       },
       {
@@ -128,6 +129,7 @@ describe("Order mapping and aggregation", () => {
         isNewCustomer: false,
         products: [],
         detection: "none",
+        signals: [],
         tags: [],
       },
     ];
@@ -158,6 +160,7 @@ describe("Order mapping and aggregation", () => {
         isNewCustomer: true,
         products: [],
         detection: "referrer match",
+        signals: [],
         tags: [],
       },
       {
@@ -176,6 +179,7 @@ describe("Order mapping and aggregation", () => {
         isNewCustomer: false,
         products: [],
         detection: "none",
+        signals: [],
         tags: [],
       },
     ];

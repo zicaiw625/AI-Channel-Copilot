@@ -44,6 +44,7 @@ model Customer {
   shopDomain       String
   platform         String   @default("shopify")
   acquiredViaAi    Boolean  @default(false)
+  firstOrderId     String?
   firstOrderAt     DateTime?
   lastOrderAt      DateTime?
   orderCount       Int      @default(0)
@@ -68,6 +69,7 @@ model Order {
   subtotalPrice   Float?
   aiSource        AiSource?
   detection       String?
+  detectionSignals Json?
   referrer        String?
   landingPage     String?
   utmSource       String?

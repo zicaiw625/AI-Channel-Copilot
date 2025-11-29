@@ -20,7 +20,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const timezone = settings.timezones[0] || "UTC";
   const dateRange = resolveDateRange(rangeKey as any, new Date(), from, to, timezone);
 
-  const existing = describeBackfill(shopDomain);
+  const existing = await describeBackfill(shopDomain);
   if (existing) {
     return json({
       ok: true,

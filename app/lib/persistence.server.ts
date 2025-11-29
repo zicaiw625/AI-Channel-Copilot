@@ -44,139 +44,187 @@ const ensureTables = () => {
 export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) => {
   if (!shopDomain || !orders.length || isDemoMode()) return { created: 0, updated: 0 };
 
+  const chunks: OrderRecord[][] = [];
+  const batchSize = 100;
+
+  for (let i = 0; i < orders.length; i += batchSize) {
+    chunks.push(orders.slice(i, i + batchSize));
+  }
+
   try {
     ensureTables();
-    const { created, updated } = await prisma.$transaction(async (tx) => {
-      let created = 0;
-      let updated = 0;
 
-      const orderIds = orders.map((order) => order.id);
-      await tx.orderProduct.deleteMany({ where: { orderId: { in: orderIds } } });
+    let created = 0;
+    let updated = 0;
 
-      for (const order of orders) {
-        const aiSource = toAiEnum(order.aiSource);
-        const createdAt = new Date(order.createdAt);
-        const existingCustomer = order.customerId
-          ? await tx.customer.findUnique({ where: { id: order.customerId } })
-          : null;
+    for (const chunk of chunks) {
+      const orderIds = chunk.map((order) => order.id);
+      const customerIds = Array.from(
+        new Set(chunk.map((order) => order.customerId).filter(Boolean) as string[]),
+      );
 
-        const isFirstKnownOrder =
-          !existingCustomer?.firstOrderAt || createdAt <= existingCustomer.firstOrderAt;
+      const { created: batchCreated, updated: batchUpdated } = await prisma.$transaction(
+        async (tx) => {
+          const existingOrders = await tx.order.findMany({ where: { id: { in: orderIds } } });
+          const existingCustomers = customerIds.length
+            ? await tx.customer.findMany({ where: { id: { in: customerIds } } })
+            : [];
 
-        const nextFirstOrderAt = isFirstKnownOrder
-          ? createdAt
-          : existingCustomer?.firstOrderAt || createdAt;
+          const orderMap = new Map(existingOrders.map((o) => [o.id, o]));
+          const customerState = new Map(
+            existingCustomers.map((c) => [c.id, { ...c }]),
+          );
 
-        const nextFirstOrderId = isFirstKnownOrder
-          ? order.id
-          : existingCustomer?.firstOrderId || null;
+          let localCreated = 0;
+          let localUpdated = 0;
 
-        const acquiredViaAi = existingCustomer?.firstOrderId || existingCustomer?.firstOrderAt
-          ? existingCustomer.acquiredViaAi
-          : Boolean(order.aiSource);
+          await tx.orderProduct.deleteMany({ where: { orderId: { in: orderIds } } });
 
-        const firstAiOrderId =
-          existingCustomer?.firstAiOrderId || (order.aiSource ? order.id : null);
+          const productBuffer: Prisma.OrderProductCreateManyInput[] = [];
 
-        const orderData: Prisma.OrderUpsertArgs["create"] = {
-          id: order.id,
-          shopDomain,
-          platform,
-          name: order.name,
-          createdAt,
-          totalPrice: order.totalPrice,
-          currency: order.currency,
-          subtotalPrice: order.subtotalPrice ?? order.totalPrice,
-          aiSource,
-          detection: order.detection,
-          referrer: order.referrer,
-          landingPage: order.landingPage,
-          utmSource: order.utmSource,
-          utmMedium: order.utmMedium,
-          sourceName: order.sourceName,
-          customerId: order.customerId ?? null,
-          isNewCustomer: order.isNewCustomer,
-          detectionSignals: order.signals,
-          createdAtLocal: createdAt,
-        };
+          for (const order of chunk) {
+            const aiSource = toAiEnum(order.aiSource);
+            const createdAt = new Date(order.createdAt);
+            const existingOrder = orderMap.get(order.id);
 
-        const existingOrder = await tx.order.findUnique({ where: { id: order.id } });
-
-        await tx.order.upsert({
-          where: { id: order.id },
-          create: orderData,
-          update: orderData,
-        });
-
-        if (order.products?.length) {
-          await tx.orderProduct.createMany({
-            data: order.products.map((line) => ({
-              orderId: order.id,
-              productId: line.id,
-              title: line.title,
-              handle: line.handle || null,
-              url: line.url || null,
-              price: line.price,
-              currency: line.currency,
-              quantity: line.quantity,
-            })),
-          });
-        }
-
-        if (order.customerId) {
-          const priorOrderCount = existingCustomer?.orderCount ?? 0;
-          const priorTotal = existingCustomer?.totalSpent ?? 0;
-          const previousContribution =
-            existingOrder && existingOrder.customerId === order.customerId
-              ? existingOrder.totalPrice
-              : 0;
-
-          const nextOrderCount = existingOrder
-            ? Math.max(priorOrderCount, 1)
-            : priorOrderCount + 1;
-          const nextTotal = priorTotal - previousContribution + order.totalPrice;
-          const nextLastOrderAt =
-            existingCustomer?.lastOrderAt && existingCustomer.lastOrderAt > createdAt
-              ? existingCustomer.lastOrderAt
-              : createdAt;
-
-          await tx.customer.upsert({
-            where: { id: order.customerId },
-            create: {
-              id: order.customerId,
+            const orderData: Prisma.OrderUpsertArgs["create"] = {
+              id: order.id,
               shopDomain,
               platform,
-              firstOrderAt: createdAt,
-              firstOrderId: order.id,
-              lastOrderAt: createdAt,
-              orderCount: 1,
-              totalSpent: order.totalPrice,
-              acquiredViaAi,
-              firstAiOrderId,
-            },
-            update: {
-              shopDomain,
-              platform,
-              firstOrderAt: nextFirstOrderAt,
-              firstOrderId: nextFirstOrderId,
-              lastOrderAt: nextLastOrderAt,
-              orderCount: nextOrderCount,
-              totalSpent: nextTotal,
-              acquiredViaAi,
-              firstAiOrderId,
-            },
-          });
-        }
+              name: order.name,
+              createdAt,
+              totalPrice: order.totalPrice,
+              currency: order.currency,
+              subtotalPrice: order.subtotalPrice ?? order.totalPrice,
+              aiSource,
+              detection: order.detection,
+              referrer: order.referrer,
+              landingPage: order.landingPage,
+              utmSource: order.utmSource,
+              utmMedium: order.utmMedium,
+              sourceName: order.sourceName,
+              customerId: order.customerId ?? null,
+              isNewCustomer: order.isNewCustomer,
+              detectionSignals: order.signals,
+              createdAtLocal: createdAt,
+            };
 
-        if (existingOrder) {
-          updated += 1;
-        } else {
-          created += 1;
-        }
-      }
+            await tx.order.upsert({
+              where: { id: order.id },
+              create: orderData,
+              update: orderData,
+            });
 
-      return { created, updated };
-    });
+            if (order.products?.length) {
+              productBuffer.push(
+                ...order.products.map((line) => ({
+                  orderId: order.id,
+                  productId: line.id,
+                  title: line.title,
+                  handle: line.handle || null,
+                  url: line.url || null,
+                  price: line.price,
+                  currency: line.currency,
+                  quantity: line.quantity,
+                })),
+              );
+            }
+
+            if (order.customerId) {
+              const current = customerState.get(order.customerId) || {
+                id: order.customerId,
+                shopDomain,
+                platform,
+                firstOrderAt: createdAt,
+                firstOrderId: order.id,
+                lastOrderAt: createdAt,
+                orderCount: 0,
+                totalSpent: 0,
+                acquiredViaAi: Boolean(order.aiSource),
+                firstAiOrderId: order.aiSource ? order.id : null,
+              };
+
+              const isFirstKnownOrder = !current.firstOrderAt || createdAt <= current.firstOrderAt;
+              const nextFirstOrderAt = isFirstKnownOrder ? createdAt : current.firstOrderAt;
+              const nextFirstOrderId = isFirstKnownOrder ? order.id : current.firstOrderId;
+
+              const previousContribution =
+                existingOrder && existingOrder.customerId === order.customerId
+                  ? existingOrder.totalPrice
+                  : 0;
+
+              const nextOrderCount = existingOrder
+                ? Math.max(current.orderCount, 1)
+                : current.orderCount + 1;
+
+              const nextTotal = current.totalSpent - previousContribution + order.totalPrice;
+
+              const nextLastOrderAt = current.lastOrderAt && current.lastOrderAt > createdAt
+                ? current.lastOrderAt
+                : createdAt;
+
+              const acquiredViaAi =
+                current.orderCount || existingOrder ? current.acquiredViaAi : Boolean(order.aiSource);
+
+              const firstAiOrderId = current.firstAiOrderId || (order.aiSource ? order.id : null);
+
+              await tx.customer.upsert({
+                where: { id: order.customerId },
+                create: {
+                  id: order.customerId,
+                  shopDomain,
+                  platform,
+                  firstOrderAt: createdAt,
+                  firstOrderId: order.id,
+                  lastOrderAt: createdAt,
+                  orderCount: 1,
+                  totalSpent: order.totalPrice,
+                  acquiredViaAi,
+                  firstAiOrderId,
+                },
+                update: {
+                  shopDomain,
+                  platform,
+                  firstOrderAt: nextFirstOrderAt,
+                  firstOrderId: nextFirstOrderId,
+                  lastOrderAt: nextLastOrderAt,
+                  orderCount: nextOrderCount,
+                  totalSpent: nextTotal,
+                  acquiredViaAi,
+                  firstAiOrderId,
+                },
+              });
+
+              customerState.set(order.customerId, {
+                ...current,
+                firstOrderAt: nextFirstOrderAt,
+                firstOrderId: nextFirstOrderId,
+                lastOrderAt: nextLastOrderAt,
+                orderCount: nextOrderCount,
+                totalSpent: nextTotal,
+                acquiredViaAi,
+                firstAiOrderId,
+              });
+            }
+
+            if (existingOrder) {
+              localUpdated += 1;
+            } else {
+              localCreated += 1;
+            }
+          }
+
+          if (productBuffer.length) {
+            await tx.orderProduct.createMany({ data: productBuffer });
+          }
+
+          return { created: localCreated, updated: localUpdated };
+        },
+      );
+
+      created += batchCreated;
+      updated += batchUpdated;
+    }
 
     return { created, updated };
   } catch (error) {

@@ -87,6 +87,17 @@ export default function App() {
             </div>
           </div>
         </div>
+        <div className={styles.panelSection}>
+          <h3>快速上手（安装后即可看到基础数据）</h3>
+          <ol>
+            <li>安装 Shopify 应用并授权，后台会自动补拉最近 90 天订单。</li>
+            <li>
+              Dashboard 查看 AI GMV / 订单 / 新客，默认规则已覆盖 chat.openai.com、perplexity.ai、
+              gemini.google.com、copilot.microsoft.com 与 utm_source=chatgpt/perplexity/gemini/copilot。
+            </li>
+            <li>在 Settings 调整识别规则、开启标签写回（默认关闭）并下载 CSV 导出。</li>
+          </ol>
+        </div>
       </div>
     </div>
   );

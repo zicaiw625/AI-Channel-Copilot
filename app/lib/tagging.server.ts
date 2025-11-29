@@ -38,6 +38,9 @@ export const applyAiTags = async (
   const orderPrefix = settings.tagging.orderTagPrefix || "AI-Source";
   const customerTag = settings.tagging.customerTag || "AI-Customer";
   const dryRun = settings.tagging.dryRun;
+  const orderTagTargets: { id: string; tags: string[] }[] = [];
+  const customerTagTargets: { id: string; tags: string[] }[] = [];
+  const seenCustomers = new Set<string>();
 
   for (const order of orders) {
     if (!order.aiSource) continue;
@@ -49,11 +52,29 @@ export const applyAiTags = async (
 
     if (settings.tagging.writeOrderTags) {
       const orderTag = `${orderPrefix}-${order.aiSource}`;
-      await addTags(admin, order.id, [orderTag]);
+      if (!order.tags?.includes(orderTag)) {
+        orderTagTargets.push({ id: order.id, tags: [orderTag] });
+      }
     }
 
     if (settings.tagging.writeCustomerTags && order.customerId) {
-      await addTags(admin, order.customerId, [customerTag]);
+      if (!seenCustomers.has(order.customerId)) {
+        customerTagTargets.push({ id: order.customerId, tags: [customerTag] });
+        seenCustomers.add(order.customerId);
+      }
     }
+  }
+
+  const runInBatches = async (targets: { id: string; tags: string[] }[]) => {
+    const batchSize = 5;
+    for (let i = 0; i < targets.length; i += batchSize) {
+      const slice = targets.slice(i, i + batchSize);
+      await Promise.all(slice.map((target) => addTags(admin, target.id, target.tags)));
+    }
+  };
+
+  if (!dryRun) {
+    await runInBatches(orderTagTargets);
+    await runInBatches(customerTagTargets);
   }
 };

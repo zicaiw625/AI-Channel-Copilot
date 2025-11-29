@@ -14,10 +14,12 @@ import {
   type TimeRangeKey,
 } from "../lib/aiData";
 import { fetchOrdersForRange } from "../lib/shopifyOrders.server";
-import { getSettings, syncShopPreferences } from "../lib/settings.server";
+import { getSettings, markActivity, syncShopPreferences } from "../lib/settings.server";
 import { loadOrdersFromDb, persistOrders } from "../lib/persistence.server";
 import { authenticate } from "../shopify.server";
 import styles from "./app.dashboard.module.css";
+
+const BACKFILL_COOLDOWN_MINUTES = 30;
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
@@ -34,34 +36,60 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const currency = settings.primaryCurrency || "USD";
   const calculationTimezone = displayTimezone || "UTC";
   const dateRange = resolveDateRange(rangeParam, new Date(), from, to, calculationTimezone);
+  const lastBackfillAt = settings.lastBackfillAt ? new Date(settings.lastBackfillAt) : null;
 
   let dataSource: "live" | "demo" | "stored" = "live";
   let orders = await loadOrdersFromDb(shopDomain, dateRange);
   let clamped = false;
+  let backfillSuppressed = false;
 
   if (orders.length > 0) {
     dataSource = "stored";
   } else {
-    try {
-      const fetched = await fetchOrdersForRange(admin, dateRange, settings);
-      orders = fetched.orders;
-      clamped = fetched.clamped;
-      if (orders.length > 0) {
-        await persistOrders(shopDomain, orders);
-        dataSource = "live";
-      } else {
+    const now = new Date();
+    const withinCooldown =
+      lastBackfillAt &&
+      now.getTime() - lastBackfillAt.getTime() < BACKFILL_COOLDOWN_MINUTES * 60 * 1000;
+
+    if (withinCooldown) {
+      dataSource = "stored";
+      backfillSuppressed = true;
+    } else {
+      try {
+        const fetched = await fetchOrdersForRange(admin, dateRange, settings, {
+          shopDomain,
+          intent: "dashboard-loader",
+          rangeLabel: dateRange.label,
+        });
+        orders = fetched.orders;
+        clamped = fetched.clamped;
+        if (orders.length > 0) {
+          await persistOrders(shopDomain, orders);
+          await markActivity(shopDomain, { lastBackfillAt: new Date() });
+          dataSource = "live";
+        } else {
+          dataSource = "demo";
+        }
+      } catch (error) {
+        console.error("Failed to load Shopify orders", error);
         dataSource = "demo";
       }
-    } catch (error) {
-      console.error("Failed to load Shopify orders", error);
-      dataSource = "demo";
     }
   }
 
-  const data =
-    orders.length > 0
-      ? buildDashboardFromOrders(orders, dateRange, settings.gmvMetric, displayTimezone)
-      : buildDashboardData(dateRange, settings.gmvMetric, displayTimezone);
+  const useDemoData = dataSource === "demo";
+  const data = useDemoData
+    ? buildDashboardData(dateRange, settings.gmvMetric, displayTimezone)
+    : buildDashboardFromOrders(orders, dateRange, settings.gmvMetric, displayTimezone);
+
+  const dataLastUpdated = (() => {
+    const timestamps = [settings.lastOrdersWebhookAt, settings.lastBackfillAt].filter(Boolean);
+    if (!timestamps.length) return null;
+    const latest = timestamps
+      .map((value) => new Date(value as string))
+      .sort((a, b) => b.getTime() - a.getTime())[0];
+    return latest.toISOString();
+  })();
 
   return {
     range: dateRange.key,
@@ -77,6 +105,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     calculationTimezone,
     timezone: displayTimezone,
     language,
+    backfillSuppressed,
+    dataLastUpdated,
     pipeline: {
       lastOrdersWebhookAt: settings.lastOrdersWebhookAt || null,
       lastBackfillAt: settings.lastBackfillAt || null,
@@ -111,6 +141,8 @@ export default function Index() {
     language,
     pipeline,
     clamped,
+    backfillSuppressed,
+    dataLastUpdated,
   } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
   const location = useLocation();
@@ -240,11 +272,19 @@ export default function Index() {
               自动识别来自 ChatGPT / Perplexity / Gemini / Copilot 等 AI 助手的订单，给出保守
               GMV 估计与差异洞察。
             </p>
-            <div className={styles.metaRow}>
-              <span>同步时间：{timeFormatter.format(new Date(overview.lastSyncedAt))}</span>
-              <span>区间：{dateRange.label}</span>
-              <span>
-                数据口径：订单 {gmvMetric} · 新客=首单客户（仅限当前时间范围） · GMV 仅基于订单字段
+            <div className={styles.warning}>
+              <strong>说明：</strong>AI 渠道识别为保守估计，依赖 referrer / UTM / 标签，部分 AI 会隐藏来源；
+              仅统计站外 AI 点击 → 到站 → 完成订单的链路，不含 AI 应用内曝光或自然流量。
+            </div>
+          <div className={styles.metaRow}>
+            <span>同步时间：{timeFormatter.format(new Date(overview.lastSyncedAt))}</span>
+            <span>
+              数据最近更新：{dataLastUpdated ? timeFormatter.format(new Date(dataLastUpdated)) : "暂无"}
+              {backfillSuppressed && "（30 分钟内已补拉，复用缓存数据）"}
+            </span>
+            <span>区间：{dateRange.label}</span>
+            <span>
+              数据口径：订单 {gmvMetric} · 新客=首单客户（仅限当前时间范围） · GMV 仅基于订单字段
               </span>
               <span>
                 数据源：

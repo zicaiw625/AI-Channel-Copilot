@@ -119,6 +119,38 @@ const fmtPercent = (value: number, fractionDigits = 1) =>
 
 type TrendScope = "overall" | "ai" | AIChannel;
 
+type JobStatus = "queued" | "processing" | "completed" | "failed";
+
+type JobSnapshot = {
+  ok: boolean;
+  backfills: {
+    recent: {
+      id: number;
+      range: string;
+      status: JobStatus;
+      error?: string | null;
+      ordersFetched: number;
+      createdAt: string;
+      startedAt?: string | null;
+      finishedAt?: string | null;
+    }[];
+    counts: Partial<Record<JobStatus, number>>;
+  };
+  webhooks: {
+    recent: {
+      id: number;
+      topic: string;
+      intent: string;
+      status: JobStatus;
+      error?: string | null;
+      createdAt: string;
+      startedAt?: string | null;
+      finishedAt?: string | null;
+    }[];
+    counts: Partial<Record<JobStatus, number>>;
+  };
+};
+
 export default function Index() {
   const {
     range,
@@ -147,6 +179,8 @@ export default function Index() {
   const [customTo, setCustomTo] = useState(
     (dateRange.toParam as string | undefined) || dateRange.end.slice(0, 10),
   );
+  const [debugOrderFilter, setDebugOrderFilter] = useState("");
+  const [debugChannelFilter, setDebugChannelFilter] = useState<"" | TrendScope>("");
   const locale = language === "English" ? "en-US" : "zh-CN";
   const fmtCurrency = useCallback(
     (value: number) =>
@@ -177,6 +211,13 @@ export default function Index() {
   }, [dateRange.end, dateRange.fromParam, dateRange.start, dateRange.toParam]);
 
   const backfillFetcher = useFetcher<{ ok: boolean; queued: boolean; reason?: string; range?: string }>();
+  const jobFetcher = useFetcher<JobSnapshot>();
+
+  useEffect(() => {
+    jobFetcher.load("/api/jobs");
+    const timer = setInterval(() => jobFetcher.load("/api/jobs"), 10000);
+    return () => clearInterval(timer);
+  }, [jobFetcher]);
   const triggerBackfill = useCallback(() => {
     backfillFetcher.submit(
       { range, from: dateRange.fromParam || "", to: dateRange.toParam || "" },
@@ -195,6 +236,28 @@ export default function Index() {
     exports: exportData,
   } = data;
   const isLowSample = overview.aiOrders < LOW_SAMPLE_THRESHOLD;
+
+  const filteredRecentOrders = useMemo(() => {
+    const keyword = debugOrderFilter.trim().toLowerCase();
+    return recentOrders.filter((order) => {
+      const matchesChannel =
+        !debugChannelFilter
+          ? true
+          : debugChannelFilter === "ai"
+            ? Boolean(order.aiSource)
+            : debugChannelFilter === "overall"
+              ? !order.aiSource
+              : order.aiSource === debugChannelFilter;
+
+      const matchesKeyword =
+        !keyword ||
+        order.name.toLowerCase().includes(keyword) ||
+          order.id.toLowerCase().includes(keyword) ||
+          (order.aiSource || "").toLowerCase().includes(keyword);
+
+      return matchesChannel && matchesKeyword;
+    });
+  }, [debugChannelFilter, debugOrderFilter, recentOrders]);
 
   const trendScopes = useMemo(
     () => [
@@ -635,14 +698,14 @@ export default function Index() {
             <p className={styles.helpText}>
               可切换 GMV / 订单并按渠道过滤；样本量低时单笔订单会放大波动，解读时需结合渠道详情。
             </p>
-          </div>
+        </div>
 
-          <div className={styles.card}>
-            <div className={styles.sectionHeader}>
-              <div>
-                <p className={styles.sectionLabel}>产品维度</p>
-                <h3 className={styles.sectionTitle}>Top Products from AI Channels</h3>
-              </div>
+        <div className={styles.card}>
+          <div className={styles.sectionHeader}>
+            <div>
+              <p className={styles.sectionLabel}>产品维度</p>
+              <h3 className={styles.sectionTitle}>Top Products from AI Channels</h3>
+            </div>
               <a
                 className={styles.secondaryButton}
                 href={`data:text/csv;charset=utf-8,${encodeURIComponent(exportData.productsCsv)}`}
@@ -688,10 +751,129 @@ export default function Index() {
         <div className={styles.card}>
           <div className={styles.sectionHeader}>
             <div>
+              <p className={styles.sectionLabel}>任务状态</p>
+              <h3 className={styles.sectionTitle}>Backfill & Webhook 队列</h3>
+            </div>
+            <span className={styles.smallBadge}>排队 / 执行 / 完成 / 错误</span>
+          </div>
+          <div className={styles.jobGrid}>
+            <div className={styles.jobBlock}>
+              <div className={styles.jobHeader}>
+                <h4>Backfill</h4>
+                <div className={styles.jobCounters}>
+                  {(["queued", "processing", "completed", "failed"] as JobStatus[]).map((status) => (
+                    <span key={status} className={styles.counterBadge}>
+                      {status}: {jobFetcher.data?.backfills.counts?.[status] ?? 0}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <div className={styles.tableWrap}>
+                <table className={styles.table}>
+                  <thead>
+                    <tr>
+                      <th>ID</th>
+                      <th>范围</th>
+                      <th>状态</th>
+                      <th>拉取订单</th>
+                      <th>开始</th>
+                      <th>结束</th>
+                      <th>错误</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(jobFetcher.data?.backfills.recent || []).map((job) => (
+                      <tr key={job.id}>
+                        <td>{job.id}</td>
+                        <td>{job.range}</td>
+                        <td>{job.status}</td>
+                        <td>{job.ordersFetched}</td>
+                        <td>{job.startedAt ? fmtTime(job.startedAt) : "待开始"}</td>
+                        <td>{job.finishedAt ? fmtTime(job.finishedAt) : "-"}</td>
+                        <td className={styles.errorCell}>{job.error || "-"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className={styles.jobBlock}>
+              <div className={styles.jobHeader}>
+                <h4>订单 Webhook 队列</h4>
+                <div className={styles.jobCounters}>
+                  {(["queued", "processing", "completed", "failed"] as JobStatus[]).map((status) => (
+                    <span key={status} className={styles.counterBadge}>
+                      {status}: {jobFetcher.data?.webhooks.counts?.[status] ?? 0}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <div className={styles.tableWrap}>
+                <table className={styles.table}>
+                  <thead>
+                    <tr>
+                      <th>ID</th>
+                      <th>Topic</th>
+                      <th>Intent</th>
+                      <th>状态</th>
+                      <th>开始</th>
+                      <th>结束</th>
+                      <th>错误</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(jobFetcher.data?.webhooks.recent || []).map((job) => (
+                      <tr key={job.id}>
+                        <td>{job.id}</td>
+                        <td>{job.topic}</td>
+                        <td>{job.intent}</td>
+                        <td>{job.status}</td>
+                        <td>{job.startedAt ? fmtTime(job.startedAt) : "待开始"}</td>
+                        <td>{job.finishedAt ? fmtTime(job.finishedAt) : "-"}</td>
+                        <td className={styles.errorCell}>{job.error || "-"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+          <p className={styles.helpText}>
+            数据来源于 /api/jobs，可用于多实例场景下排查队列堆积、失败重试等问题。
+          </p>
+        </div>
+
+        <div className={styles.card}>
+          <div className={styles.sectionHeader}>
+            <div>
               <p className={styles.sectionLabel}>调试视图</p>
               <h3 className={styles.sectionTitle}>最近订单来源解析</h3>
             </div>
-            <span className={styles.smallBadge}>Referrer + UTM + Tags</span>
+            <div className={styles.debugFilters}>
+              <input
+                type="search"
+                placeholder="按订单号 / ID / 渠道过滤"
+                value={debugOrderFilter}
+                onChange={(event) => setDebugOrderFilter(event.target.value)}
+                className={styles.searchInput}
+              />
+              <select
+                value={debugChannelFilter || ""}
+                onChange={(event) => setDebugChannelFilter(event.target.value as TrendScope | "")}
+                className={styles.select}
+              >
+                <option value="">全部</option>
+                <option value="ai">AI 渠道</option>
+                <option value="overall">非 AI / 未识别</option>
+                {channelList.map((channel) => (
+                  <option key={channel} value={channel}>
+                    {channel}
+                  </option>
+                ))}
+              </select>
+              <span className={styles.smallBadge}>Referrer + UTM + Tags + signals</span>
+            </div>
           </div>
           <div className={styles.tableWrap}>
             <table className={styles.table}>
@@ -703,10 +885,11 @@ export default function Index() {
                   <th>GMV</th>
                   <th>Referrer / UTM</th>
                   <th>解析结果</th>
+                  <th>signals</th>
                 </tr>
               </thead>
               <tbody>
-                {recentOrders.map((order) => (
+                {filteredRecentOrders.map((order) => (
                   <tr key={order.id}>
                     <td className={styles.cellLabel}>{order.name}</td>
                     <td>{timeFormatter.format(new Date(order.createdAt))}</td>
@@ -721,6 +904,14 @@ export default function Index() {
                       </div>
                     </td>
                     <td>{order.detection}</td>
+                    <td>
+                      <ul className={styles.signalList}>
+                        {(order.signals || []).map((signal, index) => (
+                          <li key={`${order.id}-${index}`}>{signal}</li>
+                        ))}
+                        {(!order.signals || order.signals.length === 0) && <li>—</li>}
+                      </ul>
+                    </td>
                   </tr>
                 ))}
               </tbody>

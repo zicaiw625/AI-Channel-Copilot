@@ -152,11 +152,26 @@ const fetchOrdersPage = async (
   };
 };
 
+type FetchContext = {
+  shopDomain?: string;
+  intent?: string;
+  rangeLabel?: string;
+};
+
 export const fetchOrdersForRange = async (
   admin: AdminGraphqlClient,
   range: DateRange,
   settings: SettingsDefaults = defaultSettings,
-): Promise<{ orders: OrderRecord[]; start: Date; end: Date; clamped: boolean }> => {
+  context?: FetchContext,
+): Promise<{
+  orders: OrderRecord[];
+  start: Date;
+  end: Date;
+  clamped: boolean;
+  pageCount: number;
+  hitPageLimit: boolean;
+  hitOrderLimit: boolean;
+}> => {
   const lowerBound = new Date();
   lowerBound.setUTCDate(lowerBound.getUTCDate() - MAX_BACKFILL_DAYS);
   lowerBound.setUTCHours(0, 0, 0, 0);
@@ -167,6 +182,8 @@ export const fetchOrdersForRange = async (
 
   let after: string | undefined;
   let guard = 0;
+  let hitPageLimit = false;
+  let hitOrderLimit = false;
 
   do {
     const json = await fetchOrdersPage(admin, search, after);
@@ -181,11 +198,32 @@ export const fetchOrdersForRange = async (
     guard += 1;
     if (guard >= MAX_BACKFILL_PAGES || records.length >= MAX_BACKFILL_ORDERS) {
       // Avoid runaway pagination in extreme cases.
+      hitPageLimit = guard >= MAX_BACKFILL_PAGES;
+      hitOrderLimit = records.length >= MAX_BACKFILL_ORDERS;
       break;
     }
   } while (after);
 
-  return { orders: records, start: effectiveStart, end: range.end, clamped };
+  console.info("[backfill] fetched orders", {
+    shopDomain: context?.shopDomain,
+    intent: context?.intent,
+    range: context?.rangeLabel || `${effectiveStart.toISOString()} to ${range.end.toISOString()}`,
+    orders: records.length,
+    pages: guard,
+    clamped,
+    hitPageLimit,
+    hitOrderLimit,
+  });
+
+  return {
+    orders: records,
+    start: effectiveStart,
+    end: range.end,
+    clamped,
+    pageCount: guard,
+    hitPageLimit,
+    hitOrderLimit,
+  };
 };
 
 export const fetchOrderById = async (

@@ -36,7 +36,22 @@ AI Discovery & Attribution Copilot 帮助 Shopify 商家识别来自 ChatGPT、P
 - 必填环境变量：`SHOPIFY_API_KEY`、`SHOPIFY_API_SECRET`、`SCOPES`、`SHOPIFY_APP_URL`、`DATABASE_URL`。
 - Webhook 订阅定义在 `shopify.app.toml`，确保公网可达；关键路径报错会返回非 2xx 以便 Shopify 重试。
 
+## 数据库加密与访问控制
+- **磁盘加密**：生产数据库需启用存储加密（如云厂商的静态加密或自建卷 LUKS），确保落盘数据合规。
+- **网络准入**：将数据库网络策略限制为仅应用服务的出口 IP（或私网安全组）可访问，禁止公共入口暴露；建议启用最小权限的数据库账户与定期轮换凭证。
+- 应用层仍通过 `DATABASE_URL` 连接，数据库的加密与访问控制需在基础设施层确保并记录到变更审计。
+
 ## 安全与免责声明
 - 标签写回默认关闭；启用后会修改 Shopify 订单/客户标签，若店铺存在基于标签的自动化流程，请先在测试店验证。
 - AI 渠道识别基于 referrer/UTM/tag，无法覆盖隐藏来源或站内曝光，所有数值均为保守估计。
+
+## 数据保留与清理
+- 默认仅保留最近 **6 个月** 的订单/客户数据，可通过环境变量 `DATA_RETENTION_MONTHS` 或后台设置调整（最小值 1）。
+- 仪表盘在有管理员访问时会自动触发每日一次的清理，将超出保留期的订单与孤立客户删除并记录 `lastCleanupAt`。
+- 也可通过 `POST /api/retention` 手动触发清理（`?force=true` 可强制立即执行），用于回归/隐私审计场景。
+
+## 自动化回归脚本
+- 使用 `npm run regression` 在测试店自动造数与派发 webhook：脚本会读取 `SHOPIFY_STORE_DOMAIN`、`SHOPIFY_ADMIN_TOKEN`（GraphQL Admin）、`SHOPIFY_API_SECRET`（计算 HMAC，可选）并寻找首个可用商品变体作为下单货品。
+- 每次运行会创建两笔测试订单（带不同的 `utm_source`/`utm_medium`），随后向 `orders/create` 与 `orders/updated` webhook 端点推送签名 payload 以驱动管道入库。
+- 可通过环境变量 `APP_WEBHOOK_URL`、`APP_WEBHOOK_UPDATE_URL` 定位到实际应用的 webhook 地址，默认指向本地 `http://localhost:3000`；运行完成后在 Dashboard 调试视图与队列面板验证落库与解析结果。
 

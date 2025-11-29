@@ -513,6 +513,72 @@
   font-size: 0.9rem;
 }
 
+.debugFilters {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.searchInput {
+  padding: 0.4rem 0.6rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  min-width: 240px;
+}
+
+.select {
+  padding: 0.4rem 0.6rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.signalList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  color: #374151;
+  padding-left: 1rem;
+  margin: 0;
+}
+
+.jobGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 1rem;
+}
+
+.jobBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.jobHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.jobCounters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.counterBadge {
+  background: #f3f4f6;
+  color: #111827;
+  border-radius: 10px;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.85rem;
+}
+
+.errorCell {
+  color: #b91c1c;
+}
+
 @media (max-width: 960px) {
   .channelRow {
     grid-template-columns: 1fr;

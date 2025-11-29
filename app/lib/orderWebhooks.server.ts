@@ -4,6 +4,7 @@ import { fetchOrderById } from "./shopifyOrders.server";
 import { persistOrders } from "./persistence.server";
 import { getSettings, markActivity, updatePipelineStatuses } from "./settings.server";
 import { getPlatform, isDemoMode } from "./runtime.server";
+import { enqueueWebhookJob, getWebhookQueueSize } from "./webhookQueue.server";
 
 const setWebhookStatus = async (
   shopDomain: string,
@@ -67,6 +68,11 @@ export const handleOrderWebhook = async (request: Request, expectedTopic: string
 
     console.log(`Received ${topic} webhook for ${shop}`);
 
+    if (topic !== expectedTopic) {
+      await setWebhookStatus(shop, "warning", `Unexpected topic ${topic}`);
+      return new Response("Topic mismatch", { status: 400 });
+    }
+
     if (!admin || !shop) {
       await setWebhookStatus(shop, "warning", "Admin client unavailable for webhook processing");
       return new Response("Admin client unavailable", { status: 500 });
@@ -80,64 +86,79 @@ export const handleOrderWebhook = async (request: Request, expectedTopic: string
     }
 
     const settings = await getSettings(shop);
-    const record = await fetchOrderById(admin, orderGid, settings, { shopDomain: shop });
 
-    if (!record) {
-      await setWebhookStatus(shop, "warning", "Order not found for webhook payload");
-      return new Response("Order not found", { status: 404 });
-    }
-
-    await persistOrders(shop, [record]);
-    await markActivity(shop, { lastOrdersWebhookAt: new Date() });
-
-    console.info("[webhook] order persisted", {
-      platform,
-      shop,
-      orderId: record.id,
-      aiSource: record.aiSource,
+    await enqueueWebhookJob({
+      shopDomain: shop,
+      topic,
       intent: expectedTopic,
-    });
+      payload: { orderGid, shopDomain: shop },
+      run: async (jobPayload) => {
+        const record = await fetchOrderById(admin, jobPayload.orderGid as string, settings, {
+          shopDomain: shop,
+        });
 
-    let webhookStatus: { status: "healthy" | "warning" | "info"; detail: string } = {
-      status: "healthy",
-      detail: `Received ${expectedTopic} at ${new Date().toISOString()}`,
-    };
+        if (!record) {
+          await setWebhookStatus(shop, "warning", "Order not found for webhook payload");
+          return;
+        }
 
-    await setWebhookStatus(shop, webhookStatus.status, webhookStatus.detail);
-    if (record.aiSource && (settings.tagging.writeOrderTags || settings.tagging.writeCustomerTags)) {
-      const taggingStart = Date.now();
-      void (async () => {
-        try {
-          await applyAiTags(admin, [record], settings, { shopDomain: shop, intent: expectedTopic });
-          await markActivity(shop, { lastTaggingAt: new Date() });
-          await setWebhookStatus(shop, "healthy", "Latest order tagged successfully.");
-        } catch (error) {
-          console.error("applyAiTags failed", {
-            shop,
-            topic,
-            message: (error as Error).message,
-          });
-          await setWebhookStatus(
-            shop,
-            "warning",
-            "Tagging failed for latest order; check server logs and retry later.",
-          );
-        } finally {
-          const elapsed = Date.now() - taggingStart;
-          if (elapsed > 4500) {
-            console.warn("[webhook] tagging exceeded threshold", {
-              platform,
+        await persistOrders(shop, [record]);
+        await markActivity(shop, { lastOrdersWebhookAt: new Date() });
+
+        console.info("[webhook] order persisted", {
+          platform,
+          shop,
+          orderId: record.id,
+          aiSource: record.aiSource,
+          detection: record.detection?.slice(0, 160),
+          signals: record.signals?.slice(0, 5),
+          intent: expectedTopic,
+        });
+
+        await setWebhookStatus(
+          shop,
+          "healthy",
+          `Processed ${expectedTopic} at ${new Date().toISOString()}`,
+        );
+
+        if (record.aiSource && (settings.tagging.writeOrderTags || settings.tagging.writeCustomerTags)) {
+          const taggingStart = Date.now();
+          try {
+            await applyAiTags(admin, [record], settings, { shopDomain: shop, intent: expectedTopic });
+            await markActivity(shop, { lastTaggingAt: new Date() });
+            await setWebhookStatus(shop, "healthy", "Latest order tagged successfully.");
+          } catch (error) {
+            console.error("applyAiTags failed", {
               shop,
-              elapsedMs: elapsed,
               topic,
+              message: (error as Error).message,
             });
+            await setWebhookStatus(
+              shop,
+              "warning",
+              "Tagging failed for latest order; check server logs and retry later.",
+            );
+          } finally {
+            const elapsed = Date.now() - taggingStart;
+            if (elapsed > 4500) {
+              console.warn("[webhook] tagging exceeded threshold", {
+                platform,
+                shop,
+                elapsedMs: elapsed,
+                topic,
+              });
+            }
           }
         }
-      })();
-    }
+      },
+    });
 
-    // Only return 2xx responses after order persistence has completed to allow Shopify to retry
-    // any critical failures automatically.
+    await setWebhookStatus(
+      shop,
+      "info",
+      `Queued ${expectedTopic} (${await getWebhookQueueSize()} in-flight)`,
+    );
+
     return new Response();
   } catch (error) {
     console.error("Order webhook handler failed", {

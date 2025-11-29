@@ -122,13 +122,17 @@ const ORDER_QUERY = `#graphql
 `;
 
 type AdminGraphqlClient = {
-  graphql: (query: string, options: { variables?: Record<string, unknown> }) => Promise<Response>;
+  graphql: (
+    query: string,
+    options: { variables?: Record<string, unknown>; signal?: AbortSignal },
+  ) => Promise<Response>;
 };
 
 const MAX_BACKFILL_PAGES = 20;
 const MAX_BACKFILL_ORDERS = 1000;
 const MAX_BACKFILL_DAYS = 90;
 const MAX_BACKFILL_DURATION_MS = 5000;
+const DEFAULT_GRAPHQL_TIMEOUT_MS = 4500;
 
 const platform = getPlatform();
 
@@ -140,56 +144,112 @@ const graphqlWithRetry = async (
   variables: Record<string, unknown>,
   context: { operation: string; shopDomain?: string },
   maxRetries = 2,
+  timeoutMs = DEFAULT_GRAPHQL_TIMEOUT_MS,
 ) => {
   let attempt = 0;
   let lastResponse: Response | null = null;
   const startedAt = Date.now();
 
   while (attempt <= maxRetries) {
-    const response = await admin.graphql(query, { variables });
-    if (response.ok) {
-      recordGraphqlCall({
-        operation: context.operation,
-        shopDomain: context.shopDomain,
-        durationMs: Date.now() - startedAt,
-        retries: attempt,
-        status: response.status,
-        ok: true,
-      });
-      return response;
-    }
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
-    lastResponse = response;
-    const shouldRetry =
-      response.status === 429 || response.status === 500 || response.status === 502 || response.status === 503;
-    if (!shouldRetry || attempt === maxRetries) {
-      const text = await response.text();
+    try {
+      const response = await admin.graphql(query, { variables, signal: controller.signal });
+      clearTimeout(timeout);
+
+      if (response.ok) {
+        recordGraphqlCall({
+          operation: context.operation,
+          shopDomain: context.shopDomain,
+          durationMs: Date.now() - startedAt,
+          retries: attempt,
+          status: response.status,
+          ok: true,
+        });
+        return response;
+      }
+
+      lastResponse = response;
+      const shouldRetry =
+        response.status === 429 || response.status === 500 || response.status === 502 || response.status === 503;
+      if (!shouldRetry || attempt === maxRetries) {
+        const text = await response.text();
+        recordGraphqlCall({
+          operation: context.operation,
+          shopDomain: context.shopDomain,
+          durationMs: Date.now() - startedAt,
+          retries: attempt,
+          status: response.status,
+          ok: false,
+          error: text,
+        });
+        console.error("[shopify] graphql request failed", {
+          platform,
+          shopDomain: context.shopDomain,
+          operation: context.operation,
+          status: response.status,
+          message: text,
+        });
+        throw new Error(
+          `Shopify ${context.operation} failed: ${response.status} ${text} (attempt ${attempt + 1}/${
+            maxRetries + 1
+          })`,
+        );
+      }
+
+      const delay = 200 * 2 ** attempt;
+      console.warn("[shopify] retrying graphql", {
+        platform,
+        shopDomain: context.shopDomain,
+        operation: context.operation,
+        attempt: attempt + 1,
+        status: response.status,
+        delay,
+      });
+      await sleep(delay);
+    } catch (error) {
+      clearTimeout(timeout);
+      const isAbortError = (error as Error).name === "AbortError";
+      const message = isAbortError
+        ? `graphql request timed out after ${timeoutMs}ms`
+        : (error as Error).message;
+      const shouldRetry = isAbortError && attempt < maxRetries;
+
       recordGraphqlCall({
         operation: context.operation,
         shopDomain: context.shopDomain,
         durationMs: Date.now() - startedAt,
         retries: attempt,
-        status: response.status,
+        status: lastResponse?.status,
         ok: false,
-        error: text,
+        error: message,
       });
-      throw new Error(
-        `Shopify ${context.operation} failed: ${response.status} ${text} (attempt ${attempt + 1}/${
-          maxRetries + 1
-        })`,
-      );
-    }
 
-    const delay = 200 * 2 ** attempt;
-    console.warn("[shopify] retrying graphql", {
-      platform,
-      shopDomain: context.shopDomain,
-      operation: context.operation,
-      attempt: attempt + 1,
-      status: response.status,
-      delay,
-    });
-    await sleep(delay);
+      if (!shouldRetry) {
+        console.error("[shopify] graphql request failed", {
+          platform,
+          shopDomain: context.shopDomain,
+          operation: context.operation,
+          status: lastResponse?.status,
+          message,
+        });
+        throw new Error(
+          `Shopify ${context.operation} failed: ${message} (attempt ${attempt + 1}/${maxRetries + 1})`,
+        );
+      }
+
+      const delay = 200 * 2 ** attempt;
+      console.warn("[shopify] retrying graphql", {
+        platform,
+        shopDomain: context.shopDomain,
+        operation: context.operation,
+        attempt: attempt + 1,
+        status: lastResponse?.status || "timeout",
+        delay,
+      });
+      await sleep(delay);
+    }
     attempt += 1;
   }
 

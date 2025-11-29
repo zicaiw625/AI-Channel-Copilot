@@ -71,10 +71,22 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   }
 
   const exports = orders.length
-    ? buildDashboardFromOrders(orders, range, settings.gmvMetric, displayTimezone).exports
+    ? buildDashboardFromOrders(
+        orders,
+        range,
+        settings.gmvMetric,
+        displayTimezone,
+        settings.primaryCurrency,
+      ).exports
     : demoAllowed
-      ? buildDashboardData(range, settings.gmvMetric, displayTimezone).exports
-      : buildDashboardFromOrders([], range, settings.gmvMetric, displayTimezone).exports;
+      ? buildDashboardData(range, settings.gmvMetric, displayTimezone, settings.primaryCurrency).exports
+      : buildDashboardFromOrders(
+          [],
+          range,
+          settings.gmvMetric,
+          displayTimezone,
+          settings.primaryCurrency,
+        ).exports;
 
   return { settings, exports, exportRange, clamped };
 };

@@ -16,20 +16,6 @@ type GdprWebhookPayload = {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value && typeof value === "object" && !Array.isArray(value));
 
-type GdprWebhookPayload = {
-  shop_domain?: string;
-  customer_id?: string | number;
-  customerId?: string;
-  customer?: { id?: string; email?: string } | null;
-  customer_email?: string;
-  email?: string;
-  orders_to_redact?: (string | number)[];
-  orders_requested?: (string | number)[];
-};
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  Boolean(value && typeof value === "object" && !Array.isArray(value));
-
 const tableMissing = (error: unknown) =>
   (error instanceof PrismaClientKnownRequestError && error.code === "P2021") ||
   (error instanceof Error && error.message.includes("not available"));

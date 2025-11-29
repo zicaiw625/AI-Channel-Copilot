@@ -15,7 +15,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     console.log(`Received ${topic} webhook for ${shop}`);
 
-    const shopDomain = (webhookPayload as any)?.shop_domain || shop;
+    const shopDomain =
+      typeof webhookPayload.shop_domain === "string" && webhookPayload.shop_domain
+        ? webhookPayload.shop_domain
+        : shop;
     if (!shopDomain) return new Response();
 
     await wipeShopData(shopDomain);

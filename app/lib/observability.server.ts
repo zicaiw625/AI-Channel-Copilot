@@ -8,7 +8,24 @@ export type GraphqlCallResult = {
   error?: string;
 };
 
-const graphqlCounters = new Map<string, { success: number; failure: number; retries: number; lastError?: string }>();
+type GraphqlCounter = {
+  success: number;
+  failure: number;
+  retries: number;
+  lastError?: string;
+  lastAlertAt?: number;
+};
+
+const graphqlCounters = new Map<string, GraphqlCounter>();
+const ALERT_SAMPLE_MIN = 10;
+const ALERT_FAILURE_RATE = 0.2;
+const ALERT_COOLDOWN_MS = 60_000;
+
+let metricsSink: ((operation: string, metrics: GraphqlCounter) => void) | null = null;
+
+export const onGraphqlMetrics = (sink: ((operation: string, metrics: GraphqlCounter) => void) | null) => {
+  metricsSink = sink;
+};
 
 export const recordGraphqlCall = (result: GraphqlCallResult) => {
   const key = `${result.operation}`;
@@ -37,4 +54,30 @@ export const recordGraphqlCall = (result: GraphqlCallResult) => {
       lastError: entry.lastError,
     });
   }
+
+  const attempts = entry.success + entry.failure;
+  const failureRate = attempts ? entry.failure / attempts : 0;
+  const shouldAlert =
+    attempts >= ALERT_SAMPLE_MIN &&
+    failureRate >= ALERT_FAILURE_RATE &&
+    (!entry.lastAlertAt || Date.now() - entry.lastAlertAt > ALERT_COOLDOWN_MS);
+
+  if (shouldAlert) {
+    entry.lastAlertAt = Date.now();
+    console.warn("[shopify][graphql] elevated failure rate", {
+      operation: result.operation,
+      failureRate: Number(failureRate.toFixed(2)),
+      attempts,
+      success: entry.success,
+      failure: entry.failure,
+    });
+  }
+
+  if (metricsSink) {
+    metricsSink(result.operation, { ...entry });
+  }
 };
+
+export const getGraphqlMetricsSnapshot = () => Object.fromEntries(graphqlCounters.entries());
+
+export const resetGraphqlMetrics = () => graphqlCounters.clear();

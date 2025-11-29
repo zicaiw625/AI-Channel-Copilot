@@ -26,10 +26,22 @@ export const getAiDashboardData = async (
   const orders = options.orders ?? (shopDomain ? await loadOrdersFromDb(shopDomain, range) : []);
 
   const data = orders.length
-    ? buildDashboardFromOrders(orders, range, settings.gmvMetric, options.timezone)
+    ? buildDashboardFromOrders(
+        orders,
+        range,
+        settings.gmvMetric,
+        options.timezone,
+        settings.primaryCurrency,
+      )
     : useDemo
-      ? buildDashboardData(range, settings.gmvMetric, options.timezone)
-      : buildDashboardFromOrders([], range, settings.gmvMetric, options.timezone);
+      ? buildDashboardData(range, settings.gmvMetric, options.timezone, settings.primaryCurrency)
+      : buildDashboardFromOrders(
+          [],
+          range,
+          settings.gmvMetric,
+          options.timezone,
+          settings.primaryCurrency,
+        );
 
   return { data, orders };
 };

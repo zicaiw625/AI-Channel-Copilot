@@ -53,6 +53,7 @@ export type OverviewMetrics = {
   aiNewCustomerRate: number;
   totalNewCustomers: number;
   lastSyncedAt: string;
+  currency: string;
 };
 
 export type ChannelStat = {
@@ -1251,6 +1252,25 @@ const orderValueByMetric = (
   metric: "current_total_price" | "subtotal_price",
 ) => (metric === "subtotal_price" ? order.subtotalPrice ?? order.totalPrice : order.totalPrice);
 
+const partitionOrdersByCurrency = (
+  records: OrderRecord[],
+  primaryCurrency?: string,
+): {
+  primaryCurrency: string;
+  primaryOrders: OrderRecord[];
+  foreignOrders: OrderRecord[];
+  foreignCurrencies: string[];
+} => {
+  const preferred = primaryCurrency || records[0]?.currency || "USD";
+  const primaryOrders = records.filter((order) => order.currency === preferred);
+  const foreignOrders = records.filter((order) => order.currency !== preferred);
+  const foreignCurrencies = Array.from(
+    new Set(foreignOrders.map((order) => order.currency).filter(Boolean)),
+  );
+
+  return { primaryCurrency: preferred, primaryOrders, foreignOrders, foreignCurrencies };
+};
+
 const sumGMVByMetric = (
   records: OrderRecord[],
   metric: "current_total_price" | "subtotal_price",
@@ -1265,6 +1285,7 @@ const filterOrdersByDateRange = (allOrders: OrderRecord[], range: DateRange) =>
 const buildOverview = (
   ordersInRange: OrderRecord[],
   metric: "current_total_price" | "subtotal_price" = "current_total_price",
+  currency: string,
 ): OverviewMetrics => {
   const aiOrders = ordersInRange.filter((order) => Boolean(order.aiSource));
   const aiGMV = sumGMVByMetric(aiOrders, metric);
@@ -1285,6 +1306,7 @@ const buildOverview = (
     aiNewCustomerRate: aiOrdersCount ? aiNewCustomers / aiOrdersCount : 0,
     totalNewCustomers,
     lastSyncedAt: new Date().toISOString(),
+    currency,
   };
 };
 
@@ -1602,12 +1624,23 @@ const buildProductsCsv = (products: ProductRow[]) => {
   return [header, ...rows].map((cells) => cells.map(toCsvValue).join(",")).join("\n");
 };
 
-const buildSampleNote = (overview: OverviewMetrics) => {
+const buildSampleNote = (
+  overview: OverviewMetrics,
+  foreignCurrencies: string[],
+  excludedCount: number,
+) => {
+  const notes = [] as string[];
   if (overview.aiOrders < LOW_SAMPLE_THRESHOLD) {
-    return "AI 渠道订单量当前较低（<5），所有指标仅供参考。";
+    notes.push("AI 渠道订单量当前较低（<5），所有指标仅供参考。");
   }
 
-  return null;
+  if (foreignCurrencies.length) {
+    notes.push(
+      `已过滤 ${excludedCount} 笔非 ${overview.currency} 货币的订单，汇总仅包含 ${overview.currency}。`,
+    );
+  }
+
+  return notes.length ? notes.join(" ") : null;
 };
 
 export const buildDashboardFromOrders = (
@@ -1615,17 +1648,20 @@ export const buildDashboardFromOrders = (
   range: DateRange,
   gmvMetric: "current_total_price" | "subtotal_price" = "current_total_price",
   timeZone?: string,
+  primaryCurrency?: string,
 ): DashboardData => {
   const ordersInRange = filterOrdersByDateRange(allOrders, range);
-  const overview = buildOverview(ordersInRange, gmvMetric);
-  const channels = buildChannelBreakdown(ordersInRange, gmvMetric);
-  const comparison = buildComparison(ordersInRange, gmvMetric);
-  const trend = buildTrend(ordersInRange, range, gmvMetric, timeZone);
-  const topProducts = buildProducts(ordersInRange, gmvMetric);
-  const recentOrders = buildRecentOrders(ordersInRange, gmvMetric);
-  const ordersCsv = buildOrdersCsv(ordersInRange, gmvMetric);
+  const { primaryCurrency: resolvedCurrency, primaryOrders, foreignOrders, foreignCurrencies } =
+    partitionOrdersByCurrency(ordersInRange, primaryCurrency);
+  const overview = buildOverview(primaryOrders, gmvMetric, resolvedCurrency);
+  const channels = buildChannelBreakdown(primaryOrders, gmvMetric);
+  const comparison = buildComparison(primaryOrders, gmvMetric);
+  const trend = buildTrend(primaryOrders, range, gmvMetric, timeZone);
+  const topProducts = buildProducts(primaryOrders, gmvMetric);
+  const recentOrders = buildRecentOrders(primaryOrders, gmvMetric);
+  const ordersCsv = buildOrdersCsv(primaryOrders, gmvMetric);
   const productsCsv = buildProductsCsv(topProducts);
-  const sampleNote = buildSampleNote(overview);
+  const sampleNote = buildSampleNote(overview, foreignCurrencies, foreignOrders.length);
 
   return {
     overview,
@@ -1646,8 +1682,9 @@ export const buildDashboardData = (
   range: DateRange,
   gmvMetric: "current_total_price" | "subtotal_price" = "current_total_price",
   timeZone?: string,
+  primaryCurrency?: string,
 ): DashboardData => {
-  return buildDashboardFromOrders(orders, range, gmvMetric, timeZone);
+  return buildDashboardFromOrders(orders, range, gmvMetric, timeZone, primaryCurrency);
 };
 
 type ShopifyMoneySet = {

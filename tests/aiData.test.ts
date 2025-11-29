@@ -132,12 +132,60 @@ describe("Order mapping and aggregation", () => {
       },
     ];
 
-    const dashboard = buildDashboardFromOrders(orders, range, "current_total_price");
+    const dashboard = buildDashboardFromOrders(orders, range, "current_total_price", undefined, "USD");
 
     expect(dashboard.overview.totalGMV).toBeCloseTo(200);
     expect(dashboard.overview.aiGMV).toBeCloseTo(120);
     expect(dashboard.overview.aiOrders).toBe(1);
     expect(dashboard.channels.find((c) => c.channel === "ChatGPT")?.gmv).toBeCloseTo(120);
+  });
+
+  it("filters non-primary currencies when aggregating GMV", () => {
+    const orders = [
+      {
+        id: "usd-order",
+        name: "#1",
+        createdAt: "2024-01-05T00:00:00Z",
+        totalPrice: 100,
+        currency: "USD",
+        aiSource: "ChatGPT" as const,
+        referrer: "https://chat.openai.com/",
+        landingPage: "https://store.example.com/",
+        utmSource: "chatgpt",
+        utmMedium: "ai-agent",
+        sourceName: "web",
+        customerId: "c1",
+        isNewCustomer: true,
+        products: [],
+        detection: "referrer match",
+        tags: [],
+      },
+      {
+        id: "eur-order",
+        name: "#2",
+        createdAt: "2024-01-06T00:00:00Z",
+        totalPrice: 200,
+        currency: "EUR",
+        aiSource: null,
+        referrer: "",
+        landingPage: "",
+        utmSource: undefined,
+        utmMedium: undefined,
+        sourceName: "web",
+        customerId: "c2",
+        isNewCustomer: false,
+        products: [],
+        detection: "none",
+        tags: [],
+      },
+    ];
+
+    const dashboard = buildDashboardFromOrders(orders, range, "current_total_price", undefined, "USD");
+
+    expect(dashboard.overview.totalGMV).toBe(100);
+    expect(dashboard.overview.currency).toBe("USD");
+    expect(dashboard.sampleNote).toContain("已过滤 1 笔非 USD 货币的订单");
+    expect(dashboard.recentOrders).toHaveLength(1);
   });
 });
 

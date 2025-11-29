@@ -2,6 +2,7 @@ import prisma from "../db.server";
 import { defaultSettings, type SettingsDefaults } from "./aiData";
 import { getPlatform } from "./runtime.server";
 import { markActivity } from "./settings.server";
+import { DEFAULT_RETENTION_MONTHS } from "./constants";
 
 const platform = getPlatform();
 
@@ -13,7 +14,8 @@ const parseEnvRetention = () => {
 };
 
 export const resolveRetentionMonths = (settings?: SettingsDefaults) => {
-  const candidate = settings?.retentionMonths || parseEnvRetention() || defaultSettings.retentionMonths || 6;
+  const candidate =
+    settings?.retentionMonths || parseEnvRetention() || defaultSettings.retentionMonths || DEFAULT_RETENTION_MONTHS;
   return Math.max(1, Math.floor(candidate));
 };
 

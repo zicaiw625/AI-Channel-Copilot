@@ -1,3 +1,5 @@
+import { DEFAULT_RANGE_KEY } from "./constants";
+
 export type AIChannel = "ChatGPT" | "Perplexity" | "Gemini" | "Copilot" | "Other-AI";
 
 export type TimeRangeKey = "7d" | "30d" | "90d" | "custom";
@@ -193,7 +195,7 @@ const channelColors: Record<AIChannel, string> = {
   "Other-AI": "#6c6f78",
 };
 
-const DEFAULT_RANGE_KEY: TimeRangeKey = "30d";
+import { DEFAULT_RANGE_KEY } from "./constants";
 
 const storeUrl = "https://demo-store.ai-beauty.example.com";
 const now = Date.now();
@@ -1774,6 +1776,7 @@ export const mapShopifyOrderToRecord = (
       tagPrefix: config.tagging.orderTagPrefix,
     },
   );
+  const truncatedDetection = detection.slice(0, 200);
 
   const products: OrderRecord["products"] =
     order.lineItems?.edges?.map(({ node }) => {
@@ -1814,7 +1817,7 @@ export const mapShopifyOrderToRecord = (
     customerId: order.customer?.id ?? null,
     isNewCustomer,
     products,
-    detection,
+    detection: truncatedDetection,
     signals,
   };
 };

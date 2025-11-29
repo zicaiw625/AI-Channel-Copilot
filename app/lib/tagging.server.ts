@@ -55,6 +55,14 @@ export const applyAiTags = async (
   const customerTagTargets: { id: string; tags: string[] }[] = [];
   const seenCustomers = new Set<string>();
 
+  const runInBatches = async (targets: { id: string; tags: string[] }[]) => {
+    const batchSize = 5;
+    for (let i = 0; i < targets.length; i += batchSize) {
+      const slice = targets.slice(i, i + batchSize);
+      await Promise.all(slice.map((target) => addTags(admin, target.id, target.tags)));
+    }
+  };
+
   for (const order of orders) {
     if (!order.aiSource) continue;
 
@@ -75,19 +83,6 @@ export const applyAiTags = async (
         customerTagTargets.push({ id: order.customerId, tags: [customerTag] });
         seenCustomers.add(order.customerId);
       }
-    }
-  };
-
-  if (!dryRun) {
-    await runInBatches(orderTagTargets);
-    await runInBatches(customerTagTargets);
-  }
-
-  const runInBatches = async (targets: { id: string; tags: string[] }[]) => {
-    const batchSize = 5;
-    for (let i = 0; i < targets.length; i += batchSize) {
-      const slice = targets.slice(i, i + batchSize);
-      await Promise.all(slice.map((target) => addTags(admin, target.id, target.tags)));
     }
   };
 

@@ -68,6 +68,11 @@ export const handleOrderWebhook = async (request: Request, expectedTopic: string
 
     console.log(`Received ${topic} webhook for ${shop}`);
 
+    if (topic !== expectedTopic) {
+      await setWebhookStatus(shop, "warning", `Unexpected topic ${topic}`);
+      return new Response("Topic mismatch", { status: 400 });
+    }
+
     if (!admin || !shop) {
       await setWebhookStatus(shop, "warning", "Admin client unavailable for webhook processing");
       return new Response("Admin client unavailable", { status: 500 });

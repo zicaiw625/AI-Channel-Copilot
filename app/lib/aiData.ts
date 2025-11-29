@@ -143,9 +143,11 @@ export type SettingsDefaults = {
   languages: string[];
   timezones: string[];
   pipelineStatuses: PipelineStatus[];
+  retentionMonths?: number;
   lastOrdersWebhookAt?: string | null;
   lastBackfillAt?: string | null;
   lastTaggingAt?: string | null;
+  lastCleanupAt?: string | null;
 };
 
 export type DashboardData = {
@@ -987,6 +989,7 @@ export const defaultSettings: SettingsDefaults = {
     exposeCollections: false,
     exposeBlogs: false,
   },
+  retentionMonths: 6,
   languages: ["中文", "English"],
   timezones: ["UTC", "America/Los_Angeles", "Asia/Shanghai", "Europe/London"],
   pipelineStatuses: defaultPipelineStatuses,

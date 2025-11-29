@@ -19,6 +19,7 @@ import styles from "./app.dashboard.module.css";
 import { allowDemoData } from "../lib/runtime.server";
 import { getAiDashboardData } from "../lib/aiQueries.server";
 import { isBackfillRunning } from "../lib/backfill.server";
+import { ensureRetentionOncePerDay } from "../lib/retention.server";
 
 const BACKFILL_COOLDOWN_MINUTES = 30;
 const BACKFILL_MAX_ORDERS = 250;
@@ -40,6 +41,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const calculationTimezone = displayTimezone || "UTC";
   const dateRange = resolveDateRange(rangeParam, new Date(), from, to, calculationTimezone);
   const lastBackfillAt = settings.lastBackfillAt ? new Date(settings.lastBackfillAt) : null;
+
+  await ensureRetentionOncePerDay(shopDomain, settings);
 
   let dataSource: "live" | "demo" | "stored" | "empty" = "live";
   let orders = await loadOrdersFromDb(shopDomain, dateRange);
@@ -95,6 +98,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     calculationTimezone,
     timezone: displayTimezone,
     language,
+    retentionMonths: settings.retentionMonths || 6,
+    lastCleanupAt: settings.lastCleanupAt || null,
     backfillSuppressed,
     backfillAvailable,
     dataLastUpdated,

@@ -130,7 +130,9 @@ model ShopSettings {
   gmvMetric             String   @default("current_total_price")
   pipelineStatuses      Json?
   aiExposurePreferences Json?
+  retentionMonths       Int      @default(6)
   lastOrdersWebhookAt   DateTime?
+  lastCleanupAt         DateTime?
   lastBackfillAt        DateTime?
   lastTaggingAt         DateTime?
   createdAt             DateTime @default(now())

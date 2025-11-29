@@ -40,3 +40,8 @@ AI Discovery & Attribution Copilot 帮助 Shopify 商家识别来自 ChatGPT、P
 - 标签写回默认关闭；启用后会修改 Shopify 订单/客户标签，若店铺存在基于标签的自动化流程，请先在测试店验证。
 - AI 渠道识别基于 referrer/UTM/tag，无法覆盖隐藏来源或站内曝光，所有数值均为保守估计。
 
+## 数据保留与清理
+- 默认仅保留最近 **6 个月** 的订单/客户数据，可通过环境变量 `DATA_RETENTION_MONTHS` 或后台设置调整（最小值 1）。
+- 仪表盘在有管理员访问时会自动触发每日一次的清理，将超出保留期的订单与孤立客户删除并记录 `lastCleanupAt`。
+- 也可通过 `POST /api/retention` 手动触发清理（`?force=true` 可强制立即执行），用于回归/隐私审计场景。
+

@@ -2,13 +2,15 @@ services:
   - type: web
     name: ai-channel-copilot
     env: node
-    buildCommand: npm ci --include=dev && npm run setup && npm run build
+    buildCommand: npm install --include=dev && npm run setup && npm run build
     startCommand: npm run start
     autoDeploy: true
     healthCheckPath: /
     envVars:
       - key: NPM_CONFIG_PRODUCTION
         value: false
+      - key: NODE_VERSION
+        value: 22.16.0
       - key: SHOPIFY_API_KEY
         sync: false
       - key: SHOPIFY_API_SECRET

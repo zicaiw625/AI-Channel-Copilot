@@ -1713,6 +1713,7 @@ export const buildDashboardFromOrders = (
   gmvMetric: "current_total_price" | "subtotal_price" = "current_total_price",
   timeZone?: string,
   primaryCurrency?: string,
+  acquiredViaAiMap?: Record<string, boolean>,
 ): DashboardData => {
   const ordersInRange = filterOrdersByDateRange(allOrders, range);
   const excludedBySource = ordersInRange.filter((o) => {
@@ -1730,7 +1731,7 @@ export const buildDashboardFromOrders = (
   const comparison = aggBuildComparison(primaryOrders, gmvMetric);
   const trend = aggBuildTrend(primaryOrders, range, gmvMetric, timeZone);
   const topProducts = aggBuildProducts(primaryOrders, gmvMetric);
-  const topCustomers = buildTopCustomers(primaryOrders, gmvMetric);
+  const topCustomers = buildTopCustomers(primaryOrders, gmvMetric, undefined, acquiredViaAiMap);
   const recentOrders = buildRecentOrders(primaryOrders, gmvMetric);
   const ordersCsv = buildOrdersCsv(primaryOrders, gmvMetric);
   const productsCsv = buildProductsCsv(topProducts);

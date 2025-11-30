@@ -324,6 +324,23 @@ export const loadOrdersFromDb = async (
   }
 };
 
+export const loadCustomersByIds = async (
+  shopDomain: string,
+  ids: string[],
+): Promise<{ id: string; acquiredViaAi: boolean }[]> => {
+  if (!shopDomain || !ids.length || isDemoMode()) return [];
+  try {
+    const { customerModel } = models;
+    const customers = await customerModel.findMany({ where: { shopDomain, id: { in: ids } }, select: { id: true, acquiredViaAi: true } });
+    return customers.map((c) => ({ id: c.id, acquiredViaAi: Boolean(c.acquiredViaAi) }));
+  } catch (error) {
+    if (tableMissing(error)) {
+      return [];
+    }
+    throw error;
+  }
+};
+
 export const aggregateAiShare = async (shopDomain: string) => {
   if (!shopDomain) return { aiOrders: 0, totalOrders: 0 };
   try {

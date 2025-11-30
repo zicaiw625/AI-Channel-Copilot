@@ -8,7 +8,7 @@ import type {
   RawOrderRow,
 } from "./aiData";
 import { buildDashboardData, buildDashboardFromOrders } from "./aiData";
-import { loadOrdersFromDb } from "./persistence.server";
+import { loadOrdersFromDb, loadCustomersByIds } from "./persistence.server";
 import { allowDemoData } from "./runtime.server";
 
 type DashboardQueryOptions = {
@@ -30,6 +30,18 @@ export const getAiDashboardData = async (
       ? await loadOrdersFromDb(shopDomain, range)
       : { orders: [], clamped: false };
 
+  let acquiredMap: Record<string, boolean> | undefined = undefined;
+  if (orders.length) {
+    const ids = Array.from(new Set(orders.map((o) => o.customerId).filter(Boolean) as string[]));
+    if (ids.length) {
+      const customers = await loadCustomersByIds(shopDomain, ids);
+      acquiredMap = customers.reduce<Record<string, boolean>>((acc, c) => {
+        acc[c.id] = Boolean(c.acquiredViaAi);
+        return acc;
+      }, {});
+    }
+  }
+
   const data = orders.length
     ? buildDashboardFromOrders(
         orders,
@@ -37,6 +49,7 @@ export const getAiDashboardData = async (
         settings.gmvMetric,
         options.timezone,
         settings.primaryCurrency,
+        acquiredMap,
       )
     : useDemo
       ? buildDashboardData(range, settings.gmvMetric, options.timezone, settings.primaryCurrency)
@@ -46,6 +59,7 @@ export const getAiDashboardData = async (
           settings.gmvMetric,
           options.timezone,
           settings.primaryCurrency,
+          undefined,
         );
 
   return { data: { ...data, sampleNote: clamped ? "数据为截断样本，建议缩短时间范围" : data.sampleNote }, orders };

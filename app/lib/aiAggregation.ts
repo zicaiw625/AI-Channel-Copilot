@@ -13,6 +13,7 @@ export const buildTopCustomers = (
   ordersInRange: OrderRecord[],
   metric: MetricKey,
   topN = 8,
+  acquiredMap?: Record<string, boolean>,
 ): TopCustomerRow[] => {
   const byCustomer = new Map<string, { ltv: number; orders: number; ai: boolean; firstDate?: Date; firstAIAcquired: boolean }>();
 
@@ -31,7 +32,7 @@ export const buildTopCustomers = (
   });
 
   return Array.from(byCustomer.entries())
-    .map(([customerId, v]) => ({ customerId, ltv: v.ltv, orders: v.orders, ai: v.ai, firstAIAcquired: v.firstAIAcquired, repeatCount: Math.max(0, v.orders - 1) }))
+    .map(([customerId, v]) => ({ customerId, ltv: v.ltv, orders: v.orders, ai: v.ai, firstAIAcquired: acquiredMap ? Boolean(acquiredMap[customerId]) : v.firstAIAcquired, repeatCount: Math.max(0, v.orders - 1) }))
     .sort((a, b) => b.ltv - a.ltv)
     .slice(0, topN);
 };

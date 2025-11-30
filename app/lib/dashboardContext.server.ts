@@ -4,6 +4,7 @@ import { loadOrdersFromDb, persistOrders } from "./persistence.server";
 import { allowDemoData } from "./runtime.server";
 import { isBackfillRunning } from "./backfill.server";
 import { fetchOrdersForRange } from "./shopifyOrders.server";
+import { logger } from "./logger.server";
 import {
   BACKFILL_COOLDOWN_MINUTES,
   DEFAULT_RANGE_KEY,
@@ -91,23 +92,28 @@ export const loadDashboardContext = async ({
   }
 
   if (orders.length === 0 && fallbackToShopify && admin) {
-    const fetched = await fetchOrdersForRange(
-      admin,
-      dateRange,
-      settings,
-      {
-        shopDomain,
-        intent: fallbackIntent,
-        rangeLabel: dateRange.label,
-      },
-      { maxOrders: MAX_BACKFILL_ORDERS, maxDurationMs: MAX_BACKFILL_DURATION_MS },
-    );
+    try {
+      const fetched = await fetchOrdersForRange(
+        admin,
+        dateRange,
+        settings,
+        {
+          shopDomain,
+          intent: fallbackIntent,
+          rangeLabel: dateRange.label,
+        },
+        { maxOrders: MAX_BACKFILL_ORDERS, maxDurationMs: MAX_BACKFILL_DURATION_MS },
+      );
 
-    orders = fetched.orders;
-    clamped = fetched.clamped;
-    if (orders.length > 0) {
-      await persistOrders(shopDomain, orders);
-      dataSource = "live";
+      orders = fetched.orders;
+      clamped = fetched.clamped;
+      if (orders.length > 0) {
+        await persistOrders(shopDomain, orders);
+        dataSource = "live";
+      }
+    } catch (error) {
+      logger.warn("[backfill] fallback fetch skipped", { shopDomain }, { message: (error as Error).message });
+      dataSource = demoAllowed ? "demo" : "empty";
     }
   }
 

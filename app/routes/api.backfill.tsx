@@ -1,4 +1,4 @@
-import { json } from "react-router";
+ 
 import type { ActionFunctionArgs } from "react-router";
 
 import { resolveDateRange, type TimeRangeKey } from "../lib/aiData";
@@ -8,7 +8,8 @@ import { authenticate } from "../shopify.server";
 import { DEFAULT_RANGE_KEY, MAX_BACKFILL_DURATION_MS, MAX_BACKFILL_ORDERS } from "../lib/constants";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  if (request.method !== "POST") return json({ ok: false, message: "Method not allowed" }, { status: 405 });
+  if (request.method !== "POST")
+    return Response.json({ ok: false, message: "Method not allowed" }, { status: 405 });
 
   const { admin, session } = await authenticate.admin(request);
   const shopDomain = session?.shop || "";
@@ -27,7 +28,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   const existing = await describeBackfill(shopDomain);
   if (existing) {
-    return json({
+    return Response.json({
       ok: true,
       queued: false,
       reason: "in-flight",
@@ -46,7 +47,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     { shopDomain },
   );
 
-  return json({
+  return Response.json({
     ok: true,
     queued: result.queued,
     reason: result.queued ? undefined : result.reason,

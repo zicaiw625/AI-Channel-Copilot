@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ActionFunctionArgs, HeadersFunction, LoaderFunctionArgs } from "react-router";
-import { json, useFetcher, useLoaderData, useNavigate, useLocation } from "react-router";
+import { useFetcher, useLoaderData, useNavigate, useLocation } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 
@@ -90,14 +90,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
 
     let normalized;
-    try {
-      normalized = normalizeSettingsPayload(incoming.toString());
-    } catch (parseError) {
-      return json(
-        { ok: false, message: "设置格式无效，请刷新后重试" },
-        { status: 400 },
-      );
-    }
+      try {
+        normalized = normalizeSettingsPayload(incoming.toString());
+      } catch (parseError) {
+        return Response.json(
+          { ok: false, message: "设置格式无效，请刷新后重试" },
+          { status: 400 },
+        );
+      }
     const existing = await getSettings(shopDomain);
     const merged = {
       ...existing,
@@ -130,7 +130,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     if (intent === "backfill") {
       if (withinCooldown) {
-        return json(
+        return Response.json(
           { ok: false, message: "距离上次补拉不足 30 分钟，已复用现有数据。" },
           { status: 429 },
         );
@@ -178,12 +178,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       );
     }
 
-    return json({ ok: true, intent });
+    return Response.json({ ok: true, intent });
   } catch (error) {
     logger.error("Failed to save settings", { shopDomain }, {
       message: (error as Error).message,
     });
-    return json(
+    return Response.json(
       { ok: false, message: (error as Error).message },
       { status: 400 },
     );

@@ -1,4 +1,4 @@
-import { json } from "react-router";
+ 
 import type { LoaderFunctionArgs } from "react-router";
 
 import prisma from "../db.server";
@@ -15,7 +15,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
   const shopDomain = session?.shop || "";
   if (!shopDomain) {
-    return json({ ok: false, message: "unauthorized" }, { status: 401 });
+    return Response.json({ ok: false, message: "unauthorized" }, { status: 401 });
   }
 
   const [backfillRows, webhookRows, backfillCounts, webhookCounts] = await Promise.all([
@@ -41,7 +41,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     }),
   ]);
 
-  return json({
+  return Response.json({
     ok: true,
     backfills: {
       recent: backfillRows,

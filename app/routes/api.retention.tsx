@@ -1,4 +1,4 @@
-import { json } from "react-router";
+ 
 import type { ActionFunctionArgs } from "react-router";
 
 import { authenticate } from "../shopify.server";
@@ -13,7 +13,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const { session } = await authenticate.admin(request);
   const shopDomain = session?.shop || "";
   if (!shopDomain) {
-    return json({ ok: false, message: "unauthorized" }, { status: 401 });
+    return Response.json({ ok: false, message: "unauthorized" }, { status: 401 });
   }
 
   const settings = await getSettings(shopDomain);
@@ -25,5 +25,5 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     ? await pruneHistoricalData(shopDomain, retentionMonths)
     : await ensureRetentionOncePerDay(shopDomain, settings);
 
-  return json({ ok: true, retentionMonths, ...result });
+  return Response.json({ ok: true, retentionMonths, ...result });
 };

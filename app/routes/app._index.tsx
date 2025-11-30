@@ -532,7 +532,7 @@ export default function Index() {
               })}
             </div>
             <p className={styles.helpText}>
-              优先级：referrer > UTM。未带 referrer/UTM 的 AI 流量无法被识别，结果为保守估计。
+              优先级：referrer &gt; UTM。未带 referrer/UTM 的 AI 流量无法被识别，结果为保守估计。
             </p>
           </div>
 
@@ -547,7 +547,7 @@ export default function Index() {
                   样本 &lt; {LOW_SAMPLE_THRESHOLD} · 解读时请谨慎
                 </span>
               ) : (
-                <span className={styles.smallBadge}>样本 >= {LOW_SAMPLE_THRESHOLD}</span>
+                <span className={styles.smallBadge}>样本 &gt;= {LOW_SAMPLE_THRESHOLD}</span>
               )}
             </div>
             <div className={styles.tableWrap}>

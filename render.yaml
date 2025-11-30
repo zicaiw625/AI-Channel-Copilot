@@ -1,0 +1,37 @@
+services:
+  - type: web
+    name: ai-channel-copilot
+    env: node
+    buildCommand: npm run setup && npm run build
+    startCommand: npm run start
+    autoDeploy: true
+    healthCheckPath: /
+    envVars:
+      - key: SHOPIFY_API_KEY
+        sync: false
+      - key: SHOPIFY_API_SECRET
+        sync: false
+      - key: SHOPIFY_APP_URL
+        sync: false
+      - key: SCOPES
+        value: read_orders,read_customers,read_products,write_orders,write_customers
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ai-channel-copilot-db
+          property: connectionString
+      - key: DEFAULT_RANGE_KEY
+        value: 30d
+      - key: MAX_BACKFILL_ORDERS
+        value: 1000
+      - key: MAX_BACKFILL_DAYS
+        value: 90
+      - key: MAX_BACKFILL_DURATION_MS
+        value: 5000
+      - key: BACKFILL_TAGGING_BATCH_SIZE
+        value: 25
+      - key: DATA_RETENTION_MONTHS
+        value: 6
+
+databases:
+  - name: ai-channel-copilot-db
+    plan: free

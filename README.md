@@ -57,4 +57,22 @@ AI Discovery & Attribution Copilot 帮助 Shopify 商家识别来自 ChatGPT、P
 - 使用 `npm run regression` 在测试店自动造数与派发 webhook：脚本会读取 `SHOPIFY_STORE_DOMAIN`、`SHOPIFY_ADMIN_TOKEN`（GraphQL Admin）、`SHOPIFY_API_SECRET`（计算 HMAC，可选）并寻找首个可用商品变体作为下单货品。
 - 每次运行会创建两笔测试订单（带不同的 `utm_source`/`utm_medium`），随后向 `orders/create` 与 `orders/updated` webhook 端点推送签名 payload 以驱动管道入库。
 - 可通过环境变量 `APP_WEBHOOK_URL`、`APP_WEBHOOK_UPDATE_URL` 定位到实际应用的 webhook 地址，默认指向本地 `http://localhost:3000`；运行完成后在 Dashboard 调试视图与队列面板验证落库与解析结果。
+## Render 部署
+
+- 准备：将 `SHOPIFY_API_KEY`、`SHOPIFY_API_SECRET`、`SCOPES`、`SHOPIFY_APP_URL`、`DATABASE_URL` 配置到 Render；仓库已包含 `render.yaml`（Blueprints）。
+- 步骤：
+  - 在 Render 点击 New → Blueprints → 选择本仓库 → main 分支 → 自动识别 `render.yaml`。
+  - 创建 Web Service 与 PostgreSQL 数据库，填写 `SHOPIFY_API_KEY/SHOPIFY_API_SECRET/SHOPIFY_APP_URL`。
+  - 部署完成后，将 Render 域名填入 Shopify Partners 的 App URL 与回调地址。
+- 构建/启动：
+  - Build：`npm run setup && npm run build`
+  - Start：`npm run start`
+- 健康检查：`GET /`
+
+### 环境变量说明
+- `SHOPIFY_API_KEY` / `SHOPIFY_API_SECRET`：从 Shopify Partners 获取
+- `SHOPIFY_APP_URL`：Render 站点完整 HTTPS URL
+- `SCOPES`：例如 `read_orders,read_customers,read_products,write_orders,write_customers`
+- `DATABASE_URL`：由 Render 数据库自动注入
+- 可选：`DEFAULT_RANGE_KEY=30d`、`MAX_BACKFILL_ORDERS=1000`、`MAX_BACKFILL_DAYS=90`、`MAX_BACKFILL_DURATION_MS=5000`、`BACKFILL_TAGGING_BATCH_SIZE=25`、`DATA_RETENTION_MONTHS=6`
 

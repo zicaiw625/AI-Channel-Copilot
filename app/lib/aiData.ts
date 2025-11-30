@@ -6,7 +6,7 @@ import { detectAiFromFields as detectAiFromFieldsRef, extractUtm as extractUtmRe
   - 因此，本模块的识别结果偏下限，可能低估 AI 真实贡献；仪表盘与导出均按保守估计展示。
   - 优先级：referrer > UTM > 其它（标签/备注），并记录冲突与命中 signals 供调试。
 */
-import { metricOrderValue, sumGMV, sumNetGMV } from "./metrics.server";
+import { metricOrderValue, sumGMV, sumNetGMV, computeLTV } from "./metrics";
 import {
   buildTopCustomers,
   buildOverview as aggBuildOverview,

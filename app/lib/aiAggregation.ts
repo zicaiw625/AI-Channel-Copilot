@@ -1,6 +1,6 @@
 import type { OrderRecord, DateRange, AIChannel, ChannelStat, ComparisonRow, TrendPoint, ProductRow } from "./aiData";
-import type { MetricKey } from "./metrics.server";
-import { metricOrderValue, sumGMV } from "./metrics.server";
+import type { MetricKey } from "./metrics";
+import { metricOrderValue, sumGMV } from "./metrics";
 
 export type TopCustomerRow = {
   customerId: string;

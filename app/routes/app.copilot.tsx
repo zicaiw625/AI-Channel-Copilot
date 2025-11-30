@@ -31,7 +31,7 @@ export default function Copilot() {
   };
 
   return (
-    <s-page heading="Copilot 分析问答（MVP）">
+    <s-page heading="Copilot 分析问答（v0.2 实验）">
       <div className={styles.page}>
         <div className={styles.lede}>
           <h1>基于固定意图的快捷问答</h1>

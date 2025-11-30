@@ -1678,8 +1678,16 @@ export const buildDashboardFromOrders = (
   primaryCurrency?: string,
 ): DashboardData => {
   const ordersInRange = filterOrdersByDateRange(allOrders, range);
+  const excludedBySource = ordersInRange.filter((o) => {
+    const src = (o.sourceName || "").toLowerCase();
+    return src === "pos" || src === "draft";
+  }).length;
+  const usableOrders = ordersInRange.filter((o) => {
+    const src = (o.sourceName || "").toLowerCase();
+    return src !== "pos" && src !== "draft";
+  });
   const { primaryCurrency: resolvedCurrency, primaryOrders, foreignOrders, foreignCurrencies } =
-    partitionOrdersByCurrency(ordersInRange, primaryCurrency);
+    partitionOrdersByCurrency(usableOrders, primaryCurrency);
   const overview = buildOverview(primaryOrders, gmvMetric, resolvedCurrency);
   const channels = buildChannelBreakdown(primaryOrders, gmvMetric);
   const comparison = buildComparison(primaryOrders, gmvMetric);
@@ -1688,7 +1696,11 @@ export const buildDashboardFromOrders = (
   const recentOrders = buildRecentOrders(primaryOrders, gmvMetric);
   const ordersCsv = buildOrdersCsv(primaryOrders, gmvMetric);
   const productsCsv = buildProductsCsv(topProducts);
-  const sampleNote = buildSampleNote(overview, foreignCurrencies, foreignOrders.length);
+  const baseNote = buildSampleNote(overview, foreignCurrencies, foreignOrders.length);
+  const posNote = excludedBySource
+    ? `已排除 ${excludedBySource} 笔 POS/草稿订单（不计入站外 AI 链路分析）。`
+    : null;
+  const sampleNote = [baseNote, posNote].filter(Boolean).join(" ") || null;
 
   return {
     overview,

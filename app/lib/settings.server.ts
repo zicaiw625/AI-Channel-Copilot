@@ -8,6 +8,8 @@ const tableMissing = (error: unknown) =>
   error instanceof PrismaClientKnownRequestError && error.code === "P2021";
 const columnMissing = (error: unknown) =>
   error instanceof PrismaClientKnownRequestError && error.code === "P2022";
+const notFound = (error: unknown) =>
+  error instanceof PrismaClientKnownRequestError && error.code === "P2025";
 
 type AdminGraphqlClient = {
   graphql: (query: string, options: { variables?: Record<string, unknown> }) => Promise<Response>;
@@ -259,9 +261,31 @@ export const markActivity = async (
   if (!shopDomain || isDemoMode()) return;
 
   try {
-    await prisma.shopSettings.update({
+    await prisma.shopSettings.upsert({
       where: { shopDomain_platform: { shopDomain, platform } },
-      data: {
+      update: {
+        ...(updates.lastOrdersWebhookAt ? { lastOrdersWebhookAt: updates.lastOrdersWebhookAt } : {}),
+        ...(updates.lastBackfillAt ? { lastBackfillAt: updates.lastBackfillAt } : {}),
+        ...(updates.lastTaggingAt ? { lastTaggingAt: updates.lastTaggingAt } : {}),
+        ...(updates.lastCleanupAt ? { lastCleanupAt: updates.lastCleanupAt } : {}),
+        ...(updates.pipelineStatuses ? { pipelineStatuses: updates.pipelineStatuses } : {}),
+      },
+      create: {
+        shopDomain,
+        platform,
+        primaryCurrency: defaultSettings.primaryCurrency,
+        aiDomains: defaultSettings.aiDomains,
+        utmSources: defaultSettings.utmSources,
+        utmMediumKeywords: defaultSettings.utmMediumKeywords,
+        orderTagPrefix: defaultSettings.tagging.orderTagPrefix,
+        customerTag: defaultSettings.tagging.customerTag,
+        writeOrderTags: defaultSettings.tagging.writeOrderTags,
+        writeCustomerTags: defaultSettings.tagging.writeCustomerTags,
+        taggingDryRun: defaultSettings.tagging.dryRun ?? true,
+        language: defaultSettings.languages[0] || "中文",
+        timezone: defaultSettings.timezones[0] || "UTC",
+        gmvMetric: defaultSettings.gmvMetric,
+        retentionMonths: clampRetention(defaultSettings.retentionMonths ?? 6),
         ...(updates.lastOrdersWebhookAt ? { lastOrdersWebhookAt: updates.lastOrdersWebhookAt } : {}),
         ...(updates.lastBackfillAt ? { lastBackfillAt: updates.lastBackfillAt } : {}),
         ...(updates.lastTaggingAt ? { lastTaggingAt: updates.lastTaggingAt } : {}),
@@ -270,7 +294,7 @@ export const markActivity = async (
       },
     });
   } catch (error) {
-    if (!(tableMissing(error) || columnMissing(error))) {
+    if (!(tableMissing(error) || columnMissing(error) || notFound(error))) {
       throw error;
     }
     const existing = await prisma.shopSettings.findFirst({ where: { shopDomain } });
@@ -278,6 +302,30 @@ export const markActivity = async (
       await prisma.shopSettings.update({
         where: { id: (existing as any).id },
         data: {
+          ...(updates.lastOrdersWebhookAt ? { lastOrdersWebhookAt: updates.lastOrdersWebhookAt } : {}),
+          ...(updates.lastBackfillAt ? { lastBackfillAt: updates.lastBackfillAt } : {}),
+          ...(updates.lastTaggingAt ? { lastTaggingAt: updates.lastTaggingAt } : {}),
+          ...(updates.lastCleanupAt ? { lastCleanupAt: updates.lastCleanupAt } : {}),
+          ...(updates.pipelineStatuses ? { pipelineStatuses: updates.pipelineStatuses } : {}),
+        },
+      });
+    } else {
+      await prisma.shopSettings.create({
+        data: {
+          shopDomain,
+          primaryCurrency: defaultSettings.primaryCurrency,
+          aiDomains: defaultSettings.aiDomains,
+          utmSources: defaultSettings.utmSources,
+          utmMediumKeywords: defaultSettings.utmMediumKeywords,
+          orderTagPrefix: defaultSettings.tagging.orderTagPrefix,
+          customerTag: defaultSettings.tagging.customerTag,
+          writeOrderTags: defaultSettings.tagging.writeOrderTags,
+          writeCustomerTags: defaultSettings.tagging.writeCustomerTags,
+          taggingDryRun: defaultSettings.tagging.dryRun ?? true,
+          language: defaultSettings.languages[0] || "中文",
+          timezone: defaultSettings.timezones[0] || "UTC",
+          gmvMetric: defaultSettings.gmvMetric,
+          retentionMonths: clampRetention(defaultSettings.retentionMonths ?? 6),
           ...(updates.lastOrdersWebhookAt ? { lastOrdersWebhookAt: updates.lastOrdersWebhookAt } : {}),
           ...(updates.lastBackfillAt ? { lastBackfillAt: updates.lastBackfillAt } : {}),
           ...(updates.lastTaggingAt ? { lastTaggingAt: updates.lastTaggingAt } : {}),

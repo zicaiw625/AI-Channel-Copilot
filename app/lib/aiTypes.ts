@@ -16,5 +16,5 @@ export type DetectionConfig = {
   utmSources: UtmSourceRule[];
   utmMediumKeywords: string[];
   tagPrefix?: string;
+  lang?: "中文" | "English";
 };
-

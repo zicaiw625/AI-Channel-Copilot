@@ -105,31 +105,39 @@ export const detectAiFromFields = (
 
   const bingCopilotReason = detectCopilotFromBing(refUrl) || detectCopilotFromBing(landingUrl);
   if (bingCopilotReason) {
-    return { aiSource: "Copilot", detection: `${bingCopilotReason} · 高置信度`, signals: [] };
+    const high = config.lang === "English" ? "confidence: high" : "高置信度";
+    return { aiSource: "Copilot", detection: `${bingCopilotReason} · ${high}`, signals: [] };
   }
 
   const domainHit = config.aiDomains.find((rule) => domainMatches(rule.domain, refUrl) || domainMatches(rule.domain, landingUrl));
   const utmMatch = utmSource ? config.utmSources.find((rule) => rule.value.toLowerCase() === utmSource.toLowerCase()) : undefined;
 
   if (domainHit) {
-    const conflictNote = utmMatch && utmMatch.channel !== domainHit.channel ? `; conflict: utm_source=${utmSource} → ${utmMatch.channel}` : utmMatch ? `; utm_source=${utmSource} confirmed` : "";
+    const conflictNote = utmMatch && utmMatch.channel !== domainHit.channel
+      ? (config.lang === "English" ? `; conflict: utm_source=${utmSource} → ${utmMatch.channel}` : `; 冲突：utm_source=${utmSource} → ${utmMatch.channel}`)
+      : utmMatch
+        ? (config.lang === "English" ? `; utm_source=${utmSource} confirmed` : `; utm_source=${utmSource} 已确认`)
+        : "";
     signals.push(`referrer matched ${domainHit.domain}`);
     if (utmMatch) signals.push(`utm_source=${utmSource}`);
     const clamped = signals.slice(0, 10).map((s) => (s.length > 255 ? s.slice(0, 255) : s));
-    return { aiSource: domainHit.channel as AIChannel, detection: `${signals.join(" + ")} · 置信度高${conflictNote}`, signals: clamped };
+    const high = config.lang === "English" ? "confidence: high" : "置信度高";
+    return { aiSource: domainHit.channel as AIChannel, detection: `${signals.join(" + ")} · ${high}${conflictNote}`, signals: clamped };
   }
 
   if (utmMatch) {
     signals.push(`utm_source=${utmSource}`);
     const clamped = signals.slice(0, 10).map((s) => (s.length > 255 ? s.slice(0, 255) : s));
-    return { aiSource: utmMatch.channel as AIChannel, detection: `${signals.join(" + ")} · 置信度中等（缺少 referrer）`, signals: clamped };
+    const medium = config.lang === "English" ? "confidence: medium (missing referrer)" : "置信度中等（缺少 referrer）";
+    return { aiSource: utmMatch.channel as AIChannel, detection: `${signals.join(" + ")} · ${medium}`, signals: clamped };
   }
 
   const mediumHit = utmMedium && config.utmMediumKeywords.find((keyword) => utmMedium.toLowerCase().includes(keyword.toLowerCase()));
   if (mediumHit) {
     signals.push(`utm_medium=${utmMedium}`);
     const clamped = signals.slice(0, 10).map((s) => (s.length > 255 ? s.slice(0, 255) : s));
-    return { aiSource: null, detection: `${signals.join(" + ")} · 置信度低：仅命中 medium 关键词(${mediumHit})，不足以判定 AI`, signals: clamped };
+    const low = config.lang === "English" ? `confidence: low: only matched medium keyword(${mediumHit}), insufficient` : `置信度低：仅命中 medium 关键词(${mediumHit})，不足以判定 AI`;
+    return { aiSource: null, detection: `${signals.join(" + ")} · ${low}`, signals: clamped };
   }
 
   const noteHit = detectFromNoteAttributes(noteAttributes, config.utmSources);
@@ -142,14 +150,17 @@ export const detectAiFromFields = (
     const channel = ([("ChatGPT"), ("Perplexity"), ("Gemini"), ("Copilot"), ("Other-AI")] as AIChannel[])
       .find((item) => item.toLowerCase() === suffix.toLowerCase()) || ("Other-AI" as AIChannel);
     const clamped = ["existing tag"].slice(0, 10).map((s) => (s.length > 255 ? s.slice(0, 255) : s));
-    return { aiSource: channel, detection: `Detected by existing tag ${tagMatch} · 置信度中等（可能来自本应用标签写回）`, signals: clamped };
+    const medium = config.lang === "English" ? "confidence: medium (may come from app tag write-back)" : "置信度中等（可能来自本应用标签写回）";
+    return { aiSource: channel, detection: `Detected by existing tag ${tagMatch} · ${medium}`, signals: clamped };
   }
 
   const clamped = signals.slice(0, 10).map((s) => (s.length > 255 ? s.slice(0, 255) : s));
+  const none = config.lang === "English"
+    ? `No AI signals detected (referrer=${refDomain || "—"}, utm_source=${utmSource || "—"}, landing=${landingDomain || "—"}) · confidence: low`
+    : `未检测到 AI 信号（referrer=${refDomain || "—"}, utm_source=${utmSource || "—"}, landing=${landingDomain || "—"}） · 置信度低`;
   return {
     aiSource: null,
-    detection: `未检测到 AI 信号（referrer=${refDomain || "—"}, utm_source=${utmSource || "—"}, landing=${landingDomain || "—"}） · 置信度低`,
+    detection: none,
     signals: clamped,
   };
 };
-

@@ -1586,6 +1586,7 @@ export const mapShopifyOrderToRecord = (
       utmSources: config.utmSources,
       utmMediumKeywords: config.utmMediumKeywords,
       tagPrefix: config.tagging.orderTagPrefix,
+      lang: (config.languages && config.languages[0]) || "中文",
     },
   );
   const truncatedDetection = detection.slice(0, 200);

@@ -62,7 +62,9 @@ export const getAiDashboardData = async (
           undefined,
         );
 
-  return { data: { ...data, sampleNote: clamped ? "数据为截断样本，建议缩短时间范围" : data.sampleNote }, orders };
+  const language = settings.languages && settings.languages[0] ? settings.languages[0] : "中文";
+  const clampedNote = language === "English" ? "Data is a truncated sample; consider shortening the time range." : "数据为截断样本，建议缩短时间范围";
+  return { data: { ...data, sampleNote: clamped ? clampedNote : data.sampleNote }, orders };
 };
 
 export const getAiOverview = async (

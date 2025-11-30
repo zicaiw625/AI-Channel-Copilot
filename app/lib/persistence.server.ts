@@ -110,6 +110,7 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
               totalPrice: order.totalPrice,
               currency: order.currency,
               subtotalPrice: order.subtotalPrice ?? order.totalPrice,
+              refundTotal: order.refundTotal ?? 0,
               aiSource,
               detection,
               referrer: order.referrer,

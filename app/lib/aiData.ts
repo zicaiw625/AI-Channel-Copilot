@@ -31,6 +31,7 @@ export type OrderRecord = {
   totalPrice: number;
   currency: string;
   subtotalPrice?: number;
+  refundTotal?: number;
   aiSource: AIChannel | null;
   referrer: string;
   landingPage: string;
@@ -47,7 +48,9 @@ export type OrderRecord = {
 
 export type OverviewMetrics = {
   totalGMV: number;
+  netGMV: number;
   aiGMV: number;
+  netAiGMV: number;
   aiShare: number;
   aiOrders: number;
   aiOrderShare: number;
@@ -1292,6 +1295,11 @@ const sumGMVByMetric = (
   metric: "current_total_price" | "subtotal_price",
 ) => records.reduce((total, order) => total + orderValueByMetric(order, metric), 0);
 
+const sumNetGMVByMetric = (
+  records: OrderRecord[],
+  metric: "current_total_price" | "subtotal_price",
+) => records.reduce((total, order) => total + Math.max(0, orderValueByMetric(order, metric) - (order.refundTotal || 0)), 0);
+
 const filterOrdersByDateRange = (allOrders: OrderRecord[], range: DateRange) =>
   allOrders.filter((order) => {
     const orderDate = new Date(order.createdAt);
@@ -1305,7 +1313,9 @@ const buildOverview = (
 ): OverviewMetrics => {
   const aiOrders = ordersInRange.filter((order) => Boolean(order.aiSource));
   const aiGMV = sumGMVByMetric(aiOrders, metric);
+  const netAiGMV = sumNetGMVByMetric(aiOrders, metric);
   const totalGMV = sumGMVByMetric(ordersInRange, metric);
+  const netGMV = sumNetGMVByMetric(ordersInRange, metric);
   const aiNewCustomers = aiOrders.filter((order) => order.isNewCustomer).length;
   const totalNewCustomers = ordersInRange.filter((order) => order.isNewCustomer).length;
   const aiOrdersCount = aiOrders.length;
@@ -1313,7 +1323,9 @@ const buildOverview = (
 
   return {
     totalGMV,
+    netGMV,
     aiGMV,
+    netAiGMV,
     aiShare: totalGMV ? aiGMV / totalGMV : 0,
     aiOrders: aiOrdersCount,
     aiOrderShare: totalOrdersCount ? aiOrdersCount / totalOrdersCount : 0,
@@ -1577,6 +1589,7 @@ const buildOrdersCsv = (
   ordersInRange: OrderRecord[],
   metric: "current_total_price" | "subtotal_price" = "current_total_price",
 ) => {
+  const comment = `# 仅统计可识别的 AI 流量（依赖 referrer/UTM/标签，结果为保守估计）；GMV 口径=${metric}`;
   const aiOrders = ordersInRange.filter((order) => order.aiSource);
   const header = [
     "order_name",
@@ -1612,10 +1625,11 @@ const buildOrdersCsv = (
     order.isNewCustomer ? "true" : "false",
   ]);
 
-  return [header, ...rows].map((cells) => cells.map(toCsvValue).join(",")).join("\n");
+  return [comment, header, ...rows].map((cells) => Array.isArray(cells) ? cells.map(toCsvValue).join(",") : cells).join("\n");
 };
 
 const buildProductsCsv = (products: ProductRow[]) => {
+  const comment = `# 仅统计可识别的 AI 流量（依赖 referrer/UTM/标签，结果为保守估计）`;
   const header = [
     "product_title",
     "ai_orders",
@@ -1638,7 +1652,7 @@ const buildProductsCsv = (products: ProductRow[]) => {
     product.handle,
   ]);
 
-  return [header, ...rows].map((cells) => cells.map(toCsvValue).join(",")).join("\n");
+  return [comment, header, ...rows].map((cells) => Array.isArray(cells) ? cells.map(toCsvValue).join(",") : cells).join("\n");
 };
 
 const buildSampleNote = (
@@ -1717,6 +1731,7 @@ export type ShopifyOrderNode = {
   createdAt: string;
   currentTotalPriceSet?: ShopifyMoneySet | null;
   currentSubtotalPriceSet?: ShopifyMoneySet | null;
+  totalRefundedSet?: ShopifyMoneySet | null;
   referringSite?: string | null;
   landingPageUrl?: string | null;
   sourceName?: string | null;
@@ -1755,6 +1770,7 @@ export const mapShopifyOrderToRecord = (
   const subtotalRaw = order.currentSubtotalPriceSet?.shopMoney?.amount;
   const subtotalPrice =
     subtotalRaw === undefined || subtotalRaw === null ? undefined : parseFloat(subtotalRaw);
+  const refundTotal = parseFloat(order.totalRefundedSet?.shopMoney?.amount || "0");
   const currency =
     order.currentTotalPriceSet?.shopMoney?.currencyCode || config.primaryCurrency || "USD";
   const referrer = order.referringSite || "";
@@ -1806,6 +1822,7 @@ export const mapShopifyOrderToRecord = (
     totalPrice,
     currency,
     subtotalPrice,
+    refundTotal,
     aiSource,
     referrer,
     landingPage,

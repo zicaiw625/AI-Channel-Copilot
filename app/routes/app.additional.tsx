@@ -701,6 +701,20 @@ export default function SettingsAndExport() {
           <div className={styles.card}>
             <div className={styles.sectionHeader}>
               <div>
+                <p className={styles.sectionLabel}>llms.txt 预览</p>
+                <h3 className={styles.sectionTitle}>根据偏好生成草稿</h3>
+              </div>
+              <span className={styles.badge}>实验</span>
+            </div>
+            <LlmsPreview />
+            <p className={styles.helpText}>
+              llms.txt 为实验性标准，不保证立刻产生 AI 排名效果；各平台的采集策略可能随时间变化。
+            </p>
+          </div>
+
+          <div className={styles.card}>
+            <div className={styles.sectionHeader}>
+              <div>
                 <p className={styles.sectionLabel}>语言 / 时区</p>
                 <h3 className={styles.sectionTitle}>展示偏好 & GMV 口径</h3>
               </div>
@@ -854,3 +868,35 @@ export default function SettingsAndExport() {
 export const headers: HeadersFunction = (headersArgs) => {
   return boundary.headers(headersArgs);
 };
+
+function LlmsPreview() {
+  const fetcher = useFetcher<{ ok: boolean; text: string }>();
+  const [copied, setCopied] = useState(false);
+  if (!fetcher.data && fetcher.state === "idle") {
+    fetcher.load("/api/llms-txt-preview");
+  }
+
+  const text = fetcher.data?.text || "# 生成中...";
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {}
+  };
+
+  return (
+    <div>
+      <textarea readOnly className={styles.textarea} value={text} rows={10} />
+      <div className={styles.inlineActions}>
+        <button type="button" className={styles.secondaryButton} onClick={copy}>
+          {copied ? "已复制" : "复制"}
+        </button>
+        <a href="/api/llms-txt-preview?download=1" className={styles.primaryButton}>
+          下载 llms.txt
+        </a>
+      </div>
+    </div>
+  );
+}

@@ -31,6 +31,11 @@ const ORDERS_QUERY = `#graphql
             amount
           }
         }
+        totalRefundedSet {
+          shopMoney {
+            amount
+          }
+        }
         referringSite
         landingPageUrl
         sourceName
@@ -84,6 +89,11 @@ const ORDER_QUERY = `#graphql
         }
       }
       currentSubtotalPriceSet {
+        shopMoney {
+          amount
+        }
+      }
+      totalRefundedSet {
         shopMoney {
           amount
         }

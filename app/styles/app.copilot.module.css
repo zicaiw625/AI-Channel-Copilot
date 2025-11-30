@@ -1,0 +1,14 @@
+.page { padding: 16px; display: grid; gap: 16px; }
+.lede { display: grid; gap: 8px; }
+.inlineNote { display: flex; gap: 12px; color: #6c6f78; }
+.quickButtons { display: flex; gap: 8px; flex-wrap: wrap; }
+.askBlock { display: flex; gap: 8px; align-items: center; }
+.answerCard { border: 1px solid #e1e4e8; border-radius: 8px; padding: 12px; display: grid; gap: 8px; }
+.answerHeader { font-weight: 600; }
+.answerBody { white-space: pre-wrap; }
+.footnote { color: #6c6f78; font-size: 12px; }
+.smallNote { color: #6c6f78; font-size: 13px; }
+.primaryButton { background: #635bff; color: white; border: none; border-radius: 6px; padding: 8px 12px; cursor: pointer; }
+.secondaryButton { background: #f6f8fa; color: #111827; border: 1px solid #e5e7eb; border-radius: 6px; padding: 8px 12px; cursor: pointer; }
+.input { border: 1px solid #e5e7eb; border-radius: 6px; padding: 8px 12px; flex: 1; }
+

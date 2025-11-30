@@ -74,6 +74,7 @@ model Order {
   totalPrice      Float
   currency        String   @default("USD")
   subtotalPrice   Float?
+  refundTotal     Float    @default(0)
   aiSource        AiSource?
   detection       String?
   detectionSignals Json?
@@ -94,6 +95,9 @@ model Order {
   @@index([shopDomain, platform, createdAt])
   @@index([shopDomain, aiSource])
   @@index([shopDomain, platform])
+  @@index([shopDomain, createdAt(sort: Desc)], map: "orders_shop_date_desc")
+  @@index([shopDomain, aiSource, createdAt(sort: Desc)], map: "orders_shop_ai_desc")
+  @@index([aiSource, id], map: "orders_ai_id")
 }
 
 model OrderProduct {
@@ -149,6 +153,11 @@ model WebhookJob {
   topic      String
   intent     String
   payload    Json
+  externalId String?
+  orderId    String?
+  eventTime  DateTime?
+  attempts   Int        @default(0)
+  nextRunAt  DateTime?
   status     JobStatus  @default(queued)
   error      String?
   createdAt  DateTime   @default(now())
@@ -157,6 +166,9 @@ model WebhookJob {
 
   @@index([shopDomain])
   @@index([status])
+  @@unique([shopDomain, topic, externalId], map: "webhook_unique_external")
+  @@index([shopDomain, topic, orderId])
+  @@index([status, nextRunAt])
 }
 
 model BackfillJob {

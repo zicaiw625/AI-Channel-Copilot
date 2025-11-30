@@ -6,16 +6,21 @@ type WebhookJob = {
   topic: string;
   intent: string;
   payload: Record<string, unknown>;
+  externalId?: string | null;
+  orderId?: string | null;
+  eventTime?: Date | null;
   run: (payload: Record<string, unknown>) => Promise<void>;
 };
 
 let processing = false;
+const MAX_RETRIES = 2;
 
 const dequeue = async () => {
   return prisma.$transaction(async (tx) => {
+    const now = new Date();
     const pending = await tx.webhookJob.findFirst({
-      where: { status: "queued" },
-      orderBy: { id: "asc" },
+      where: { status: "queued", OR: [{ nextRunAt: null }, { nextRunAt: { lte: now } }] },
+      orderBy: [{ nextRunAt: "asc" }, { id: "asc" }],
     });
 
     if (!pending) return null;
@@ -95,6 +100,26 @@ const processQueue = async (handlers: Map<string, WebhookJob["run"]>) => {
           topic: job.topic,
           message: (error as Error).message,
         });
+
+        if ((job.attempts || 0) < MAX_RETRIES) {
+          const nextDelay = 200 * 2 ** (job.attempts || 0);
+          const nextRun = new Date(Date.now() + nextDelay);
+          await prisma.webhookJob.create({
+            data: {
+              shopDomain: job.shopDomain,
+              topic: job.topic,
+              intent: job.intent,
+              payload: job.payload as Record<string, unknown>,
+              externalId: job.externalId || null,
+              orderId: job.orderId || null,
+              eventTime: job.eventTime || null,
+              attempts: (job.attempts || 0) + 1,
+              nextRunAt: nextRun,
+              status: "queued",
+            },
+          });
+          logger.warn("[webhook] job scheduled for retry", context, { attempts: (job.attempts || 0) + 1, nextDelay });
+        }
       }
     }
   } finally {
@@ -121,12 +146,28 @@ export const enqueueWebhookJob = async (job: WebhookJob) => {
     handlers.set(job.intent, job.run);
   }
 
+  if (job.externalId) {
+    const exists = await prisma.webhookJob.findFirst({
+      where: { shopDomain: job.shopDomain, topic: job.topic, externalId: job.externalId },
+      select: { id: true },
+    });
+    if (exists) {
+      logger.info("[webhook] duplicate ignored by externalId", { shopDomain: job.shopDomain, topic: job.topic });
+      return;
+    }
+  }
+
   await prisma.webhookJob.create({
     data: {
       shopDomain: job.shopDomain,
       topic: job.topic,
       intent: job.intent,
       payload: job.payload,
+      externalId: job.externalId || null,
+      orderId: job.orderId || null,
+      eventTime: job.eventTime || null,
+      attempts: 0,
+      nextRunAt: new Date(),
     },
   });
 

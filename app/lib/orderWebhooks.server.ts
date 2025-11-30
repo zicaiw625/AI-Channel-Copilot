@@ -147,11 +147,18 @@ export const handleOrderWebhook = async (request: Request, expectedTopic: string
       }
     };
 
+    const externalId = request.headers.get("X-Shopify-Webhook-Id") || request.headers.get("x-shopify-webhook-id") || null;
+    const triggeredAt = request.headers.get("X-Shopify-Triggered-At") || request.headers.get("x-shopify-triggered-at") || null;
+    const eventTime = triggeredAt ? new Date(triggeredAt) : null;
+
     await enqueueWebhookJob({
       shopDomain: shop,
       topic,
       intent: expectedTopic,
       payload: { orderGid, shopDomain: shop },
+      externalId,
+      orderId: orderGid,
+      eventTime,
       run: handler,
     });
 

@@ -143,6 +143,17 @@
   flex-wrap: wrap;
 }
 
+.textarea {
+  width: 100%;
+  min-height: 180px;
+  padding: 0.55rem 0.6rem;
+  border-radius: 10px;
+  border: 1px solid #e5e7eb;
+  font-size: 0.9rem;
+  color: #0f172a;
+  background: #f9fafb;
+}
+
 .inlineStats {
   display: flex;
   flex-wrap: wrap;

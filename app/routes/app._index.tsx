@@ -451,6 +451,9 @@ export default function Index() {
                 <Link to="/app/additional" className={styles.primaryButton}>
                   设置 / 规则 & 导出
                 </Link>
+                <Link to="/app/copilot" className={styles.secondaryButton}>
+                  Copilot 分析问答
+                </Link>
                 <a
                 className={styles.secondaryButton}
                 href={`data:text/csv;charset=utf-8,${encodeURIComponent(exportData.ordersCsv)}`}
@@ -458,8 +461,23 @@ export default function Index() {
               >
                 导出 AI 订单 CSV
               </a>
+        </div>
+        </div>
+
+        <div className={styles.card}>
+          <div className={styles.sectionHeader}>
+            <div>
+              <p className={styles.sectionLabel}>指标说明</p>
+              <h3 className={styles.sectionTitle}>口径定义（固定）</h3>
             </div>
+            <span className={styles.smallBadge}>参考</span>
           </div>
+          <ul className={styles.helpList}>
+            <li>GMV：按设置的 {gmvMetric} 字段汇总（当前为 {gmvMetric === "subtotal_price" ? "不含税/运费" : "含税/运费"}）。</li>
+            <li>AI GMV：仅统计被识别为 AI 渠道的订单 GMV。</li>
+            <li>LTV（如展示）：当前为历史累积 GMV，不含预测。</li>
+          </ul>
+        </div>
         </div>
 
         <div className={styles.kpiGrid}>
@@ -469,11 +487,13 @@ export default function Index() {
             <p className={styles.cardMeta}>
               订单 {fmtNumber(overview.totalOrders)} · 新客 {fmtNumber(overview.totalNewCustomers)}
             </p>
+            <p className={styles.helpText}>净 GMV {fmtCurrency(overview.netGMV)}</p>
           </div>
           <div className={styles.card}>
             <p className={styles.cardLabel}>AI 渠道 GMV</p>
             <p className={styles.cardValue}>{fmtCurrency(overview.aiGMV)}</p>
             <p className={styles.cardMeta}>占比 {fmtPercent(overview.aiShare)}</p>
+            <p className={styles.helpText}>AI 净 GMV {fmtCurrency(overview.netAiGMV)}</p>
           </div>
           <div className={styles.card}>
             <p className={styles.cardLabel}>AI 渠道订单</p>

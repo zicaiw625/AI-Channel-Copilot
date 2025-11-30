@@ -30,26 +30,30 @@ export const pruneHistoricalData = async (shopDomain: string, months: number) =>
   if (!shopDomain) return { deletedOrders: 0, deletedCustomers: 0, cutoff: null };
 
   const cutoff = computeCutoff(months);
+  try {
+    const [deletedOrders, deletedCustomers] = await Promise.all([
+      prisma.order.deleteMany({ where: { shopDomain, createdAt: { lt: cutoff } } }),
+      prisma.customer.deleteMany({
+        where: { shopDomain, updatedAt: { lt: cutoff }, orders: { none: {} } },
+      }),
+    ]);
 
-  const [deletedOrders, deletedCustomers] = await Promise.all([
-    prisma.order.deleteMany({ where: { shopDomain, createdAt: { lt: cutoff } } }),
-    prisma.customer.deleteMany({
-      where: { shopDomain, updatedAt: { lt: cutoff }, orders: { none: {} } },
-    }),
-  ]);
+    await markActivity(shopDomain, { lastCleanupAt: new Date() });
 
-  await markActivity(shopDomain, { lastCleanupAt: new Date() });
+    logger.info("[retention] cleanup complete", {
+      platform,
+      shopDomain,
+      cutoff: cutoff.toISOString(),
+      deletedOrders: deletedOrders.count,
+      deletedCustomers: deletedCustomers.count,
+      jobType: "retention",
+    });
 
-  logger.info("[retention] cleanup complete", {
-    platform,
-    shopDomain,
-    cutoff: cutoff.toISOString(),
-    deletedOrders: deletedOrders.count,
-    deletedCustomers: deletedCustomers.count,
-    jobType: "retention",
-  });
-
-  return { cutoff, deletedOrders: deletedOrders.count, deletedCustomers: deletedCustomers.count };
+    return { cutoff, deletedOrders: deletedOrders.count, deletedCustomers: deletedCustomers.count };
+  } catch (error) {
+    logger.warn("[retention] cleanup skipped (table or connection issue)", { platform, shopDomain }, { message: (error as Error).message });
+    return { cutoff, deletedOrders: 0, deletedCustomers: 0 };
+  }
 };
 
 export const ensureRetentionOncePerDay = async (shopDomain: string, settings?: SettingsDefaults) => {

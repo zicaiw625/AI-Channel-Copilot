@@ -4,6 +4,7 @@ import { type AIChannel, type DateRange, type OrderRecord } from "./aiData";
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 import { getPlatform, isDemoMode } from "./runtime.server";
 import { MAX_DASHBOARD_ORDERS, MAX_DETECTION_LENGTH } from "./constants";
+import { getSettings } from "./settings.server";
 
 const tableMissing = (error: unknown) =>
   (error instanceof PrismaClientKnownRequestError && error.code === "P2021") ||
@@ -58,6 +59,9 @@ const models = ensureTables();
 
 export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) => {
   if (!shopDomain || !orders.length || isDemoMode()) return { created: 0, updated: 0 };
+
+  const settings = await getSettings(shopDomain);
+  const timeZone = settings.timezones?.[0];
 
   const chunks: OrderRecord[][] = [];
   const batchSize = 100;
@@ -121,7 +125,7 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
               customerId: order.customerId ?? null,
               isNewCustomer: order.isNewCustomer,
               detectionSignals: order.signals,
-              createdAtLocal: createdAt,
+              createdAtLocal: toZonedDate(createdAt, timeZone),
             };
 
             await tx.order.upsert({
@@ -339,4 +343,19 @@ export const aggregateAiShare = async (shopDomain: string) => {
 
 export const hasAnyTables = () => {
   return Boolean(models);
+};
+const toZonedDate = (date: Date, timeZone?: string) => {
+  if (!timeZone) return new Date(date);
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+  const get = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((p) => p.type === type)?.value || 0);
+  return new Date(Date.UTC(get("year"), get("month") - 1, get("day"), get("hour"), get("minute"), get("second")));
 };

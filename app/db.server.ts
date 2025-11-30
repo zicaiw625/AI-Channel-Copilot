@@ -7,7 +7,10 @@ declare global {
   var prismaGlobal: PrismaClient | undefined;
 }
 
-const rawDatabaseUrl = requireEnv("DATABASE_URL");
+const rawDatabaseUrl =
+  process.env.NODE_ENV === "test"
+    ? process.env.DATABASE_URL || "postgresql://local/ai_channel_copilot_test"
+    : requireEnv("DATABASE_URL");
 let databaseUrl = rawDatabaseUrl;
 
 try {

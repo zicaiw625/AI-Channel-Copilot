@@ -95,30 +95,29 @@ const processQueue = async (handlers: Map<string, WebhookJob["run"]>) => {
           elapsedMs: Date.now() - startedAt,
         });
       } catch (error) {
-        await updateJobStatus(job.id, "failed", (error as Error).message);
+        const message = (error as Error).message;
         logger.error("[webhook] job failed", context, {
           topic: job.topic,
-          message: (error as Error).message,
+          message,
         });
 
-        if ((job.attempts || 0) < MAX_RETRIES) {
-          const nextDelay = 200 * 2 ** (job.attempts || 0);
+        const attempts = (job.attempts || 0);
+        if (attempts < MAX_RETRIES) {
+          const nextDelay = 200 * 2 ** attempts;
           const nextRun = new Date(Date.now() + nextDelay);
-          await prisma.webhookJob.create({
+          await prisma.webhookJob.update({
+            where: { id: job.id },
             data: {
-              shopDomain: job.shopDomain,
-              topic: job.topic,
-              intent: job.intent,
-              payload: job.payload as Record<string, unknown>,
-              externalId: job.externalId || null,
-              orderId: job.orderId || null,
-              eventTime: job.eventTime || null,
-              attempts: (job.attempts || 0) + 1,
-              nextRunAt: nextRun,
               status: "queued",
+              error: message,
+              attempts: attempts + 1,
+              nextRunAt: nextRun,
+              finishedAt: null,
             },
           });
-          logger.warn("[webhook] job scheduled for retry", context, { attempts: (job.attempts || 0) + 1, nextDelay });
+          logger.warn("[webhook] job scheduled for retry", context, { attempts: attempts + 1, nextDelay });
+        } else {
+          await updateJobStatus(job.id, "failed", message);
         }
       }
     }
@@ -153,6 +152,22 @@ export const enqueueWebhookJob = async (job: WebhookJob) => {
     });
     if (exists) {
       logger.info("[webhook] duplicate ignored by externalId", { shopDomain: job.shopDomain, topic: job.topic });
+      return;
+    }
+  }
+
+  if (job.orderId) {
+    const existsByOrder = await prisma.webhookJob.findFirst({
+      where: {
+        shopDomain: job.shopDomain,
+        topic: job.topic,
+        orderId: job.orderId,
+        status: { in: ["queued", "processing"] },
+      },
+      select: { id: true },
+    });
+    if (existsByOrder) {
+      logger.info("[webhook] duplicate ignored by orderId", { shopDomain: job.shopDomain, topic: job.topic });
       return;
     }
   }

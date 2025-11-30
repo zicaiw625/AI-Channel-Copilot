@@ -1047,10 +1047,6 @@ const detectCopilotFromBing = (url: URL | null) => {
   const hasCopilotParam =
     url.pathname.includes("/chat") ||
     url.pathname.includes("/copilot") ||
-    url.searchParams.has("showconv") ||
-    url.searchParams.has("iscopiloted") ||
-    url.searchParams.get("bpc") === "1" ||
-    url.searchParams.get("bpe") === "1" ||
     form.includes("bingai") ||
     form.includes("copilot") ||
     ocid.includes("copilot");
@@ -1193,8 +1189,8 @@ export const detectAiFromFields = (
   if (mediumHit) {
     signals.push(`utm_medium=${utmMedium}`);
     return {
-      aiSource: "Other-AI",
-      detection: `${signals.join(" + ")} · 置信度低：仅命中 medium 关键词(${mediumHit})`,
+      aiSource: null,
+      detection: `${signals.join(" + ")} · 置信度低：仅命中 medium 关键词(${mediumHit})，不足以判定 AI`,
       signals,
     };
   }
@@ -1211,7 +1207,7 @@ export const detectAiFromFields = (
         "Other-AI") as AIChannel;
     return {
       aiSource: channel,
-      detection: `Detected by existing tag ${tagMatch} · 置信度中等`,
+      detection: `Detected by existing tag ${tagMatch} · 置信度中等（可能来自本应用标签写回）`,
       signals: ["existing tag"],
     };
   }

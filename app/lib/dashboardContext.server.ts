@@ -80,11 +80,14 @@ export const loadDashboardContext = async ({
       dataSource = "stored";
       backfillSuppressed = true;
     } else if (includeBackfillState) {
-      backfillAvailable = !(await isBackfillRunning(shopDomain));
       dataSource = demoAllowed ? "demo" : "empty";
     } else {
       dataSource = demoAllowed ? "demo" : "empty";
     }
+  }
+
+  if (includeBackfillState) {
+    backfillAvailable = !(await isBackfillRunning(shopDomain));
   }
 
   if (orders.length === 0 && fallbackToShopify && admin) {

@@ -24,16 +24,19 @@ const ORDERS_QUERY = `#graphql
         currentTotalPriceSet {
           shopMoney {
             amount
+            currencyCode
           }
         }
         currentSubtotalPriceSet {
           shopMoney {
             amount
+            currencyCode
           }
         }
         totalRefundedSet {
           shopMoney {
             amount
+            currencyCode
           }
         }
         referringSite
@@ -57,6 +60,7 @@ const ORDERS_QUERY = `#graphql
                 originalUnitPriceSet {
                   shopMoney {
                     amount
+                    currencyCode
                   }
                 }
                 variant {
@@ -86,16 +90,19 @@ const ORDER_QUERY = `#graphql
       currentTotalPriceSet {
         shopMoney {
           amount
+          currencyCode
         }
       }
       currentSubtotalPriceSet {
         shopMoney {
           amount
+          currencyCode
         }
       }
       totalRefundedSet {
         shopMoney {
           amount
+          currencyCode
         }
       }
       referringSite
@@ -119,6 +126,7 @@ const ORDER_QUERY = `#graphql
             originalUnitPriceSet {
               shopMoney {
                 amount
+                currencyCode
               }
             }
             variant {

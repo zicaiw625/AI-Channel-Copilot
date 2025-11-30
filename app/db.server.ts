@@ -7,7 +7,22 @@ declare global {
   var prismaGlobal: PrismaClient | undefined;
 }
 
-const databaseUrl = requireEnv("DATABASE_URL");
+const rawDatabaseUrl = requireEnv("DATABASE_URL");
+let databaseUrl = rawDatabaseUrl;
+
+try {
+  const parsed = new URL(rawDatabaseUrl);
+  const sslMode = parsed.searchParams.get("sslmode")?.toLowerCase();
+  const sslFlag = parsed.searchParams.get("ssl")?.toLowerCase();
+  const hasTls = sslMode === "require" || sslFlag === "true";
+  if (process.env.NODE_ENV === "production" && !hasTls) {
+    parsed.searchParams.set("sslmode", "require");
+    databaseUrl = parsed.toString();
+    logger.info("[db] Applied sslmode=require to DATABASE_URL for production safety");
+  }
+} catch {
+  // keep raw url
+}
 
 const validateDatabaseSecurity = () => {
   if (process.env.NODE_ENV === "test") return;

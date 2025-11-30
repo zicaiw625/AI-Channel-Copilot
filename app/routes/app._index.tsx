@@ -296,7 +296,7 @@ export default function Index() {
               <span className={styles.badgeSecondary}>保守识别 · Shopify Orders</span>
               {isLowSample && (
                 <span className={styles.badgeSecondary}>
-                  样本 < {LOW_SAMPLE_THRESHOLD} · 指标仅供参考
+                  样本 &lt; {LOW_SAMPLE_THRESHOLD} · 指标仅供参考
                 </span>
               )}
             </div>
@@ -475,7 +475,7 @@ export default function Index() {
         </div>
         {isLowSample && (
           <div className={styles.lowSampleNotice}>
-            样本 < {LOW_SAMPLE_THRESHOLD}，所有指标仅供参考；延长时间范围后可获得更稳定的趋势。
+            样本 &lt; {LOW_SAMPLE_THRESHOLD}，所有指标仅供参考；延长时间范围后可获得更稳定的趋势。
           </div>
         )}
 
@@ -544,7 +544,7 @@ export default function Index() {
               </div>
               {isLowSample ? (
                 <span className={styles.smallBadge}>
-                  样本 < {LOW_SAMPLE_THRESHOLD} · 解读时请谨慎
+                  样本 &lt; {LOW_SAMPLE_THRESHOLD} · 解读时请谨慎
                 </span>
               ) : (
                 <span className={styles.smallBadge}>样本 >= {LOW_SAMPLE_THRESHOLD}</span>

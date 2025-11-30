@@ -9,6 +9,10 @@ const dict: Record<string, { zh: string; en: string }> = {
   col_orders: { zh: "订单数", en: "Orders" },
   col_ai: { zh: "AI", en: "AI" },
   export_ltv_csv: { zh: "下载 LTV CSV", en: "Download LTV CSV" },
+  channels_section_title: { zh: "渠道贡献（GMV / 订单 / 新客）", en: "Channel Contribution (GMV / Orders / New Customers)" },
+  trend_section_title: { zh: "GMV / 订单趋势（按渠道过滤）", en: "GMV / Orders Trend (Filter by Channel)" },
+  products_section_title: { zh: "Top Products from AI Channels", en: "Top Products from AI Channels" },
+  export_products_csv: { zh: "导出产品榜单 CSV", en: "Export Products CSV" },
 };
 
 export const t = (language: Lang, key: keyof typeof dict) => {

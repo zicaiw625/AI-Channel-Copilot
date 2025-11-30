@@ -1,6 +1,32 @@
 # AI Discovery & Attribution Copilot
 
-AI Discovery & Attribution Copilot 帮助 Shopify 商家识别来自 ChatGPT、Perplexity、Gemini、Copilot 等 AI 助手带来的真实 GMV。应用默认以保守口径统计“站外 AI 点击 → 到站 → 完成订单”的链路，并提供仪表盘、调试视图、标签写回与 CSV 导出。
+ AI Discovery & Attribution Copilot 帮助 Shopify 商家识别来自 ChatGPT、Perplexity、Gemini、Copilot 等 AI 助手带来的真实 GMV。应用默认以保守口径统计“站外 AI 点击 → 到站 → 完成订单”的链路，并提供仪表盘、调试视图、标签写回与 CSV 导出。
+
+ ## 指标口径（统一）
+ - GMV：可选择 `current_total_price`（含税/运费）或 `subtotal_price`（不含税/运费）。
+ - 净 GMV：按订单级退款扣减（`refundTotal`）。
+ - AOV：`GMV / 订单数`。
+ - LTV（窗口化）：选定时间范围内客户累计 GMV，不做预测。
+ - 注：当前版本不计算 Session 级 CVR。
+
+ ## AI 渠道识别规则（保守估计）
+ - 优先级：`referrer` 域名命中 > `utm_source` 映射 > 其它（标签/备注）。
+ - 域名默认覆盖：`chat.openai.com`、`perplexity.ai`、`gemini.google.com`、`copilot.microsoft.com` 等；可在 Settings 配置。
+ - 结果偏下限：部分 AI/浏览器可能隐藏来源，仪表盘将明确“保守估计”说明与样本量提示。
+
+ ## 数据来源与保留
+ - Shopify Admin API + `orders/create` webhook + 90 天补拉，幂等与重试内建。
+ - 数据最小化存储；保留清理支持环境开关 `ENABLE_RETENTION_SWEEP`，最小保留月数强制为 3。
+
+ ## 导出与调试
+ - CSV 导出：AI 渠道订单明细、Top Products from AI Channels、Customers LTV（窗口）。
+ - 调试视图：最近订单的 referrer/UTM/解析与 signals，便于核验规则。
+
+ ## Copilot（v0.2 实验）
+ - intent 与 range 参数白名单校验；仅从后端结构化结果生成解读，尾注附数据范围与口径说明。
+
+ ## 回归脚本（仅限开发环境）
+ - 位于 `scripts/regression.js`，用于生成测试订单并模拟 webhook。请勿在生产环境运行。
 
 ## 适合谁
 - 年 GMV 20-500 万美金、想评估 AI 助手带来 GMV/客单/新客表现的 DTC 品牌。
@@ -75,4 +101,3 @@ AI Discovery & Attribution Copilot 帮助 Shopify 商家识别来自 ChatGPT、P
 - `SCOPES`：例如 `read_orders,read_customers,read_products,write_orders,write_customers`
 - `DATABASE_URL`：由 Render 数据库自动注入
 - 可选：`DEFAULT_RANGE_KEY=30d`、`MAX_BACKFILL_ORDERS=1000`、`MAX_BACKFILL_DAYS=90`、`MAX_BACKFILL_DURATION_MS=5000`、`BACKFILL_TAGGING_BATCH_SIZE=25`、`DATA_RETENTION_MONTHS=6`
-

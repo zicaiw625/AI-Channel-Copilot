@@ -530,7 +530,7 @@ export default function Index() {
             <div className={styles.sectionHeader}>
               <div>
                 <p className={styles.sectionLabel}>AI 渠道拆分</p>
-                <h3 className={styles.sectionTitle}>渠道贡献（GMV / 订单 / 新客）</h3>
+                <h3 className={styles.sectionTitle}>{t(language as any, "channels_section_title")}</h3>
               </div>
               <div className={styles.toggleGroup}>
                 {[
@@ -673,7 +673,7 @@ export default function Index() {
             <div className={styles.sectionHeader}>
               <div>
                 <p className={styles.sectionLabel}>趋势</p>
-                <h3 className={styles.sectionTitle}>GMV / 订单趋势（按渠道过滤）</h3>
+                <h3 className={styles.sectionTitle}>{t(language as any, "trend_section_title")}</h3>
               </div>
               <div className={styles.trendControls}>
                 <div className={styles.toggleGroup}>
@@ -748,17 +748,17 @@ export default function Index() {
         </div>
 
         <div className={styles.card}>
-          <div className={styles.sectionHeader}>
-            <div>
-              <p className={styles.sectionLabel}>产品维度</p>
-              <h3 className={styles.sectionTitle}>Top Products from AI Channels</h3>
-            </div>
+            <div className={styles.sectionHeader}>
+              <div>
+                <p className={styles.sectionLabel}>产品维度</p>
+                <h3 className={styles.sectionTitle}>{t(language as any, "products_section_title")}</h3>
+              </div>
               <a
                 className={styles.secondaryButton}
                 href={`data:text/csv;charset=utf-8,${encodeURIComponent(exportData.productsCsv)}`}
                 download={`ai-products-${range}.csv`}
               >
-                导出产品榜单 CSV
+                {t(language as any, "export_products_csv")}
               </a>
             </div>
             <div className={styles.tableWrap}>

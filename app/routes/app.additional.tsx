@@ -277,7 +277,7 @@ export default function SettingsAndExport() {
   const removeDomain = (rule: AiDomainRule) => {
     if (
       rule.source === "default" &&
-      !window.confirm("删除默认域名可能导致漏标，确定要移除这一项吗？")
+      !window.confirm(language === "English" ? "Removing a default domain may reduce attribution accuracy. Are you sure?" : "删除默认域名可能导致漏标，确定要移除这一项吗？")
     ) {
       return;
     }
@@ -658,8 +658,8 @@ export default function SettingsAndExport() {
                 }
               />
               <div>
-                <div className={styles.ruleTitle}>允许 AI 访问产品页</div>
-                <div className={styles.ruleMeta}>product_url / handle</div>
+                <div className={styles.ruleTitle}>{language === "English" ? "Allow AI to access product pages" : "允许 AI 访问产品页"}</div>
+                <div className={styles.ruleMeta}>{language === "English" ? "product_url / handle" : "product_url / handle"}</div>
               </div>
             </div>
             <div className={styles.checkboxRow}>
@@ -674,8 +674,8 @@ export default function SettingsAndExport() {
                 }
               />
               <div>
-                <div className={styles.ruleTitle}>允许 AI 访问合集/分类页</div>
-                <div className={styles.ruleMeta}>未来用于生成精选集合</div>
+                <div className={styles.ruleTitle}>{language === "English" ? "Allow AI to access collections/categories" : "允许 AI 访问合集/分类页"}</div>
+                <div className={styles.ruleMeta}>{language === "English" ? "Reserved for curated collections in future" : "未来用于生成精选集合"}</div>
               </div>
             </div>
             <div className={styles.checkboxRow}>
@@ -690,8 +690,8 @@ export default function SettingsAndExport() {
                 }
               />
               <div>
-                <div className={styles.ruleTitle}>允许 AI 访问博客内容</div>
-                <div className={styles.ruleMeta}>博客/内容页可选暴露</div>
+                <div className={styles.ruleTitle}>{language === "English" ? "Allow AI to access blog content" : "允许 AI 访问博客内容"}</div>
+                <div className={styles.ruleMeta}>{language === "English" ? "Blog/content pages optional" : "博客/内容页可选暴露"}</div>
               </div>
             </div>
           </div>

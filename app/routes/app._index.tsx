@@ -919,7 +919,7 @@ export default function Index() {
                   </option>
                 ))}
               </select>
-              <span className={styles.smallBadge}>Referrer + UTM + Tags + signals</span>
+              <span className={styles.smallBadge}>{language === "English" ? "Referrer + UTM + Tags + signals" : "Referrer + UTM + 标签 + signals"}</span>
             </div>
           </div>
           <div className={styles.tableWrap}>

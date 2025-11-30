@@ -51,7 +51,7 @@ export default function App() {
           <div className={styles.chips}>
             <span>{language === "English" ? "Conservative: Referrer + UTM" : "Referrer + UTM 保守识别"}</span>
             <span>{language === "English" ? "AI GMV / Orders / New Customers" : "AI 渠道 GMV / 订单 / 新客"}</span>
-            <span>Top Products from AI Channels</span>
+            <span>{language === "English" ? "Top Products from AI Channels" : "AI 渠道热销产品"}</span>
             <span>{language === "English" ? "Tag write-back & CSV export" : "标签写回 & CSV 导出"}</span>
           </div>
           <div className={styles.chips}>

@@ -134,7 +134,18 @@ export const syncShopPreferences = async (
 
   try {
     const response = await admin.graphql(SHOP_PREFS_QUERY, { variables: {} });
-    if (!response.ok) return settings;
+    if (!response.ok) {
+      let bodyText: string | undefined;
+      try {
+        bodyText = await response.text();
+      } catch {}
+      logger.error(
+        "Failed to sync shop preferences",
+        { shopDomain, platform },
+        { status: response.status, statusText: response.statusText, body: bodyText },
+      );
+      return settings;
+    }
 
     const json = (await response.json()) as {
       data?: { shop?: { currencyCode?: string | null; ianaTimezone?: string | null } };
@@ -172,7 +183,7 @@ export const syncShopPreferences = async (
     logger.error(
       "Failed to sync shop preferences",
       { shopDomain, platform },
-      { message: (error as Error).message },
+      { message: (error as any)?.message ?? String(error) },
     );
   }
 

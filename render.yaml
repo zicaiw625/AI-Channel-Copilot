@@ -18,7 +18,7 @@ services:
       - key: SHOPIFY_APP_URL
         sync: false
       - key: SCOPES
-        value: read_orders,read_customers,read_products,write_orders,write_customers
+        value: read_orders,read_customers,read_products,write_orders,write_customers,read_shop
       - key: DATABASE_URL
         fromDatabase:
           name: ai-channel-copilot-db

@@ -179,7 +179,11 @@ export default function Index() {
 
   useEffect(() => {
     jobFetcher.load("/api/jobs");
-    const timer = setInterval(() => jobFetcher.load("/api/jobs"), 10000);
+    const timer = setInterval(() => {
+      if (jobFetcher.state !== "loading") {
+        jobFetcher.load("/api/jobs");
+      }
+    }, 5000);
     return () => clearInterval(timer);
   }, [jobFetcher]);
   const triggerBackfill = useCallback(() => {

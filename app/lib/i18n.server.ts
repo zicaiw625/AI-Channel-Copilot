@@ -29,7 +29,17 @@ const dict: Record<string, { zh: string; en: string }> = {
   tagging_enable_alert: { zh: "启用后将修改订单/客户标签。若依赖标签驱动自动化，请先在测试店验证。避免与既有标签冲突。", en: "Enabling tag write-back modifies order/customer tags. Verify on a test shop if your automations depend on tags. Avoid conflicts." },
   llms_preview_help: { zh: "llms.txt 为实验性标准，不保证产生排名效果；平台采集策略可能变化。", en: "llms.txt is experimental, not guaranteed to improve rankings; platform crawling policies may change." },
   gmv_metric_help: { zh: "仅影响 UI 展示，不影响底层数据口径。", en: "Affects UI display only, not underlying data definitions." },
-  customers_ltv_desc: { zh: "字段：customer_id、LTV（窗口内累计 GMV）、GMV 口径、first_ai_acquired、repeat_count。", en: "Fields: customer_id, LTV (window GMV), gmv_metric, first_ai_acquired, repeat_count." },
+  customers_ltv_desc: { zh: "字段：customer_id、LTV（窗口内累计 GMV）、GMV 口径、first_ai_acquired、repeat_count、ai_order_share、first_order_at。", en: "Fields: customer_id, LTV (window GMV), gmv_metric, first_ai_acquired, repeat_count, ai_order_share, first_order_at." },
+  btn_save: { zh: "保存", en: "Save" },
+  btn_write_tags_now: { zh: "立即写回标签", en: "Write Tags Now" },
+  btn_backfill_90d: { zh: "补拉最近 90 天订单", en: "Backfill Last 90 Days" },
+  btn_add_domain: { zh: "添加域名", en: "Add Domain" },
+  btn_delete: { zh: "删除", en: "Delete" },
+  btn_add_utm: { zh: "添加 UTM", en: "Add UTM" },
+  placeholder_add_domain: { zh: "新增域名，例如 agent.example.com", en: "Add domain e.g. agent.example.com" },
+  placeholder_add_utm_source: { zh: "新增 utm_source，例如 ai-referral", en: "Add utm_source e.g. ai-referral" },
+  risk_remove_default_domain: { zh: "移除默认域名可能导致漏标", en: "Removing default domain may reduce attribution accuracy" },
+  title_delete_rule: { zh: "删除规则", en: "Delete rule" },
 };
 
 export const t = (language: Lang, key: keyof typeof dict) => {

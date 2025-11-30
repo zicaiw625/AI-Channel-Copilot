@@ -1414,12 +1414,24 @@ const buildCustomersCsv = (
       fallbackFirstAi[cid] = Boolean(o.isNewCustomer && o.aiSource);
     }
   });
-  const header = ["customer_id", "ltv", "gmv_metric", "first_ai_acquired", "repeat_count"];
+  const header = ["customer_id", "ltv", "gmv_metric", "first_ai_acquired", "repeat_count", "ai_order_share", "first_order_at"];
   const rows: string[][] = [];
   for (const [customerId, ltv] of ltvMap.entries()) {
     const firstAi = acquiredViaAiMap ? Boolean(acquiredViaAiMap[customerId]) : Boolean(fallbackFirstAi[customerId]);
-    const repeat = Math.max(0, (counts[customerId] || 0) - 1);
-    rows.push([customerId, String(ltv), metric, firstAi ? "true" : "false", String(repeat)]);
+    const total = counts[customerId] || 0;
+    const aiCount = ordersInRange.filter((o) => o.customerId === customerId && Boolean(o.aiSource)).length;
+    const aiShare = total ? aiCount / total : 0;
+    const firstOrderDate = ordersInRange.filter((o) => o.customerId === customerId).map((o) => new Date(o.createdAt)).sort((a, b) => a.getTime() - b.getTime())[0];
+    const repeat = Math.max(0, total - 1);
+    rows.push([
+      customerId,
+      String(ltv),
+      metric,
+      firstAi ? "true" : "false",
+      String(repeat),
+      aiShare.toFixed(4),
+      firstOrderDate ? new Date(firstOrderDate).toISOString() : "",
+    ]);
   }
   return [comment, header, ...rows].map((cells) => Array.isArray(cells) ? cells.map(toCsvValue).join(",") : cells).join("\n");
 };

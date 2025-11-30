@@ -418,7 +418,7 @@ export default function SettingsAndExport() {
             <div className={styles.inlineForm}>
               <input
                 className={styles.input}
-                placeholder="新增域名，例如 agent.example.com"
+                placeholder={t(language as any, "placeholder_add_domain")}
                 value={newDomain}
                 onChange={(event) => setNewDomain(event.target.value)}
               />
@@ -436,7 +436,7 @@ export default function SettingsAndExport() {
                 ))}
               </select>
               <button type="button" className={styles.primaryButton} onClick={addDomain}>
-                添加域名
+                {t(language as any, "btn_add_domain")}
               </button>
             </div>
             <p className={styles.helpText}>{t(language as any, "referrer_help")}</p>
@@ -462,7 +462,7 @@ export default function SettingsAndExport() {
                     className={styles.linkButton}
                     onClick={() => removeUtmMapping(rule.value)}
                   >
-                    删除
+                    {t(language as any, "btn_delete")}
                   </button>
                 </div>
               ))}
@@ -488,7 +488,7 @@ export default function SettingsAndExport() {
                 ))}
               </select>
               <button type="button" className={styles.primaryButton} onClick={addUtmMapping}>
-                添加 UTM
+                {t(language as any, "btn_add_utm")}
               </button>
             </div>
             <label className={styles.stackField}>

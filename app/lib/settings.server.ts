@@ -6,6 +6,8 @@ import { logger } from "./logger.server";
 
 const tableMissing = (error: unknown) =>
   error instanceof PrismaClientKnownRequestError && error.code === "P2021";
+const columnMissing = (error: unknown) =>
+  error instanceof PrismaClientKnownRequestError && error.code === "P2022";
 
 type AdminGraphqlClient = {
   graphql: (query: string, options: { variables?: Record<string, unknown> }) => Promise<Response>;
@@ -109,8 +111,13 @@ export const getSettings = async (shopDomain: string): Promise<SettingsDefaults>
     if (!record) return defaultSettings;
     return mapRecordToSettings(record);
   } catch (error) {
-    if (tableMissing(error)) {
-      return defaultSettings;
+    if (tableMissing(error) || columnMissing(error)) {
+      try {
+        const legacy = await prisma.shopSettings.findFirst({ where: { shopDomain } });
+        return legacy ? mapRecordToSettings(legacy as any) : defaultSettings;
+      } catch {
+        return defaultSettings;
+      }
     }
     throw error;
   }
@@ -225,8 +232,14 @@ export const saveSettings = async (
       update: { ...baseData, ...updateOptionals },
     });
   } catch (error) {
-    if (!tableMissing(error)) {
+    if (!(tableMissing(error) || columnMissing(error))) {
       throw error;
+    }
+    const existing = await prisma.shopSettings.findFirst({ where: { shopDomain } });
+    if (existing) {
+      await prisma.shopSettings.update({ where: { id: (existing as any).id }, data: { ...baseData, ...updateOptionals } });
+    } else {
+      await prisma.shopSettings.create({ data: { shopDomain, ...withOptionalsCreate } });
     }
   }
 
@@ -257,8 +270,21 @@ export const markActivity = async (
       },
     });
   } catch (error) {
-    if (!tableMissing(error)) {
+    if (!(tableMissing(error) || columnMissing(error))) {
       throw error;
+    }
+    const existing = await prisma.shopSettings.findFirst({ where: { shopDomain } });
+    if (existing) {
+      await prisma.shopSettings.update({
+        where: { id: (existing as any).id },
+        data: {
+          ...(updates.lastOrdersWebhookAt ? { lastOrdersWebhookAt: updates.lastOrdersWebhookAt } : {}),
+          ...(updates.lastBackfillAt ? { lastBackfillAt: updates.lastBackfillAt } : {}),
+          ...(updates.lastTaggingAt ? { lastTaggingAt: updates.lastTaggingAt } : {}),
+          ...(updates.lastCleanupAt ? { lastCleanupAt: updates.lastCleanupAt } : {}),
+          ...(updates.pipelineStatuses ? { pipelineStatuses: updates.pipelineStatuses } : {}),
+        },
+      });
     }
   }
 };
@@ -283,8 +309,12 @@ export const deleteSettings = async (shopDomain: string) => {
   try {
     await prisma.shopSettings.delete({ where: { shopDomain_platform: { shopDomain, platform } } });
   } catch (error) {
-    if (!tableMissing(error)) {
+    if (!(tableMissing(error) || columnMissing(error))) {
       throw error;
+    }
+    const existing = await prisma.shopSettings.findFirst({ where: { shopDomain } });
+    if (existing) {
+      await prisma.shopSettings.delete({ where: { id: (existing as any).id } });
     }
   }
 };

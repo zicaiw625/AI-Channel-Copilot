@@ -706,7 +706,7 @@ export default function SettingsAndExport() {
               </div>
               <span className={styles.badge}>{t(language as any, "badge_experiment")}</span>
             </div>
-            <LlmsPreview />
+            <LlmsPreview language={language} />
             <p className={styles.helpText}>{t(language as any, "llms_preview_help")}</p>
           </div>
 
@@ -726,6 +726,7 @@ export default function SettingsAndExport() {
                 onChange={(event) => {
                   const next = event.target.value;
                   setLanguage(next);
+                  try { window.localStorage.setItem("aicc_language", next); } catch {}
                   fetcher.submit(
                     {
                       settings: JSON.stringify({
@@ -901,14 +902,12 @@ export const headers: HeadersFunction = (headersArgs) => {
   return boundary.headers(headersArgs);
 };
 
-function LlmsPreview() {
+function LlmsPreview({ language }: { language: string }) {
   const fetcher = useFetcher<{ ok: boolean; text: string }>();
-  const { settings } = useLoaderData<typeof loader>();
-  const language = settings.languages[0];
   const [copied, setCopied] = useState(false);
-  if (!fetcher.data && fetcher.state === "idle") {
-    fetcher.load("/api/llms-txt-preview");
-  }
+  useEffect(() => {
+    fetcher.load(`/api/llms-txt-preview?ts=${Date.now()}`);
+  }, [language]);
 
   const text = fetcher.data?.text || (language === "English" ? "# Generating..." : "# 生成中...");
 

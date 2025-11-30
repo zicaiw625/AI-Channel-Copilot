@@ -248,11 +248,4 @@
   color: #92400e;
   border-radius: 10px;
   font-size: 0.95rem;
-  line-height: 1.5;
-}
-
-@media (max-width: 960px) {
-  .inlineForm {
-    grid-template-columns: 1fr;
-  }
 }

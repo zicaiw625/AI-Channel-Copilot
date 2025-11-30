@@ -24,7 +24,7 @@ import {
 import { persistOrders } from "../lib/persistence.server";
 import { applyAiTags } from "../lib/tagging.server";
 import { authenticate } from "../shopify.server";
-import styles from "../styles/app.settings.module.css";
+import styles from "./app.settings.module.css";
 import { allowDemoData, getPlatform } from "../lib/runtime.server";
 import { loadDashboardContext } from "../lib/dashboardContext.server";
 import {

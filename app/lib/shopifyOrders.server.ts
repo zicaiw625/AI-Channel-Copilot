@@ -39,9 +39,6 @@ const ORDERS_QUERY = `#graphql
             currencyCode
           }
         }
-        customerJourneySummary {
-          referrerUrl
-        }
         landingPageUrl
         sourceName
         tags
@@ -106,9 +103,6 @@ const ORDER_QUERY = `#graphql
           amount
           currencyCode
         }
-      }
-      customerJourneySummary {
-        referrerUrl
       }
       landingPageUrl
       sourceName

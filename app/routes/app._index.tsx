@@ -313,56 +313,52 @@ export default function Index() {
         <div className={styles.pageHeader}>
           <div className={styles.titleBlock}>
             <div className={styles.badgeRow}>
-              <span className={styles.badge}>v0.1 内测 · Referrer + UTM</span>
-              <span className={styles.badgeSecondary}>保守识别 · Shopify Orders</span>
+              <span className={styles.badge}>{t(language as any, "badge_v01")}</span>
+              <span className={styles.badgeSecondary}>{t(language as any, "badge_conservative_orders")}</span>
               {isLowSample && (
                 <span className={styles.badgeSecondary}>
                   样本 &lt; {LOW_SAMPLE_THRESHOLD} · 指标仅供参考
                 </span>
               )}
             </div>
-            <h1 className={styles.heading}>AI 渠道基础仪表盘</h1>
-            <p className={styles.subheading}>
-              自动识别来自 ChatGPT / Perplexity / Gemini / Copilot 等 AI 助手的订单，给出保守
-              GMV 估计与差异洞察。
-            </p>
+            <h1 className={styles.heading}>{t(language as any, "dashboard_title")}</h1>
+            <p className={styles.subheading}>{t(language as any, "dashboard_subheading")}</p>
             <div className={styles.warning}>
-              <strong>说明：</strong>AI 渠道识别为保守估计，依赖 referrer / UTM / 标签，部分 AI 会隐藏来源；
-              仅统计站外 AI 点击 → 到站 → 完成订单的链路，不含 AI 应用内曝光或自然流量。
+              <strong>{language === "English" ? "Note:" : "说明："}</strong>{t(language as any, "dashboard_warning")}
             </div>
             <div className={styles.metaRow}>
-              <span>同步时间：{timeFormatter.format(new Date(overview.lastSyncedAt))}</span>
+              <span>{t(language as any, "meta_synced_at")}{timeFormatter.format(new Date(overview.lastSyncedAt))}</span>
               <span>
-                数据最近更新：{dataLastUpdated ? timeFormatter.format(new Date(dataLastUpdated)) : "暂无"}
+                {t(language as any, "meta_updated_at")}{dataLastUpdated ? timeFormatter.format(new Date(dataLastUpdated)) : (language === "English" ? "None" : "暂无")}
                 {backfillSuppressed && "（30 分钟内已补拉，复用缓存数据）"}
                 {backfillAvailable && "（可手动触发后台补拉）"}
               </span>
-              <span>区间：{dateRange.label}</span>
+              <span>{t(language as any, "meta_range")}{dateRange.label}</span>
               <span>
-                数据口径：订单 {gmvMetric} · 新客=首单客户（仅限当前时间范围） · GMV 仅基于订单字段
+                {t(language as any, "meta_metric_scope")} {gmvMetric} · {language === "English" ? "New Customers = first-order customers (window)" : "新客=首单客户（仅限当前时间范围）"} · {language === "English" ? "GMV computed from order fields" : "GMV 仅基于订单字段"}
               </span>
               <span>
-                数据源：
+                {t(language as any, "meta_data_source")}
                 {dataSource === "live"
-                  ? "Shopify 实时订单"
+                  ? (language === "English" ? "Shopify Live Orders" : "Shopify 实时订单")
                   : dataSource === "stored"
-                    ? "已缓存的店铺订单"
+                    ? (language === "English" ? "Stored Orders" : "已缓存的店铺订单")
                     : dataSource === "demo"
-                      ? "Demo 样例（未检索到 AI 订单）"
-                      : "暂无数据（未启用演示数据）"}
-                （live=实时 API，stored=本地缓存，demo=演示数据）
+                      ? (language === "English" ? "Demo samples (no AI orders found)" : "Demo 样例（未检索到 AI 订单）")
+                      : (language === "English" ? "No data (demo disabled)" : "暂无数据（未启用演示数据）")}
+                {language === "English" ? " (live=API, stored=cached, demo=samples)" : "（live=实时 API，stored=本地缓存，demo=演示数据）"}
               </span>
-              {clamped && <span>提示：已截断为最近 {MAX_DASHBOARD_ORDERS} 笔订单样本。</span>}
+              {clamped && <span>{language === "English" ? `Hint: truncated to latest ${MAX_DASHBOARD_ORDERS} orders.` : `提示：已截断为最近 ${MAX_DASHBOARD_ORDERS} 笔订单样本。`}</span>}
               <span>
-                计算时区：{calculationTimezone} · 展示时区：{timezone} · 货币：{currency}
+                {t(language as any, "meta_timezones_currency")}{calculationTimezone} · {language === "English" ? "Display TZ" : "展示时区"}：{timezone} · {language === "English" ? "Currency" : "货币"}：{currency}
               </span>
             </div>
             <details className={styles.statusBlock}>
-              <summary>系统状态与操作</summary>
+              <summary>{t(language as any, "status_ops")}</summary>
               <div className={styles.pipelineRow}>
-                <span>Webhook：{fmtTime(pipeline.lastOrdersWebhookAt)}</span>
-                <span>补拉：{fmtTime(pipeline.lastBackfillAt)}</span>
-                <span>标签：{fmtTime(pipeline.lastTaggingAt)}</span>
+                <span>{language === "English" ? "Webhook:" : "Webhook："}{fmtTime(pipeline.lastOrdersWebhookAt)}</span>
+                <span>{language === "English" ? "Backfill:" : "补拉："}{fmtTime(pipeline.lastBackfillAt)}</span>
+                <span>{language === "English" ? "Tagging:" : "标签："}{fmtTime(pipeline.lastTaggingAt)}</span>
                 <div className={styles.statusChips}>
                   {(pipeline.statuses || []).map((item) => (
                     <span
@@ -404,13 +400,13 @@ export default function Index() {
             {/* 补拉提示移入系统状态折叠块，避免首页拥挤 */}
             {dataSource === "demo" && (
               <div className={styles.callout}>
-                <span>提示</span>
-                当前店铺暂无可识别的 AI 渠道订单，以下为演示数据。可检查时间范围、referrer/UTM 规则，或延长观测窗口后再试。
+                <span>{t(language as any, "hint_title")}</span>
+                {language === "English" ? "No identifiable AI orders in this shop. Showing demo data. Check time range, referrer/UTM rules, or extend the window and retry." : "当前店铺暂无可识别的 AI 渠道订单，以下为演示数据。可检查时间范围、referrer/UTM 规则，或延长观测窗口后再试。"}
               </div>
             )}
             {dataSource === "empty" && (
               <div className={styles.warning}>
-                暂未检索到符合条件的订单，且已关闭演示数据。可等待 webhook/backfill 完成或延长时间范围后重试。
+                {language === "English" ? "No qualifying orders found and demo is disabled. Wait for webhook/backfill or extend the time range and retry." : "暂未检索到符合条件的订单，且已关闭演示数据。可等待 webhook/backfill 完成或延长时间范围后重试。"}
               </div>
             )}
             {overview.aiOrders === 0 && overview.totalOrders > 0 && (
@@ -473,49 +469,49 @@ export default function Index() {
         </div>
         </div>
 
-        <div className={styles.card}>
-          <div className={styles.sectionHeader}>
-            <div>
-              <p className={styles.sectionLabel}>指标说明</p>
-              <h3 className={styles.sectionTitle}>口径定义（固定）</h3>
+          <div className={styles.card}>
+            <div className={styles.sectionHeader}>
+              <div>
+                <p className={styles.sectionLabel}>{t(language as any, "metrics_section_label")}</p>
+                <h3 className={styles.sectionTitle}>{t(language as any, "metrics_section_title")}</h3>
+              </div>
+              <span className={styles.smallBadge}>{language === "English" ? "Reference" : "参考"}</span>
             </div>
-            <span className={styles.smallBadge}>参考</span>
+            <ul className={styles.helpList}>
+            <li>{language === "English" ? `GMV: aggregated by ${gmvMetric} (${gmvMetric === "subtotal_price" ? "excluding tax/shipping" : "including tax/shipping"}).` : `GMV：按设置的 ${gmvMetric} 字段汇总（当前为 ${gmvMetric === "subtotal_price" ? "不含税/运费" : "含税/运费"}）。`}</li>
+            <li>{language === "English" ? "AI GMV: only orders identified as AI channel." : "AI GMV：仅统计被识别为 AI 渠道的订单 GMV。"}</li>
+            <li>{language === "English" ? "LTV (if shown): historical accumulated GMV within window, no prediction." : "LTV（如展示）：当前为历史累积 GMV，不含预测。"}</li>
+            </ul>
           </div>
-          <ul className={styles.helpList}>
-            <li>GMV：按设置的 {gmvMetric} 字段汇总（当前为 {gmvMetric === "subtotal_price" ? "不含税/运费" : "含税/运费"}）。</li>
-            <li>AI GMV：仅统计被识别为 AI 渠道的订单 GMV。</li>
-            <li>LTV（如展示）：当前为历史累积 GMV，不含预测。</li>
-          </ul>
-        </div>
         </div>
 
         <div className={styles.kpiGrid}>
           <div className={styles.card}>
-            <p className={styles.cardLabel}>总 GMV（所选区间）</p>
+            <p className={styles.cardLabel}>{t(language as any, "kpi_total_gmv")}</p>
             <p className={styles.cardValue}>{fmtCurrency(overview.totalGMV)}</p>
             <p className={styles.cardMeta}>
-              订单 {fmtNumber(overview.totalOrders)} · 新客 {fmtNumber(overview.totalNewCustomers)}
+              {language === "English" ? "Orders" : t(language as any, "kpi_orders")} {fmtNumber(overview.totalOrders)} · {language === "English" ? "New" : t(language as any, "kpi_new_customers")} {fmtNumber(overview.totalNewCustomers)}
             </p>
-            <p className={styles.helpText}>净 GMV {fmtCurrency(overview.netGMV)}</p>
+            <p className={styles.helpText}>{t(language as any, "kpi_net_gmv")} {fmtCurrency(overview.netGMV)}</p>
           </div>
           <div className={styles.card}>
-            <p className={styles.cardLabel}>AI 渠道 GMV</p>
+            <p className={styles.cardLabel}>{t(language as any, "kpi_ai_gmv")}</p>
             <p className={styles.cardValue}>{fmtCurrency(overview.aiGMV)}</p>
-            <p className={styles.cardMeta}>占比 {fmtPercent(overview.aiShare)}</p>
-            <p className={styles.helpText}>AI 净 GMV {fmtCurrency(overview.netAiGMV)}</p>
+            <p className={styles.cardMeta}>{language === "English" ? "Share" : t(language as any, "kpi_ai_share")} {fmtPercent(overview.aiShare)}</p>
+            <p className={styles.helpText}>{language === "English" ? "AI Net GMV" : "AI 净 GMV"} {fmtCurrency(overview.netAiGMV)}</p>
           </div>
           <div className={styles.card}>
-            <p className={styles.cardLabel}>AI 渠道订单</p>
+            <p className={styles.cardLabel}>{t(language as any, "kpi_ai_orders")}</p>
             <p className={styles.cardValue}>{fmtNumber(overview.aiOrders)}</p>
             <p className={styles.cardMeta}>
-              总订单 {fmtNumber(overview.totalOrders)} · {fmtPercent(overview.aiOrderShare)}
+              {language === "English" ? "Total Orders" : t(language as any, "kpi_ai_order_share")} {fmtNumber(overview.totalOrders)} · {fmtPercent(overview.aiOrderShare)}
             </p>
           </div>
           <div className={styles.card}>
-            <p className={styles.cardLabel}>AI 新客</p>
+            <p className={styles.cardLabel}>{t(language as any, "kpi_ai_new_customers")}</p>
             <p className={styles.cardValue}>{fmtNumber(overview.aiNewCustomers)}</p>
             <p className={styles.cardMeta}>
-              AI 新客占比 {fmtPercent(overview.aiNewCustomerRate)} · 全站新客 {fmtNumber(overview.totalNewCustomers)}
+              {language === "English" ? "AI New Customer Rate" : t(language as any, "kpi_ai_new_customer_rate")} {fmtPercent(overview.aiNewCustomerRate)} · {language === "English" ? "Site New" : "全站新客"} {fmtNumber(overview.totalNewCustomers)}
             </p>
           </div>
         </div>
@@ -529,7 +525,7 @@ export default function Index() {
           <div className={styles.card}>
             <div className={styles.sectionHeader}>
               <div>
-                <p className={styles.sectionLabel}>AI 渠道拆分</p>
+                <p className={styles.sectionLabel}>{t(language as any, "channels_section_label")}</p>
                 <h3 className={styles.sectionTitle}>{t(language as any, "channels_section_title")}</h3>
               </div>
               <div className={styles.toggleGroup}>
@@ -585,7 +581,7 @@ export default function Index() {
           <div className={styles.card}>
             <div className={styles.sectionHeader}>
               <div>
-                <p className={styles.sectionLabel}>关键指标对比</p>
+                <p className={styles.sectionLabel}>{t(language as any, "comparison_section_label")}</p>
                 <h3 className={styles.sectionTitle}>整体 vs 各 AI 渠道</h3>
               </div>
               {isLowSample ? (
@@ -600,11 +596,11 @@ export default function Index() {
               <table className={styles.table}>
                 <thead>
                   <tr>
-                    <th>渠道</th>
-                    <th>AOV</th>
-                    <th>新客占比</th>
-                    <th>简易复购率</th>
-                    <th>样本</th>
+                    <th>{t(language as any, "table_channel")}</th>
+                    <th>{t(language as any, "table_aov")}</th>
+                    <th>{t(language as any, "table_new_customer_rate")}</th>
+                    <th>{t(language as any, "table_repeat_rate")}</th>
+                    <th>{t(language as any, "table_sample")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -769,11 +765,11 @@ export default function Index() {
               <table className={styles.table}>
                 <thead>
                   <tr>
-                    <th>产品</th>
-                    <th>AI 渠道订单</th>
-                    <th>AI GMV</th>
-                    <th>AI 占比</th>
-                    <th>Top 渠道</th>
+                    <th>{t(language as any, "products_table_product")}</th>
+                    <th>{t(language as any, "products_table_ai_orders")}</th>
+                    <th>{t(language as any, "products_table_ai_gmv")}</th>
+                    <th>{t(language as any, "products_table_ai_share")}</th>
+                    <th>{t(language as any, "products_table_top_channel")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -799,14 +795,14 @@ export default function Index() {
           </div>
         </div>
 
-        <div className={styles.card}>
-          <div className={styles.sectionHeader}>
-            <div>
-              <p className={styles.sectionLabel}>任务状态</p>
-              <h3 className={styles.sectionTitle}>Backfill & Webhook 队列</h3>
+          <div className={styles.card}>
+            <div className={styles.sectionHeader}>
+              <div>
+              <p className={styles.sectionLabel}>{t(language as any, "jobs_section_label")}</p>
+              <h3 className={styles.sectionTitle}>{t(language as any, "jobs_section_title")}</h3>
+              </div>
+              <span className={styles.smallBadge}>{t(language as any, "jobs_small_badge")}</span>
             </div>
-            <span className={styles.smallBadge}>排队 / 执行 / 完成 / 错误</span>
-          </div>
           <div className={styles.jobGrid}>
             <div className={styles.jobBlock}>
               <div className={styles.jobHeader}>
@@ -898,8 +894,8 @@ export default function Index() {
         <div className={styles.card}>
           <div className={styles.sectionHeader}>
             <div>
-              <p className={styles.sectionLabel}>调试视图</p>
-              <h3 className={styles.sectionTitle}>最近订单来源解析</h3>
+              <p className={styles.sectionLabel}>{t(language as any, "debug_section_label")}</p>
+              <h3 className={styles.sectionTitle}>{t(language as any, "debug_section_title")}</h3>
             </div>
             <div className={styles.debugFilters}>
               <input
@@ -930,13 +926,13 @@ export default function Index() {
             <table className={styles.table}>
               <thead>
                 <tr>
-                  <th>订单</th>
-                  <th>时间</th>
-                  <th>AI 渠道</th>
-                  <th>GMV</th>
-                  <th>Referrer / UTM</th>
-                  <th>解析结果</th>
-                  <th>signals</th>
+                  <th>{t(language as any, "debug_table_order")}</th>
+                  <th>{t(language as any, "debug_table_time")}</th>
+                  <th>{t(language as any, "debug_table_ai_channel")}</th>
+                  <th>{t(language as any, "debug_table_gmv")}</th>
+                  <th>{t(language as any, "debug_table_ref_utm")}</th>
+                  <th>{t(language as any, "debug_table_detection")}</th>
+                  <th>{t(language as any, "debug_table_signals")}</th>
                 </tr>
               </thead>
               <tbody>

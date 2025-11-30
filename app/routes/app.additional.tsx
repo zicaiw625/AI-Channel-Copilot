@@ -390,10 +390,10 @@ export default function SettingsAndExport() {
           <div className={styles.card}>
             <div className={styles.sectionHeader}>
               <div>
-                <p className={styles.sectionLabel}>AI 域名识别</p>
-                <h3 className={styles.sectionTitle}>Referrer 域名表</h3>
+                <p className={styles.sectionLabel}>{t(language as any, "channels_section_label")}</p>
+                <h3 className={styles.sectionTitle}>{language === "English" ? "Referrer Domains" : "Referrer 域名表"}</h3>
               </div>
-              <span className={styles.badge}>优先级最高</span>
+              <span className={styles.badge}>{t(language as any, "badge_priority_high")}</span>
             </div>
             <div className={styles.ruleList}>
               {domains.map((rule) => (
@@ -445,10 +445,10 @@ export default function SettingsAndExport() {
           <div className={styles.card}>
             <div className={styles.sectionHeader}>
               <div>
-                <p className={styles.sectionLabel}>UTM 匹配规则</p>
-                <h3 className={styles.sectionTitle}>utm_source → 渠道映射</h3>
+                <p className={styles.sectionLabel}>{language === "English" ? "UTM Rules" : "UTM 匹配规则"}</p>
+                <h3 className={styles.sectionTitle}>{language === "English" ? "utm_source → Channel Mapping" : "utm_source → 渠道映射"}</h3>
               </div>
-              <span className={styles.badge}>辅助识别</span>
+              <span className={styles.badge}>{t(language as any, "badge_assist")}</span>
             </div>
             <div className={styles.ruleList}>
               {utmMappings.map((rule) => (
@@ -507,8 +507,8 @@ export default function SettingsAndExport() {
           <div className={styles.card}>
             <div className={styles.sectionHeader}>
               <div>
-                <p className={styles.sectionLabel}>标签写回</p>
-                <h3 className={styles.sectionTitle}>控制 Shopify 标签行为</h3>
+                <p className={styles.sectionLabel}>{language === "English" ? "Tag Write-back" : "标签写回"}</p>
+                <h3 className={styles.sectionTitle}>{language === "English" ? "Control Shopify Tagging" : "控制 Shopify 标签行为"}</h3>
               </div>
               <div className={styles.inlineActions}>
                 <button type="button" className={styles.secondaryButton} onClick={submitSettings}>
@@ -613,10 +613,10 @@ export default function SettingsAndExport() {
           <div className={styles.card}>
             <div className={styles.sectionHeader}>
               <div>
-                <p className={styles.sectionLabel}>llms.txt 偏好（预留）</p>
-                <h3 className={styles.sectionTitle}>希望向 AI 暴露的站点类型</h3>
+                <p className={styles.sectionLabel}>{language === "English" ? "llms.txt Preferences (Reserved)" : "llms.txt 偏好（预留）"}</p>
+                <h3 className={styles.sectionTitle}>{language === "English" ? "Site Types to Expose" : "希望向 AI 暴露的站点类型"}</h3>
               </div>
-              <span className={styles.badge}>实验</span>
+              <span className={styles.badge}>{t(language as any, "badge_experiment")}</span>
             </div>
             <p className={styles.helpText}>{language === "English" ? "Preferences only; no changes to storefront. Future llms.txt generation will respect these. Default off to avoid unnecessary exposure." : "仅存储偏好，不会改动店铺页面。未来生成 llms.txt 时会参考此配置；默认全部关闭以避免暴露不必要的内容。"}</p>
             <div className={styles.checkboxRow}>
@@ -672,10 +672,10 @@ export default function SettingsAndExport() {
           <div className={styles.card}>
             <div className={styles.sectionHeader}>
               <div>
-                <p className={styles.sectionLabel}>llms.txt 预览</p>
-                <h3 className={styles.sectionTitle}>根据偏好生成草稿</h3>
+                <p className={styles.sectionLabel}>{language === "English" ? "llms.txt Preview" : "llms.txt 预览"}</p>
+                <h3 className={styles.sectionTitle}>{language === "English" ? "Draft Based on Preferences" : "根据偏好生成草稿"}</h3>
               </div>
-              <span className={styles.badge}>实验</span>
+              <span className={styles.badge}>{t(language as any, "badge_experiment")}</span>
             </div>
             <LlmsPreview />
             <p className={styles.helpText}>{t(language as any, "llms_preview_help")}</p>
@@ -684,10 +684,10 @@ export default function SettingsAndExport() {
           <div className={styles.card}>
             <div className={styles.sectionHeader}>
               <div>
-                <p className={styles.sectionLabel}>语言 / 时区</p>
-                <h3 className={styles.sectionTitle}>展示偏好 & GMV 口径</h3>
+                <p className={styles.sectionLabel}>{language === "English" ? "Language / Timezone" : "语言 / 时区"}</p>
+                <h3 className={styles.sectionTitle}>{language === "English" ? "Display Preferences & GMV Metric" : "展示偏好 & GMV 口径"}</h3>
               </div>
-              <span className={styles.badge}>仅影响 UI</span>
+              <span className={styles.badge}>{t(language as any, "badge_ui_only")}</span>
             </div>
             <label className={styles.stackField}>
               <span className={styles.fieldLabel}>语言</span>
@@ -758,16 +758,16 @@ export default function SettingsAndExport() {
           </div>
         </div>
 
-        <div className={styles.card}>
-          <div className={styles.sectionHeader}>
-            <div>
-              <p className={styles.sectionLabel}>{language === "English" ? "Data Export" : "数据导出"}</p>
-              <h3 className={styles.sectionTitle}>{language === "English" ? "CSV Download" : "CSV 下载"}</h3>
+          <div className={styles.card}>
+            <div className={styles.sectionHeader}>
+              <div>
+                <p className={styles.sectionLabel}>{language === "English" ? "Data Export" : "数据导出"}</p>
+                <h3 className={styles.sectionTitle}>{language === "English" ? "CSV Download" : "CSV 下载"}</h3>
+              </div>
+              <span className={styles.badge}>{t(language as any, "badge_analysis")}</span>
             </div>
-            <span className={styles.badge}>适合二次分析</span>
-          </div>
-          <div className={styles.inlineForm}>
-            <label className={styles.fieldLabel}>{language === "English" ? "Export Range" : "导出时间范围"}</label>
+            <div className={styles.inlineForm}>
+              <label className={styles.fieldLabel}>{language === "English" ? "Export Range" : "导出时间范围"}</label>
             <select
               className={styles.select}
               value={exportWindow}

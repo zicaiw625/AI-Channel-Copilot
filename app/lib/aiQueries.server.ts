@@ -64,7 +64,15 @@ export const getAiDashboardData = async (
 
   const language = settings.languages && settings.languages[0] ? settings.languages[0] : "中文";
   const clampedNote = language === "English" ? "Data is a truncated sample; consider shortening the time range." : "数据为截断样本，建议缩短时间范围";
-  return { data: { ...data, sampleNote: clamped ? clampedNote : data.sampleNote }, orders };
+  const localizeNote = (note: string | null): string | null => {
+    if (!note || language !== "English") return note;
+    let out = note;
+    out = out.replace("AI 渠道订单量当前较低（<5），所有指标仅供参考。", "AI-channel order volume currently low (<5); metrics for reference only.");
+    out = out.replace(/已过滤\s+(\d+)\s+笔非\s+([A-Z]{3})\s+货币的订单，汇总仅包含\s+\2。/g, "Filtered $1 orders not in $2; aggregation only includes $2.");
+    out = out.replace(/已排除\s+(\d+)\s+笔\s+POS\/草稿订单（不计入站外 AI 链路分析）。/g, "Excluded $1 POS/draft orders (not counted in offsite AI flow analysis).");
+    return out;
+  };
+  return { data: { ...data, sampleNote: clamped ? clampedNote : localizeNote(data.sampleNote) }, orders };
 };
 
 export const getAiOverview = async (

@@ -26,7 +26,8 @@ export const buildLlmsTxt = async (
   lines.push("");
   if (language === "English") {
     lines.push(`# Site: shop=${shopDomain} · primary_currency=${settings.primaryCurrency || "USD"}`);
-    lines.push(`# Time Range: ${range.label} · Top list based on recent AI GMV/orders`);
+    const englishRange = rangeKey === "7d" ? "Last 7 days" : rangeKey === "30d" ? "Last 30 days" : rangeKey === "90d" ? "Last 90 days" : range.label;
+    lines.push(`# Time Range: ${englishRange} · Top list based on recent AI GMV/orders`);
   } else {
     lines.push(`# 站点声明：shop=${shopDomain} · primary_currency=${settings.primaryCurrency || "USD"}`);
     lines.push(`# 时间范围：${range.label} · 依据最近 AI GMV/订单生成 Top 列表`);

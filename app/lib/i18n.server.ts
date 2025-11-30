@@ -8,6 +8,7 @@ const dict: Record<string, { zh: string; en: string }> = {
   col_ltv: { zh: "LTV", en: "LTV" },
   col_orders: { zh: "订单数", en: "Orders" },
   col_ai: { zh: "AI", en: "AI" },
+  export_ltv_csv: { zh: "下载 LTV CSV", en: "Download LTV CSV" },
 };
 
 export const t = (language: Lang, key: keyof typeof dict) => {

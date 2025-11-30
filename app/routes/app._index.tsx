@@ -639,7 +639,7 @@ export default function Index() {
                 href={`data:text/csv;charset=utf-8,${encodeURIComponent(exportData.customersCsv)}`}
                 download={`customers-ltv-${range}.csv`}
               >
-                下载 LTV CSV
+                {t(language as any, "export_ltv_csv")}
               </a>
             </div>
             <div className={styles.tableWrap}>

@@ -215,6 +215,7 @@ export default function Index() {
     comparison,
     trend,
     topProducts,
+    topCustomers,
     recentOrders,
     sampleNote,
     exports: exportData,
@@ -623,6 +624,47 @@ export default function Index() {
               </table>
             </div>
             {sampleNote && <p className={styles.warning}>{sampleNote}</p>}
+          </div>
+        </div>
+
+        <div className={styles.twoCol}>
+          <div className={styles.card}>
+            <div className={styles.sectionHeader}>
+              <div>
+                <p className={styles.sectionLabel}>客户维度</p>
+                <h3 className={styles.sectionTitle}>{t(language as any, "top_customers_title")}</h3>
+              </div>
+              <a
+                className={styles.secondaryButton}
+                href={`data:text/csv;charset=utf-8,${encodeURIComponent(exportData.customersCsv)}`}
+                download={`customers-ltv-${range}.csv`}
+              >
+                下载 LTV CSV
+              </a>
+            </div>
+            <div className={styles.tableWrap}>
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    <th>{t(language as any, "col_customer")}</th>
+                    <th>{t(language as any, "col_ltv")}</th>
+                    <th>{t(language as any, "col_orders")}</th>
+                    <th>{t(language as any, "col_ai")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {topCustomers.map((row) => (
+                    <tr key={row.customerId}>
+                      <td className={styles.cellLabel}>{row.customerId}</td>
+                      <td>{fmtCurrency(row.ltv)}</td>
+                      <td>{fmtNumber(row.orders)}</td>
+                      <td>{row.ai ? "✓" : "-"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className={styles.helpText}>窗口内按 GMV 汇总的 LTV，适合观察高价值客户分布。</p>
           </div>
         </div>
 

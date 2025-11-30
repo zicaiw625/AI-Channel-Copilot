@@ -7,6 +7,7 @@ import { detectAiFromFields as detectAiFromFieldsRef, extractUtm as extractUtmRe
   - 优先级：referrer > UTM > 其它（标签/备注），并记录冲突与命中 signals 供调试。
 */
 import { metricOrderValue, sumGMV, sumNetGMV } from "./metrics.server";
+import { buildTopCustomers } from "./aiAggregation";
 
 export type AIChannel = "ChatGPT" | "Perplexity" | "Gemini" | "Copilot" | "Other-AI";
 
@@ -169,6 +170,7 @@ export type DashboardData = {
   comparison: ComparisonRow[];
   trend: TrendPoint[];
   topProducts: ProductRow[];
+  topCustomers: { customerId: string; ltv: number; orders: number; ai: boolean }[];
   recentOrders: RawOrderRow[];
   sampleNote: string | null;
   exports: {
@@ -1721,6 +1723,7 @@ export const buildDashboardFromOrders = (
   const comparison = buildComparison(primaryOrders, gmvMetric);
   const trend = buildTrend(primaryOrders, range, gmvMetric, timeZone);
   const topProducts = buildProducts(primaryOrders, gmvMetric);
+  const topCustomers = buildTopCustomers(primaryOrders, gmvMetric);
   const recentOrders = buildRecentOrders(primaryOrders, gmvMetric);
   const ordersCsv = buildOrdersCsv(primaryOrders, gmvMetric);
   const productsCsv = buildProductsCsv(topProducts);
@@ -1737,6 +1740,7 @@ export const buildDashboardFromOrders = (
     comparison,
     trend,
     topProducts,
+    topCustomers,
     recentOrders,
     sampleNote,
     exports: {

@@ -468,7 +468,7 @@ export default function Index() {
                 href={`data:text/csv;charset=utf-8,${encodeURIComponent(exportData.ordersCsv)}`}
                 download={`ai-orders-${range}.csv`}
               >
-                导出 AI 订单 CSV
+                {t(language as any, "export_orders_csv")}
               </a>
         </div>
         </div>
@@ -534,9 +534,9 @@ export default function Index() {
               </div>
               <div className={styles.toggleGroup}>
                 {[
-                  { key: "gmv", label: "GMV" },
-                  { key: "orders", label: "订单" },
-                  { key: "newCustomers", label: "新客" },
+                  { key: "gmv", label: t(language as any, "toggle_gmv") },
+                  { key: "orders", label: t(language as any, "toggle_orders") },
+                  { key: "newCustomers", label: t(language as any, "toggle_new_customers") },
                 ].map(({ key, label }) => (
                   <button
                     key={key}

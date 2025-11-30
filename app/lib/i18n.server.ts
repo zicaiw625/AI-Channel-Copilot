@@ -13,6 +13,10 @@ const dict: Record<string, { zh: string; en: string }> = {
   trend_section_title: { zh: "GMV / 订单趋势（按渠道过滤）", en: "GMV / Orders Trend (Filter by Channel)" },
   products_section_title: { zh: "Top Products from AI Channels", en: "Top Products from AI Channels" },
   export_products_csv: { zh: "导出产品榜单 CSV", en: "Export Products CSV" },
+  export_orders_csv: { zh: "导出 AI 订单 CSV", en: "Export AI Orders CSV" },
+  toggle_gmv: { zh: "GMV", en: "GMV" },
+  toggle_orders: { zh: "订单", en: "Orders" },
+  toggle_new_customers: { zh: "新客", en: "New Customers" },
 };
 
 export const t = (language: Lang, key: keyof typeof dict) => {

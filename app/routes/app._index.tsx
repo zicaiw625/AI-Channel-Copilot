@@ -17,6 +17,7 @@ import {
   MAX_BACKFILL_ORDERS,
 } from "../lib/constants";
 import { loadDashboardContext } from "../lib/dashboardContext.server";
+import { t } from "../lib/i18n.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
@@ -413,9 +414,9 @@ export default function Index() {
             )}
             {overview.aiOrders === 0 && overview.totalOrders > 0 && (
               <div className={styles.callout}>
-                <span>提示</span>
-                选定区间内有订单但未识别到 AI 渠道。建议前往「设置 / 规则 & 导出」补充 AI 域名或 utm_source 规则。
-                <Link to="/app/additional" className={styles.link}>前往设置</Link>
+                <span>{language === "English" ? "Hint" : "提示"}</span>
+                {t(language as any, "hint_zero_ai")}
+                <Link to="/app/additional" className={styles.link}>{t(language as any, "goto_settings")}</Link>
               </div>
             )}
             </div>

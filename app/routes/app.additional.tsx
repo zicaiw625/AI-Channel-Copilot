@@ -796,31 +796,42 @@ export default function SettingsAndExport() {
             <span className={styles.helpText}>切换后将重新加载并生成对应区间的导出。</span>
           </div>
           <div className={styles.exportGrid}>
-            <div className={styles.exportCard}>
-              <h4>AI 渠道订单明细</h4>
-              <p>
-                字段：订单号、下单时间、AI 渠道、GMV（按当前 GMV 口径）、referrer、landing_page、source_name、utm_source、utm_medium、解析结果
-                （附加 order_id / customer_id / new_customer 标记便于对照）。
-              </p>
-              <a
-                className={styles.primaryButton}
-                href={toCsvHref(exports.ordersCsv)}
-                download="ai-orders-90d.csv"
-              >
-                下载 CSV
-              </a>
-            </div>
-            <div className={styles.exportCard}>
-              <h4>Top Products from AI Channels</h4>
-              <p>字段：产品名、AI 订单数、AI GMV、AI 占比、Top 渠道、URL（附产品 ID / handle 便于二次分析）。</p>
-              <a
-                className={styles.secondaryButton}
-                href={toCsvHref(exports.productsCsv)}
-                download="ai-products-90d.csv"
-              >
-                下载 CSV
-              </a>
-            </div>
+          <div className={styles.exportCard}>
+            <h4>AI 渠道订单明细</h4>
+            <p>
+              字段：订单号、下单时间、AI 渠道、GMV（按当前 GMV 口径）、referrer、landing_page、source_name、utm_source、utm_medium、解析结果
+              （附加 order_id / customer_id / new_customer 标记便于对照）。
+            </p>
+            <a
+              className={styles.primaryButton}
+              href={toCsvHref(exports.ordersCsv)}
+              download="ai-orders-90d.csv"
+            >
+              下载 CSV
+            </a>
+          </div>
+          <div className={styles.exportCard}>
+            <h4>Top Products from AI Channels</h4>
+            <p>字段：产品名、AI 订单数、AI GMV、AI 占比、Top 渠道、URL（附产品 ID / handle 便于二次分析）。</p>
+            <a
+              className={styles.secondaryButton}
+              href={toCsvHref(exports.productsCsv)}
+              download="ai-products-90d.csv"
+            >
+              下载 CSV
+            </a>
+          </div>
+          <div className={styles.exportCard}>
+            <h4>Customers LTV（选定窗口）</h4>
+            <p>字段：customer_id、LTV（在选定时间范围内累计 GMV）、GMV 口径。</p>
+            <a
+              className={styles.secondaryButton}
+              href={toCsvHref(exports.customersCsv)}
+              download="customers-ltv-90d.csv"
+            >
+              下载 CSV
+            </a>
+          </div>
           </div>
           <p className={styles.helpText}>
             导出仅包含已被识别的 AI 渠道订单；若 AI 样本量很低，建议延长时间窗口后再导出。导出的 GMV 字段随「GMV 口径」设置切换。

@@ -1,4 +1,5 @@
 import { DEFAULT_RANGE_KEY } from "./constants";
+import { detectAiFromFields as detectAiFromFieldsRef, extractUtm as extractUtmRef } from "./aiAttribution";
 /*
   AI 渠道识别说明（保守估计）
   - 识别基于 referrer 域名与 UTM（utm_source/utm_medium）等显式信号；部分 AI/浏览器可能隐藏来源。
@@ -173,6 +174,7 @@ export type DashboardData = {
   exports: {
     ordersCsv: string;
     productsCsv: string;
+    customersCsv: string;
   };
 };
 
@@ -1663,6 +1665,20 @@ const buildProductsCsv = (products: ProductRow[]) => {
   return [comment, header, ...rows].map((cells) => Array.isArray(cells) ? cells.map(toCsvValue).join(",") : cells).join("\n");
 };
 
+const buildCustomersCsv = (
+  ordersInRange: OrderRecord[],
+  metric: "current_total_price" | "subtotal_price" = "current_total_price",
+) => {
+  const comment = `# 客户级 LTV（选定时间范围内累计 GMV）；GMV 口径=${metric}`;
+  const ltvMap = computeLTV(ordersInRange, metric);
+  const header = ["customer_id", "ltv", "gmv_metric"];
+  const rows: string[][] = [];
+  for (const [customerId, ltv] of ltvMap.entries()) {
+    rows.push([customerId, String(ltv), metric]);
+  }
+  return [comment, header, ...rows].map((cells) => Array.isArray(cells) ? cells.map(toCsvValue).join(",") : cells).join("\n");
+};
+
 const buildSampleNote = (
   overview: OverviewMetrics,
   foreignCurrencies: string[],
@@ -1708,6 +1724,7 @@ export const buildDashboardFromOrders = (
   const recentOrders = buildRecentOrders(primaryOrders, gmvMetric);
   const ordersCsv = buildOrdersCsv(primaryOrders, gmvMetric);
   const productsCsv = buildProductsCsv(topProducts);
+  const customersCsv = buildCustomersCsv(primaryOrders, gmvMetric);
   const baseNote = buildSampleNote(overview, foreignCurrencies, foreignOrders.length);
   const posNote = excludedBySource
     ? `已排除 ${excludedBySource} 笔 POS/草稿订单（不计入站外 AI 链路分析）。`
@@ -1725,6 +1742,7 @@ export const buildDashboardFromOrders = (
     exports: {
       ordersCsv,
       productsCsv,
+      customersCsv,
     },
   };
 };
@@ -1794,9 +1812,9 @@ export const mapShopifyOrderToRecord = (
     order.currentTotalPriceSet?.shopMoney?.currencyCode || config.primaryCurrency || "USD";
   const referrer = "";
   const landingPage = order.landingPageUrl || "";
-  const { utmSource, utmMedium } = extractUtm(referrer, landingPage);
+  const { utmSource, utmMedium } = extractUtmRef(referrer, landingPage);
 
-  const { aiSource, detection, signals } = detectAiFromFields(
+  const { aiSource, detection, signals } = detectAiFromFieldsRef(
     referrer,
     landingPage,
     utmSource,

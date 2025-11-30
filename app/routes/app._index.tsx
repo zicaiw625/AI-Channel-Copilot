@@ -650,6 +650,8 @@ export default function Index() {
                     <th>{t(language as any, "col_ltv")}</th>
                     <th>{t(language as any, "col_orders")}</th>
                     <th>{t(language as any, "col_ai")}</th>
+                    <th>{t(language as any, "col_acquired_ai")}</th>
+                    <th>{t(language as any, "col_repeats")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -659,6 +661,8 @@ export default function Index() {
                       <td>{fmtCurrency(row.ltv)}</td>
                       <td>{fmtNumber(row.orders)}</td>
                       <td>{row.ai ? "✓" : "-"}</td>
+                      <td>{row.firstAIAcquired ? "✓" : "-"}</td>
+                      <td>{fmtNumber(row.repeatCount)}</td>
                     </tr>
                   ))}
                 </tbody>

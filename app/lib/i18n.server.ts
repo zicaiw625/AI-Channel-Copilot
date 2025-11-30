@@ -17,6 +17,8 @@ const dict: Record<string, { zh: string; en: string }> = {
   toggle_gmv: { zh: "GMV", en: "GMV" },
   toggle_orders: { zh: "订单", en: "Orders" },
   toggle_new_customers: { zh: "新客", en: "New Customers" },
+  col_acquired_ai: { zh: "首单 AI 获客", en: "First Order AI-acquired" },
+  col_repeats: { zh: "复购次数", en: "Repeat Count" },
 };
 
 export const t = (language: Lang, key: keyof typeof dict) => {

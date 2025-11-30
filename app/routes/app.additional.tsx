@@ -25,6 +25,7 @@ import { persistOrders } from "../lib/persistence.server";
 import { applyAiTags } from "../lib/tagging.server";
 import { authenticate } from "../shopify.server";
 import styles from "../styles/app.settings.module.css";
+import { t } from "../lib/i18n.server";
 import { allowDemoData, getPlatform } from "../lib/runtime.server";
 import { loadDashboardContext } from "../lib/dashboardContext.server";
 import {
@@ -340,10 +341,10 @@ export default function SettingsAndExport() {
   }, [fetcher.data, shopify]);
 
   return (
-    <s-page heading="设置 / 规则 & 导出">
+    <s-page heading={language === "English" ? "Settings / Rules & Export" : "设置 / 规则 & 导出"}>
       <div className={styles.page}>
       <div className={styles.lede}>
-        <h1>AI 渠道识别规则 & 数据导出</h1>
+        <h1>{language === "English" ? "AI Channel Rules & Data Export" : "AI 渠道识别规则 & 数据导出"}</h1>
         <p>
           控制 referrer / UTM 匹配规则、标签写回、语言时区，支持一键导出 AI 渠道订单和产品榜单
           CSV。所有演示数据均基于 v0.1 保守识别。
@@ -534,7 +535,7 @@ export default function SettingsAndExport() {
               </div>
               <div className={styles.inlineActions}>
                 <button type="button" className={styles.secondaryButton} onClick={submitSettings}>
-                  保存
+                  {language === "English" ? "Save" : "保存"}
                 </button>
                 <button
                   type="button"
@@ -561,7 +562,7 @@ export default function SettingsAndExport() {
                   }
                   disabled={!tagging.writeOrderTags && !tagging.writeCustomerTags}
                 >
-                  立即写回标签
+                  {language === "English" ? "Write Tags Now" : "立即写回标签"}
                 </button>
               </div>
             </div>
@@ -772,13 +773,13 @@ export default function SettingsAndExport() {
         <div className={styles.card}>
           <div className={styles.sectionHeader}>
             <div>
-              <p className={styles.sectionLabel}>数据导出</p>
-              <h3 className={styles.sectionTitle}>CSV 下载</h3>
+              <p className={styles.sectionLabel}>{language === "English" ? "Data Export" : "数据导出"}</p>
+              <h3 className={styles.sectionTitle}>{language === "English" ? "CSV Download" : "CSV 下载"}</h3>
             </div>
             <span className={styles.badge}>适合二次分析</span>
           </div>
           <div className={styles.inlineForm}>
-            <label className={styles.fieldLabel}>导出时间范围</label>
+            <label className={styles.fieldLabel}>{language === "English" ? "Export Range" : "导出时间范围"}</label>
             <select
               className={styles.select}
               value={exportWindow}
@@ -790,14 +791,14 @@ export default function SettingsAndExport() {
                 navigate({ search: `?${params.toString()}` });
               }}
             >
-              <option value="30d">最近 30 天</option>
-              <option value="90d">最近 90 天</option>
+              <option value="30d">{language === "English" ? "Last 30 days" : "最近 30 天"}</option>
+              <option value="90d">{language === "English" ? "Last 90 days" : "最近 90 天"}</option>
             </select>
-            <span className={styles.helpText}>切换后将重新加载并生成对应区间的导出。</span>
+            <span className={styles.helpText}>{language === "English" ? "Switch the range to regenerate exports." : "切换后将重新加载并生成对应区间的导出。"}</span>
           </div>
           <div className={styles.exportGrid}>
           <div className={styles.exportCard}>
-            <h4>AI 渠道订单明细</h4>
+            <h4>{language === "English" ? "AI Orders Details" : "AI 渠道订单明细"}</h4>
             <p>
               字段：订单号、下单时间、AI 渠道、GMV（按当前 GMV 口径）、referrer、landing_page、source_name、utm_source、utm_medium、解析结果
               （附加 order_id / customer_id / new_customer 标记便于对照）。
@@ -807,29 +808,29 @@ export default function SettingsAndExport() {
               href={toCsvHref(exports.ordersCsv)}
               download="ai-orders-90d.csv"
             >
-              下载 CSV
+              {language === "English" ? "Download CSV" : "下载 CSV"}
             </a>
           </div>
           <div className={styles.exportCard}>
-            <h4>Top Products from AI Channels</h4>
+            <h4>{t(language as any, "products_section_title")}</h4>
             <p>字段：产品名、AI 订单数、AI GMV、AI 占比、Top 渠道、URL（附产品 ID / handle 便于二次分析）。</p>
             <a
               className={styles.secondaryButton}
               href={toCsvHref(exports.productsCsv)}
               download="ai-products-90d.csv"
             >
-              下载 CSV
+              {language === "English" ? "Download CSV" : "下载 CSV"}
             </a>
           </div>
           <div className={styles.exportCard}>
-            <h4>Customers LTV（选定窗口）</h4>
+            <h4>{language === "English" ? "Customers LTV (Window)" : "Customers LTV（选定窗口）"}</h4>
             <p>字段：customer_id、LTV（在选定时间范围内累计 GMV）、GMV 口径。</p>
             <a
               className={styles.secondaryButton}
               href={toCsvHref(exports.customersCsv)}
               download="customers-ltv-90d.csv"
             >
-              下载 CSV
+              {language === "English" ? "Download CSV" : "下载 CSV"}
             </a>
           </div>
           </div>

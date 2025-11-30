@@ -7,7 +7,14 @@ import { detectAiFromFields as detectAiFromFieldsRef, extractUtm as extractUtmRe
   - 优先级：referrer > UTM > 其它（标签/备注），并记录冲突与命中 signals 供调试。
 */
 import { metricOrderValue, sumGMV, sumNetGMV } from "./metrics.server";
-import { buildTopCustomers } from "./aiAggregation";
+import {
+  buildTopCustomers,
+  buildOverview as aggBuildOverview,
+  buildChannelBreakdown as aggBuildChannelBreakdown,
+  buildComparison as aggBuildComparison,
+  buildTrend as aggBuildTrend,
+  buildProducts as aggBuildProducts,
+} from "./aiAggregation";
 
 export type AIChannel = "ChatGPT" | "Perplexity" | "Gemini" | "Copilot" | "Other-AI";
 
@@ -170,7 +177,7 @@ export type DashboardData = {
   comparison: ComparisonRow[];
   trend: TrendPoint[];
   topProducts: ProductRow[];
-  topCustomers: { customerId: string; ltv: number; orders: number; ai: boolean }[];
+  topCustomers: { customerId: string; ltv: number; orders: number; ai: boolean; firstAIAcquired: boolean; repeatCount: number }[];
   recentOrders: RawOrderRow[];
   sampleNote: string | null;
   exports: {
@@ -1718,11 +1725,11 @@ export const buildDashboardFromOrders = (
   });
   const { primaryCurrency: resolvedCurrency, primaryOrders, foreignOrders, foreignCurrencies } =
     partitionOrdersByCurrency(usableOrders, primaryCurrency);
-  const overview = buildOverview(primaryOrders, gmvMetric, resolvedCurrency);
-  const channels = buildChannelBreakdown(primaryOrders, gmvMetric);
-  const comparison = buildComparison(primaryOrders, gmvMetric);
-  const trend = buildTrend(primaryOrders, range, gmvMetric, timeZone);
-  const topProducts = buildProducts(primaryOrders, gmvMetric);
+  const overview = aggBuildOverview(primaryOrders, gmvMetric, resolvedCurrency);
+  const channels = aggBuildChannelBreakdown(primaryOrders, gmvMetric);
+  const comparison = aggBuildComparison(primaryOrders, gmvMetric);
+  const trend = aggBuildTrend(primaryOrders, range, gmvMetric, timeZone);
+  const topProducts = aggBuildProducts(primaryOrders, gmvMetric);
   const topCustomers = buildTopCustomers(primaryOrders, gmvMetric);
   const recentOrders = buildRecentOrders(primaryOrders, gmvMetric);
   const ordersCsv = buildOrdersCsv(primaryOrders, gmvMetric);

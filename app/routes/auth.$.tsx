@@ -8,6 +8,7 @@ import { fetchOrdersForRange } from "../lib/shopifyOrders.server";
 import { persistOrders } from "../lib/persistence.server";
 import { BACKFILL_COOLDOWN_MINUTES, MAX_BACKFILL_DURATION_MS, MAX_BACKFILL_ORDERS } from "../lib/constants";
 import { ensureWebhooks } from "../lib/webhooks.server";
+import { logger } from "../lib/logger.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
@@ -38,7 +39,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         }
       }
     }
-  } catch {}
+  } catch (error) {
+    logger.warn("[auth] loader encountered error", undefined, { message: (error as Error).message });
+  }
 
   return null;
 };

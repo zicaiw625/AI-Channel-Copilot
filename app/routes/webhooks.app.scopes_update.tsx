@@ -5,10 +5,12 @@ import { logger } from "../lib/logger.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   let shopDomain = "";
+  let topic = "";
 
   try {
-    const { payload, session, topic, shop } = await authenticate.webhook(request);
+    const { payload, session, topic: webhookTopic, shop } = await authenticate.webhook(request);
     shopDomain = shop;
+    topic = webhookTopic;
     logger.info(`Received ${topic} webhook`, { shopDomain: shop, topic });
 
     const currentRaw = (payload as { current?: unknown }).current;

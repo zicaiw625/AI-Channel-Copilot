@@ -1,5 +1,5 @@
 import prisma from "../db.server";
-import type { Prisma } from "@prisma/client";
+import type { Prisma, AiSource as PrismaAiSource } from "@prisma/client";
 import { type AIChannel, type DateRange, type OrderRecord } from "./aiData";
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 import { getPlatform, isDemoMode } from "./runtime.server";
@@ -12,7 +12,7 @@ const tableMissing = (error: unknown) =>
 
 const platform = getPlatform();
 
-const toAiEnum = (source: AIChannel | null): Prisma.AiSource | null => {
+const toAiEnum = (source: AIChannel | null): PrismaAiSource | null => {
   switch (source) {
     case "ChatGPT":
       return "ChatGPT";
@@ -29,7 +29,7 @@ const toAiEnum = (source: AIChannel | null): Prisma.AiSource | null => {
   }
 };
 
-const fromAiEnum = (source: Prisma.AiSource | null): AIChannel | null => {
+const fromAiEnum = (source: PrismaAiSource | null): AIChannel | null => {
   if (!source) return null;
   if (source === "Other_AI") return "Other-AI";
   return source as AIChannel;
@@ -88,7 +88,7 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
             : [];
 
           const orderMap = new Map(existingOrders.map((o) => [o.id, o]));
-          const customerState = new Map(
+          const customerState = new Map<string, any>(
             existingCustomers.map((c) => [c.id, { ...c }]),
           );
 
@@ -124,7 +124,7 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
               sourceName: order.sourceName,
               customerId: order.customerId ?? null,
               isNewCustomer: order.isNewCustomer,
-              detectionSignals: order.signals,
+              detectionSignals: order.signals as unknown as Prisma.InputJsonValue,
               createdAtLocal: toZonedDate(createdAt, timeZone),
             };
 
@@ -312,7 +312,9 @@ export const loadOrdersFromDb = async (
       isNewCustomer: order.isNewCustomer,
       products: productMap[order.id] || [],
       detection: (order.detection || "").slice(0, MAX_DETECTION_LENGTH),
-      signals: order.detectionSignals || [],
+      signals: Array.isArray(order.detectionSignals)
+        ? (order.detectionSignals as unknown[]).filter((v) => typeof v === "string") as string[]
+        : [],
     }));
 
     return { orders: mappedOrders, clamped: orders.length >= MAX_DASHBOARD_ORDERS };

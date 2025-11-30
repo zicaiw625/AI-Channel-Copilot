@@ -5,10 +5,12 @@ import { logger } from "../lib/logger.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   let shop = "";
+  let topic = "";
 
   try {
-    const { shop: webhookShop, topic, payload } = await authenticate.webhook(request);
+    const { shop: webhookShop, topic: webhookTopic, payload } = await authenticate.webhook(request);
     shop = webhookShop;
+    topic = webhookTopic;
     const webhookPayload =
       payload && typeof payload === "object" && !Array.isArray(payload)
         ? (payload as Record<string, unknown>)

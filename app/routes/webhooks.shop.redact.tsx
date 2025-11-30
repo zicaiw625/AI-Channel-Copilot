@@ -5,10 +5,12 @@ import { logger } from "../lib/logger.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   let shop = "";
+  let topic = "";
 
   try {
-    const { shop: webhookShop, topic, payload } = await authenticate.webhook(request);
+    const { shop: webhookShop, topic: webhookTopic, payload } = await authenticate.webhook(request);
     shop = webhookShop;
+    topic = webhookTopic;
     const webhookPayload =
       payload && typeof payload === "object" && !Array.isArray(payload)
         ? (payload as Record<string, unknown>)
@@ -26,7 +28,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   } catch (error) {
     logger.error(
       "shop/redact failed",
-      { shopDomain: shop || (error as { shop_domain?: string } | Error)?.shop_domain, topic },
+      { shopDomain: shop || (error as any)?.shop_domain, topic },
       { message: (error as Error).message },
     );
 

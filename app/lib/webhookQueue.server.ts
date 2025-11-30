@@ -1,4 +1,5 @@
 import prisma from "../db.server";
+import { Prisma } from "@prisma/client";
 import { logger, type LogContext } from "./logger.server";
 
 type WebhookJob = {
@@ -177,7 +178,7 @@ export const enqueueWebhookJob = async (job: WebhookJob) => {
       shopDomain: job.shopDomain,
       topic: job.topic,
       intent: job.intent,
-      payload: job.payload,
+      payload: job.payload as Prisma.InputJsonValue,
       externalId: job.externalId || null,
       orderId: job.orderId || null,
       eventTime: job.eventTime || null,

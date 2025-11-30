@@ -195,9 +195,7 @@ export const saveSettings = async (
   payload: SettingsDefaults,
 ): Promise<SettingsDefaults> => {
   if (!shopDomain || isDemoMode()) return payload;
-
-  try {
-    const primaryCurrency = payload.primaryCurrency || defaultSettings.primaryCurrency || "USD";
+  const primaryCurrency = payload.primaryCurrency || defaultSettings.primaryCurrency || "USD";
   const baseData = {
     aiDomains: payload.aiDomains,
     utmSources: payload.utmSources,
@@ -216,29 +214,23 @@ export const saveSettings = async (
     aiExposurePreferences: payload.exposurePreferences,
   };
 
-    const withOptionalsCreate = {
-      ...baseData,
-      lastBackfillAt: payload.lastBackfillAt ? new Date(payload.lastBackfillAt) : null,
-      lastTaggingAt: payload.lastTaggingAt ? new Date(payload.lastTaggingAt) : null,
-      lastCleanupAt: payload.lastCleanupAt ? new Date(payload.lastCleanupAt) : null,
-      lastOrdersWebhookAt: payload.lastOrdersWebhookAt
-        ? new Date(payload.lastOrdersWebhookAt)
-        : null,
-    };
+  const withOptionalsCreate = {
+    ...baseData,
+    lastBackfillAt: payload.lastBackfillAt ? new Date(payload.lastBackfillAt) : null,
+    lastTaggingAt: payload.lastTaggingAt ? new Date(payload.lastTaggingAt) : null,
+    lastCleanupAt: payload.lastCleanupAt ? new Date(payload.lastCleanupAt) : null,
+    lastOrdersWebhookAt: payload.lastOrdersWebhookAt ? new Date(payload.lastOrdersWebhookAt) : null,
+  };
 
-    const updateOptionals: Record<
-      string,
-      Date | null | undefined | PipelineStatus[] | SettingsDefaults["exposurePreferences"]
-    > = {};
-    if (payload.lastBackfillAt) updateOptionals.lastBackfillAt = new Date(payload.lastBackfillAt);
-    if (payload.lastTaggingAt) updateOptionals.lastTaggingAt = new Date(payload.lastTaggingAt);
-    if (payload.lastCleanupAt) updateOptionals.lastCleanupAt = new Date(payload.lastCleanupAt);
-    if (payload.lastOrdersWebhookAt) {
-      updateOptionals.lastOrdersWebhookAt = new Date(payload.lastOrdersWebhookAt);
-    }
-    if (payload.pipelineStatuses) updateOptionals.pipelineStatuses = payload.pipelineStatuses;
-    if (payload.exposurePreferences) updateOptionals.aiExposurePreferences = payload.exposurePreferences;
+  const updateOptionals: Record<string, Date | null | undefined | PipelineStatus[] | SettingsDefaults["exposurePreferences"]> = {};
+  if (payload.lastBackfillAt) updateOptionals.lastBackfillAt = new Date(payload.lastBackfillAt);
+  if (payload.lastTaggingAt) updateOptionals.lastTaggingAt = new Date(payload.lastTaggingAt);
+  if (payload.lastCleanupAt) updateOptionals.lastCleanupAt = new Date(payload.lastCleanupAt);
+  if (payload.lastOrdersWebhookAt) updateOptionals.lastOrdersWebhookAt = new Date(payload.lastOrdersWebhookAt);
+  if (payload.pipelineStatuses) updateOptionals.pipelineStatuses = payload.pipelineStatuses;
+  if (payload.exposurePreferences) updateOptionals.aiExposurePreferences = payload.exposurePreferences;
 
+  try {
     await prisma.shopSettings.upsert({
       where: { shopDomain_platform: { shopDomain, platform } },
       create: { shopDomain, platform, ...withOptionalsCreate },

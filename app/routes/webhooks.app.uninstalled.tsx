@@ -5,11 +5,14 @@ import { logger } from "../lib/logger.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   let shop = "";
+  let topic = "";
 
   try {
-    const { shop: webhookShop, session, topic, payload } = await authenticate.webhook(request);
+    const { shop: webhookShop, session, topic: webhookTopic, payload } = await authenticate.webhook(request);
     shop = webhookShop;
-    const shopDomain = shop || (payload as Record<string, unknown> | null)?.shop_domain;
+    topic = webhookTopic;
+    const payloadShop = (payload as any)?.shop_domain;
+    const shopDomain = typeof shop === "string" && shop ? shop : (typeof payloadShop === "string" ? payloadShop : "");
 
     logger.info(`Received ${topic} webhook`, { shopDomain: shopDomain || shop, topic });
 

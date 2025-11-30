@@ -345,21 +345,10 @@ export default function SettingsAndExport() {
       <div className={styles.page}>
       <div className={styles.lede}>
         <h1>{language === "English" ? "AI Channel Rules & Data Export" : "AI 渠道识别规则 & 数据导出"}</h1>
-        <p>
-          控制 referrer / UTM 匹配规则、标签写回、语言时区，支持一键导出 AI 渠道订单和产品榜单
-          CSV。所有演示数据均基于 v0.1 保守识别。
-        </p>
-        <div className={styles.alert}>
-          <strong>AI 渠道识别为保守估计：</strong>依赖 referrer / UTM / 标签，部分 AI 会隐藏来源；仅统计站外 AI
-          点击到站并完成订单的链路，不代表 AI 渠道的全部曝光或 GMV。
-        </div>
-        <p className={styles.helpText}>
-          默认规则已覆盖 ChatGPT / Perplexity / Gemini / Copilot / Claude / DeepSeek 等常见 referrer 与
-          utm_source（chatgpt、perplexity、gemini、copilot、deepseek、claude），安装后无需改动即可识别主流 AI 域名与 UTM。
-        </p>
-        <p className={styles.helpText}>
-          标签默认前缀：订单 AI-Source-*，客户 AI-Customer；如需自定义请在下方修改并保存。
-        </p>
+        <p>{t(language as any, "settings_lede_desc")}</p>
+        <div className={styles.alert}>{t(language as any, "ai_conservative_alert")}</div>
+        <p className={styles.helpText}>{t(language as any, "default_rules_help")}</p>
+        <p className={styles.helpText}>{t(language as any, "tag_prefix_help")}</p>
         <div className={styles.inlineStats}>
           <span>最近 webhook：{settings.lastOrdersWebhookAt ? new Date(settings.lastOrdersWebhookAt).toLocaleString() : "暂无"}</span>
           <span>最近补拉：{settings.lastBackfillAt ? new Date(settings.lastBackfillAt).toLocaleString() : "暂无"}</span>
@@ -391,16 +380,10 @@ export default function SettingsAndExport() {
                 { method: "post", encType: "application/x-www-form-urlencoded" },
               )
             }
-          >
-            补拉最近 90 天订单
-          </button>
+          >{language === "English" ? "Backfill Last 90 Days" : "补拉最近 90 天订单"}</button>
         </div>
-        <div className={styles.alert}>
-          当前版本针对单次 Backfill 做了保护：最多回拉 90 天 / 1000 笔订单。日订单量较大的店铺请拆分时间窗口分批回填，避免 webhook 漏数。
-        </div>
-        <p className={styles.helpText}>
-          补拉任务可能需要执行多次才能覆盖所有历史数据，特别是日订单量高或区间较长的店铺，请拆分时间段循环触发。
-        </p>
+        <div className={styles.alert}>{t(language as any, "backfill_protect_alert")}</div>
+        <p className={styles.helpText}>{t(language as any, "backfill_help")}</p>
       </div>
 
         <div className={styles.gridTwo}>
@@ -456,11 +439,7 @@ export default function SettingsAndExport() {
                 添加域名
               </button>
             </div>
-            <p className={styles.helpText}>
-              编辑默认域名可能导致漏标/误标，建议只新增或停用可疑域名；referrer 匹配优先级高于 UTM。Copilot 仅在
-              copilot.microsoft.com 或附带 chat/copilot 参数的 bing.com referrer 时计入，避免误把普通
-              Bing 搜索视为 AI。
-            </p>
+            <p className={styles.helpText}>{t(language as any, "referrer_help")}</p>
           </div>
 
           <div className={styles.card}>
@@ -491,7 +470,7 @@ export default function SettingsAndExport() {
             <div className={styles.inlineForm}>
               <input
                 className={styles.input}
-                placeholder="新增 utm_source，例如 ai-referral"
+                placeholder={language === "English" ? "Add utm_source, e.g. ai-referral" : "新增 utm_source，例如 ai-referral"}
                 value={newSource}
                 onChange={(event) => setNewSource(event.target.value)}
               />
@@ -513,15 +492,13 @@ export default function SettingsAndExport() {
               </button>
             </div>
             <label className={styles.stackField}>
-              <span className={styles.fieldLabel}>utm_medium 关键词（逗号分隔）</span>
+              <span className={styles.fieldLabel}>{language === "English" ? "utm_medium keywords (comma separated)" : "utm_medium 关键词（逗号分隔）"}</span>
               <input
                 className={styles.input}
                 value={utmMediumInput}
                 onChange={(event) => setUtmMediumInput(event.target.value)}
               />
-              <span className={styles.helpText}>
-                当前关键词：{utmMediumKeywords.join(", ") || "无"}
-              </span>
+              <span className={styles.helpText}>{language === "English" ? "Current keywords: " : "当前关键词："}{utmMediumKeywords.join(", ") || (language === "English" ? "None" : "无")}</span>
             </label>
           </div>
         </div>
@@ -609,10 +586,7 @@ export default function SettingsAndExport() {
                 </div>
               </div>
             </div>
-            <div className={styles.alert}>
-              启用后，本应用会修改订单 / 客户标签。若你依赖标签驱动自动化流程，请先在测试店验证。默认前缀：
-              {tagging.orderTagPrefix || "AI-Source"}-* / 客户标签 {tagging.customerTag || "AI-Customer"}，建议避免与现有标签冲突。
-            </div>
+            <div className={styles.alert}>{t(language as any, "tagging_enable_alert")}</div>
             <label className={styles.stackField}>
               <span className={styles.fieldLabel}>订单标签前缀</span>
               <input
@@ -633,9 +607,7 @@ export default function SettingsAndExport() {
                 }
               />
             </label>
-            <p className={styles.helpText}>
-              标签默认关闭；开启后会回写到 Shopify 订单/客户，便于在后台过滤或导出。
-            </p>
+            <p className={styles.helpText}>{language === "English" ? "Tags are off by default; when enabled, they write to Shopify orders/customers for filtering/export." : "标签默认关闭；开启后会回写到 Shopify 订单/客户，便于在后台过滤或导出。"}</p>
           </div>
 
           <div className={styles.card}>
@@ -646,9 +618,7 @@ export default function SettingsAndExport() {
               </div>
               <span className={styles.badge}>实验</span>
             </div>
-            <p className={styles.helpText}>
-              仅存储偏好，不会改动店铺页面。未来生成 llms.txt 时会参考此配置；默认全部关闭以避免暴露不必要的内容。
-            </p>
+            <p className={styles.helpText}>{language === "English" ? "Preferences only; no changes to storefront. Future llms.txt generation will respect these. Default off to avoid unnecessary exposure." : "仅存储偏好，不会改动店铺页面。未来生成 llms.txt 时会参考此配置；默认全部关闭以避免暴露不必要的内容。"}</p>
             <div className={styles.checkboxRow}>
               <input
                 type="checkbox"
@@ -708,9 +678,7 @@ export default function SettingsAndExport() {
               <span className={styles.badge}>实验</span>
             </div>
             <LlmsPreview />
-            <p className={styles.helpText}>
-              llms.txt 为实验性标准，不保证立刻产生 AI 排名效果；各平台的采集策略可能随时间变化。
-            </p>
+            <p className={styles.helpText}>{t(language as any, "llms_preview_help")}</p>
           </div>
 
           <div className={styles.card}>
@@ -766,7 +734,7 @@ export default function SettingsAndExport() {
                 <option value="subtotal_price">subtotal_price（不含税/运费）</option>
               </select>
             </label>
-            <p className={styles.helpText}>仅影响 UI 展示，不影响底层数据口径。</p>
+            <p className={styles.helpText}>{t(language as any, "gmv_metric_help")}</p>
           </div>
         </div>
 
@@ -824,7 +792,7 @@ export default function SettingsAndExport() {
           </div>
           <div className={styles.exportCard}>
             <h4>{language === "English" ? "Customers LTV (Window)" : "Customers LTV（选定窗口）"}</h4>
-            <p>字段：customer_id、LTV（在选定时间范围内累计 GMV）、GMV 口径。</p>
+            <p>{t(language as any, "customers_ltv_desc")}</p>
             <a
               className={styles.secondaryButton}
               href={toCsvHref(exports.customersCsv)}

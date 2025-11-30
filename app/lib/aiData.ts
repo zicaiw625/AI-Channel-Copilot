@@ -1256,39 +1256,8 @@ export const channelList: AIChannel[] = [
 
 type TrendBucket = "day" | "week" | "month";
 
-const determineBucket = (range: DateRange): TrendBucket => {
-  if (range.key === "7d") return "day";
-  if (range.key === "30d") return "week";
-  if (range.key === "90d") return "month";
-  if (range.days <= 14) return "day";
-  if (range.days <= 60) return "week";
-  return "month";
-};
 
-const formatDateLabel = (date: Date, bucket: TrendBucket, timeZone?: string) => {
-  if (bucket === "day") {
-    return formatDateOnly(date, timeZone);
-  }
 
-  if (bucket === "week") {
-    const startOfWeek = startOfDay(date, timeZone);
-    const day = startOfWeek.getUTCDay();
-    const diff = (day + 6) % 7;
-    startOfWeek.setUTCDate(startOfWeek.getUTCDate() - diff);
-    return `${formatDateOnly(startOfWeek, timeZone)} · 周`;
-  }
-
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-  }).format(date);
-};
-
-const orderValueByMetric = (
-  order: OrderRecord,
-  metric: "current_total_price" | "subtotal_price",
-) => (metric === "subtotal_price" ? order.subtotalPrice ?? order.totalPrice : order.totalPrice);
 
 const partitionOrdersByCurrency = (
   records: OrderRecord[],
@@ -1309,15 +1278,6 @@ const partitionOrdersByCurrency = (
   return { primaryCurrency: preferred, primaryOrders, foreignOrders, foreignCurrencies };
 };
 
-const sumGMVByMetric = (
-  records: OrderRecord[],
-  metric: "current_total_price" | "subtotal_price",
-) => records.reduce((total, order) => total + orderValueByMetric(order, metric), 0);
-
-const sumNetGMVByMetric = (
-  records: OrderRecord[],
-  metric: "current_total_price" | "subtotal_price",
-) => records.reduce((total, order) => total + Math.max(0, orderValueByMetric(order, metric) - (order.refundTotal || 0)), 0);
 
 const filterOrdersByDateRange = (allOrders: OrderRecord[], range: DateRange) =>
   allOrders.filter((order) => {
@@ -1325,251 +1285,10 @@ const filterOrdersByDateRange = (allOrders: OrderRecord[], range: DateRange) =>
     return orderDate >= range.start && orderDate <= range.end;
   });
 
-const buildOverview = (
-  ordersInRange: OrderRecord[],
-  metric: "current_total_price" | "subtotal_price" = "current_total_price",
-  currency: string,
-): OverviewMetrics => {
-  const aiOrders = ordersInRange.filter((order) => Boolean(order.aiSource));
-  const aiGMV = sumGMV(aiOrders, metric);
-  const netAiGMV = sumNetGMV(aiOrders, metric);
-  const totalGMV = sumGMV(ordersInRange, metric);
-  const netGMV = sumNetGMV(ordersInRange, metric);
-  const aiNewCustomers = aiOrders.filter((order) => order.isNewCustomer).length;
-  const totalNewCustomers = ordersInRange.filter((order) => order.isNewCustomer).length;
-  const aiOrdersCount = aiOrders.length;
-  const totalOrdersCount = ordersInRange.length;
 
-  return {
-    totalGMV,
-    netGMV,
-    aiGMV,
-    netAiGMV,
-    aiShare: totalGMV ? aiGMV / totalGMV : 0,
-    aiOrders: aiOrdersCount,
-    aiOrderShare: totalOrdersCount ? aiOrdersCount / totalOrdersCount : 0,
-    totalOrders: totalOrdersCount,
-    aiNewCustomers,
-    aiNewCustomerRate: aiOrdersCount ? aiNewCustomers / aiOrdersCount : 0,
-    totalNewCustomers,
-    lastSyncedAt: new Date().toISOString(),
-    currency,
-  };
-};
 
-const buildChannelBreakdown = (
-  ordersInRange: OrderRecord[],
-  metric: "current_total_price" | "subtotal_price" = "current_total_price",
-): ChannelStat[] =>
-  channelList.map((channel) => {
-    const scopedOrders = ordersInRange.filter((order) => order.aiSource === channel);
-    return {
-      channel,
-      gmv: sumGMV(scopedOrders, metric),
-      orders: scopedOrders.length,
-      newCustomers: scopedOrders.filter((order) => order.isNewCustomer).length,
-      color: channelColors[channel],
-    };
-  });
 
-const buildComparison = (
-  ordersInRange: OrderRecord[],
-  metric: "current_total_price" | "subtotal_price" = "current_total_price",
-): ComparisonRow[] => {
-  const scopes: { label: string; filter: (order: OrderRecord) => boolean }[] = [
-    { label: "整体", filter: () => true },
-    ...channelList.map((channel) => ({
-      label: channel,
-      filter: (order: OrderRecord) => order.aiSource === channel,
-    })),
-  ];
 
-  return scopes.map(({ label, filter }) => {
-    const scopedOrders = ordersInRange.filter(filter);
-    const gmv = sumGMVByMetric(scopedOrders, metric);
-    const ordersCount = scopedOrders.length;
-    const customers = scopedOrders.reduce<Record<string, number>>((acc, order) => {
-      if (!order.customerId) return acc;
-      acc[order.customerId] = (acc[order.customerId] || 0) + 1;
-      return acc;
-    }, {});
-
-    const repeats = Object.values(customers).filter((count) => count > 1).length;
-
-    return {
-      channel: label,
-      aov: ordersCount ? gmv / ordersCount : 0,
-      newCustomerRate: ordersCount
-        ? scopedOrders.filter((order) => order.isNewCustomer).length / ordersCount
-        : 0,
-      repeatRate: Object.keys(customers).length
-        ? repeats / Object.keys(customers).length
-        : 0,
-      sampleSize: ordersCount,
-      isLowSample: ordersCount < 5,
-    };
-  });
-};
-
-const buildTrend = (
-  ordersInRange: OrderRecord[],
-  range: DateRange,
-  metric: "current_total_price" | "subtotal_price" = "current_total_price",
-  timeZone?: string,
-): TrendPoint[] => {
-  const bucket = determineBucket(range);
-  const buckets = new Map<
-    string,
-    {
-      label: string;
-      aiGMV: number;
-      aiOrders: number;
-      overallGMV: number;
-      overallOrders: number;
-      byChannel: Partial<Record<AIChannel, { gmv: number; orders: number }>>;
-      sortKey: number;
-    }
-  >();
-
-  ordersInRange.forEach((order) => {
-    const bucketStart = startOfDay(new Date(order.createdAt), timeZone);
-
-    if (bucket === "week") {
-      const day = bucketStart.getUTCDay();
-      const diff = (day + 6) % 7;
-      bucketStart.setUTCDate(bucketStart.getUTCDate() - diff);
-    }
-
-    if (bucket === "month") {
-      bucketStart.setUTCDate(1);
-    }
-
-    const label = formatDateLabel(bucketStart, bucket, timeZone);
-    if (!buckets.has(label)) {
-      buckets.set(label, {
-        label,
-        aiGMV: 0,
-        aiOrders: 0,
-        overallGMV: 0,
-        overallOrders: 0,
-        byChannel: {},
-        sortKey: bucketStart.getTime(),
-      });
-    }
-
-    const bucketValue = buckets.get(label)!;
-    const orderValue = metricOrderValue(order, metric);
-    bucketValue.overallGMV += orderValue;
-    bucketValue.overallOrders += 1;
-    bucketValue.sortKey = Math.min(bucketValue.sortKey, bucketStart.getTime());
-
-    if (order.aiSource) {
-      bucketValue.aiGMV += orderValue;
-      bucketValue.aiOrders += 1;
-
-      const channelMetrics = bucketValue.byChannel[order.aiSource] || {
-        gmv: 0,
-        orders: 0,
-      };
-      channelMetrics.gmv += orderValue;
-      channelMetrics.orders += 1;
-      bucketValue.byChannel[order.aiSource] = channelMetrics;
-    }
-  });
-
-  return Array.from(buckets.values())
-    .sort((a, b) => a.sortKey - b.sortKey)
-    .map(({ sortKey, ...rest }) => rest);
-};
-
-const buildProducts = (
-  ordersInRange: OrderRecord[],
-  metric: "current_total_price" | "subtotal_price" = "current_total_price",
-): ProductRow[] => {
-  const products = new Map<
-    string,
-    {
-      id: string;
-      title: string;
-      handle: string;
-      url: string;
-      aiOrders: number;
-      aiGMV: number;
-      totalOrders: number;
-      byChannel: Partial<Record<AIChannel, number>>;
-    }
-  >();
-
-  ordersInRange.forEach((order) => {
-    const isAI = Boolean(order.aiSource);
-    const orderValue = metricOrderValue(order, metric);
-    const lineTotal = order.products.reduce(
-      (sum, line) => sum + line.price * line.quantity,
-      0,
-    );
-    const allocationDenominator = lineTotal || order.products.length || 1;
-    const productSeen = new Set<string>();
-
-    order.products.forEach((line) => {
-      if (!products.has(line.id)) {
-        products.set(line.id, {
-          id: line.id,
-          title: line.title,
-          handle: line.handle,
-          url: line.url,
-          aiOrders: 0,
-          aiGMV: 0,
-          totalOrders: 0,
-          byChannel: {},
-        });
-      }
-
-      const product = products.get(line.id)!;
-
-      if (!productSeen.has(line.id)) {
-        product.totalOrders += 1;
-        if (isAI) {
-          product.aiOrders += 1;
-        }
-        productSeen.add(line.id);
-      }
-
-      if (isAI) {
-        const share =
-          lineTotal > 0
-            ? (line.price * line.quantity) / lineTotal
-            : 1 / allocationDenominator;
-        const allocatedGmv = orderValue * share;
-
-        product.aiGMV += allocatedGmv;
-        if (order.aiSource) {
-          product.byChannel[order.aiSource] =
-            (product.byChannel[order.aiSource] || 0) + allocatedGmv;
-        }
-      }
-    });
-  });
-
-  return Array.from(products.values())
-    .map((product) => {
-      const topChannel =
-        Object.entries(product.byChannel).sort(([, a], [, b]) => b - a)[0]?.[0] ??
-        null;
-
-      return {
-        id: product.id,
-        title: product.title,
-        handle: product.handle,
-        url: product.url,
-        aiOrders: product.aiOrders,
-        aiGMV: product.aiGMV,
-        aiShare: product.totalOrders ? product.aiOrders / product.totalOrders : 0,
-        topChannel: topChannel as AIChannel | null,
-      };
-    })
-    .sort((a, b) => b.aiGMV - a.aiGMV)
-    .slice(0, 8);
-};
 
 const buildRecentOrders = (
   ordersInRange: OrderRecord[],
@@ -1677,13 +1396,30 @@ const buildProductsCsv = (products: ProductRow[]) => {
 const buildCustomersCsv = (
   ordersInRange: OrderRecord[],
   metric: "current_total_price" | "subtotal_price" = "current_total_price",
+  acquiredViaAiMap?: Record<string, boolean>,
 ) => {
   const comment = `# 客户级 LTV（选定时间范围内累计 GMV）；GMV 口径=${metric}`;
   const ltvMap = computeLTV(ordersInRange, metric);
-  const header = ["customer_id", "ltv", "gmv_metric"];
+  const counts = ordersInRange.reduce<Record<string, number>>((acc, o) => {
+    if (!o.customerId) return acc;
+    acc[o.customerId] = (acc[o.customerId] || 0) + 1;
+    return acc;
+  }, {});
+  const fallbackFirstAi: Record<string, boolean> = {};
+  ordersInRange.forEach((o) => {
+    if (!o.customerId) return;
+    const cid = o.customerId;
+    const prev = fallbackFirstAi[cid];
+    if (prev !== true) {
+      fallbackFirstAi[cid] = Boolean(o.isNewCustomer && o.aiSource);
+    }
+  });
+  const header = ["customer_id", "ltv", "gmv_metric", "first_ai_acquired", "repeat_count"];
   const rows: string[][] = [];
   for (const [customerId, ltv] of ltvMap.entries()) {
-    rows.push([customerId, String(ltv), metric]);
+    const firstAi = acquiredViaAiMap ? Boolean(acquiredViaAiMap[customerId]) : Boolean(fallbackFirstAi[customerId]);
+    const repeat = Math.max(0, (counts[customerId] || 0) - 1);
+    rows.push([customerId, String(ltv), metric, firstAi ? "true" : "false", String(repeat)]);
   }
   return [comment, header, ...rows].map((cells) => Array.isArray(cells) ? cells.map(toCsvValue).join(",") : cells).join("\n");
 };
@@ -1735,7 +1471,7 @@ export const buildDashboardFromOrders = (
   const recentOrders = buildRecentOrders(primaryOrders, gmvMetric);
   const ordersCsv = buildOrdersCsv(primaryOrders, gmvMetric);
   const productsCsv = buildProductsCsv(topProducts);
-  const customersCsv = buildCustomersCsv(primaryOrders, gmvMetric);
+  const customersCsv = buildCustomersCsv(primaryOrders, gmvMetric, acquiredViaAiMap);
   const baseNote = buildSampleNote(overview, foreignCurrencies, foreignOrders.length);
   const posNote = excludedBySource
     ? `已排除 ${excludedBySource} 笔 POS/草稿订单（不计入站外 AI 链路分析）。`

@@ -1728,7 +1728,7 @@ export type ShopifyOrderNode = {
   currentTotalPriceSet?: ShopifyMoneySet | null;
   currentSubtotalPriceSet?: ShopifyMoneySet | null;
   totalRefundedSet?: ShopifyMoneySet | null;
-  referringSite?: string | null;
+  customerJourneySummary?: { referrerUrl?: string | null } | null;
   landingPageUrl?: string | null;
   sourceName?: string | null;
   tags: string[];
@@ -1769,7 +1769,7 @@ export const mapShopifyOrderToRecord = (
   const refundTotal = parseFloat(order.totalRefundedSet?.shopMoney?.amount || "0");
   const currency =
     order.currentTotalPriceSet?.shopMoney?.currencyCode || config.primaryCurrency || "USD";
-  const referrer = order.referringSite || "";
+  const referrer = order.customerJourneySummary?.referrerUrl || "";
   const landingPage = order.landingPageUrl || "";
   const { utmSource, utmMedium } = extractUtm(referrer, landingPage);
 

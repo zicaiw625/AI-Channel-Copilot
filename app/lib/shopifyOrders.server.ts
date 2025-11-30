@@ -42,10 +42,6 @@ const ORDERS_QUERY = `#graphql
         landingPageUrl
         sourceName
         tags
-        noteAttributes {
-          name
-          value
-        }
         customer {
           id
           numberOfOrders
@@ -107,10 +103,6 @@ const ORDER_QUERY = `#graphql
       landingPageUrl
       sourceName
       tags
-      noteAttributes {
-        name
-        value
-      }
       customer {
         id
         numberOfOrders

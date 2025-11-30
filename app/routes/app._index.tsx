@@ -6,7 +6,7 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { channelList, defaultSettings, timeRanges, type AIChannel, LOW_SAMPLE_THRESHOLD } from "../lib/aiData";
 import { getSettings, syncShopPreferences } from "../lib/settings.server";
 import { authenticate } from "../shopify.server";
-import styles from "./app.dashboard.module.css";
+import styles from "../styles/app.dashboard.module.css";
 import { getAiDashboardData } from "../lib/aiQueries.server";
 import { ensureRetentionOncePerDay } from "../lib/retention.server";
 import {

@@ -36,4 +36,10 @@ export const computeLTV = <T extends { totalPrice: number; subtotalPrice?: numbe
   }
   return byCustomer;
 };
-
+/*
+  指标口径（统一 helper）
+  - GMV：按设置选择订单字段（current_total_price 或 subtotal_price）汇总。
+  - 净 GMV：GMV 扣除退款金额（refundTotal）。
+  - AOV：GMV / 订单数。
+  - LTV：在选定窗口内，按客户累计 GMV（不做预测）。
+*/

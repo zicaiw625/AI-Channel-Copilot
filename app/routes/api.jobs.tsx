@@ -4,6 +4,10 @@ import type { LoaderFunctionArgs } from "react-router";
 import prisma from "../db.server";
 import { authenticate } from "../shopify.server";
 
+let cached: any | null = null;
+let cachedAt = 0;
+const TTL_MS = 10_000;
+
 const toCounts = (rows: { status: string; _count: { status: number } }[]) => {
   return rows.reduce<Record<string, number>>((acc, row) => {
     acc[row.status] = row._count.status;
@@ -16,6 +20,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const shopDomain = session?.shop || "";
   if (!shopDomain) {
     return Response.json({ ok: false, message: "unauthorized" }, { status: 401 });
+  }
+
+  const now = Date.now();
+  if (cached && now - cachedAt < TTL_MS && cached.shopDomain === shopDomain) {
+    return Response.json(cached.payload);
   }
 
   const [backfillRows, webhookRows, backfillCounts, webhookCounts] = await Promise.all([
@@ -41,7 +50,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     }),
   ]);
 
-  return Response.json({
+  const payload = {
     ok: true,
     backfills: {
       recent: backfillRows,
@@ -51,5 +60,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       recent: webhookRows,
       counts: toCounts(webhookCounts),
     },
-  });
+  };
+  cached = { shopDomain, payload };
+  cachedAt = now;
+  return Response.json(payload);
 };

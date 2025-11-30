@@ -1,4 +1,10 @@
 import { DEFAULT_RANGE_KEY } from "./constants";
+/*
+  AI 渠道识别说明（保守估计）
+  - 识别基于 referrer 域名与 UTM（utm_source/utm_medium）等显式信号；部分 AI/浏览器可能隐藏来源。
+  - 因此，本模块的识别结果偏下限，可能低估 AI 真实贡献；仪表盘与导出均按保守估计展示。
+  - 优先级：referrer > UTM > 其它（标签/备注），并记录冲突与命中 signals 供调试。
+*/
 import { metricOrderValue, sumGMV, sumNetGMV } from "./metrics.server";
 
 export type AIChannel = "ChatGPT" | "Perplexity" | "Gemini" | "Copilot" | "Other-AI";

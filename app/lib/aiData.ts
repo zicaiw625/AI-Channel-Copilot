@@ -1,4 +1,5 @@
 import { DEFAULT_RANGE_KEY } from "./constants";
+import { metricOrderValue, sumGMV, sumNetGMV } from "./metrics.server";
 
 export type AIChannel = "ChatGPT" | "Perplexity" | "Gemini" | "Copilot" | "Other-AI";
 
@@ -1164,19 +1165,21 @@ export const detectAiFromFields = (
     signals.push(`referrer matched ${domainHit.domain}`);
     if (utmMatch) signals.push(`utm_source=${utmSource}`);
 
+    const clamped = signals.slice(0, 10).map((s) => (s.length > 255 ? s.slice(0, 255) : s));
     return {
       aiSource: domainHit.channel as AIChannel,
       detection: `${signals.join(" + ")} · 置信度高${conflictNote}`,
-      signals,
+      signals: clamped,
     };
   }
 
   if (utmMatch) {
     signals.push(`utm_source=${utmSource}`);
+    const clamped = signals.slice(0, 10).map((s) => (s.length > 255 ? s.slice(0, 255) : s));
     return {
       aiSource: utmMatch.channel,
       detection: `${signals.join(" + ")} · 置信度中等（缺少 referrer）`,
-      signals,
+      signals: clamped,
     };
   }
 
@@ -1188,10 +1191,11 @@ export const detectAiFromFields = (
 
   if (mediumHit) {
     signals.push(`utm_medium=${utmMedium}`);
+    const clamped = signals.slice(0, 10).map((s) => (s.length > 255 ? s.slice(0, 255) : s));
     return {
       aiSource: null,
       detection: `${signals.join(" + ")} · 置信度低：仅命中 medium 关键词(${mediumHit})，不足以判定 AI`,
-      signals,
+      signals: clamped,
     };
   }
 
@@ -1205,19 +1209,21 @@ export const detectAiFromFields = (
     const channel =
       (channelList.find((item) => item.toLowerCase() === suffix.toLowerCase()) ||
         "Other-AI") as AIChannel;
+    const clamped = ["existing tag"].slice(0, 10).map((s) => (s.length > 255 ? s.slice(0, 255) : s));
     return {
       aiSource: channel,
       detection: `Detected by existing tag ${tagMatch} · 置信度中等（可能来自本应用标签写回）`,
-      signals: ["existing tag"],
+      signals: clamped,
     };
   }
 
+  const clamped = signals.slice(0, 10).map((s) => (s.length > 255 ? s.slice(0, 255) : s));
   return {
     aiSource: null,
     detection: `未检测到 AI 信号（referrer=${refDomain || "—"}, utm_source=${
       utmSource || "—"
     }, landing=${landingDomain || "—"}） · 置信度低`,
-    signals,
+    signals: clamped,
   };
 };
 
@@ -1308,10 +1314,10 @@ const buildOverview = (
   currency: string,
 ): OverviewMetrics => {
   const aiOrders = ordersInRange.filter((order) => Boolean(order.aiSource));
-  const aiGMV = sumGMVByMetric(aiOrders, metric);
-  const netAiGMV = sumNetGMVByMetric(aiOrders, metric);
-  const totalGMV = sumGMVByMetric(ordersInRange, metric);
-  const netGMV = sumNetGMVByMetric(ordersInRange, metric);
+  const aiGMV = sumGMV(aiOrders, metric);
+  const netAiGMV = sumNetGMV(aiOrders, metric);
+  const totalGMV = sumGMV(ordersInRange, metric);
+  const netGMV = sumNetGMV(ordersInRange, metric);
   const aiNewCustomers = aiOrders.filter((order) => order.isNewCustomer).length;
   const totalNewCustomers = ordersInRange.filter((order) => order.isNewCustomer).length;
   const aiOrdersCount = aiOrders.length;
@@ -1342,7 +1348,7 @@ const buildChannelBreakdown = (
     const scopedOrders = ordersInRange.filter((order) => order.aiSource === channel);
     return {
       channel,
-      gmv: sumGMVByMetric(scopedOrders, metric),
+      gmv: sumGMV(scopedOrders, metric),
       orders: scopedOrders.length,
       newCustomers: scopedOrders.filter((order) => order.isNewCustomer).length,
       color: channelColors[channel],
@@ -1435,7 +1441,7 @@ const buildTrend = (
     }
 
     const bucketValue = buckets.get(label)!;
-    const orderValue = orderValueByMetric(order, metric);
+    const orderValue = metricOrderValue(order, metric);
     bucketValue.overallGMV += orderValue;
     bucketValue.overallOrders += 1;
     bucketValue.sortKey = Math.min(bucketValue.sortKey, bucketStart.getTime());
@@ -1479,7 +1485,7 @@ const buildProducts = (
 
   ordersInRange.forEach((order) => {
     const isAI = Boolean(order.aiSource);
-    const orderValue = orderValueByMetric(order, metric);
+    const orderValue = metricOrderValue(order, metric);
     const lineTotal = order.products.reduce(
       (sum, line) => sum + line.price * line.quantity,
       0,
@@ -1560,7 +1566,7 @@ const buildRecentOrders = (
       name: order.name,
       createdAt: order.createdAt,
       aiSource: order.aiSource,
-      totalPrice: orderValueByMetric(order, metric),
+      totalPrice: metricOrderValue(order, metric),
       currency: order.currency,
       referrer: order.referrer,
       landingPage: order.landingPage,
@@ -1608,7 +1614,7 @@ const buildOrdersCsv = (
     order.name,
     order.createdAt,
     order.aiSource,
-    orderValueByMetric(order, metric),
+    metricOrderValue(order, metric),
     metric,
     order.referrer,
     order.landingPage,

@@ -17,7 +17,7 @@ const parseEnvRetention = () => {
 export const resolveRetentionMonths = (settings?: SettingsDefaults) => {
   const candidate =
     settings?.retentionMonths || parseEnvRetention() || defaultSettings.retentionMonths || DEFAULT_RETENTION_MONTHS;
-  return Math.max(1, Math.floor(candidate));
+  return Math.max(3, Math.floor(candidate));
 };
 
 const computeCutoff = (months: number) => {
@@ -44,6 +44,7 @@ export const pruneHistoricalData = async (shopDomain: string, months: number) =>
       platform,
       shopDomain,
       cutoff: cutoff.toISOString(),
+      retentionMonths: months,
       deletedOrders: deletedOrders.count,
       deletedCustomers: deletedCustomers.count,
       jobType: "retention",
@@ -57,6 +58,9 @@ export const pruneHistoricalData = async (shopDomain: string, months: number) =>
 };
 
 export const ensureRetentionOncePerDay = async (shopDomain: string, settings?: SettingsDefaults) => {
+  if (process.env.ENABLE_RETENTION_SWEEP === "0") {
+    return { skipped: true, reason: "disabled", lastCleanupAt: settings?.lastCleanupAt || null };
+  }
   const retentionMonths = resolveRetentionMonths(settings);
   const lastCleanup = settings?.lastCleanupAt ? new Date(settings.lastCleanupAt) : null;
   const now = new Date();

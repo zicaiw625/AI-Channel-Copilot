@@ -411,6 +411,13 @@ export default function Index() {
                 暂未检索到符合条件的订单，且已关闭演示数据。可等待 webhook/backfill 完成或延长时间范围后重试。
               </div>
             )}
+            {overview.aiOrders === 0 && overview.totalOrders > 0 && (
+              <div className={styles.callout}>
+                <span>提示</span>
+                选定区间内有订单但未识别到 AI 渠道。建议前往「设置 / 规则 & 导出」补充 AI 域名或 utm_source 规则。
+                <Link to="/app/additional" className={styles.link}>前往设置</Link>
+              </div>
+            )}
             </div>
             <div className={styles.actions}>
               <div className={styles.rangePills}>

@@ -18,6 +18,8 @@ export default async function handleRequest(
 ) {
   initScheduler();
   addDocumentResponseHeaders(request, responseHeaders);
+  responseHeaders.set("X-Content-Type-Options", "nosniff");
+  responseHeaders.set("Referrer-Policy", "strict-origin-when-cross-origin");
   const userAgent = request.headers.get("user-agent");
   const callbackName = isbot(userAgent ?? '')
     ? "onAllReady"

@@ -17,14 +17,29 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     payload = Object.fromEntries(Array.from(form.entries()));
   }
 
+  const allowedIntents = new Set(["ai_performance", "ai_vs_all_aov", "ai_top_products"]);
+  const allowedRanges = new Set(["7d", "30d", "90d", "custom"]);
+  const intent = (payload.intent as string | undefined) || undefined;
+  const range = (payload.range as string | undefined) || undefined;
+  const question = (payload.question as string | undefined) || undefined;
+
+  if (intent && !allowedIntents.has(intent)) {
+    return Response.json({ ok: false, message: "invalid intent" }, { status: 400 });
+  }
+  if (range && !allowedRanges.has(range)) {
+    return Response.json({ ok: false, message: "invalid range" }, { status: 400 });
+  }
+  if (question && question.length > 500) {
+    return Response.json({ ok: false, message: "question too long" }, { status: 400 });
+  }
+
   const result = await copilotAnswer(request, {
-    intent: (payload.intent as string | undefined) as any,
-    question: (payload.question as string | undefined) || undefined,
-    range: (payload.range as string | undefined) as any,
+    intent: intent as any,
+    question,
+    range: range as any,
     from: (payload.from as string | null) || null,
     to: (payload.to as string | null) || null,
   });
 
   return Response.json(result);
 };
-

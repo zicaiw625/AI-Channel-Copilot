@@ -15,6 +15,9 @@ const runRetentionSweep = async () => {
 export const initScheduler = () => {
   if (initialized) return;
   initialized = true;
+  if (process.env.ENABLE_RETENTION_SWEEP === "0") {
+    return;
+  }
   setTimeout(() => {
     void runRetentionSweep();
   }, 10000);
@@ -22,4 +25,3 @@ export const initScheduler = () => {
     void runRetentionSweep();
   }, 60 * 60 * 1000);
 };
-

@@ -355,53 +355,51 @@ export default function Index() {
                 计算时区：{calculationTimezone} · 展示时区：{timezone} · 货币：{currency}
               </span>
             </div>
-            <div className={styles.pipelineRow}>
-              <span>Webhook：{fmtTime(pipeline.lastOrdersWebhookAt)}</span>
-              <span>补拉：{fmtTime(pipeline.lastBackfillAt)}</span>
-              <span>标签：{fmtTime(pipeline.lastTaggingAt)}</span>
-              <div className={styles.statusChips}>
-                {(pipeline.statuses || []).map((item) => (
-                  <span
-                    key={item.title}
-                    className={`${styles.statusChip} ${
-                      item.status === "healthy"
-                        ? styles.statusHealthy
-                        : item.status === "warning"
-                          ? styles.statusWarning
-                          : styles.statusInfo
-                    }`}
-                  >
-                    {item.title}: {item.status}
-                  </span>
-                ))}
-              </div>
-            </div>
-            {backfillAvailable && (
-              <div className={styles.callout}>
-                <p>
-                  暂未检索到符合条件的订单，可手动触发后台补拉（上限 {MAX_BACKFILL_ORDERS} 单，约
-                  {MAX_BACKFILL_DURATION_MS / 1000} 秒）。
-                </p>
-                <div className={styles.backfillRow}>
-                  <button
-                    className={styles.primaryButton}
-                    onClick={triggerBackfill}
-                    disabled={backfillFetcher.state !== "idle"}
-                  >
-                    {backfillFetcher.state === "idle" ? "后台补拉" : "后台补拉中..."}
-                  </button>
-                  {backfillFetcher.data && (
-                    <span className={styles.backfillStatus}>
-                      {backfillFetcher.data.queued
-                        ? `已触发后台任务（${backfillFetcher.data.range}）`
-                        : backfillFetcher.data.reason === "in-flight"
-                          ? "已有补拉在进行中，稍后刷新"
-                          : "无法触发补拉，请确认店铺会话"}
+            <details className={styles.statusBlock}>
+              <summary>系统状态与操作</summary>
+              <div className={styles.pipelineRow}>
+                <span>Webhook：{fmtTime(pipeline.lastOrdersWebhookAt)}</span>
+                <span>补拉：{fmtTime(pipeline.lastBackfillAt)}</span>
+                <span>标签：{fmtTime(pipeline.lastTaggingAt)}</span>
+                <div className={styles.statusChips}>
+                  {(pipeline.statuses || []).map((item) => (
+                    <span
+                      key={item.title}
+                      className={`${styles.statusChip} ${
+                        item.status === "healthy"
+                          ? styles.statusHealthy
+                          : item.status === "warning"
+                            ? styles.statusWarning
+                            : styles.statusInfo
+                      }`}
+                    >
+                      {item.title}: {item.status}
                     </span>
-                  )}
+                  ))}
                 </div>
+                {backfillAvailable && (
+                  <div className={styles.backfillRow}>
+                    <button
+                      className={styles.primaryButton}
+                      onClick={triggerBackfill}
+                      disabled={backfillFetcher.state !== "idle"}
+                    >
+                      {backfillFetcher.state === "idle" ? "后台补拉" : "后台补拉中..."}
+                    </button>
+                    {backfillFetcher.data && (
+                      <span className={styles.backfillStatus}>
+                        {backfillFetcher.data.queued
+                          ? `已触发后台任务（${backfillFetcher.data.range}）`
+                          : backfillFetcher.data.reason === "in-flight"
+                            ? "已有补拉在进行中，稍后刷新"
+                            : "无法触发补拉，请确认店铺会话"}
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
-            )}
+            </details>
+            {/* 补拉提示移入系统状态折叠块，避免首页拥挤 */}
             {dataSource === "demo" && (
               <div className={styles.callout}>
                 <span>提示</span>

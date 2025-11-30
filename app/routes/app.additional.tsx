@@ -727,6 +727,7 @@ export default function SettingsAndExport() {
                   const next = event.target.value;
                   setLanguage(next);
                   try { window.localStorage.setItem("aicc_language", next); } catch {}
+                  try { window.dispatchEvent(new CustomEvent("aicc_language_change", { detail: next })); } catch {}
                   fetcher.submit(
                     {
                       settings: JSON.stringify({

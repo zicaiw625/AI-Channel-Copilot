@@ -28,7 +28,14 @@ export default function App() {
         setUiLanguage(e.newValue);
       }
     };
+    const onCustom = (e: Event) => {
+      try {
+        const detail = (e as CustomEvent).detail as string | undefined;
+        if (detail && detail !== uiLanguage) setUiLanguage(detail);
+      } catch {}
+    };
     window.addEventListener("storage", onStorage);
+    window.addEventListener("aicc_language_change", onCustom as EventListener);
     return () => window.removeEventListener("storage", onStorage);
   }, [uiLanguage]);
 

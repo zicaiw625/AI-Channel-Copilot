@@ -178,13 +178,28 @@ export default function Index() {
   const jobFetcher = useFetcher<JobSnapshot>();
 
   useEffect(() => {
-    jobFetcher.load("/api/jobs");
-    const timer = setInterval(() => {
+    const poll = () => {
+      if (document.visibilityState !== "visible") return;
       if (jobFetcher.state !== "loading") {
         jobFetcher.load("/api/jobs");
       }
-    }, 5000);
-    return () => clearInterval(timer);
+    };
+    poll();
+    let timer = window.setInterval(poll, 12000);
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        poll();
+        clearInterval(timer);
+        timer = window.setInterval(poll, 12000);
+      } else {
+        clearInterval(timer);
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
   }, [jobFetcher]);
   const triggerBackfill = useCallback(() => {
     backfillFetcher.submit(

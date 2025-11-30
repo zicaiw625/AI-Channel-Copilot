@@ -25,7 +25,7 @@ import { persistOrders } from "../lib/persistence.server";
 import { applyAiTags } from "../lib/tagging.server";
 import { authenticate } from "../shopify.server";
 import styles from "../styles/app.settings.module.css";
-import { t } from "../lib/i18n.server";
+import { t } from "../lib/i18n";
 import { allowDemoData, getPlatform } from "../lib/runtime.server";
 import { loadDashboardContext } from "../lib/dashboardContext.server";
 import {
@@ -694,7 +694,27 @@ export default function SettingsAndExport() {
               <select
                 className={styles.select}
                 value={language}
-                onChange={(event) => setLanguage(event.target.value)}
+                onChange={(event) => {
+                  const next = event.target.value;
+                  setLanguage(next);
+                  fetcher.submit(
+                    {
+                      settings: JSON.stringify({
+                        aiDomains: sanitizedDomains,
+                        utmSources: sanitizedUtmSources,
+                        utmMediumKeywords,
+                        gmvMetric,
+                        primaryCurrency: settings.primaryCurrency,
+                        tagging,
+                        exposurePreferences,
+                        languages: [next, ...settings.languages.filter((l) => l !== next)],
+                        timezones: [timezone, ...settings.timezones.filter((t) => t !== timezone)],
+                        pipelineStatuses: settings.pipelineStatuses,
+                      }),
+                    },
+                    { method: "post", encType: "application/x-www-form-urlencoded" },
+                  );
+                }}
               >
                 {settings.languages.map((option) => (
                   <option key={option} value={option}>

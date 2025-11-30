@@ -17,7 +17,7 @@ import {
   MAX_BACKFILL_ORDERS,
 } from "../lib/constants";
 import { loadDashboardContext } from "../lib/dashboardContext.server";
-import { t } from "../lib/i18n.server";
+import { t } from "../lib/i18n";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);

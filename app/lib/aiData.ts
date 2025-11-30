@@ -195,7 +195,6 @@ const channelColors: Record<AIChannel, string> = {
   "Other-AI": "#6c6f78",
 };
 
-import { DEFAULT_RANGE_KEY } from "./constants";
 
 const storeUrl = "https://demo-store.ai-beauty.example.com";
 const now = Date.now();

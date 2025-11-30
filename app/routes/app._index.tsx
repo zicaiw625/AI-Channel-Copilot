@@ -360,8 +360,8 @@ export default function Index() {
             {backfillAvailable && (
               <div className={styles.callout}>
                 <p>
-                  暂未检索到符合条件的订单，可手动触发后台补拉（上限 {BACKFILL_MAX_ORDERS} 单，约
-                  {BACKFILL_MAX_DURATION_MS / 1000} 秒）。
+                  暂未检索到符合条件的订单，可手动触发后台补拉（上限 {MAX_BACKFILL_ORDERS} 单，约
+                  {MAX_BACKFILL_DURATION_MS / 1000} 秒）。
                 </p>
                 <div className={styles.backfillRow}>
                   <button

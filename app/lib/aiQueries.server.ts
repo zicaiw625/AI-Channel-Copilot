@@ -5,6 +5,7 @@ import type {
   OrderRecord,
   ProductRow,
   SettingsDefaults,
+  RawOrderRow,
 } from "./aiData";
 import { buildDashboardData, buildDashboardFromOrders } from "./aiData";
 import { loadOrdersFromDb } from "./persistence.server";

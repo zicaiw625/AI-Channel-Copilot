@@ -1,6 +1,7 @@
 import type { OrderRecord, SettingsDefaults } from "./aiData";
 import { getPlatform, isDemoMode } from "./runtime.server";
 import { logger } from "./logger.server";
+import { BACKFILL_TAGGING_BATCH_SIZE } from "./constants";
 
 type AdminGraphqlClient = {
   graphql: (query: string, options: { variables?: Record<string, unknown> }) => Promise<Response>;
@@ -56,7 +57,7 @@ export const applyAiTags = async (
   const seenCustomers = new Set<string>();
 
   const runInBatches = async (targets: { id: string; tags: string[] }[]) => {
-    const batchSize = 5;
+    const batchSize = BACKFILL_TAGGING_BATCH_SIZE;
     for (let i = 0; i < targets.length; i += batchSize) {
       const slice = targets.slice(i, i + batchSize);
       await Promise.all(slice.map((target) => addTags(admin, target.id, target.tags)));

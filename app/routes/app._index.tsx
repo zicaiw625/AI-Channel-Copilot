@@ -298,6 +298,16 @@ export default function Index() {
     navigate({ search: `?${params.toString()}` });
   };
 
+  const getRangeLabel = (key: TimeRangeKey) => {
+    if (language === "English") {
+      if (key === "7d") return "Last 7 days";
+      if (key === "30d") return "Last 30 days";
+      if (key === "90d") return "Last 90 days";
+      if (key === "custom") return "Custom";
+    }
+    return timeRanges[key].label;
+  };
+
   const applyCustomRange = () => {
     if (!customFrom) return;
     const params = new URLSearchParams(location.search);
@@ -426,7 +436,7 @@ export default function Index() {
                     onClick={() => setRange(key)}
                     type="button"
                   >
-                    {timeRanges[key].label}
+                    {getRangeLabel(key)}
                   </button>
                 ))}
               </div>

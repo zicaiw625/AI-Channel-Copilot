@@ -85,9 +85,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const formData = await request.formData();
     const intent = formData.get("intent") || "save";
     const incoming = formData.get("settings");
+    const currentSettings = await getSettings(shopDomain);
+    const currentLanguage = currentSettings.languages && currentSettings.languages[0] ? currentSettings.languages[0] : "中文";
 
     if (!incoming) {
-      throw new Error("Missing settings payload");
+      throw new Error(currentLanguage === "English" ? "Missing settings payload" : "缺少设置数据载荷");
     }
 
     let normalized;
@@ -95,7 +97,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         normalized = normalizeSettingsPayload(incoming.toString());
       } catch (parseError) {
         return Response.json(
-          { ok: false, message: "设置格式无效，请刷新后重试" },
+          { ok: false, message: currentLanguage === "English" ? "Invalid settings format. Please refresh and retry." : "设置格式无效，请刷新后重试" },
           { status: 400 },
         );
       }
@@ -132,7 +134,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     if (intent === "backfill") {
       if (withinCooldown) {
         return Response.json(
-          { ok: false, message: "距离上次补拉不足 30 分钟，已复用现有数据。" },
+          { ok: false, message: currentLanguage === "English" ? "Backfill cooldown (<30 minutes). Reusing current data." : "距离上次补拉不足 30 分钟，已复用现有数据。" },
           { status: 429 },
         );
       }

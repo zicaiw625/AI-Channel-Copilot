@@ -229,6 +229,8 @@ export default function SettingsAndExport() {
   const [gmvMetric, setGmvMetric] = useState(settings.gmvMetric || "current_total_price");
   const [exportWindow, setExportWindow] = useState<TimeRangeKey>(exportRange as TimeRangeKey);
 
+  const locale = language === "English" ? "en-US" : "zh-CN";
+
   const utmMediumKeywords = useMemo(
     () =>
       utmMediumInput
@@ -261,7 +263,7 @@ export default function SettingsAndExport() {
   const addDomain = () => {
     if (!newDomain.trim()) return;
     if (!isValidDomain(newDomain)) {
-      shopify.toast.show?.("域名格式不合法，请输入如 chat.openai.com");
+      shopify.toast.show?.(language === "English" ? "Invalid domain format, e.g. chat.openai.com" : "域名格式不合法，请输入如 chat.openai.com");
       return;
     }
     setDomains((prev) => [
@@ -269,7 +271,7 @@ export default function SettingsAndExport() {
       { domain: newDomain.trim(), channel: newDomainChannel, source: "custom" },
     ]);
     setNewDomain("");
-    shopify.toast.show?.("已添加自定义 AI 域名，点击保存后生效");
+    shopify.toast.show?.(language === "English" ? "Custom AI domain added. Click Save to apply." : "已添加自定义 AI 域名，点击保存后生效");
   };
 
   const removeDomain = (rule: AiDomainRule) => {
@@ -290,12 +292,12 @@ export default function SettingsAndExport() {
     if (!newSource.trim()) return;
     const value = newSource.trim().toLowerCase();
     if (!isValidUtmSource(value)) {
-      shopify.toast.show?.("utm_source 仅支持字母/数字/中划线/下划线");
+      shopify.toast.show?.(language === "English" ? "utm_source supports letters/numbers/dash/underscore only" : "utm_source 仅支持字母/数字/中划线/下划线");
       return;
     }
     setUtmMappings((prev) => [...prev, { value, channel: newSourceChannel }]);
     setNewSource("");
-    shopify.toast.show?.("新增 utm_source 规则，保存后应用到识别逻辑");
+    shopify.toast.show?.(language === "English" ? "utm_source rule added. Save to apply to detection." : "新增 utm_source 规则，保存后应用到识别逻辑");
   };
 
   const removeUtmMapping = (value: string) => {
@@ -327,14 +329,14 @@ export default function SettingsAndExport() {
       if (fetcher.data.ok) {
         const message =
           fetcher.data.intent === "tag"
-            ? "标签写回已触发（基于最近 90 天 AI 订单）"
+            ? (language === "English" ? "Tag write-back triggered (based on last 90 days AI orders)" : "标签写回已触发（基于最近 90 天 AI 订单）")
             : fetcher.data.intent === "backfill"
-              ? "已补拉最近 90 天订单（含 AI 识别）"
-              : "设置已保存";
+              ? (language === "English" ? "Backfilled last 90 days (including AI detection)" : "已补拉最近 90 天订单（含 AI 识别）")
+              : (language === "English" ? "Settings saved" : "设置已保存");
         shopify.toast.show?.(message);
       } else {
         shopify.toast.show?.(
-          fetcher.data.message || "保存失败，请检查配置或稍后重试",
+          fetcher.data.message || (language === "English" ? "Save failed. Check configuration or retry later." : "保存失败，请检查配置或稍后重试"),
         );
       }
     }
@@ -350,11 +352,35 @@ export default function SettingsAndExport() {
         <p className={styles.helpText}>{t(language as any, "default_rules_help")}</p>
         <p className={styles.helpText}>{t(language as any, "tag_prefix_help")}</p>
         <div className={styles.inlineStats}>
-          <span>最近 webhook：{settings.lastOrdersWebhookAt ? new Date(settings.lastOrdersWebhookAt).toLocaleString() : "暂无"}</span>
-          <span>最近补拉：{settings.lastBackfillAt ? new Date(settings.lastBackfillAt).toLocaleString() : "暂无"}</span>
-          <span>最近标签写回：{settings.lastTaggingAt ? new Date(settings.lastTaggingAt).toLocaleString() : "暂无 / 模拟"}</span>
-          <span>店铺货币：{settings.primaryCurrency || "USD"}</span>
-          {clamped && <span>提示：导出/补拉已限制为最近 90 天内的订单窗口。</span>}
+          <span>
+            {language === "English" ? "Last webhook: " : "最近 webhook："}
+            {settings.lastOrdersWebhookAt
+              ? new Date(settings.lastOrdersWebhookAt).toLocaleString(locale)
+              : language === "English" ? "None" : "暂无"}
+          </span>
+          <span>
+            {language === "English" ? "Last backfill: " : "最近补拉："}
+            {settings.lastBackfillAt
+              ? new Date(settings.lastBackfillAt).toLocaleString(locale)
+              : language === "English" ? "None" : "暂无"}
+          </span>
+          <span>
+            {language === "English" ? "Last tagging: " : "最近标签写回："}
+            {settings.lastTaggingAt
+              ? new Date(settings.lastTaggingAt).toLocaleString(locale)
+              : language === "English" ? "None / Simulated" : "暂无 / 模拟"}
+          </span>
+          <span>
+            {language === "English" ? "Shop Currency: " : "店铺货币："}
+            {settings.primaryCurrency || "USD"}
+          </span>
+          {clamped && (
+            <span>
+              {language === "English"
+                ? "Hint: Export/Backfill is limited to the last 90 days."
+                : "提示：导出/补拉已限制为最近 90 天内的订单窗口。"}
+            </span>
+          )}
         </div>
         <div className={styles.inlineActions}>
           <button
@@ -401,16 +427,17 @@ export default function SettingsAndExport() {
                   <div>
                     <div className={styles.ruleTitle}>{rule.domain}</div>
                     <div className={styles.ruleMeta}>
-                      渠道：{rule.channel} · {rule.source === "default" ? "默认" : "自定义"}
+                      {language === "English" ? "Channel: " : "渠道："}
+                      {rule.channel} · {rule.source === "default" ? (language === "English" ? "Default" : "默认") : (language === "English" ? "Custom" : "自定义")}
                     </div>
                   </div>
                   <button
                     type="button"
                     className={styles.linkButton}
-                    title={rule.source === "default" ? "移除默认域名可能导致漏标" : "删除规则"}
+                    title={rule.source === "default" ? t(language as any, "risk_remove_default_domain") : t(language as any, "title_delete_rule")}
                     onClick={() => removeDomain(rule)}
                   >
-                    删除
+                    {t(language as any, "btn_delete")}
                   </button>
                 </div>
               ))}
@@ -455,7 +482,7 @@ export default function SettingsAndExport() {
                 <div key={`${rule.value}-${rule.channel}`} className={styles.ruleRow}>
                   <div>
                     <div className={styles.ruleTitle}>{rule.value}</div>
-                    <div className={styles.ruleMeta}>渠道：{rule.channel}</div>
+                    <div className={styles.ruleMeta}>{language === "English" ? "Channel: " : "渠道："}{rule.channel}</div>
                   </div>
                   <button
                     type="button"
@@ -552,9 +579,9 @@ export default function SettingsAndExport() {
                 }
               />
               <div>
-                <div className={styles.ruleTitle}>向订单写回 AI 渠道标签</div>
+                <div className={styles.ruleTitle}>{language === "English" ? "Write AI channel tags to orders" : "向订单写回 AI 渠道标签"}</div>
                 <div className={styles.ruleMeta}>
-                  前缀：{tagging.orderTagPrefix}-ChatGPT / Perplexity / ...
+                  {language === "English" ? "Prefix: " : "前缀："}{tagging.orderTagPrefix}-ChatGPT / Perplexity / ...
                 </div>
               </div>
             </div>
@@ -567,8 +594,8 @@ export default function SettingsAndExport() {
                 }
               />
               <div>
-                <div className={styles.ruleTitle}>向客户写回 AI 获客标签</div>
-                <div className={styles.ruleMeta}>示例：{tagging.customerTag}</div>
+                <div className={styles.ruleTitle}>{language === "English" ? "Write AI acquisition tag to customers" : "向客户写回 AI 获客标签"}</div>
+                <div className={styles.ruleMeta}>{language === "English" ? "Example: " : "示例："}{tagging.customerTag}</div>
               </div>
             </div>
             <div className={styles.checkboxRow}>
@@ -580,15 +607,15 @@ export default function SettingsAndExport() {
                 }
               />
               <div>
-                <div className={styles.ruleTitle}>实际写入 Shopify（关闭则为模拟）</div>
+                <div className={styles.ruleTitle}>{language === "English" ? "Write to Shopify (unchecked = simulate)" : "实际写入 Shopify（关闭则为模拟）"}</div>
                 <div className={styles.ruleMeta}>
-                  默认模拟模式避免误写；取消选中后才会真正写入订单/客户标签。
+                  {language === "English" ? "Default is dry-run to avoid mistakes; uncheck to actually write order/customer tags." : "默认模拟模式避免误写；取消选中后才会真正写入订单/客户标签。"}
                 </div>
               </div>
             </div>
             <div className={styles.alert}>{t(language as any, "tagging_enable_alert")}</div>
             <label className={styles.stackField}>
-              <span className={styles.fieldLabel}>订单标签前缀</span>
+              <span className={styles.fieldLabel}>{language === "English" ? "Order tag prefix" : "订单标签前缀"}</span>
               <input
                 className={styles.input}
                 value={tagging.orderTagPrefix}
@@ -598,7 +625,7 @@ export default function SettingsAndExport() {
               />
             </label>
             <label className={styles.stackField}>
-              <span className={styles.fieldLabel}>客户标签</span>
+              <span className={styles.fieldLabel}>{language === "English" ? "Customer tag" : "客户标签"}</span>
               <input
                 className={styles.input}
                 value={tagging.customerTag}
@@ -690,7 +717,7 @@ export default function SettingsAndExport() {
               <span className={styles.badge}>{t(language as any, "badge_ui_only")}</span>
             </div>
             <label className={styles.stackField}>
-              <span className={styles.fieldLabel}>语言</span>
+              <span className={styles.fieldLabel}>{language === "English" ? "Language" : "语言"}</span>
               <select
                 className={styles.select}
                 value={language}
@@ -724,7 +751,7 @@ export default function SettingsAndExport() {
               </select>
             </label>
             <label className={styles.stackField}>
-              <span className={styles.fieldLabel}>时区</span>
+              <span className={styles.fieldLabel}>{language === "English" ? "Timezone" : "时区"}</span>
               <select
                 className={styles.select}
                 value={timezone}
@@ -738,7 +765,7 @@ export default function SettingsAndExport() {
               </select>
             </label>
             <label className={styles.stackField}>
-              <span className={styles.fieldLabel}>GMV 口径</span>
+              <span className={styles.fieldLabel}>{language === "English" ? "GMV Metric" : "GMV 口径"}</span>
               <select
                 className={styles.select}
                 value={gmvMetric}
@@ -750,8 +777,8 @@ export default function SettingsAndExport() {
                   )
                 }
               >
-                <option value="current_total_price">current_total_price（含税/运费）</option>
-                <option value="subtotal_price">subtotal_price（不含税/运费）</option>
+                <option value="current_total_price">{language === "English" ? "current_total_price (includes taxes/shipping)" : "current_total_price（含税/运费）"}</option>
+                <option value="subtotal_price">{language === "English" ? "subtotal_price (excludes taxes/shipping)" : "subtotal_price（不含税/运费）"}</option>
               </select>
             </label>
             <p className={styles.helpText}>{t(language as any, "gmv_metric_help")}</p>
@@ -788,8 +815,9 @@ export default function SettingsAndExport() {
           <div className={styles.exportCard}>
             <h4>{language === "English" ? "AI Orders Details" : "AI 渠道订单明细"}</h4>
             <p>
-              字段：订单号、下单时间、AI 渠道、GMV（按当前 GMV 口径）、referrer、landing_page、source_name、utm_source、utm_medium、解析结果
-              （附加 order_id / customer_id / new_customer 标记便于对照）。
+              {language === "English"
+                ? "Fields: order name, time, AI channel, GMV (per current metric), referrer, landing_page, source_name, utm_source, utm_medium, detection (with order_id/customer_id/new_customer for comparison)."
+                : "字段：订单号、下单时间、AI 渠道、GMV（按当前 GMV 口径）、referrer、landing_page、source_name、utm_source、utm_medium、解析结果（附加 order_id / customer_id / new_customer 标记便于对照）。"}
             </p>
             <a
               className={styles.primaryButton}
@@ -801,7 +829,7 @@ export default function SettingsAndExport() {
           </div>
           <div className={styles.exportCard}>
             <h4>{t(language as any, "products_section_title")}</h4>
-            <p>字段：产品名、AI 订单数、AI GMV、AI 占比、Top 渠道、URL（附产品 ID / handle 便于二次分析）。</p>
+            <p>{language === "English" ? "Fields: product title, AI orders, AI GMV, AI share, top channel, URL (with product ID/handle for analysis)." : "字段：产品名、AI 订单数、AI GMV、AI 占比、Top 渠道、URL（附产品 ID / handle 便于二次分析）。"}</p>
             <a
               className={styles.secondaryButton}
               href={toCsvHref(exports.productsCsv)}
@@ -823,17 +851,19 @@ export default function SettingsAndExport() {
           </div>
           </div>
           <p className={styles.helpText}>
-            导出仅包含已被识别的 AI 渠道订单；若 AI 样本量很低，建议延长时间窗口后再导出。导出的 GMV 字段随「GMV 口径」设置切换。
+            {language === "English"
+              ? "Exports include only orders identified as AI-channel. If sample size is low, extend the time window before exporting. GMV column respects the selected GMV metric."
+              : "导出仅包含已被识别的 AI 渠道订单；若 AI 样本量很低，建议延长时间窗口后再导出。导出的 GMV 字段随「GMV 口径」设置切换。"}
           </p>
         </div>
 
         <div className={styles.card}>
           <div className={styles.sectionHeader}>
             <div>
-              <p className={styles.sectionLabel}>数据采集健康度</p>
-              <h3 className={styles.sectionTitle}>Webhook / Backfill / 标签写回</h3>
+              <p className={styles.sectionLabel}>{language === "English" ? "Data Collection Health" : "数据采集健康度"}</p>
+              <h3 className={styles.sectionTitle}>{language === "English" ? "Webhook / Backfill / Tagging" : "Webhook / Backfill / 标签写回"}</h3>
             </div>
-            <span className={styles.badge}>监控</span>
+            <span className={styles.badge}>{language === "English" ? "Monitor" : "监控"}</span>
           </div>
           <div className={styles.statusList}>
             {settings.pipelineStatuses.map((item) => (
@@ -857,7 +887,7 @@ export default function SettingsAndExport() {
             ))}
           </div>
           <p className={styles.helpText}>
-            建议同时开启 webhook + 定时补拉，避免短时异常导致的漏数；写回标签需在此处开启后才会生效。
+            {language === "English" ? "Enable both webhook and scheduled backfill to avoid gaps from short outages; tag write-back only works when enabled here." : "建议同时开启 webhook + 定时补拉，避免短时异常导致的漏数；写回标签需在此处开启后才会生效。"}
           </p>
         </div>
       </div>
@@ -871,12 +901,14 @@ export const headers: HeadersFunction = (headersArgs) => {
 
 function LlmsPreview() {
   const fetcher = useFetcher<{ ok: boolean; text: string }>();
+  const { settings } = useLoaderData<typeof loader>();
+  const language = settings.languages[0];
   const [copied, setCopied] = useState(false);
   if (!fetcher.data && fetcher.state === "idle") {
     fetcher.load("/api/llms-txt-preview");
   }
 
-  const text = fetcher.data?.text || "# 生成中...";
+  const text = fetcher.data?.text || (language === "English" ? "# Generating..." : "# 生成中...");
 
   const copy = async () => {
     try {
@@ -891,10 +923,10 @@ function LlmsPreview() {
       <textarea readOnly className={styles.textarea} value={text} rows={10} />
       <div className={styles.inlineActions}>
         <button type="button" className={styles.secondaryButton} onClick={copy}>
-          {copied ? "已复制" : "复制"}
+          {copied ? (language === "English" ? "Copied" : "已复制") : (language === "English" ? "Copy" : "复制")}
         </button>
         <a href="/api/llms-txt-preview?download=1" className={styles.primaryButton}>
-          下载 llms.txt
+          {language === "English" ? "Download llms.txt" : "下载 llms.txt"}
         </a>
       </div>
     </div>

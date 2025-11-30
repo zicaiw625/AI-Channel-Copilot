@@ -166,8 +166,8 @@ export default function Index() {
     [locale, timezone],
   );
   const fmtTime = useCallback(
-    (iso?: string | null) => (iso ? timeFormatter.format(new Date(iso)) : "暂无"),
-    [timeFormatter],
+    (iso?: string | null) => (iso ? timeFormatter.format(new Date(iso)) : (language === "English" ? "None" : "暂无")),
+    [timeFormatter, language],
   );
 
   useEffect(() => {
@@ -246,11 +246,11 @@ export default function Index() {
 
   const trendScopes = useMemo(
     () => [
-      { key: "overall" as TrendScope, label: "全部订单" },
-      { key: "ai" as TrendScope, label: "AI 汇总" },
+      { key: "overall" as TrendScope, label: language === "English" ? "All Orders" : "全部订单" },
+      { key: "ai" as TrendScope, label: language === "English" ? "AI Summary" : "AI 汇总" },
       ...channelList.map((channel) => ({ key: channel as TrendScope, label: channel })),
     ],
-    [],
+    [language],
   );
 
   const channelMax = useMemo(() => {
@@ -278,7 +278,7 @@ export default function Index() {
   );
 
   const trendScopeLabel =
-    trendScopes.find((item) => item.key === trendScope)?.label || "AI 汇总";
+    trendScopes.find((item) => item.key === trendScope)?.label || (language === "English" ? "AI Summary" : "AI 汇总");
 
   const trendMax = useMemo(
     () => Math.max(1, ...trend.map((point) => getTrendValue(point))),
@@ -308,7 +308,7 @@ export default function Index() {
   };
 
   return (
-    <s-page heading="AI Discovery & Attribution">
+    <s-page heading={language === "English" ? "AI Discovery & Attribution" : "AI 渠道基础仪表盘"}>
       <div className={styles.page}>
         <div className={styles.pageHeader}>
           <div className={styles.titleBlock}>
@@ -317,7 +317,7 @@ export default function Index() {
               <span className={styles.badgeSecondary}>{t(language as any, "badge_conservative_orders")}</span>
               {isLowSample && (
                 <span className={styles.badgeSecondary}>
-                  样本 &lt; {LOW_SAMPLE_THRESHOLD} · 指标仅供参考
+                  {language === "English" ? `Sample < ${LOW_SAMPLE_THRESHOLD} · metrics for reference only` : `样本 < ${LOW_SAMPLE_THRESHOLD} · 指标仅供参考`}
                 </span>
               )}
             </div>
@@ -330,8 +330,8 @@ export default function Index() {
               <span>{t(language as any, "meta_synced_at")}{timeFormatter.format(new Date(overview.lastSyncedAt))}</span>
               <span>
                 {t(language as any, "meta_updated_at")}{dataLastUpdated ? timeFormatter.format(new Date(dataLastUpdated)) : (language === "English" ? "None" : "暂无")}
-                {backfillSuppressed && "（30 分钟内已补拉，复用缓存数据）"}
-                {backfillAvailable && "（可手动触发后台补拉）"}
+                {backfillSuppressed && (language === "English" ? " (Backfilled within 30 minutes; using cached data)" : "（30 分钟内已补拉，复用缓存数据）")}
+                {backfillAvailable && (language === "English" ? " (Manual backfill available)" : "（可手动触发后台补拉）")}
               </span>
               <span>{t(language as any, "meta_range")}{dateRange.label}</span>
               <span>
@@ -382,15 +382,15 @@ export default function Index() {
                       onClick={triggerBackfill}
                       disabled={backfillFetcher.state !== "idle"}
                     >
-                      {backfillFetcher.state === "idle" ? "后台补拉" : "后台补拉中..."}
+                      {backfillFetcher.state === "idle" ? (language === "English" ? "Backfill in background" : "后台补拉") : (language === "English" ? "后台补拉中..." : "后台补拉中...")}
                     </button>
                     {backfillFetcher.data && (
                       <span className={styles.backfillStatus}>
                         {backfillFetcher.data.queued
-                          ? `已触发后台任务（${backfillFetcher.data.range}）`
+                          ? (language === "English" ? `Background task triggered (${backfillFetcher.data.range})` : `已触发后台任务（${backfillFetcher.data.range}）`)
                           : backfillFetcher.data.reason === "in-flight"
-                            ? "已有补拉在进行中，稍后刷新"
-                            : "无法触发补拉，请确认店铺会话"}
+                            ? (language === "English" ? "A backfill is already running; refresh later" : "已有补拉在进行中，稍后刷新")
+                            : (language === "English" ? "Cannot trigger backfill; check shop session" : "无法触发补拉，请确认店铺会话")}
                       </span>
                     )}
                   </div>
@@ -437,7 +437,7 @@ export default function Index() {
                   value={customFrom}
                   onChange={(event) => setCustomFrom(event.target.value)}
                 />
-                <span className={styles.rangeDivider}>至</span>
+                <span className={styles.rangeDivider}>{language === "English" ? "to" : "至"}</span>
                 <input
                   type="date"
                   className={styles.input}
@@ -449,15 +449,15 @@ export default function Index() {
                   className={styles.secondaryButton}
                   onClick={applyCustomRange}
                 >
-                  应用自定义
+                  {language === "English" ? "Apply Custom" : "应用自定义"}
                 </button>
               </div>
               <div className={styles.actionButtons}>
                 <Link to="/app/additional" className={styles.primaryButton}>
-                  设置 / 规则 & 导出
+                  {language === "English" ? "Settings / Rules & Export" : "设置 / 规则 & 导出"}
                 </Link>
                 <Link to="/app/copilot" className={styles.secondaryButton}>
-                  Copilot 分析问答
+                  {language === "English" ? "Copilot Q&A" : "Copilot 分析问答"}
                 </Link>
                 <a
                 className={styles.secondaryButton}
@@ -517,7 +517,7 @@ export default function Index() {
         </div>
         {isLowSample && (
           <div className={styles.lowSampleNotice}>
-            样本 &lt; {LOW_SAMPLE_THRESHOLD}，所有指标仅供参考；延长时间范围后可获得更稳定的趋势。
+            {language === "English" ? `Sample < ${LOW_SAMPLE_THRESHOLD}, metrics for reference only; extend range for more stable trends.` : `样本 < ${LOW_SAMPLE_THRESHOLD}，所有指标仅供参考；延长时间范围后可获得更稳定的趋势。`}
           </div>
         )}
 
@@ -574,7 +574,7 @@ export default function Index() {
               })}
             </div>
             <p className={styles.helpText}>
-              优先级：referrer &gt; UTM。未带 referrer/UTM 的 AI 流量无法被识别，结果为保守估计。
+              {language === "English" ? "Priority: referrer > UTM. AI traffic without referrer/UTM cannot be attributed; results are conservative." : "优先级：referrer > UTM。未带 referrer/UTM 的 AI 流量无法被识别，结果为保守估计。"}
             </p>
           </div>
 
@@ -582,14 +582,14 @@ export default function Index() {
             <div className={styles.sectionHeader}>
               <div>
                 <p className={styles.sectionLabel}>{t(language as any, "comparison_section_label")}</p>
-                <h3 className={styles.sectionTitle}>整体 vs 各 AI 渠道</h3>
+                <h3 className={styles.sectionTitle}>{language === "English" ? "Overall vs AI Channels" : "整体 vs 各 AI 渠道"}</h3>
               </div>
               {isLowSample ? (
                 <span className={styles.smallBadge}>
-                  样本 &lt; {LOW_SAMPLE_THRESHOLD} · 解读时请谨慎
+                  {language === "English" ? `Sample < ${LOW_SAMPLE_THRESHOLD} · interpret with caution` : `样本 < ${LOW_SAMPLE_THRESHOLD} · 解读时请谨慎`}
                 </span>
               ) : (
-                <span className={styles.smallBadge}>样本 &gt;= {LOW_SAMPLE_THRESHOLD}</span>
+                <span className={styles.smallBadge}>{language === "English" ? `Sample >= ${LOW_SAMPLE_THRESHOLD}` : `样本 >= ${LOW_SAMPLE_THRESHOLD}`}</span>
               )}
             </div>
             <div className={styles.tableWrap}>
@@ -608,7 +608,7 @@ export default function Index() {
                     <tr key={row.channel}>
                       <td className={styles.cellLabel}>
                         {row.channel}
-                        {row.isLowSample && <span className={styles.chip}>样本少</span>}
+                        {row.isLowSample && <span className={styles.chip}>{language === "English" ? "Low sample" : "样本少"}</span>}
                       </td>
                       <td>{fmtCurrency(row.aov)}</td>
                       <td>{fmtPercent(row.newCustomerRate)}</td>
@@ -627,7 +627,7 @@ export default function Index() {
           <div className={styles.card}>
             <div className={styles.sectionHeader}>
               <div>
-                <p className={styles.sectionLabel}>客户维度</p>
+                <p className={styles.sectionLabel}>{language === "English" ? "Customers" : "客户维度"}</p>
                 <h3 className={styles.sectionTitle}>{t(language as any, "top_customers_title")}</h3>
               </div>
               <a
@@ -664,7 +664,7 @@ export default function Index() {
                 </tbody>
               </table>
             </div>
-            <p className={styles.helpText}>窗口内按 GMV 汇总的 LTV，适合观察高价值客户分布。</p>
+            <p className={styles.helpText}>{language === "English" ? "LTV aggregated by GMV within window; good for spotting high-value customers." : "窗口内按 GMV 汇总的 LTV，适合观察高价值客户分布。"}</p>
           </div>
         </div>
 
@@ -672,14 +672,14 @@ export default function Index() {
           <div className={styles.card}>
             <div className={styles.sectionHeader}>
               <div>
-                <p className={styles.sectionLabel}>趋势</p>
+                <p className={styles.sectionLabel}>{language === "English" ? "Trend" : "趋势"}</p>
                 <h3 className={styles.sectionTitle}>{t(language as any, "trend_section_title")}</h3>
               </div>
               <div className={styles.trendControls}>
                 <div className={styles.toggleGroup}>
                   {[
                     { key: "gmv", label: "GMV" },
-                    { key: "orders", label: "订单" },
+                    { key: "orders", label: language === "English" ? "Orders" : "订单" },
                   ].map(({ key, label }) => (
                     <button
                       key={key}
@@ -708,7 +708,7 @@ export default function Index() {
             <div className={styles.legend}>
               <span className={styles.legendDot} />
               <span>
-                {trendScopeLabel} · {trendMetric === "gmv" ? "GMV" : "订单数"}
+                {trendScopeLabel} · {trendMetric === "gmv" ? "GMV" : (language === "English" ? "Orders" : "订单数")}
               </span>
             </div>
             <div className={styles.trendList}>
@@ -717,11 +717,11 @@ export default function Index() {
                 const secondary =
                   trendScope === "overall"
                     ? trendMetric === "gmv"
-                      ? `AI GMV ${fmtCurrency(point.aiGMV)}`
-                      : `AI 订单 ${fmtNumber(point.aiOrders)}`
+                      ? (language === "English" ? `AI GMV ${fmtCurrency(point.aiGMV)}` : `AI GMV ${fmtCurrency(point.aiGMV)}`)
+                      : (language === "English" ? `AI Orders ${fmtNumber(point.aiOrders)}` : `AI 订单 ${fmtNumber(point.aiOrders)}`)
                     : trendMetric === "gmv"
-                      ? `总 GMV ${fmtCurrency(point.overallGMV)}`
-                      : `总订单 ${fmtNumber(point.overallOrders)}`;
+                      ? (language === "English" ? `Total GMV ${fmtCurrency(point.overallGMV)}` : `总 GMV ${fmtCurrency(point.overallGMV)}`)
+                      : (language === "English" ? `Total Orders ${fmtNumber(point.overallOrders)}` : `总订单 ${fmtNumber(point.overallOrders)}`);
 
                 return (
                   <div key={point.label} className={styles.trendRow}>
@@ -743,14 +743,14 @@ export default function Index() {
               })}
             </div>
             <p className={styles.helpText}>
-              可切换 GMV / 订单并按渠道过滤；样本量低时单笔订单会放大波动，解读时需结合渠道详情。
+              {language === "English" ? "Toggle GMV/Orders and filter by channel. Low sample sizes can exaggerate variance; read alongside channel details." : "可切换 GMV / 订单并按渠道过滤；样本量低时单笔订单会放大波动，解读时需结合渠道详情。"}
             </p>
         </div>
 
         <div className={styles.card}>
             <div className={styles.sectionHeader}>
               <div>
-                <p className={styles.sectionLabel}>产品维度</p>
+                <p className={styles.sectionLabel}>{language === "English" ? "Products" : "产品维度"}</p>
                 <h3 className={styles.sectionTitle}>{t(language as any, "products_section_title")}</h3>
               </div>
               <a
@@ -790,7 +790,7 @@ export default function Index() {
               </table>
             </div>
             <p className={styles.helpText}>
-              统计口径：含 AI 渠道订单中出现过的产品；占比=AI 渠道订单数 / 产品总订单数。
+              {language === "English" ? "Scope: products appearing in AI-channel orders; Share = AI-channel orders / total orders of product." : "统计口径：含 AI 渠道订单中出现过的产品；占比=AI 渠道订单数 / 产品总订单数。"}
             </p>
           </div>
         </div>
@@ -806,7 +806,7 @@ export default function Index() {
           <div className={styles.jobGrid}>
             <div className={styles.jobBlock}>
               <div className={styles.jobHeader}>
-                <h4>Backfill</h4>
+                <h4>{language === "English" ? "Backfill" : "补拉"}</h4>
                 <div className={styles.jobCounters}>
                   {(["queued", "processing", "completed", "failed"] as JobStatus[]).map((status) => (
                     <span key={status} className={styles.counterBadge}>
@@ -820,12 +820,12 @@ export default function Index() {
                   <thead>
                     <tr>
                       <th>ID</th>
-                      <th>范围</th>
-                      <th>状态</th>
-                      <th>拉取订单</th>
-                      <th>开始</th>
-                      <th>结束</th>
-                      <th>错误</th>
+                      <th>{language === "English" ? "Range" : "范围"}</th>
+                      <th>{language === "English" ? "Status" : "状态"}</th>
+                      <th>{language === "English" ? "Orders Fetched" : "拉取订单"}</th>
+                      <th>{language === "English" ? "Started" : "开始"}</th>
+                      <th>{language === "English" ? "Finished" : "结束"}</th>
+                      <th>{language === "English" ? "Error" : "错误"}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -835,7 +835,7 @@ export default function Index() {
                         <td>{job.range}</td>
                         <td>{job.status}</td>
                         <td>{job.ordersFetched}</td>
-                        <td>{job.startedAt ? fmtTime(job.startedAt) : "待开始"}</td>
+                        <td>{job.startedAt ? fmtTime(job.startedAt) : (language === "English" ? "Pending" : "待开始")}</td>
                         <td>{job.finishedAt ? fmtTime(job.finishedAt) : "-"}</td>
                         <td className={styles.errorCell}>{job.error || "-"}</td>
                       </tr>
@@ -847,7 +847,7 @@ export default function Index() {
 
             <div className={styles.jobBlock}>
               <div className={styles.jobHeader}>
-                <h4>订单 Webhook 队列</h4>
+                <h4>{language === "English" ? "Order Webhook Queue" : "订单 Webhook 队列"}</h4>
                 <div className={styles.jobCounters}>
                   {(["queued", "processing", "completed", "failed"] as JobStatus[]).map((status) => (
                     <span key={status} className={styles.counterBadge}>
@@ -863,10 +863,10 @@ export default function Index() {
                       <th>ID</th>
                       <th>Topic</th>
                       <th>Intent</th>
-                      <th>状态</th>
-                      <th>开始</th>
-                      <th>结束</th>
-                      <th>错误</th>
+                      <th>{language === "English" ? "Status" : "状态"}</th>
+                      <th>{language === "English" ? "Started" : "开始"}</th>
+                      <th>{language === "English" ? "Finished" : "结束"}</th>
+                      <th>{language === "English" ? "Error" : "错误"}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -876,7 +876,7 @@ export default function Index() {
                         <td>{job.topic}</td>
                         <td>{job.intent}</td>
                         <td>{job.status}</td>
-                        <td>{job.startedAt ? fmtTime(job.startedAt) : "待开始"}</td>
+                        <td>{job.startedAt ? fmtTime(job.startedAt) : (language === "English" ? "Pending" : "待开始")}</td>
                         <td>{job.finishedAt ? fmtTime(job.finishedAt) : "-"}</td>
                         <td className={styles.errorCell}>{job.error || "-"}</td>
                       </tr>
@@ -887,7 +887,7 @@ export default function Index() {
             </div>
           </div>
           <p className={styles.helpText}>
-            数据来源于 /api/jobs，可用于多实例场景下排查队列堆积、失败重试等问题。
+            {language === "English" ? "Data from /api/jobs; useful for diagnosing queue backlogs and retries across instances." : "数据来源于 /api/jobs，可用于多实例场景下排查队列堆积、失败重试等问题。"}
           </p>
         </div>
 
@@ -900,7 +900,7 @@ export default function Index() {
             <div className={styles.debugFilters}>
               <input
                 type="search"
-                placeholder="按订单号 / ID / 渠道过滤"
+                placeholder={language === "English" ? "Filter by order name / ID / channel" : "按订单号 / ID / 渠道过滤"}
                 value={debugOrderFilter}
                 onChange={(event) => setDebugOrderFilter(event.target.value)}
                 className={styles.searchInput}
@@ -910,9 +910,9 @@ export default function Index() {
                 onChange={(event) => setDebugChannelFilter(event.target.value as TrendScope | "")}
                 className={styles.select}
               >
-                <option value="">全部</option>
-                <option value="ai">AI 渠道</option>
-                <option value="overall">非 AI / 未识别</option>
+                <option value="">{language === "English" ? "All" : "全部"}</option>
+                <option value="ai">{language === "English" ? "AI Channels" : "AI 渠道"}</option>
+                <option value="overall">{language === "English" ? "Non-AI / Unattributed" : "非 AI / 未识别"}</option>
                 {channelList.map((channel) => (
                   <option key={channel} value={channel}>
                     {channel}
@@ -965,7 +965,7 @@ export default function Index() {
             </table>
           </div>
           <p className={styles.helpText}>
-            若识别结果与预期不符，可在「设置 / 规则 & 导出」中调整 AI 域名与 UTM 映射；所有结果均为保守估计。
+            {language === "English" ? "If attribution looks off, adjust AI domains and UTM mapping in Settings / Rules & Export. All results are conservative estimates." : "若识别结果与预期不符，可在「设置 / 规则 & 导出」中调整 AI 域名与 UTM 映射；所有结果均为保守估计。"}
           </p>
         </div>
       </div>

@@ -14,7 +14,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const errors = loginErrorMessage(result);
   const url = new URL(request.url);
   const language = url.searchParams.get("lang") === "en" ? "English" : "中文";
-  return { errors, language };
+  return { errors, language, apiKey: process.env.SHOPIFY_API_KEY };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -33,7 +33,7 @@ export default function Auth() {
   const loaderData = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const [shop, setShop] = useState("");
-  const { errors, language } = actionData || loaderData;
+  const { errors, language, apiKey } = actionData || loaderData;
   const app = useAppBridge();
 
   const submit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -47,6 +47,10 @@ export default function Auth() {
         const data = await resp.clone().json().catch(() => null);
         if (!target && data && typeof data.url === "string") target = data.url;
       } catch {}
+      if (!target && apiKey && shop) {
+        const store = shop.replace(/\.myshopify\.com$/i, "");
+        target = `https://admin.shopify.com/store/${store}/oauth/install?client_id=${apiKey}`;
+      }
       if (target) {
         try { (window.top || window).location.href = target; } catch { window.location.href = target; }
         return;

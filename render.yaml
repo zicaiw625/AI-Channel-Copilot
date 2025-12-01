@@ -19,6 +19,16 @@ services:
         sync: false
       - key: SCOPES
         value: read_orders,read_customers,read_products,write_orders,write_customers,read_shop
+      - key: BILLING_PLAN_NAME
+        value: AI Channel Copilot Basic
+      - key: BILLING_PRICE
+        value: 5
+      - key: BILLING_CURRENCY
+        value: USD
+      - key: BILLING_TRIAL_DAYS
+        value: 7
+      - key: BILLING_INTERVAL
+        value: EVERY_30_DAYS
       - key: DATABASE_URL
         fromDatabase:
           name: ai-channel-copilot-db

@@ -2,7 +2,7 @@ import type { HeadersFunction, LoaderFunctionArgs, ActionFunctionArgs } from "re
 import { useLoaderData } from "react-router";
 import { useEffect, useState } from "react";
 import { boundary } from "@shopify/shopify-app-react-router/server";
-import { authenticate } from "../shopify.server";
+import { authenticate, login } from "../shopify.server";
 import { requireEnv } from "../lib/env.server";
 import { ensureBilling, hasActiveSubscription } from "../lib/billing.server";
 import { getSettings, syncShopPreferences } from "../lib/settings.server";
@@ -19,11 +19,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const trialDays = Number(process.env.BILLING_TRIAL_DAYS || "7");
   const interval = process.env.BILLING_INTERVAL || "EVERY_30_DAYS";
   const language = settings.languages[0] || "中文";
-  return { language, planName, active: ok, amount, currencyCode, trialDays, interval };
+  return { language, planName, active: ok, amount, currencyCode, trialDays, interval, shopDomain };
 };
 
 export default function Billing() {
-  const { language, planName, active, amount, currencyCode, trialDays, interval } = useLoaderData<typeof loader>();
+  const { language, planName, active, amount, currencyCode, trialDays, interval, shopDomain } = useLoaderData<typeof loader>();
   const [uiLanguage, setUiLanguage] = useState(language);
   useEffect(() => {
     try {
@@ -56,6 +56,7 @@ export default function Billing() {
       </p>
       {!active && (
         <form method="post">
+          <input type="hidden" name="shop" value={shopDomain} />
           <button type="submit">{uiLanguage === "English" ? "Start Subscription" : "开始订阅"}</button>
         </form>
       )}
@@ -71,8 +72,18 @@ export const headers: HeadersFunction = (headersArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { admin, session } = await authenticate.admin(request);
-  const shopDomain = session?.shop || "";
-  await ensureBilling(admin as any, shopDomain, request);
-  return null;
+  try {
+    const { admin, session } = await authenticate.admin(request);
+    const shopDomain = session?.shop || "";
+    await ensureBilling(admin as any, shopDomain, request);
+    return null;
+  } catch (error) {
+    if (error instanceof Response) throw error;
+    const form = await request.formData();
+    const shop = (form.get("shop") as string) || "";
+    const url = new URL(request.url);
+    const lang = url.searchParams.get("lang") === "en" ? "en" : "zh";
+    const next = new Request(`/auth/login?lang=${lang}`, { method: "POST", body: form });
+    throw await login(next);
+  }
 };

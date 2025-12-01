@@ -39,7 +39,6 @@ const ORDERS_QUERY = `#graphql
             currencyCode
           }
         }
-        referringSite
         landingPageUrl
         sourceName
         tags
@@ -101,7 +100,6 @@ const ORDER_QUERY = `#graphql
           currencyCode
         }
       }
-      referringSite
       landingPageUrl
       sourceName
       tags

@@ -9,7 +9,7 @@ import { loginErrorMessage } from "./error.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const result = await login(request);
-  if (result instanceof Response) return result;
+  if (result instanceof Response) throw result;
   const errors = loginErrorMessage(result);
   const url = new URL(request.url);
   const language = url.searchParams.get("lang") === "en" ? "English" : "中文";
@@ -18,7 +18,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   const result = await login(request);
-  if (result instanceof Response) return result;
+  if (result instanceof Response) throw result;
   const errors = loginErrorMessage(result);
   const url = new URL(request.url);
   const language = url.searchParams.get("lang") === "en" ? "English" : "中文";

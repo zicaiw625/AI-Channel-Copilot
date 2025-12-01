@@ -121,6 +121,7 @@ export const ensureBilling = async (
     throw new Response(null, { status: 302, headers: { Location: confirmationUrl } });
   } catch (error) {
     const message = (error as Error)?.message || "unknown error";
+    if (error instanceof Response) throw error;
     if (message.includes("Missing access token")) return;
     logger.warn("[billing] ensureBilling failed", { shopDomain }, { message });
   }

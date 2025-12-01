@@ -58,13 +58,20 @@ export const hasActiveSubscription = async (
   admin: AdminGraphqlClient,
   planName: string,
 ): Promise<boolean> => {
-  const response = await admin.graphql(ACTIVE_SUBSCRIPTIONS_QUERY, {});
-  if (!response.ok) return false;
-  const json = (await response.json()) as {
-    data?: { currentAppInstallation?: { activeSubscriptions?: { id: string; name: string; status: string }[] } };
-  };
-  const list = json.data?.currentAppInstallation?.activeSubscriptions || [];
-  return list.some((s) => s.name === planName && s.status === "ACTIVE");
+  try {
+    const response = await admin.graphql(ACTIVE_SUBSCRIPTIONS_QUERY, {});
+    if (!response.ok) return false;
+    const json = (await response.json()) as {
+      data?: { currentAppInstallation?: { activeSubscriptions?: { id: string; name: string; status: string }[] } };
+    };
+    const list = json.data?.currentAppInstallation?.activeSubscriptions || [];
+    return list.some((s) => s.name === planName && s.status === "ACTIVE");
+  } catch (error) {
+    const message = (error as Error)?.message || "unknown error";
+    if (message.includes("Missing access token")) return false;
+    logger.warn("[billing] hasActiveSubscription failed", {}, { message });
+    return false;
+  }
 };
 
 export const ensureBilling = async (
@@ -82,34 +89,39 @@ export const ensureBilling = async (
   const ok = await hasActiveSubscription(admin, planName);
   if (ok) return;
 
-  const returnUrl = `${appUrl}/app/billing/confirm`;
-  const response = await admin.graphql(APP_SUBSCRIPTION_CREATE_MUTATION, {
-    variables: {
-      name: planName,
-      trialDays,
-      returnUrl,
-      amount,
-      currencyCode,
-      interval,
-    },
-  });
+  try {
+    const returnUrl = `${appUrl}/app/billing/confirm`;
+    const response = await admin.graphql(APP_SUBSCRIPTION_CREATE_MUTATION, {
+      variables: {
+        name: planName,
+        trialDays,
+        returnUrl,
+        amount,
+        currencyCode,
+        interval,
+      },
+    });
 
-  if (!response.ok) {
-    const text = await response.text();
-    logger.error("[billing] appSubscriptionCreate failed", { shopDomain }, { message: text });
-    throw new Error(`Billing setup failed: ${response.status}`);
+    if (!response.ok) {
+      const text = await response.text();
+      logger.error("[billing] appSubscriptionCreate failed", { shopDomain }, { message: text });
+      return;
+    }
+
+    const json = (await response.json()) as {
+      data?: { appSubscriptionCreate?: { confirmationUrl?: string | null; userErrors?: { field?: string[]; message: string }[] } };
+    };
+    const confirmationUrl = json.data?.appSubscriptionCreate?.confirmationUrl || null;
+    if (!confirmationUrl) {
+      const err = (json.data?.appSubscriptionCreate?.userErrors || []).map((e) => e.message).join("; ");
+      logger.error("[billing] confirmationUrl missing", { shopDomain }, { errors: err });
+      return;
+    }
+
+    throw new Response(null, { status: 302, headers: { Location: confirmationUrl } });
+  } catch (error) {
+    const message = (error as Error)?.message || "unknown error";
+    if (message.includes("Missing access token")) return;
+    logger.warn("[billing] ensureBilling failed", { shopDomain }, { message });
   }
-
-  const json = (await response.json()) as {
-    data?: { appSubscriptionCreate?: { confirmationUrl?: string | null; userErrors?: { field?: string[]; message: string }[] } };
-  };
-  const confirmationUrl = json.data?.appSubscriptionCreate?.confirmationUrl || null;
-  if (!confirmationUrl) {
-    const err = (json.data?.appSubscriptionCreate?.userErrors || []).map((e) => e.message).join("; ");
-    logger.error("[billing] confirmationUrl missing", { shopDomain }, { errors: err });
-    throw new Error("Billing confirmation URL not available");
-  }
-
-  throw new Response(null, { status: 302, headers: { Location: confirmationUrl } });
 };
-

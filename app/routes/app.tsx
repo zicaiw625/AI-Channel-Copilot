@@ -15,7 +15,16 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   let settings = await getSettings(shopDomain);
   settings = await syncShopPreferences(admin, shopDomain, settings);
 
-  await ensureBilling(admin as any, shopDomain, request);
+  try {
+    const url = new URL(request.url);
+    const path = url.pathname.toLowerCase();
+    const skipBilling = path.includes("/app/billing") || path.includes("/app/additional");
+    if (!skipBilling) {
+      await ensureBilling(admin as any, shopDomain, request);
+    }
+  } catch (e) {
+    if (e instanceof Response) throw e;
+  }
 
   return { apiKey: requireEnv("SHOPIFY_API_KEY"), language: settings.languages[0] || "中文" };
 };

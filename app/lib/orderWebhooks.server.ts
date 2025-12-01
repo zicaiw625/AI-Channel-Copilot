@@ -107,6 +107,9 @@ export const handleOrderWebhook = async (request: Request, expectedTopic: string
         aiSource: record.aiSource,
         detection: record.detection?.slice(0, 160),
         signals: record.signals?.slice(0, 5),
+        referrer: record.referrer || null,
+        utmSource: record.utmSource || null,
+        utmMedium: record.utmMedium || null,
         intent: expectedTopic,
       });
 

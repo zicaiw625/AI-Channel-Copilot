@@ -18,9 +18,14 @@
  - Shopify Admin API + `orders/create` webhook + 90 天补拉，幂等与重试内建。
  - 数据最小化存储；保留清理支持环境开关 `ENABLE_RETENTION_SWEEP`，最小保留月数强制为 3。
 
- ## 导出与调试
- - CSV 导出：AI 渠道订单明细、Top Products from AI Channels、Customers LTV（窗口）。
- - 调试视图：最近订单的 referrer/UTM/解析与 signals，便于核验规则。
+## 导出与调试
+- CSV 导出：AI 渠道订单明细、Top Products from AI Channels、Customers LTV（窗口）。
+- 调试视图：最近订单的 referrer/UTM/解析与 signals，便于核验规则。
+
+## 识别局限性
+- 部分浏览器或 App 可能不传 `referrer`，将降低域名匹配的覆盖率。
+- 未打 `utm_source` 的 AI 链接可能无法完全识别，建议配合自定义 UTM 规则。
+- 当前统计为保守估计，仅包含“站外 AI 点击 → 到站 → 完成订单”的链路。
 
  ## Copilot（v0.2 实验）
  - intent 与 range 参数白名单校验；仅从后端结构化结果生成解读，尾注附数据范围与口径说明。

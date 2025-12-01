@@ -36,7 +36,7 @@ export default function Copilot() {
       <div className={styles.page}>
         <div className={styles.lede}>
           <h1>{language === "English" ? "Quick Q&A based on fixed intents" : "基于固定意图的快捷问答"}</h1>
-          <p>{language === "English" ? "This page uses fixed templates to generate natural language from aggregated JSON without asking the model to compute numbers." : "本页采用固定模板，直接从聚合 JSON 中生成自然语言解读，不会让模型自行计算数字。"}</p>
+          <p>{language === "English" ? "This page uses fixed templates to generate natural language from aggregated JSON without asking the model to compute numbers. Prefer quick buttons for best results." : "本页采用固定模板，直接从聚合 JSON 中生成自然语言解读，不会让模型自行计算数字。推荐优先使用下方快捷按钮以获得更稳定结果。"}</p>
           <div className={styles.inlineNote}>
             <span>{language === "English" ? "GMV Metric: " : "GMV 口径："}{settings.gmvMetric}</span>
             <span>{language === "English" ? "Time Range: " : "时间范围："}{dateRange.label}</span>
@@ -52,7 +52,7 @@ export default function Copilot() {
         <div className={styles.askBlock}>
           <input
             className={styles.input}
-            placeholder={language === "English" ? "Type your question (keywords: AOV/products/GMV/orders etc.)" : "输入你的问题（可识别 AOV/产品/GMV/订单等关键词）"}
+            placeholder={language === "English" ? "Type your question (limited intents: performance/overview/trend, compare/vs, top/bestsellers)" : "输入你的问题（目前仅支持有限类型：表现/概览/趋势、对比/VS、Top/热销）"}
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
           />

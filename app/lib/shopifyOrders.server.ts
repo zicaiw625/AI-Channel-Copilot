@@ -39,6 +39,7 @@ const ORDERS_QUERY = `#graphql
             currencyCode
           }
         }
+        referringSite
         landingPageUrl
         sourceName
         tags
@@ -100,6 +101,7 @@ const ORDER_QUERY = `#graphql
           currencyCode
         }
       }
+      referringSite
       landingPageUrl
       sourceName
       tags
@@ -383,7 +385,22 @@ export const fetchOrdersForRange = async (
     if (!page) break;
 
     page.edges.forEach(({ node }) => {
-      records.push(mapShopifyOrderToRecord(node, settings));
+      const record = mapShopifyOrderToRecord(node, settings);
+      records.push(record);
+      if (!record.aiSource || record.aiSource === "Other-AI") {
+        const refDomain = (record.referrer || "").split("/")[0];
+        logger.info("[attribution] non-specific AI result", {
+          platform,
+          shopDomain: context?.shopDomain,
+          jobType: "backfill",
+          intent: context?.intent,
+        }, {
+          referrer: record.referrer || null,
+          utmSource: record.utmSource || null,
+          utmMedium: record.utmMedium || null,
+          detection: record.detection,
+        });
+      }
     });
 
     after = page.pageInfo.hasNextPage ? page.pageInfo.endCursor || undefined : undefined;

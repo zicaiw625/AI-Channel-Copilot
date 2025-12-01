@@ -2,11 +2,9 @@ import { resolveDateRange, type TimeRangeKey } from "./aiData";
 import { getAiDashboardData } from "./aiQueries.server";
 import { getSettings } from "./settings.server";
 import { authenticate } from "../shopify.server";
+import { parseIntent, type CopilotIntent } from "./copilot.intent";
 
-type CopilotIntent =
-  | "ai_performance"
-  | "ai_vs_all_aov"
-  | "ai_top_products";
+type CopilotIntent = CopilotIntent;
 
 type CopilotRequest = {
   intent?: CopilotIntent;
@@ -52,14 +50,6 @@ const buildOverviewShape = (data: Awaited<ReturnType<typeof getAiDashboardData>>
   };
 };
 
-const parseIntent = (raw?: string | null): CopilotIntent | undefined => {
-  if (!raw) return undefined;
-  const q = raw.toLowerCase();
-  if (q.includes("aov") || q.includes("客单价") || q.includes("对比")) return "ai_vs_all_aov";
-  if (q.includes("top") || q.includes("产品") || q.includes("销量")) return "ai_top_products";
-  if (q.includes("表现") || q.includes("gmv") || q.includes("订单")) return "ai_performance";
-  return undefined;
-};
 
 export const copilotAnswer = async (request: Request, payload: CopilotRequest) => {
   const { admin, session } = await authenticate.admin(request);

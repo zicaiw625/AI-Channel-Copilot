@@ -40,6 +40,18 @@ describe('aiAggregation', () => {
     expect(ov.aiShare).toBeCloseTo(170/250)
   })
 
+  it('buildOverview computes Net GMV by subtracting refunds', () => {
+    const withRefunds = [
+      mkOrder({ id: 'r1', totalPrice: 100, refundTotal: 20, aiSource: 'ChatGPT' }),
+      mkOrder({ id: 'r2', totalPrice: 50, refundTotal: 30, aiSource: null }),
+    ]
+    const ov = buildOverview(withRefunds, 'current_total_price', 'USD')
+    expect(ov.totalGMV).toBe(150)
+    expect(ov.netGMV).toBe(100)
+    expect(ov.aiGMV).toBe(100)
+    expect(ov.netAiGMV).toBe(80)
+  })
+
   it('buildChannelBreakdown aggregates by AI channel', () => {
     const ch = buildChannelBreakdown(orders, 'current_total_price')
     const chat = ch.find(x => x.channel === 'ChatGPT')!
@@ -77,4 +89,3 @@ describe('aiAggregation', () => {
     expect(row.repeatCount).toBe(1)
   })
 })
-

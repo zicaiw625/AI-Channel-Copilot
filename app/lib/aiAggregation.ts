@@ -1,6 +1,6 @@
 import type { OrderRecord, DateRange, AIChannel, ChannelStat, ComparisonRow, TrendPoint, ProductRow } from "./aiData";
 import type { MetricKey } from "./metrics";
-import { metricOrderValue, sumGMV } from "./metrics";
+import { metricOrderValue, sumGMV, sumNetGMV } from "./metrics";
 
 export type TopCustomerRow = {
   customerId: string;
@@ -45,15 +45,17 @@ export const buildOverview = (
   const aiOrders = ordersInRange.filter((order) => Boolean(order.aiSource));
   const aiGMV = sumGMV(aiOrders, metric);
   const totalGMV = sumGMV(ordersInRange, metric);
+  const netAiGMV = sumNetGMV(aiOrders, metric);
+  const netGMV = sumNetGMV(ordersInRange, metric);
   const aiNewCustomers = aiOrders.filter((order) => order.isNewCustomer).length;
   const totalNewCustomers = ordersInRange.filter((order) => order.isNewCustomer).length;
   const aiOrdersCount = aiOrders.length;
   const totalOrdersCount = ordersInRange.length;
   return {
     totalGMV,
-    netGMV: totalGMV,
+    netGMV,
     aiGMV,
-    netAiGMV: aiGMV,
+    netAiGMV,
     aiShare: totalGMV ? aiGMV / totalGMV : 0,
     aiOrders: aiOrdersCount,
     aiOrderShare: totalOrdersCount ? aiOrdersCount / totalOrdersCount : 0,

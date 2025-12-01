@@ -75,7 +75,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           settings.primaryCurrency,
         ).exports;
 
-  return { settings, exports, exportRange, clamped, displayTimezone };
+  const ordersSample = orders.slice(0, 20);
+  return { settings, exports, exportRange, clamped, displayTimezone, ordersSample };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -202,7 +203,7 @@ const isValidDomain = (value: string) => /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(value.
 const isValidUtmSource = (value: string) => /^[a-z0-9_-]+$/i.test(value.trim());
 
 export default function SettingsAndExport() {
-  const { settings, exports, exportRange, clamped } = useLoaderData<typeof loader>();
+  const { settings, exports, exportRange, clamped, ordersSample } = useLoaderData<typeof loader>();
   const shopify = useAppBridge();
   const fetcher = useFetcher<typeof action>();
   const navigate = useNavigate();
@@ -710,6 +711,45 @@ export default function SettingsAndExport() {
             </div>
             <LlmsPreview language={language} />
             <p className={styles.helpText}>{t(language as any, "llms_preview_help")}</p>
+          </div>
+
+          <div className={styles.card}>
+            <div className={styles.sectionHeader}>
+              <div>
+                <p className={styles.sectionLabel}>{language === "English" ? "Debug" : "调试"}</p>
+                <h3 className={styles.sectionTitle}>{language === "English" ? "Recent Orders Diagnosis" : "最近订单诊断"}</h3>
+              </div>
+              <span className={styles.badge}>{language === "English" ? "Admin" : "仅管理员"}</span>
+            </div>
+            <div className={styles.tableWrap}>
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    <th>{language === "English" ? "Order" : "订单"}</th>
+                    <th>referrer</th>
+                    <th>landing</th>
+                    <th>utm_source</th>
+                    <th>utm_medium</th>
+                    <th>{language === "English" ? "AI" : "AI"}</th>
+                    <th>{language === "English" ? "Detection" : "解析"}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(ordersSample || []).map((o: any) => (
+                    <tr key={o.id}>
+                      <td>{o.name}</td>
+                      <td>{o.referrer || ""}</td>
+                      <td>{o.landingPage || ""}</td>
+                      <td>{o.utmSource || ""}</td>
+                      <td>{o.utmMedium || ""}</td>
+                      <td>{o.aiSource || ""}</td>
+                      <td>{o.detection || ""}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className={styles.helpText}>{language === "English" ? "Only shows a small sample for debugging attribution signals; referrer has priority over UTM." : "用于调试 AI 渠道识别，仅展示少量样本；referrer 识别优先于 UTM。"}</p>
           </div>
 
           <div className={styles.card}>

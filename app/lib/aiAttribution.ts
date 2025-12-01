@@ -109,7 +109,9 @@ export const detectAiFromFields = (
     return { aiSource: "Copilot", detection: `${bingCopilotReason} · ${high}`, signals: [] };
   }
 
-  const domainHit = config.aiDomains.find((rule) => domainMatches(rule.domain, refUrl) || domainMatches(rule.domain, landingUrl));
+  const domainHitRef = config.aiDomains.find((rule) => domainMatches(rule.domain, refUrl));
+  const domainHitLanding = domainHitRef ? undefined : config.aiDomains.find((rule) => domainMatches(rule.domain, landingUrl));
+  const domainHit = domainHitRef || domainHitLanding;
   const utmMatch = utmSource ? config.utmSources.find((rule) => rule.value.toLowerCase() === utmSource.toLowerCase()) : undefined;
 
   if (domainHit) {
@@ -118,7 +120,8 @@ export const detectAiFromFields = (
       : utmMatch
         ? (config.lang === "English" ? `; utm_source=${utmSource} confirmed` : `; utm_source=${utmSource} 已确认`)
         : "";
-    signals.push(`referrer matched ${domainHit.domain}`);
+    if (domainHitRef) signals.push(`referrer matched ${domainHit.domain}`);
+    if (domainHitLanding) signals.push(`landing matched ${domainHit.domain}`);
     if (utmMatch) signals.push(`utm_source=${utmSource}`);
     const clamped = signals.slice(0, 10).map((s) => (s.length > 255 ? s.slice(0, 255) : s));
     const high = config.lang === "English" ? "confidence: high" : "置信度高";

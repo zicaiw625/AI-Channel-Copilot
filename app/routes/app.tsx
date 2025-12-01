@@ -17,8 +17,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   try {
     const url = new URL(request.url);
-    const path = url.pathname.toLowerCase();
-    const skipBilling = path.includes("/app/billing") || path.includes("/app/additional");
+    const skipBilling = shouldSkipBilling(url.pathname);
     if (!skipBilling) {
       await ensureBilling(admin as any, shopDomain, request);
     }
@@ -69,4 +68,9 @@ export function ErrorBoundary() {
 
 export const headers: HeadersFunction = (headersArgs) => {
   return boundary.headers(headersArgs);
+};
+
+const shouldSkipBilling = (pathname: string) => {
+  const path = pathname.toLowerCase();
+  return path.includes("/app/billing") || path.includes("/app/additional");
 };

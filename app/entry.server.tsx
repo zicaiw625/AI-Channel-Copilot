@@ -7,8 +7,11 @@ import { isbot } from "isbot";
 import { addDocumentResponseHeaders } from "./shopify.server";
 import { logger } from "./lib/logger.server";
 import { initScheduler } from "./lib/scheduler.server";
+import { applySecurityHeaders } from "./lib/securityHeaders.server";
 
 export const streamTimeout = 5000;
+
+initScheduler();
 
 export default async function handleRequest(
   request: Request,
@@ -16,23 +19,8 @@ export default async function handleRequest(
   responseHeaders: Headers,
   reactRouterContext: EntryContext
 ) {
-  initScheduler();
   addDocumentResponseHeaders(request, responseHeaders);
-  responseHeaders.set("X-Content-Type-Options", "nosniff");
-  responseHeaders.set("Referrer-Policy", "strict-origin-when-cross-origin");
-  const csp = [
-    "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https:",
-    "style-src 'self' 'unsafe-inline' https:",
-    "img-src 'self' data: https:",
-    "font-src 'self' https:",
-    "connect-src 'self' https: wss:",
-    "frame-ancestors https://*.myshopify.com https://admin.shopify.com",
-    "base-uri 'self'",
-    "form-action 'self' https://*.myshopify.com https://admin.shopify.com",
-  ].join("; ");
-  responseHeaders.set("Content-Security-Policy", csp);
-  responseHeaders.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  applySecurityHeaders(request, responseHeaders);
   const userAgent = request.headers.get("user-agent");
   const callbackName = isbot(userAgent ?? '')
     ? "onAllReady"

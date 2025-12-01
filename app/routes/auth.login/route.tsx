@@ -1,20 +1,25 @@
 import { AppProvider } from "@shopify/shopify-app-react-router/react";
 import { useState } from "react";
-import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
+import type { ActionFunctionArgs, LoaderFunctionArgs, HeadersFunction } from "react-router";
 import { Form, useActionData, useLoaderData } from "react-router";
+import { boundary } from "@shopify/shopify-app-react-router/server";
 
 import { login } from "../../shopify.server";
 import { loginErrorMessage } from "./error.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const errors = loginErrorMessage(await login(request));
+  const result = await login(request);
+  if (result instanceof Response) return result;
+  const errors = loginErrorMessage(result);
   const url = new URL(request.url);
   const language = url.searchParams.get("lang") === "en" ? "English" : "中文";
   return { errors, language };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const errors = loginErrorMessage(await login(request));
+  const result = await login(request);
+  if (result instanceof Response) return result;
+  const errors = loginErrorMessage(result);
   const url = new URL(request.url);
   const language = url.searchParams.get("lang") === "en" ? "English" : "中文";
   return {
@@ -50,3 +55,7 @@ export default function Auth() {
     </AppProvider>
   );
 }
+
+export const headers: HeadersFunction = (headersArgs) => {
+  return boundary.headers(headersArgs);
+};

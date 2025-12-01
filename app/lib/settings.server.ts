@@ -180,11 +180,19 @@ export const syncShopPreferences = async (
       return next;
     }
   } catch (error) {
-    logger.error(
-      "Failed to sync shop preferences",
-      { shopDomain, platform },
-      { message: (error as any)?.message ?? String(error) },
-    );
+    if (error instanceof Response) {
+      logger.warn(
+        "Failed to sync shop preferences",
+        { shopDomain, platform },
+        { message: "auth/session missing or interrupted" },
+      );
+    } else {
+      logger.error(
+        "Failed to sync shop preferences",
+        { shopDomain, platform },
+        { message: (error as any)?.message ?? String(error) },
+      );
+    }
   }
 
   return settings;

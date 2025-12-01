@@ -371,45 +371,68 @@ export const fetchOrdersForRange = async (
     range: context?.rangeLabel || `${effectiveStart.toISOString()} to ${range.end.toISOString()}`,
     jobType: "backfill",
   });
-
-  do {
-    if (Date.now() - startedAt > maxDuration) {
-      hitDurationLimit = true;
-      break;
-    }
-
-    const json = await fetchOrdersPage(admin, search, after, context || {});
-    const page = json.data?.orders;
-    if (!page) break;
-
-    page.edges.forEach(({ node }) => {
-      const record = mapShopifyOrderToRecord(node, settings);
-      records.push(record);
-      if (!record.aiSource || record.aiSource === "Other-AI") {
-        const refDomain = (record.referrer || "").split("/")[0];
-        logger.info("[attribution] non-specific AI result", {
-          platform,
-          shopDomain: context?.shopDomain,
-          jobType: "backfill",
-          intent: context?.intent,
-        }, {
-          referrer: record.referrer || null,
-          utmSource: record.utmSource || null,
-          utmMedium: record.utmMedium || null,
-          detection: record.detection,
-        });
+  try {
+    do {
+      if (Date.now() - startedAt > maxDuration) {
+        hitDurationLimit = true;
+        break;
       }
-    });
 
-    after = page.pageInfo.hasNextPage ? page.pageInfo.endCursor || undefined : undefined;
-    guard += 1;
-    if (guard >= MAX_BACKFILL_PAGES || records.length >= maxOrders) {
-      // Avoid runaway pagination in extreme cases.
-      hitPageLimit = guard >= MAX_BACKFILL_PAGES;
-      hitOrderLimit = records.length >= maxOrders;
-      break;
+      const json = await fetchOrdersPage(admin, search, after, context || {});
+      const page = json.data?.orders;
+      if (!page) break;
+
+      page.edges.forEach(({ node }) => {
+        const record = mapShopifyOrderToRecord(node, settings);
+        records.push(record);
+        if (!record.aiSource || record.aiSource === "Other-AI") {
+          const refDomain = (record.referrer || "").split("/")[0];
+          logger.info("[attribution] non-specific AI result", {
+            platform,
+            shopDomain: context?.shopDomain,
+            jobType: "backfill",
+            intent: context?.intent,
+          }, {
+            referrer: record.referrer || null,
+            utmSource: record.utmSource || null,
+            utmMedium: record.utmMedium || null,
+            detection: record.detection,
+          });
+        }
+      });
+
+      after = page.pageInfo.hasNextPage ? page.pageInfo.endCursor || undefined : undefined;
+      guard += 1;
+      if (guard >= MAX_BACKFILL_PAGES || records.length >= maxOrders) {
+        // Avoid runaway pagination in extreme cases.
+        hitPageLimit = guard >= MAX_BACKFILL_PAGES;
+        hitOrderLimit = records.length >= maxOrders;
+        break;
+      }
+    } while (after);
+  } catch (error) {
+    const message = (error as Error)?.message || String(error);
+    if (/not approved to access the Order object/i.test(message) || /protected customer data/i.test(message)) {
+      logger.warn("[backfill] orders fetch skipped due to protected customer data access", {
+        platform,
+        shopDomain: context?.shopDomain,
+        jobType: "backfill",
+        intent: context?.intent,
+      }, { message });
+      // Return empty dataset gracefully so settings页面可加载
+      return {
+        orders: [],
+        start: effectiveStart,
+        end: range.end,
+        clamped,
+        pageCount: 0,
+        hitPageLimit: false,
+        hitOrderLimit: false,
+        hitDurationLimit: false,
+      };
     }
-  } while (after);
+    throw error;
+  }
 
   logger.info("[backfill] fetched orders", {
     platform,

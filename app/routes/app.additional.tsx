@@ -53,7 +53,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     settings,
     url,
     defaultRangeKey: (exportRange as TimeRangeKey) || DEFAULT_RANGE_KEY,
-    fallbackToShopify: true,
+    fallbackToShopify: false,
     fallbackIntent: "settings-export",
   });
 

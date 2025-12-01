@@ -20,8 +20,8 @@ const ACTIVE_SUBSCRIPTIONS_QUERY = `#graphql
   }
 `;
 
-const APP_SUBSCRIPTION_CREATE_MUTATION = `#graphql
-  mutation AppSubscriptionCreate($name: String!, $trialDays: Int, $returnUrl: URL!, $amount: Decimal!, $currencyCode: CurrencyCode!, $interval: AppRecurringPricingInterval!) {
+const buildAppSubscriptionCreateMutation = (intervalEnum: string) => `#graphql
+  mutation AppSubscriptionCreate($name: String!, $trialDays: Int, $returnUrl: URL!, $amount: Decimal!, $currencyCode: CurrencyCode!) {
     appSubscriptionCreate(
       name: $name,
       trialDays: $trialDays,
@@ -31,7 +31,7 @@ const APP_SUBSCRIPTION_CREATE_MUTATION = `#graphql
           plan: {
             appRecurringPricingDetails: {
               price: { amount: $amount, currencyCode: $currencyCode },
-              interval: $interval
+              interval: ${intervalEnum}
             }
           }
         }
@@ -91,14 +91,14 @@ export const ensureBilling = async (
 
   try {
     const returnUrl = `${appUrl}/app/billing/confirm`;
-    const response = await admin.graphql(APP_SUBSCRIPTION_CREATE_MUTATION, {
+    const normalizedInterval = interval === "ANNUAL" ? "ANNUAL" : "EVERY_30_DAYS";
+    const response = await admin.graphql(buildAppSubscriptionCreateMutation(normalizedInterval), {
       variables: {
         name: planName,
         trialDays,
         returnUrl,
         amount,
         currencyCode,
-        interval,
       },
     });
 

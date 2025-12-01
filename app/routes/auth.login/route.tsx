@@ -42,9 +42,13 @@ export default function Auth() {
     const lang = language === "English" ? "en" : "zh";
     const resp = await fetch(`/auth/login.data?lang=${lang}`, { method: "POST", body: formData });
     if (resp.status === 202) {
-      const loc = resp.headers.get("Location");
-      if (loc) {
-        try { (window.top || window).location.href = loc; } catch { window.location.href = loc; }
+      let target = resp.headers.get("Location") || "";
+      try {
+        const data = await resp.clone().json().catch(() => null);
+        if (!target && data && typeof data.url === "string") target = data.url;
+      } catch {}
+      if (target) {
+        try { (window.top || window).location.href = target; } catch { window.location.href = target; }
         return;
       }
     }

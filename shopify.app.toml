@@ -2,7 +2,7 @@
 
 client_id = "775682342ec5187aaef9b6bd2a9d0b90"
 name = "AI Channel Copilot"
-application_url = "https://example.com"
+application_url = "https://ai-channel-copilot.onrender.com"
 embedded = true
 
 [build]
@@ -45,4 +45,4 @@ api_version = "2024-07"
 scopes = "read_orders,read_customers,read_products,write_orders,write_customers,read_shop"
 
 [auth]
-redirect_urls = [ "https://example.com/api/auth" ]
+redirect_urls = [ "https://ai-channel-copilot.onrender.com/auth" ]

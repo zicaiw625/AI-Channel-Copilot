@@ -1,4 +1,6 @@
 import type { ActionFunctionArgs } from "react-router";
+import type { TimeRangeKey } from "../lib/aiData";
+import type { CopilotIntent } from "../lib/copilot.intent";
 import { copilotAnswer } from "../lib/copilot.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -11,7 +13,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   if (contentType.includes("application/json")) {
     try {
       payload = await request.json();
-    } catch {}
+    } catch {
+      payload = {};
+    }
   } else {
     const form = await request.formData();
     payload = Object.fromEntries(Array.from(form.entries()));
@@ -34,9 +38,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
 
   const result = await copilotAnswer(request, {
-    intent: intent as any,
+    intent: intent as CopilotIntent | undefined,
     question,
-    range: range as any,
+    range: range as TimeRangeKey | undefined,
     from: (payload.from as string | null) || null,
     to: (payload.to as string | null) || null,
   });

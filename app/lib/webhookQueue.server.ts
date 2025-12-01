@@ -1,4 +1,5 @@
 import prisma from "../db.server";
+import { withAdvisoryLock } from "./locks.server";
 import { Prisma } from "@prisma/client";
 import { logger, type LogContext } from "./logger.server";
 
@@ -14,7 +15,9 @@ type WebhookJob = {
 };
 
 let processing = false;
-const MAX_RETRIES = 2;
+const MAX_RETRIES = Number(process.env.WEBHOOK_MAX_RETRIES || 5);
+const BASE_DELAY_MS = Number(process.env.WEBHOOK_BASE_DELAY_MS || 500);
+const MAX_DELAY_MS = Number(process.env.WEBHOOK_MAX_DELAY_MS || 30000);
 
 const dequeue = async () => {
   return prisma.$transaction(async (tx) => {
@@ -68,9 +71,10 @@ const processQueue = async (handlers: Map<string, WebhookJob["run"]>) => {
   processing = true;
 
   try {
-    while (true) {
-      const job = await dequeue();
-      if (!job) break;
+    await withAdvisoryLock(1001, async () => {
+      for (;;) {
+        const job = await dequeue();
+        if (!job) break;
 
       const startedAt = Date.now();
       const handler = handlers.get(job.intent);
@@ -102,9 +106,11 @@ const processQueue = async (handlers: Map<string, WebhookJob["run"]>) => {
           message,
         });
 
-        const attempts = (job.attempts || 0);
+        const attempts = job.attempts || 0;
         if (attempts < MAX_RETRIES) {
-          const nextDelay = 200 * 2 ** attempts;
+          const jitter = Math.floor(Math.random() * BASE_DELAY_MS);
+          const calc = BASE_DELAY_MS * 2 ** attempts + jitter;
+          const nextDelay = Math.min(MAX_DELAY_MS, calc);
           const nextRun = new Date(Date.now() + nextDelay);
           await prisma.webhookJob.update({
             where: { id: job.id },
@@ -121,7 +127,8 @@ const processQueue = async (handlers: Map<string, WebhookJob["run"]>) => {
           await updateJobStatus(job.id, "failed", message);
         }
       }
-    }
+      }
+    });
   } finally {
     processing = false;
     const pending = await prisma.webhookJob.count({ where: { status: "queued" } });
@@ -142,6 +149,12 @@ export const registerWebhookHandler = (
 };
 
 export const enqueueWebhookJob = async (job: WebhookJob) => {
+  if (!job || typeof job !== "object") return;
+  const payloadIsObject = job.payload && typeof job.payload === "object";
+  if (!payloadIsObject) {
+    logger.warn("[webhook] payload rejected: must be object", { shopDomain: job.shopDomain, intent: job.intent });
+    return;
+  }
   if (!handlers.has(job.intent)) {
     handlers.set(job.intent, job.run);
   }
@@ -199,3 +212,6 @@ export const enqueueWebhookJob = async (job: WebhookJob) => {
 
 export const getWebhookQueueSize = async () =>
   prisma.webhookJob.count({ where: { status: { in: ["queued", "processing"] } } });
+
+export const getDeadLetterJobs = async (limit = 50) =>
+  prisma.webhookJob.findMany({ where: { status: "failed" }, orderBy: { finishedAt: "desc" }, take: limit });

@@ -80,10 +80,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   } catch (error) {
     if (error instanceof Response) throw error;
     const form = await request.formData();
-    const shop = (form.get("shop") as string) || "";
     const url = new URL(request.url);
     const lang = url.searchParams.get("lang") === "en" ? "en" : "zh";
-    const next = new Request(`/auth/login?lang=${lang}`, { method: "POST", body: form });
+    const nextUrl = new URL(`/auth/login?lang=${lang}`, url.origin);
+    const next = new Request(nextUrl.toString(), { method: "POST", body: form, headers: request.headers });
     throw await login(next);
   }
 };

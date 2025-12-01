@@ -1,10 +1,10 @@
 import type { Prisma } from "@prisma/client";
-import type { SettingsDefaults } from "./aiData";
+import type { SettingsDefaults, DateRange } from "./aiData";
 import { fetchOrdersForRange } from "./shopifyOrders.server";
-import type { DateRange } from "./aiData";
 import { markActivity } from "./settings.server";
 import { persistOrders } from "./persistence.server";
 import prisma from "../db.server";
+import { withAdvisoryLock } from "./locks.server";
 import { logger } from "./logger.server";
 import { MAX_BACKFILL_DURATION_MS, MAX_BACKFILL_ORDERS } from "./constants";
 
@@ -64,9 +64,10 @@ const processQueue = async (
   processing = true;
 
   try {
-    while (true) {
-      const job = await dequeue(where);
-      if (!job) break;
+    await withAdvisoryLock(1002, async () => {
+      for (;;) {
+        const job = await dequeue(where);
+        if (!job) break;
 
       const range: DateRange = {
         key: "custom",
@@ -124,6 +125,7 @@ const processQueue = async (
         await updateJobStatus(job.id, "failed", { error: message });
       }
     }
+    });
   } finally {
     processing = false;
     const pending = await prisma.backfillJob.count({ where: { status: "queued", ...where } });
@@ -154,7 +156,7 @@ export const startBackfill = async (
     return { queued: false, reason: "in-flight" } as const;
   }
 
-  const job = await prisma.backfillJob.create({
+  await prisma.backfillJob.create({
     data: {
       shopDomain,
       range: range.label,

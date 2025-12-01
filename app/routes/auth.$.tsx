@@ -18,7 +18,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       await ensureWebhooks(session);
 
       const shopDomain = session.shop;
-      let settings = await getSettings(shopDomain);
+      const settings = await getSettings(shopDomain);
       const now = new Date();
       const lastBackfillAt = settings.lastBackfillAt ? new Date(settings.lastBackfillAt) : null;
       const withinCooldown =

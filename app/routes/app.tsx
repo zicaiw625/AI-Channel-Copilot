@@ -41,10 +41,9 @@ export default function App() {
       }
     };
     const onCustom = (e: Event) => {
-      try {
-        const detail = (e as CustomEvent).detail as string | undefined;
-        if (detail && detail !== uiLanguage) setUiLanguage(detail);
-      } catch {}
+      const ce = e as CustomEvent;
+      const detail = typeof ce.detail === "string" ? ce.detail : undefined;
+      if (detail && detail !== uiLanguage) setUiLanguage(detail);
     };
     window.addEventListener("storage", onStorage);
     window.addEventListener("aicc_language_change", onCustom as EventListener);

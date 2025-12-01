@@ -62,7 +62,7 @@ export const applyAiTags = async (
       const slice = targets.slice(i, i + batchSize);
       await Promise.all(slice.map((target) => addTags(admin, target.id, target.tags)));
     }
-  };
+  }
 
   for (const order of orders) {
     if (!order.aiSource) continue;
@@ -85,7 +85,7 @@ export const applyAiTags = async (
         seenCustomers.add(order.customerId);
       }
     }
-  };
+  }
 
   if (!dryRun) {
     await runInBatches(orderTagTargets);
@@ -102,4 +102,4 @@ export const applyAiTags = async (
       customerTagTargets: customerTagTargets.length,
     },
   );
-};
+  }

@@ -208,7 +208,16 @@ export const buildTrend = (
       bucketValue.byChannel[order.aiSource] = channelMetrics;
     }
   });
-  return Array.from(buckets.values()).sort((a, b) => a.sortKey - b.sortKey).map(({ sortKey, ...rest }) => rest);
+  return Array.from(buckets.values())
+    .sort((a, b) => a.sortKey - b.sortKey)
+    .map(({ label, aiGMV, aiOrders, overallGMV, overallOrders, byChannel }) => ({
+      label,
+      aiGMV,
+      aiOrders,
+      overallGMV,
+      overallOrders,
+      byChannel,
+    }));
 };
 
 export const buildProducts = (

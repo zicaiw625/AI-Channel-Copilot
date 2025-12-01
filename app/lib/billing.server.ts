@@ -85,6 +85,17 @@ export const ensureBilling = async (
   const trialDays = toNumber(getEnvOrDefault("BILLING_TRIAL_DAYS", "7"), 7);
   const interval = getEnvOrDefault("BILLING_INTERVAL", "EVERY_30_DAYS");
   const appUrl = requireEnv("SHOPIFY_APP_URL");
+  void request;
+
+  const validInterval = interval === "ANNUAL" || interval === "EVERY_30_DAYS";
+  const validCurrency = /^[A-Z]{3}$/.test(currencyCode);
+  const validAmount = amount > 0 && Number.isFinite(amount);
+  const validTrial = trialDays >= 0 && Number.isInteger(trialDays);
+  if (process.env.NODE_ENV === "production") {
+    if (!validInterval || !validCurrency || !validAmount || !validTrial) {
+      throw new Error("Invalid billing configuration");
+    }
+  }
 
   const ok = await hasActiveSubscription(admin, planName);
   if (ok) return;

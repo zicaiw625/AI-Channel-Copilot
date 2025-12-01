@@ -50,7 +50,7 @@ const buildOverviewShape = (data: Awaited<ReturnType<typeof getAiDashboardData>>
 
 
 export const copilotAnswer = async (request: Request, payload: CopilotRequest) => {
-  const { admin, session } = await authenticate.admin(request);
+  const { session } = await authenticate.admin(request);
   const shopDomain = session?.shop || "";
   const settings = await getSettings(shopDomain);
   const rangeKey: TimeRangeKey = (payload.range as TimeRangeKey) || "30d";

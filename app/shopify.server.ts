@@ -7,6 +7,7 @@ import {
 import { PrismaSessionStorage } from "@shopify/shopify-app-session-storage-prisma";
 import prisma from "./db.server";
 import { requireEnv } from "./lib/env.server";
+import { runStartupSelfCheck } from "./lib/selfcheck.server";
 
 const apiKey = requireEnv("SHOPIFY_API_KEY");
 const apiSecretKey = requireEnv("SHOPIFY_API_SECRET");
@@ -31,6 +32,8 @@ const shopify = shopifyApp({
     ? { customShopDomains: [process.env.SHOP_CUSTOM_DOMAIN] }
     : {}),
 });
+
+runStartupSelfCheck();
 
 export default shopify;
 export const apiVersion = appApiVersion;

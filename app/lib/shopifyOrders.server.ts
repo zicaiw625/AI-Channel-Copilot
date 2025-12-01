@@ -1,5 +1,4 @@
-import { defaultSettings, mapShopifyOrderToRecord, type DateRange } from "./aiData";
-import type { OrderRecord, SettingsDefaults, ShopifyOrderNode } from "./aiData";
+import { defaultSettings, mapShopifyOrderToRecord, type DateRange, type OrderRecord, type SettingsDefaults, type ShopifyOrderNode } from "./aiData";
 import { getPlatform, isDemoMode } from "./runtime.server";
 import { recordGraphqlCall } from "./observability.server";
 import {
@@ -397,6 +396,7 @@ export const fetchOrdersForRange = async (
             utmSource: record.utmSource || null,
             utmMedium: record.utmMedium || null,
             detection: record.detection,
+            refDomain: refDomain || null,
           });
         }
       });

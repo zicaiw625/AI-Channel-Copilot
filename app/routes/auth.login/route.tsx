@@ -14,7 +14,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const errors = loginErrorMessage(result);
   const url = new URL(request.url);
   const language = url.searchParams.get("lang") === "en" ? "English" : "中文";
-  return { errors, language, apiKey: process.env.SHOPIFY_API_KEY };
+  return { errors, language, apiKey: process.env.SHOPIFY_API_KEY ?? "" };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -26,6 +26,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   return {
     errors,
     language,
+    apiKey: process.env.SHOPIFY_API_KEY ?? "",
   };
 };
 
@@ -34,7 +35,7 @@ export default function Auth() {
   const actionData = useActionData<typeof action>();
   const [shop, setShop] = useState("");
   const { errors, language, apiKey } = actionData || loaderData;
-  const app = useAppBridge();
+  useAppBridge();
 
   const submit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -43,10 +44,8 @@ export default function Auth() {
     const resp = await fetch(`/auth/login.data?lang=${lang}`, { method: "POST", body: formData });
     if (resp.status === 202) {
       let target = resp.headers.get("Location") || "";
-      try {
-        const data = await resp.clone().json().catch(() => null);
-        if (!target && data && typeof data.url === "string") target = data.url;
-      } catch {}
+      const data = await resp.clone().json().catch(() => null);
+      if (!target && data && typeof data.url === "string") target = data.url;
       if (!target && apiKey && shop) {
         const store = shop.replace(/\.myshopify\.com$/i, "");
         target = `https://admin.shopify.com/store/${store}/oauth/install?client_id=${apiKey}`;
@@ -59,7 +58,7 @@ export default function Auth() {
   };
 
   return (
-    <AppProvider embedded>
+    <AppProvider embedded apiKey={apiKey}>
       <s-page>
         <form method="post" onSubmit={submit}>
         <s-section heading={language === "English" ? "Log in" : "登录"}>

@@ -1,4 +1,4 @@
-import type { AIChannel, AiDomainRule, UtmSourceRule, DetectionConfig } from "./aiTypes";
+import type { AIChannel, UtmSourceRule, DetectionConfig } from "./aiTypes";
 
 const normalizeDomain = (domain?: string | null) =>
   (domain || "").replace(/^https?:\/\//, "").replace(/^www\./, "").toLowerCase();

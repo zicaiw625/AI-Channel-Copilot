@@ -1,6 +1,6 @@
 import type { ActionFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
-import { extractGdprIdentifiers, redactCustomerRecords } from "../lib/gdpr.server";
+import { redactCustomerRecords } from "../lib/gdpr.server";
 import { logger } from "../lib/logger.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {

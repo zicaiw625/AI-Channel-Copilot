@@ -776,6 +776,7 @@ export default function Index() {
                 <thead>
                   <tr>
                     <th>{t(language as any, "products_table_product")}</th>
+                    <th>{language === "English" ? "Product ID / Handle" : "产品 ID / Handle"}</th>
                     <th>{t(language as any, "products_table_ai_orders")}</th>
                     <th>{t(language as any, "products_table_ai_gmv")}</th>
                     <th>{t(language as any, "products_table_ai_share")}</th>
@@ -790,6 +791,7 @@ export default function Index() {
                           {product.title}
                         </a>
                       </td>
+                      <td>{product.id} / {product.handle}</td>
                       <td>{fmtNumber(product.aiOrders)}</td>
                       <td>{fmtCurrency(product.aiGMV)}</td>
                       <td>{fmtPercent(product.aiShare)}</td>

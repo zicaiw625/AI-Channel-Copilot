@@ -3,7 +3,7 @@ import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { Link, useFetcher, useLoaderData, useLocation, useNavigate } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 
-import { channelList, defaultSettings, timeRanges, type AIChannel, LOW_SAMPLE_THRESHOLD } from "../lib/aiData";
+import { channelList, defaultSettings, timeRanges, type AIChannel, type TimeRangeKey, LOW_SAMPLE_THRESHOLD } from "../lib/aiData";
 import { getSettings, syncShopPreferences } from "../lib/settings.server";
 import { authenticate } from "../shopify.server";
 import styles from "../styles/app.dashboard.module.css";
@@ -470,12 +470,11 @@ export default function Index() {
                   {language === "English" ? "Copilot Q&A" : "Copilot 分析问答"}
                 </Link>
                 <a
-                className={styles.secondaryButton}
-                href={`data:text/csv;charset=utf-8,${encodeURIComponent(exportData.ordersCsv)}`}
-                download={`ai-orders-${range}.csv`}
-              >
-                {t(language as any, "export_orders_csv")}
-              </a>
+                  className={styles.secondaryButton}
+                  href={`/api/export/orders?range=${range}&from=${encodeURIComponent(dateRange.fromParam || "")}&to=${encodeURIComponent(dateRange.toParam || "")}`}
+                >
+                  {t(language as any, "export_orders_csv")}
+                </a>
         </div>
         </div>
 

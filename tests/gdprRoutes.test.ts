@@ -45,7 +45,7 @@ describe("GDPR webhooks", () => {
 
     vi.mocked(describeCustomerFootprint).mockResolvedValue({ hasData: false, orders: 0, customers: 0 });
 
-    const response = await dataRequestAction({ request: new Request("http://test", { method: "POST" }) });
+    const response = await dataRequestAction({ request: new Request("http://test", { method: "POST" }) } as any);
     const body = await response.json();
 
     expect(body.ok).toBe(true);
@@ -63,11 +63,11 @@ describe("GDPR webhooks", () => {
 
     vi.mocked(describeCustomerFootprint).mockResolvedValue({ hasData: true, orders: 2, customers: 1 });
     vi.mocked(collectCustomerData).mockResolvedValue({
-      orders: [{ id: "gid://shopify/Order/10" }],
-      customers: [{ id: "gid://shopify/Customer/1" }],
-    });
+      orders: [{ id: "gid://shopify/Order/10", products: [] }],
+      customers: [{ id: "gid://shopify/Customer/1", shopDomain: "demo.myshopify.com", platform: "shopify", acquiredViaAi: false, firstOrderId: null, firstOrderAt: null, lastOrderAt: null, orderCount: 0, totalSpent: 0, firstAiOrderId: null, createdAt: new Date(), updatedAt: new Date() }],
+    } as any);
 
-    const response = await dataRequestAction({ request: new Request("http://test", { method: "POST" }) });
+    const response = await dataRequestAction({ request: new Request("http://test", { method: "POST" }) } as any);
     const body = await response.json();
 
     expect(body.ok).toBe(true);
@@ -87,7 +87,7 @@ describe("GDPR webhooks", () => {
       payload: { customer_id: 1, orders_to_redact: [10, 11] },
     });
 
-    const response = await customerRedactAction({ request: new Request("http://test", { method: "POST" }) });
+    const response = await customerRedactAction({ request: new Request("http://test", { method: "POST" }) } as any);
 
     expect(response.status).toBe(200);
     expect(redactCustomerRecords).toHaveBeenCalledWith(
@@ -104,7 +104,7 @@ describe("GDPR webhooks", () => {
       payload: { shop_domain: "other.myshopify.com" },
     });
 
-    const response = await shopRedactAction({ request: new Request("http://test", { method: "POST" }) });
+    const response = await shopRedactAction({ request: new Request("http://test", { method: "POST" }) } as any);
 
     expect(response.status).toBe(200);
     expect(wipeShopData).toHaveBeenCalledWith("other.myshopify.com");

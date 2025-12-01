@@ -34,6 +34,7 @@ const platform = getPlatform();
 type OrderWebhookPayload = {
   admin_graphql_api_id?: unknown;
   id?: unknown;
+  order_id?: unknown;
 };
 
 const normalizeOrderGid = (value: unknown): string | null => {
@@ -47,6 +48,7 @@ const extractOrderGid = (payload: Record<string, unknown>): string | null => {
   return (
     normalizeOrderGid(typed.admin_graphql_api_id) ||
     normalizeOrderGid(typed.id) ||
+    normalizeOrderGid(typed.order_id) ||
     null
   );
 };

@@ -7,6 +7,8 @@ export type TopCustomerRow = {
   ltv: number;
   orders: number;
   ai: boolean;
+  firstAIAcquired: boolean;
+  repeatCount: number;
 };
 
 export const buildTopCustomers = (

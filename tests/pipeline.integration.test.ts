@@ -71,7 +71,7 @@ describe("orders webhook to dashboard integration", () => {
       signals: ["referrer:chatgpt"],
       createdAt: new Date(),
     } as any);
-    vi.mocked(persistOrders).mockResolvedValue();
+    vi.mocked(persistOrders).mockResolvedValue({ created: 0, updated: 0 } as any);
     vi.mocked(markActivity).mockResolvedValue();
     vi.mocked(applyAiTags).mockResolvedValue();
 

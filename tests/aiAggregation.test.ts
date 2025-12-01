@@ -21,6 +21,7 @@ const mkOrder = (o: Partial<OrderRecord>): OrderRecord => ({
   products: o.products || [],
   detection: o.detection || '',
   signals: o.signals || [],
+  currency: o.currency || 'USD',
 })
 
 describe('aiAggregation', () => {
@@ -29,7 +30,7 @@ describe('aiAggregation', () => {
     mkOrder({ id: 'o2', customerId: 'c2', totalPrice: 80, aiSource: null, createdAt: new Date('2025-11-02').toISOString(), products: [{ id: 'p2', title: 'P2', handle: 'p2', url: '', price: 80, currency: 'USD', quantity: 1 }] }),
     mkOrder({ id: 'o3', customerId: 'c1', totalPrice: 50, aiSource: 'Perplexity', createdAt: new Date('2025-11-03').toISOString(), products: [{ id: 'p1', title: 'P1', handle: 'p1', url: '', price: 50, currency: 'USD', quantity: 1 }] }),
   ]
-  const range = { key: '7d', days: 7, start: new Date('2025-11-01'), end: new Date('2025-11-10') }
+  const range = { key: '7d' as const, label: '最近 7 天', days: 7, start: new Date('2025-11-01'), end: new Date('2025-11-10') }
 
   it('buildOverview computes totals and shares', () => {
     const ov = buildOverview(orders, 'current_total_price', 'USD')

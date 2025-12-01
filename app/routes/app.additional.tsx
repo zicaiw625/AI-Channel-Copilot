@@ -330,18 +330,19 @@ export default function SettingsAndExport() {
   };
 
   useEffect(() => {
-    if (fetcher.data) {
-      if (fetcher.data.ok) {
+    const data = fetcher.data as { ok: boolean; intent?: string; message?: string } | undefined;
+    if (data) {
+      if (data.ok) {
         const message =
-          fetcher.data.intent === "tag"
+          data.intent === "tag"
             ? (language === "English" ? "Tag write-back triggered (based on last 90 days AI orders)" : "标签写回已触发（基于最近 90 天 AI 订单）")
-            : fetcher.data.intent === "backfill"
+            : data.intent === "backfill"
               ? (language === "English" ? "Backfilled last 90 days (including AI detection)" : "已补拉最近 90 天订单（含 AI 识别）")
               : (language === "English" ? "Settings saved" : "设置已保存");
         shopify.toast.show?.(message);
       } else {
         shopify.toast.show?.(
-          fetcher.data.message || (language === "English" ? "Save failed. Check configuration or retry later." : "保存失败，请检查配置或稍后重试"),
+          data.message || (language === "English" ? "Save failed. Check configuration or retry later." : "保存失败，请检查配置或稍后重试"),
         );
       }
     }
@@ -867,8 +868,7 @@ export default function SettingsAndExport() {
             </p>
             <a
               className={styles.primaryButton}
-              href={toCsvHref(exports.ordersCsv)}
-              download="ai-orders-90d.csv"
+              href={`/api/export/orders?range=${exportWindow}`}
             >
               {language === "English" ? "Download CSV" : "下载 CSV"}
             </a>
@@ -878,8 +878,7 @@ export default function SettingsAndExport() {
             <p>{language === "English" ? "Fields: product title, AI orders, AI GMV, AI share, top channel, URL (with product ID/handle for analysis)." : "字段：产品名、AI 订单数、AI GMV、AI 占比、Top 渠道、URL（附产品 ID / handle 便于二次分析）。"}</p>
             <a
               className={styles.secondaryButton}
-              href={toCsvHref(exports.productsCsv)}
-              download="ai-products-90d.csv"
+              href={`/api/export/products?range=${exportWindow}`}
             >
               {language === "English" ? "Download CSV" : "下载 CSV"}
             </a>
@@ -889,8 +888,7 @@ export default function SettingsAndExport() {
             <p>{t(language as any, "customers_ltv_desc")}</p>
             <a
               className={styles.secondaryButton}
-              href={toCsvHref(exports.customersCsv)}
-              download="customers-ltv-90d.csv"
+              href={`/api/export/customers?range=${exportWindow}`}
             >
               {language === "English" ? "Download CSV" : "下载 CSV"}
             </a>

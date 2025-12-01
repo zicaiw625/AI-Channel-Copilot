@@ -100,7 +100,7 @@ describe("Order mapping and aggregation", () => {
         totalPrice: 120,
         currency: "USD",
         subtotalPrice: 100,
-        aiSource: "ChatGPT",
+        aiSource: "ChatGPT" as const,
         referrer: "https://chat.openai.com/",
         landingPage: "https://store.example.com/",
         utmSource: "chatgpt",

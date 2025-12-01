@@ -4,8 +4,6 @@ import { getSettings } from "./settings.server";
 import { authenticate } from "../shopify.server";
 import { parseIntent, type CopilotIntent } from "./copilot.intent";
 
-type CopilotIntent = CopilotIntent;
-
 type CopilotRequest = {
   intent?: CopilotIntent;
   question?: string;

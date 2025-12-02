@@ -196,6 +196,30 @@ export const hasActiveSubscription = async (
   return subs.some((s) => s.name === planName && s.status === "ACTIVE");
 };
 
+export const getActiveSubscriptionDetails = async (
+  admin: AdminGraphqlClient,
+  planName: string,
+): Promise<{ status: string | null; trialEnd: Date | null } | null> => {
+  const sdk = createGraphqlSdk(admin);
+  const QUERY = `#graphql
+    query ActiveSubscriptionDetails {
+      currentAppInstallation {
+        activeSubscriptions { id name status trialEnd }
+      }
+    }
+  `;
+  const resp = await sdk.request("activeSubscriptionDetails", QUERY, {});
+  if (!resp.ok) return null;
+  const json = (await resp.json()) as {
+    data?: { currentAppInstallation?: { activeSubscriptions?: { id: string; name: string; status: string; trialEnd?: string | null }[] } };
+  };
+  const subs = json.data?.currentAppInstallation?.activeSubscriptions || [];
+  const sub = subs.find((s) => s.name === planName) || null;
+  if (!sub) return null;
+  const trialEnd = sub.trialEnd ? new Date(sub.trialEnd) : null;
+  return { status: sub.status || null, trialEnd };
+};
+
 export const ensureBilling = async (
   admin: AdminGraphqlClient,
   shopDomain: string,

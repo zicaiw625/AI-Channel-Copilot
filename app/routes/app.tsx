@@ -5,10 +5,9 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { AppProvider } from "@shopify/shopify-app-react-router/react";
 
 import { authenticate, BILLING_PLAN } from "../shopify.server";
-import { requireEnv, isNonProduction } from "../lib/env.server";
-import { LANGUAGE_EVENT, LANGUAGE_STORAGE_KEY } from "../lib/constants";
-import { getSettings, syncShopPreferences, getInstallCreatedAt } from "../lib/settings.server";
-import { detectAndPersistDevShop, shouldSkipBillingForPath, computeIsTestMode, markSubscriptionCheck, getTrialRemainingDays } from "../lib/billing.server";
+import { requireEnv } from "../lib/env.server";
+import { getSettings, syncShopPreferences } from "../lib/settings.server";
+import { detectAndPersistDevShop, shouldSkipBillingForPath, computeIsTestMode, markSubscriptionCheck, getTrialRemainingDays, getBillingState } from "../lib/billing.server";
  
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -23,11 +22,20 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const skipBilling = shouldSkipBillingForPath(url.pathname, isDevShop);
     let readOnly = false;
     let trialDaysLeft: number | null = null;
+    let devBanner = isDevShop;
     if (!skipBilling) {
-      const isTest = await computeIsTestMode(shopDomain);
-      const result = await billing.check({ plans: [BILLING_PLAN], isTest });
-      readOnly = !result.hasActivePayment;
-      await markSubscriptionCheck(shopDomain, result.hasActivePayment ? "active" : "inactive");
+      const state = await getBillingState(shopDomain);
+      const ttlMinutes = Number(process.env.BILLING_CHECK_TTL_MINUTES || "10");
+      const fresh = state?.lastCheckedAt && Date.now() - state.lastCheckedAt.getTime() < ttlMinutes * 60 * 1000;
+      const cachedActive = state?.lastSubscriptionStatus === "active" || (typeof state?.lastTrialEndAt === "object" && state?.lastTrialEndAt && state.lastTrialEndAt.getTime() > Date.now());
+      if (fresh && cachedActive) {
+        readOnly = false;
+      } else {
+        const isTest = await computeIsTestMode(shopDomain);
+        const result = await billing.check({ plans: [BILLING_PLAN], isTest });
+        readOnly = !result.hasActivePayment;
+        await markSubscriptionCheck(shopDomain, result.hasActivePayment ? "active" : "inactive");
+      }
       trialDaysLeft = await getTrialRemainingDays(shopDomain);
       const trialActive = typeof trialDaysLeft === "number" && trialDaysLeft > 0;
       if (trialActive) readOnly = false;
@@ -39,15 +47,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         throw new Response(null, { status: 302, headers: { Location: next.toString() } });
       }
     }
-    return { apiKey: requireEnv("SHOPIFY_API_KEY"), language: settings.languages[0] || "中文", readOnly, trialDaysLeft };
+    return { apiKey: requireEnv("SHOPIFY_API_KEY"), language: settings.languages[0] || "中文", readOnly, trialDaysLeft, isDevShop: devBanner };
   } catch (e) {
     if (e instanceof Response) throw e;
   }
-  return { apiKey: requireEnv("SHOPIFY_API_KEY"), language: settings.languages[0] || "中文", readOnly: false, trialDaysLeft: null };
+  return { apiKey: requireEnv("SHOPIFY_API_KEY"), language: settings.languages[0] || "中文", readOnly: false, trialDaysLeft: null, isDevShop: false };
 };
 
 export default function App() {
-  const { apiKey, language, readOnly, trialDaysLeft } = useLoaderData<typeof loader>();
+  const { apiKey, language, readOnly, trialDaysLeft, isDevShop } = useLoaderData<typeof loader>();
   const uiLanguage = useUILanguage(language);
 
   return (
@@ -62,6 +70,11 @@ export default function App() {
         {typeof trialDaysLeft === "number" && trialDaysLeft > 0 && (
           <span style={{ marginLeft: 12, color: "#555" }}>
             {uiLanguage === "English" ? `Trial ${trialDaysLeft} days left` : `试用剩余 ${trialDaysLeft} 天`}
+          </span>
+        )}
+        {isDevShop && (
+          <span style={{ marginLeft: 12, color: "#555" }}>
+            {uiLanguage === "English" ? "Development store: free testing mode" : "开发店环境：免费测试模式"}
           </span>
         )}
       </s-app-nav>

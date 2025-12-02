@@ -1,6 +1,6 @@
 
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
-import shopify, { authenticate, BILLING_PLAN, type BillingPlanKey } from "../shopify.server";
+import { authenticate, BILLING_PLAN, type BillingPlanKey } from "../shopify.server";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { getSettings, markActivity } from "../lib/settings.server";
 import { detectAndPersistDevShop, computeIsTestMode } from "../lib/billing.server";

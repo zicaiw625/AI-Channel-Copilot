@@ -61,6 +61,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 export default function App() {
   const { apiKey, language, readOnly, trialDaysLeft, isDevShop } = useLoaderData<typeof loader>();
   const uiLanguage = useUILanguage(language);
+  const invalidApiKey = !apiKey || apiKey === "placeholder" || apiKey.length < 10;
 
   return (
     <AppProvider embedded apiKey={apiKey}>
@@ -82,6 +83,13 @@ export default function App() {
           </span>
         )}
       </s-app-nav>
+      {invalidApiKey && (
+        <div style={{ padding: 12, margin: 12, border: "1px solid #ffd7c2", background: "#fff2e8", color: "#b25b1a" }}>
+          {uiLanguage === "English"
+            ? "Environment misconfigured: set SHOPIFY_API_KEY/SHOPIFY_API_SECRET in Render and redeploy."
+            : "环境变量未配置：请在 Render 设置 SHOPIFY_API_KEY/SHOPIFY_API_SECRET 并重新部署。"}
+        </div>
+      )}
       <Outlet />
     </AppProvider>
   );

@@ -120,7 +120,7 @@ export const detectAndPersistDevShop = async (
   if (!response.ok) return false;
   const json = (await response.json()) as { data?: { shop?: { plan?: { displayName?: string | null } } } };
   const planName = json?.data?.shop?.plan?.displayName?.toLowerCase() || "";
-  const isDev = planName.includes("development") || planName.includes("trial");
+  const isDev = planName.includes("development") || planName.includes("trial") || planName.includes("affiliate");
   const state = await upsertBillingState(shopDomain, { isDevShop: isDev });
   return state.isDevShop;
 };

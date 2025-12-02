@@ -40,15 +40,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         }
       }
 
-      const isDev = await detectAndPersistDevShop(admin, shopDomain);
-      const isTest = await computeIsTestMode(shopDomain);
-      const check = await billing.check({ plans: [BILLING_PLAN as BillingPlanKey], isTest });
-      if (!isDev && !check.hasActivePayment) {
-        const url = new URL(request.url);
-        const next = new URL("/app/onboarding", url.origin);
-        next.search = url.search;
-        throw new Response(null, { status: 302, headers: { Location: next.toString() } });
-      }
+      const url = new URL(request.url);
+      const next = new URL("/app/onboarding", url.origin);
+      next.search = url.search;
+      throw new Response(null, { status: 302, headers: { Location: next.toString() } });
     }
   } catch (error) {
     logger.warn("[auth] loader encountered error", undefined, { message: (error as Error).message });

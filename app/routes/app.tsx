@@ -20,6 +20,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const url = new URL(request.url);
     const isDevShop = await detectAndPersistDevShop(admin, shopDomain);
     const skipBilling = shouldSkipBillingForPath(url.pathname, isDevShop);
+    const billingEnabled = process.env.ENABLE_BILLING === "true";
+    if (!billingEnabled) {
+      return { apiKey: requireEnv("SHOPIFY_API_KEY"), language: settings.languages[0] || "中文", readOnly: false, trialDaysLeft: null, isDevShop };
+    }
     let readOnly = false;
     let trialDaysLeft: number | null = null;
     let devBanner = isDevShop;

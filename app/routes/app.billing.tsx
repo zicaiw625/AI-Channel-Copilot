@@ -16,7 +16,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   settings = await syncShopPreferences(admin, shopDomain, settings);
   const isDev = await detectAndPersistDevShop(admin, shopDomain);
   const isTest = await computeIsTestMode(shopDomain);
-  const billingCheck = isDev
+  const billingEnabled = process.env.ENABLE_BILLING === "true";
+  const billingCheck = (!billingEnabled || isDev)
     ? { hasActivePayment: true }
     : await billing.check({ plans: [BILLING_PLAN], isTest });
   const amount = Number(process.env.BILLING_PRICE || "5");
@@ -58,6 +59,7 @@ export const headers: HeadersFunction = (headersArgs) => {
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   try {
+    if (process.env.ENABLE_BILLING !== "true") return null;
     const { billing, session } = await authenticate.admin(request);
     const shopDomain = session?.shop || "";
     const isTest = await computeIsTestMode(shopDomain);

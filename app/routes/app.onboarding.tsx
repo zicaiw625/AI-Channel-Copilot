@@ -17,11 +17,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const currency = process.env.BILLING_CURRENCY || "USD";
   const url = new URL(request.url);
   const reason = url.searchParams.get("reason") || "";
-  return { language: settings.languages[0] || "中文", planName: BILLING_PLAN, trialDays, price, currency, isDevShop, reason };
+  const enabled = process.env.ENABLE_BILLING === "true";
+  return { language: settings.languages[0] || "中文", planName: BILLING_PLAN, trialDays, price, currency, isDevShop, reason, enabled };
 };
 
 export default function Onboarding() {
-  const { language, planName, trialDays, price, currency, isDevShop, reason } = useLoaderData<typeof loader>();
+  const { language, planName, trialDays, price, currency, isDevShop, reason, enabled } = useLoaderData<typeof loader>();
   const en = language === "English";
   return (
     <section style={{ padding: 16 }}>
@@ -44,7 +45,7 @@ export default function Onboarding() {
               : `计划：${planName}，$${price} / 每 30 天，含 ${trialDays} 天免费试用。`}
           </p>
         )}
-        {!isDevShop && trialDays >= 0 && (
+        {enabled && !isDevShop && trialDays >= 0 && (
           <form method="post" action="/app/billing/start" style={{ display: "inline-block", marginRight: 12 }}>
             <button type="submit">
               {en
@@ -53,7 +54,10 @@ export default function Onboarding() {
             </button>
           </form>
         )}
-        {!isDevShop && (
+        {!enabled && (
+          <p>{en ? "Billing disabled in this environment." : "当前环境已关闭计费功能。"}</p>
+        )}
+        {enabled && !isDevShop && (
           <div style={{ display: "inline-block", marginTop: 8 }}>
             <s-link href="/intro">
               {en ? "Maybe later, view intro only" : "稍后再说，仅查看介绍"}

@@ -7,29 +7,31 @@ import { shouldOfferTrial, computeIsTestMode, detectAndPersistDevShop } from "..
 import { getSettings, syncShopPreferences } from "../lib/settings.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const demo = process.env.DEMO_MODE === "true";
-  let admin: any = null;
-  let session: any = null;
+  type AuthShape = Awaited<ReturnType<typeof authenticate.admin>>;
+  let admin: AuthShape["admin"] | null = null;
+  let session: AuthShape["session"] | null = null;
   try {
     const auth = await authenticate.admin(request);
     admin = auth.admin;
     session = auth.session;
-  } catch (e) {}
+  } catch (error) {
+    // Allow unauthenticated access so shops can view onboarding details
+    void error;
+  }
   const shopDomain = session?.shop || "";
   let settings = await getSettings(shopDomain);
   settings = await syncShopPreferences(admin, shopDomain, settings);
   const trialDays = await shouldOfferTrial(shopDomain);
   const isDevShop = admin ? await detectAndPersistDevShop(admin, shopDomain) : false;
   const price = Number(process.env.BILLING_PRICE || "5");
-  const currency = process.env.BILLING_CURRENCY || "USD";
   const url = new URL(request.url);
   const reason = url.searchParams.get("reason") || "";
   const enabled = process.env.ENABLE_BILLING === "true";
-  return { language: settings.languages[0] || "中文", planName: BILLING_PLAN, trialDays, price, currency, isDevShop, reason, enabled, shopDomain };
+  return { language: settings.languages[0] || "中文", planName: BILLING_PLAN, trialDays, price, isDevShop, reason, enabled, shopDomain };
 };
 
 export default function Onboarding() {
-  const { language, planName, trialDays, price, currency, isDevShop, reason, enabled, shopDomain } = useLoaderData<typeof loader>();
+  const { language, planName, trialDays, price, isDevShop, reason, enabled, shopDomain } = useLoaderData<typeof loader>();
   const en = language === "English";
   return (
     <section style={{ padding: 16 }}>

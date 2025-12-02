@@ -18,7 +18,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   try {
     const auth = await authenticate.admin(request);
     shopDomain = auth.session?.shop || shopDomain;
-  } catch {}
+  } catch (error) {
+    // Ignore authentication errors; intro is accessible pre-install.
+    void error;
+  }
 
   if (!shopDomain) {
     const token = url.searchParams.get("id_token") || "";
@@ -36,7 +39,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           shopDomain = `${match[1]}.myshopify.com`;
         }
       }
-    } catch {}
+    } catch (error) {
+      // Best-effort extraction; ignore malformed token payloads.
+      void error;
+    }
   }
 
   if (!shopDomain) {
@@ -48,14 +54,20 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         const handle = match[1];
         shopDomain = `${handle}.myshopify.com`;
       }
-    } catch {}
+    } catch (error) {
+      // Ignore invalid host hints and continue with defaults.
+      void error;
+    }
   }
 
   if (shopDomain) {
     try {
       const settings = await getSettings(shopDomain);
       language = settings.languages[0] || language;
-    } catch {}
+    } catch (error) {
+      // Ignore settings lookup failures; fall back to default language.
+      void error;
+    }
   }
 
   return { language, apiKey: requireEnv("SHOPIFY_API_KEY") };

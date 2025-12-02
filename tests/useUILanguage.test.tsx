@@ -1,6 +1,5 @@
 /* @vitest-environment jsdom */
 import { describe, it, expect } from "vitest";
-import React from "react";
 import { createRoot } from "react-dom/client";
 import { act } from "react";
 import { useUILanguage } from "../app/lib/useUILanguage";
@@ -10,8 +9,6 @@ function TestComp({ initial }: { initial: string }) {
   const lang = useUILanguage(initial);
   return <span data-testid="lang">{lang}</span>;
 }
-
-const flush = () => new Promise((r) => setTimeout(r, 0));
 
 describe("useUILanguage", () => {
   it("loads from localStorage and reacts to custom events", async () => {

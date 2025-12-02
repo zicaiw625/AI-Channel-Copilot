@@ -220,9 +220,11 @@ export const getActiveSubscriptionDetails = async (
 
 export const ensureBilling = async (
   admin: AdminGraphqlClient,
-  shopDomain: string,
-  request: Request,
+  _shopDomain: string,
+  _request: Request,
 ): Promise<void> => {
+  void _shopDomain;
+  void _request;
   const plan = (process.env.BILLING_PLAN_NAME || "AI Channel Copilot Basic").trim();
   const ok = await hasActiveSubscription(admin, plan);
   if (ok) return;

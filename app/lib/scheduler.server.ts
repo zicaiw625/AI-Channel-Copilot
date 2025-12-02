@@ -46,22 +46,27 @@ const runBackfillSweep = async () => {
         if (!queued.queued) continue;
       }
 
-      void processBackfillQueue(
-        async () => {
-          let client: unknown = null;
-          try {
-            client = await unauthenticated.admin(shopDomain);
-          } catch {
-            client = null;
-          }
-          const hasGraphql = client && typeof (client as any).graphql === "function";
-          const admin = hasGraphql
-            ? (client as { graphql: (query: string, options: { variables?: Record<string, unknown> }) => Promise<Response> })
-            : null;
-          return { admin, settings };
-        },
-        { shopDomain },
-      );
+        void processBackfillQueue(
+          async () => {
+            let client: unknown = null;
+            try {
+              client = await unauthenticated.admin(shopDomain);
+            } catch {
+              client = null;
+            }
+
+            type GraphqlCapableClient = {
+              graphql: (query: string, options: { variables?: Record<string, unknown> }) => Promise<Response>;
+            };
+
+            const hasGraphql = (candidate: unknown): candidate is GraphqlCapableClient =>
+              typeof candidate === "object" && candidate !== null && typeof (candidate as GraphqlCapableClient).graphql === "function";
+
+            const admin = hasGraphql(client) ? client : null;
+            return { admin, settings };
+          },
+          { shopDomain },
+        );
     }
   } catch (error) {
     logger.warn("[scheduler] backfill sweep skipped", undefined, { message: (error as Error).message });

@@ -21,7 +21,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     billing = auth.billing;
     session = auth.session;
   } catch (e) {
-    if (!demo) throw e;
+    const url = new URL(request.url);
+    const path = url.pathname.toLowerCase();
+    const allowUnauth = path.includes("/app/onboarding") || path.includes("/app/billing");
+    if (!demo && !allowUnauth) throw e;
   }
   const shopDomain = session?.shop || "";
   let settings = await getSettings(shopDomain);

@@ -1,11 +1,16 @@
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { useLoaderData } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
+import { authenticate } from "../shopify.server";
+import { getSettings, syncShopPreferences } from "../lib/settings.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const url = new URL(request.url);
-  const lang = url.searchParams.get("lang") === "en" ? "English" : "中文";
-  return { language: lang };
+  const { admin, session } = await authenticate.admin(request);
+  const shopDomain = session?.shop || "";
+  let settings = await getSettings(shopDomain);
+  settings = await syncShopPreferences(admin, shopDomain, settings);
+  const language = settings.languages[0] || "中文";
+  return { language };
 };
 
 export default function Intro() {
@@ -27,4 +32,3 @@ export default function Intro() {
 export const headers: HeadersFunction = (headersArgs) => {
   return boundary.headers(headersArgs);
 };
-

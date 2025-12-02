@@ -73,14 +73,3 @@ export function ErrorBoundary() {
 export const headers: HeadersFunction = (headersArgs) => {
   return boundary.headers(headersArgs);
 };
-
-const shouldEnforceBilling = () => process.env.BILLING_ENFORCE === "true";
-const resolveEnforceBilling = async (shopDomain: string) => {
-  if (shouldEnforceBilling()) return true;
-  const freeDays = Number(process.env.BILLING_FREE_DAYS || "7");
-  const createdAt = await getInstallCreatedAt(shopDomain);
-  if (!createdAt) return false;
-  const now = Date.now();
-  const ageDays = Math.floor((now - createdAt.getTime()) / (24 * 60 * 60 * 1000));
-  return ageDays >= Math.max(0, freeDays);
-};

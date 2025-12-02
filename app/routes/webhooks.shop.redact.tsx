@@ -26,9 +26,17 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     await wipeShopData(shopDomain);
   } catch (error) {
+    const shopFromError = (() => {
+      const obj = error && typeof error === "object" && !Array.isArray(error)
+        ? (error as Record<string, unknown>)
+        : {};
+      const val = obj["shop_domain"];
+      return typeof val === "string" ? (val as string) : undefined;
+    })();
+
     logger.error(
       "shop/redact failed",
-      { shopDomain: shop || (error as any)?.shop_domain, topic },
+      { shopDomain: shop || shopFromError, topic },
       { message: (error as Error).message },
     );
 

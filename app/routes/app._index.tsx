@@ -13,11 +13,10 @@ import {
   DEFAULT_RANGE_KEY,
   DEFAULT_RETENTION_MONTHS,
   MAX_DASHBOARD_ORDERS,
-  MAX_BACKFILL_DURATION_MS,
-  MAX_BACKFILL_ORDERS,
 } from "../lib/constants";
 import { loadDashboardContext } from "../lib/dashboardContext.server";
 import { t } from "../lib/i18n";
+type Lang = "English" | "中文";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
@@ -133,6 +132,7 @@ export default function Index() {
     backfillAvailable,
     dataLastUpdated,
   } = useLoaderData<typeof loader>();
+  const lang = language as Lang;
   const navigate = useNavigate();
   const location = useLocation();
   const [metricView, setMetricView] = useState<"gmv" | "orders" | "newCustomers">("gmv");
@@ -323,32 +323,32 @@ export default function Index() {
         <div className={styles.pageHeader}>
           <div className={styles.titleBlock}>
             <div className={styles.badgeRow}>
-              <span className={styles.badge}>{t(language as any, "badge_v01")}</span>
-              <span className={styles.badgeSecondary}>{t(language as any, "badge_conservative_orders")}</span>
+              <span className={styles.badge}>{t(lang, "badge_v01")}</span>
+              <span className={styles.badgeSecondary}>{t(lang, "badge_conservative_orders")}</span>
               {isLowSample && (
                 <span className={styles.badgeSecondary}>
                   {language === "English" ? `Sample < ${LOW_SAMPLE_THRESHOLD} · metrics for reference only` : `样本 < ${LOW_SAMPLE_THRESHOLD} · 指标仅供参考`}
                 </span>
               )}
             </div>
-            <h1 className={styles.heading}>{t(language as any, "dashboard_title")}</h1>
-            <p className={styles.subheading}>{t(language as any, "dashboard_subheading")}</p>
+            <h1 className={styles.heading}>{t(lang, "dashboard_title")}</h1>
+            <p className={styles.subheading}>{t(lang, "dashboard_subheading")}</p>
             <div className={styles.warning}>
-              <strong>{language === "English" ? "Note:" : "说明："}</strong>{t(language as any, "dashboard_warning")}
+              <strong>{language === "English" ? "Note:" : "说明："}</strong>{t(lang, "dashboard_warning")}
             </div>
             <div className={styles.metaRow}>
-              <span>{t(language as any, "meta_synced_at")}{timeFormatter.format(new Date(overview.lastSyncedAt))}</span>
+              <span>{t(lang, "meta_synced_at")}{timeFormatter.format(new Date(overview.lastSyncedAt))}</span>
               <span>
-                {t(language as any, "meta_updated_at")}{dataLastUpdated ? timeFormatter.format(new Date(dataLastUpdated)) : (language === "English" ? "None" : "暂无")}
+                {t(lang, "meta_updated_at")}{dataLastUpdated ? timeFormatter.format(new Date(dataLastUpdated)) : (language === "English" ? "None" : "暂无")}
                 {backfillSuppressed && (language === "English" ? " (Backfilled within 30 minutes; using cached data)" : "（30 分钟内已补拉，复用缓存数据）")}
                 {backfillAvailable && (language === "English" ? " (Manual backfill available)" : "（可手动触发后台补拉）")}
               </span>
-              <span>{t(language as any, "meta_range")}{dateRange.label}</span>
+              <span>{t(lang, "meta_range")}{dateRange.label}</span>
               <span>
-                {t(language as any, "meta_metric_scope")} {gmvMetric} · {language === "English" ? "New Customers = first-order customers (window)" : "新客=首单客户（仅限当前时间范围）"} · {language === "English" ? "GMV computed from order fields" : "GMV 仅基于订单字段"}
+                {t(lang, "meta_metric_scope")} {gmvMetric} · {language === "English" ? "New Customers = first-order customers (window)" : "新客=首单客户（仅限当前时间范围）"} · {language === "English" ? "GMV computed from order fields" : "GMV 仅基于订单字段"}
               </span>
               <span>
-                {t(language as any, "meta_data_source")}
+                {t(lang, "meta_data_source")}
                 {dataSource === "live"
                   ? (language === "English" ? "Shopify Live Orders" : "Shopify 实时订单")
                   : dataSource === "stored"
@@ -360,11 +360,11 @@ export default function Index() {
               </span>
               {clamped && <span>{language === "English" ? `Hint: truncated to latest ${MAX_DASHBOARD_ORDERS} orders.` : `提示：已截断为最近 ${MAX_DASHBOARD_ORDERS} 笔订单样本。`}</span>}
               <span>
-                {t(language as any, "meta_timezones_currency")}{calculationTimezone} · {language === "English" ? "Display TZ" : "展示时区"}：{timezone} · {language === "English" ? "Currency" : "货币"}：{currency}
+                {t(lang, "meta_timezones_currency")}{calculationTimezone} · {language === "English" ? "Display TZ" : "展示时区"}：{timezone} · {language === "English" ? "Currency" : "货币"}：{currency}
               </span>
             </div>
             <details className={styles.statusBlock}>
-              <summary>{t(language as any, "status_ops")}</summary>
+              <summary>{t(lang, "status_ops")}</summary>
               <div className={styles.pipelineRow}>
                 <span>{language === "English" ? "Webhook:" : "Webhook："}{fmtTime(pipeline.lastOrdersWebhookAt)}</span>
                 <span>{language === "English" ? "Backfill:" : "补拉："}{fmtTime(pipeline.lastBackfillAt)}</span>
@@ -410,7 +410,7 @@ export default function Index() {
             {/* 补拉提示移入系统状态折叠块，避免首页拥挤 */}
             {dataSource === "demo" && (
               <div className={styles.callout}>
-                <span>{t(language as any, "hint_title")}</span>
+                <span>{t(lang, "hint_title")}</span>
                 {language === "English" ? "No identifiable AI orders in this shop. Showing demo data. Check time range, referrer/UTM rules, or extend the window and retry." : "当前店铺暂无可识别的 AI 渠道订单，以下为演示数据。可检查时间范围、referrer/UTM 规则，或延长观测窗口后再试。"}
               </div>
             )}
@@ -422,8 +422,8 @@ export default function Index() {
             {overview.aiOrders === 0 && overview.totalOrders > 0 && (
               <div className={styles.callout}>
                 <span>{language === "English" ? "Hint" : "提示"}</span>
-                {t(language as any, "hint_zero_ai")}
-                <Link to="/app/additional" className={styles.link}>{t(language as any, "goto_settings")}</Link>
+                {t(lang, "hint_zero_ai")}
+                <Link to="/app/additional" className={styles.link}>{t(lang, "goto_settings")}</Link>
               </div>
             )}
             </div>
@@ -473,7 +473,7 @@ export default function Index() {
                   className={styles.secondaryButton}
                   href={`/api/export/orders?range=${range}&from=${encodeURIComponent(dateRange.fromParam || "")}&to=${encodeURIComponent(dateRange.toParam || "")}`}
                 >
-                  {t(language as any, "export_orders_csv")}
+                  {t(lang, "export_orders_csv")}
                 </a>
         </div>
         </div>
@@ -481,8 +481,8 @@ export default function Index() {
           <div className={styles.card}>
             <div className={styles.sectionHeader}>
               <div>
-                <p className={styles.sectionLabel}>{t(language as any, "metrics_section_label")}</p>
-                <h3 className={styles.sectionTitle}>{t(language as any, "metrics_section_title")}</h3>
+                <p className={styles.sectionLabel}>{t(lang, "metrics_section_label")}</p>
+                <h3 className={styles.sectionTitle}>{t(lang, "metrics_section_title")}</h3>
               </div>
               <span className={styles.smallBadge}>{language === "English" ? "Reference" : "参考"}</span>
             </div>
@@ -496,31 +496,31 @@ export default function Index() {
 
         <div className={styles.kpiGrid}>
           <div className={styles.card}>
-            <p className={styles.cardLabel}>{t(language as any, "kpi_total_gmv")}</p>
+            <p className={styles.cardLabel}>{t(lang, "kpi_total_gmv")}</p>
             <p className={styles.cardValue}>{fmtCurrency(overview.totalGMV)}</p>
             <p className={styles.cardMeta}>
-              {language === "English" ? "Orders" : t(language as any, "kpi_orders")} {fmtNumber(overview.totalOrders)} · {language === "English" ? "New" : t(language as any, "kpi_new_customers")} {fmtNumber(overview.totalNewCustomers)}
+              {language === "English" ? "Orders" : t(lang, "kpi_orders")} {fmtNumber(overview.totalOrders)} · {language === "English" ? "New" : t(lang, "kpi_new_customers")} {fmtNumber(overview.totalNewCustomers)}
             </p>
-            <p className={styles.helpText}>{t(language as any, "kpi_net_gmv")} {fmtCurrency(overview.netGMV)}</p>
+            <p className={styles.helpText}>{t(lang, "kpi_net_gmv")} {fmtCurrency(overview.netGMV)}</p>
           </div>
           <div className={styles.card}>
-            <p className={styles.cardLabel}>{t(language as any, "kpi_ai_gmv")}</p>
+            <p className={styles.cardLabel}>{t(lang, "kpi_ai_gmv")}</p>
             <p className={styles.cardValue}>{fmtCurrency(overview.aiGMV)}</p>
-            <p className={styles.cardMeta}>{language === "English" ? "Share" : t(language as any, "kpi_ai_share")} {fmtPercent(overview.aiShare)}</p>
+            <p className={styles.cardMeta}>{language === "English" ? "Share" : t(lang, "kpi_ai_share")} {fmtPercent(overview.aiShare)}</p>
             <p className={styles.helpText}>{language === "English" ? "AI Net GMV" : "AI 净 GMV"} {fmtCurrency(overview.netAiGMV)}</p>
           </div>
           <div className={styles.card}>
-            <p className={styles.cardLabel}>{t(language as any, "kpi_ai_orders")}</p>
+            <p className={styles.cardLabel}>{t(lang, "kpi_ai_orders")}</p>
             <p className={styles.cardValue}>{fmtNumber(overview.aiOrders)}</p>
             <p className={styles.cardMeta}>
-              {language === "English" ? "Total Orders" : t(language as any, "kpi_ai_order_share")} {fmtNumber(overview.totalOrders)} · {fmtPercent(overview.aiOrderShare)}
+              {language === "English" ? "Total Orders" : t(lang, "kpi_ai_order_share")} {fmtNumber(overview.totalOrders)} · {fmtPercent(overview.aiOrderShare)}
             </p>
           </div>
           <div className={styles.card}>
-            <p className={styles.cardLabel}>{t(language as any, "kpi_ai_new_customers")}</p>
+            <p className={styles.cardLabel}>{t(lang, "kpi_ai_new_customers")}</p>
             <p className={styles.cardValue}>{fmtNumber(overview.aiNewCustomers)}</p>
             <p className={styles.cardMeta}>
-              {language === "English" ? "AI New Customer Rate" : t(language as any, "kpi_ai_new_customer_rate")} {fmtPercent(overview.aiNewCustomerRate)} · {language === "English" ? "Site New" : "全站新客"} {fmtNumber(overview.totalNewCustomers)}
+              {language === "English" ? "AI New Customer Rate" : t(lang, "kpi_ai_new_customer_rate")} {fmtPercent(overview.aiNewCustomerRate)} · {language === "English" ? "Site New" : "全站新客"} {fmtNumber(overview.totalNewCustomers)}
             </p>
           </div>
         </div>
@@ -534,14 +534,14 @@ export default function Index() {
           <div className={styles.card}>
             <div className={styles.sectionHeader}>
               <div>
-                <p className={styles.sectionLabel}>{t(language as any, "channels_section_label")}</p>
-                <h3 className={styles.sectionTitle}>{t(language as any, "channels_section_title")}</h3>
+                <p className={styles.sectionLabel}>{t(lang, "channels_section_label")}</p>
+                <h3 className={styles.sectionTitle}>{t(lang, "channels_section_title")}</h3>
               </div>
               <div className={styles.toggleGroup}>
                 {[
-                  { key: "gmv", label: t(language as any, "toggle_gmv") },
-                  { key: "orders", label: t(language as any, "toggle_orders") },
-                  { key: "newCustomers", label: t(language as any, "toggle_new_customers") },
+                  { key: "gmv", label: t(lang, "toggle_gmv") },
+                  { key: "orders", label: t(lang, "toggle_orders") },
+                  { key: "newCustomers", label: t(lang, "toggle_new_customers") },
                 ].map(({ key, label }) => (
                   <button
                     key={key}
@@ -590,7 +590,7 @@ export default function Index() {
           <div className={styles.card}>
             <div className={styles.sectionHeader}>
               <div>
-                <p className={styles.sectionLabel}>{t(language as any, "comparison_section_label")}</p>
+                <p className={styles.sectionLabel}>{t(lang, "comparison_section_label")}</p>
                 <h3 className={styles.sectionTitle}>{language === "English" ? "Overall vs AI Channels" : "整体 vs 各 AI 渠道"}</h3>
               </div>
               {isLowSample ? (
@@ -605,11 +605,11 @@ export default function Index() {
               <table className={styles.table}>
                 <thead>
                   <tr>
-                    <th>{t(language as any, "table_channel")}</th>
-                    <th>{t(language as any, "table_aov")}</th>
-                    <th>{t(language as any, "table_new_customer_rate")}</th>
-                    <th>{t(language as any, "table_repeat_rate")}</th>
-                    <th>{t(language as any, "table_sample")}</th>
+                    <th>{t(lang, "table_channel")}</th>
+                    <th>{t(lang, "table_aov")}</th>
+                    <th>{t(lang, "table_new_customer_rate")}</th>
+                    <th>{t(lang, "table_repeat_rate")}</th>
+                    <th>{t(lang, "table_sample")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -637,26 +637,26 @@ export default function Index() {
             <div className={styles.sectionHeader}>
               <div>
                 <p className={styles.sectionLabel}>{language === "English" ? "Customers" : "客户维度"}</p>
-                <h3 className={styles.sectionTitle}>{t(language as any, "top_customers_title")}</h3>
+                <h3 className={styles.sectionTitle}>{t(lang, "top_customers_title")}</h3>
               </div>
               <a
                 className={styles.secondaryButton}
                 href={`data:text/csv;charset=utf-8,${encodeURIComponent(exportData.customersCsv)}`}
                 download={`customers-ltv-${range}.csv`}
               >
-                {t(language as any, "export_ltv_csv")}
+                {t(lang, "export_ltv_csv")}
               </a>
             </div>
             <div className={styles.tableWrap}>
               <table className={styles.table}>
                 <thead>
                   <tr>
-                    <th>{t(language as any, "col_customer")}</th>
-                    <th>{t(language as any, "col_ltv")}</th>
-                    <th>{t(language as any, "col_orders")}</th>
-                    <th>{t(language as any, "col_ai")}</th>
-                    <th>{t(language as any, "col_acquired_ai")}</th>
-                    <th>{t(language as any, "col_repeats")}</th>
+                    <th>{t(lang, "col_customer")}</th>
+                    <th>{t(lang, "col_ltv")}</th>
+                    <th>{t(lang, "col_orders")}</th>
+                    <th>{t(lang, "col_ai")}</th>
+                    <th>{t(lang, "col_acquired_ai")}</th>
+                    <th>{t(lang, "col_repeats")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -682,7 +682,7 @@ export default function Index() {
             <div className={styles.sectionHeader}>
               <div>
                 <p className={styles.sectionLabel}>{language === "English" ? "Trend" : "趋势"}</p>
-                <h3 className={styles.sectionTitle}>{t(language as any, "trend_section_title")}</h3>
+                <h3 className={styles.sectionTitle}>{t(lang, "trend_section_title")}</h3>
               </div>
               <div className={styles.trendControls}>
                 <div className={styles.toggleGroup}>
@@ -760,26 +760,26 @@ export default function Index() {
             <div className={styles.sectionHeader}>
               <div>
                 <p className={styles.sectionLabel}>{language === "English" ? "Products" : "产品维度"}</p>
-                <h3 className={styles.sectionTitle}>{t(language as any, "products_section_title")}</h3>
+                <h3 className={styles.sectionTitle}>{t(lang, "products_section_title")}</h3>
               </div>
               <a
                 className={styles.secondaryButton}
                 href={`data:text/csv;charset=utf-8,${encodeURIComponent(exportData.productsCsv)}`}
                 download={`ai-products-${range}.csv`}
               >
-                {t(language as any, "export_products_csv")}
+                {t(lang, "export_products_csv")}
               </a>
             </div>
             <div className={styles.tableWrap}>
               <table className={styles.table}>
                 <thead>
                   <tr>
-                    <th>{t(language as any, "products_table_product")}</th>
+                    <th>{t(lang, "products_table_product")}</th>
                     <th>{language === "English" ? "Product ID / Handle" : "产品 ID / Handle"}</th>
-                    <th>{t(language as any, "products_table_ai_orders")}</th>
-                    <th>{t(language as any, "products_table_ai_gmv")}</th>
-                    <th>{t(language as any, "products_table_ai_share")}</th>
-                    <th>{t(language as any, "products_table_top_channel")}</th>
+                    <th>{t(lang, "products_table_ai_orders")}</th>
+                    <th>{t(lang, "products_table_ai_gmv")}</th>
+                    <th>{t(lang, "products_table_ai_share")}</th>
+                    <th>{t(lang, "products_table_top_channel")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -809,10 +809,10 @@ export default function Index() {
           <div className={styles.card}>
             <div className={styles.sectionHeader}>
               <div>
-              <p className={styles.sectionLabel}>{t(language as any, "jobs_section_label")}</p>
-              <h3 className={styles.sectionTitle}>{t(language as any, "jobs_section_title")}</h3>
+              <p className={styles.sectionLabel}>{t(lang, "jobs_section_label")}</p>
+              <h3 className={styles.sectionTitle}>{t(lang, "jobs_section_title")}</h3>
               </div>
-              <span className={styles.smallBadge}>{t(language as any, "jobs_small_badge")}</span>
+              <span className={styles.smallBadge}>{t(lang, "jobs_small_badge")}</span>
             </div>
           <div className={styles.jobGrid}>
             <div className={styles.jobBlock}>
@@ -905,8 +905,8 @@ export default function Index() {
         <div className={styles.card}>
           <div className={styles.sectionHeader}>
             <div>
-              <p className={styles.sectionLabel}>{t(language as any, "debug_section_label")}</p>
-              <h3 className={styles.sectionTitle}>{t(language as any, "debug_section_title")}</h3>
+              <p className={styles.sectionLabel}>{t(lang, "debug_section_label")}</p>
+              <h3 className={styles.sectionTitle}>{t(lang, "debug_section_title")}</h3>
             </div>
             <div className={styles.debugFilters}>
               <input
@@ -937,13 +937,13 @@ export default function Index() {
             <table className={styles.table}>
               <thead>
                 <tr>
-                  <th>{t(language as any, "debug_table_order")}</th>
-                  <th>{t(language as any, "debug_table_time")}</th>
-                  <th>{t(language as any, "debug_table_ai_channel")}</th>
-                  <th>{t(language as any, "debug_table_gmv")}</th>
-                  <th>{t(language as any, "debug_table_ref_utm")}</th>
-                  <th>{t(language as any, "debug_table_detection")}</th>
-                  <th>{t(language as any, "debug_table_signals")}</th>
+                  <th>{t(lang, "debug_table_order")}</th>
+                  <th>{t(lang, "debug_table_time")}</th>
+                  <th>{t(lang, "debug_table_ai_channel")}</th>
+                  <th>{t(lang, "debug_table_gmv")}</th>
+                  <th>{t(lang, "debug_table_ref_utm")}</th>
+                  <th>{t(lang, "debug_table_detection")}</th>
+                  <th>{t(lang, "debug_table_signals")}</th>
                 </tr>
               </thead>
               <tbody>

@@ -2,6 +2,7 @@ import type { OrderRecord, SettingsDefaults } from "./aiData";
 import { getPlatform, isDemoMode } from "./runtime.server";
 import { logger } from "./logger.server";
 import { BACKFILL_TAGGING_BATCH_SIZE } from "./constants";
+import { createGraphqlSdk } from "./graphqlSdk.server";
 
 type AdminGraphqlClient = {
   graphql: (query: string, options: { variables?: Record<string, unknown> }) => Promise<Response>;
@@ -20,7 +21,8 @@ const TAGS_ADD = `#graphql
 
 const addTags = async (admin: AdminGraphqlClient, id: string, tags: string[]) => {
   if (!tags.length) return;
-  const response = await admin.graphql(TAGS_ADD, { variables: { id, tags } });
+  const sdk = createGraphqlSdk(admin);
+  const response = await sdk.request("tagsAdd", TAGS_ADD, { id, tags });
   if (!response.ok) {
     const text = await response.text();
     throw new Error(`Failed to add tags to ${id}: ${response.status} ${text}`);

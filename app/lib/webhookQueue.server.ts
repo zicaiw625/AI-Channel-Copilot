@@ -14,7 +14,6 @@ type WebhookJob = {
   run: (payload: Record<string, unknown>) => Promise<void>;
 };
 
-let processing = false;
 const processingKeys = new Set<string>();
 const MAX_RETRIES = Number(process.env.WEBHOOK_MAX_RETRIES || 5);
 const BASE_DELAY_MS = Number(process.env.WEBHOOK_BASE_DELAY_MS || 500);
@@ -69,78 +68,7 @@ const updateJobStatus = async (
   }
 };
 
-const processQueue = async (handlers: Map<string, WebhookJob["run"]>) => {
-  if (processing) return;
-  processing = true;
-
-  try {
-    await withAdvisoryLock(1001, async () => {
-      for (;;) {
-        const job = await dequeue();
-        if (!job) break;
-
-      const startedAt = Date.now();
-      const handler = handlers.get(job.intent);
-
-      const context: LogContext = {
-        shopDomain: job.shopDomain,
-        jobId: job.id,
-        jobType: "webhook",
-        intent: job.intent,
-      };
-
-      if (!handler) {
-        logger.warn("[webhook] no handler registered", context, { topic: job.topic });
-        await updateJobStatus(job.id, "failed", "no handler registered");
-        continue;
-      }
-
-      try {
-        await handler(job.payload as Record<string, unknown>);
-        await updateJobStatus(job.id, "completed");
-        logger.info("[webhook] job completed", context, {
-          topic: job.topic,
-          elapsedMs: Date.now() - startedAt,
-        });
-      } catch (error) {
-        const message = (error as Error).message;
-        logger.error("[webhook] job failed", context, {
-          topic: job.topic,
-          message,
-        });
-
-        const attempts = job.attempts || 0;
-        if (attempts < MAX_RETRIES) {
-          const jitter = Math.floor(Math.random() * BASE_DELAY_MS);
-          const calc = BASE_DELAY_MS * 2 ** attempts + jitter;
-          const nextDelay = Math.min(MAX_DELAY_MS, calc);
-          const nextRun = new Date(Date.now() + nextDelay);
-          await prisma.webhookJob.update({
-            where: { id: job.id },
-            data: {
-              status: "queued",
-              error: message,
-              attempts: attempts + 1,
-              nextRunAt: nextRun,
-              finishedAt: null,
-            },
-          });
-          logger.warn("[webhook] job scheduled for retry", context, { attempts: attempts + 1, nextDelay });
-        } else {
-          await updateJobStatus(job.id, "failed", message);
-        }
-      }
-      }
-    });
-  } finally {
-    processing = false;
-    const pending = await prisma.webhookJob.count({ where: { status: "queued" } });
-    if (pending) {
-      // Resume processing in case new jobs arrived while we were handling failures.
-      void processQueue(handlers);
-    }
-  }
-};
+// removed unused global processing loop in favor of per-shop processing
 
 const handlers = new Map<string, WebhookJob["run"]>();
 

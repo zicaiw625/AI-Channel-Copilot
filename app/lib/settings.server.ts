@@ -3,6 +3,7 @@ import { defaultSettings, type AiDomainRule, type PipelineStatus, type SettingsD
 import { getPlatform, isDemoMode } from "./runtime.server";
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 import { logger } from "./logger.server";
+import { createGraphqlSdk } from "./graphqlSdk.server";
 
 const tableMissing = (error: unknown) =>
   error instanceof PrismaClientKnownRequestError && error.code === "P2021";
@@ -133,7 +134,8 @@ export const syncShopPreferences = async (
   if (!admin || !shopDomain) return settings;
 
   try {
-    const response = await admin.graphql(SHOP_PREFS_QUERY, { variables: {} });
+    const sdk = createGraphqlSdk(admin, shopDomain);
+    const response = await sdk.request("shopPreferences", SHOP_PREFS_QUERY, {});
     if (!response.ok) {
       let bodyText: string | undefined;
       try {

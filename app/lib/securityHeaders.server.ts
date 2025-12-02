@@ -1,10 +1,25 @@
+import crypto from "node:crypto";
+
+const generateNonce = () => crypto.randomBytes(16).toString("base64");
+
 export const applySecurityHeaders = (request: Request, responseHeaders: Headers) => {
   responseHeaders.set("X-Content-Type-Options", "nosniff");
   responseHeaders.set("Referrer-Policy", "strict-origin-when-cross-origin");
 
+  const isProd = process.env.NODE_ENV === "production";
+  const nonce = generateNonce();
+  responseHeaders.set("X-CSP-Nonce", nonce);
+  const scriptSrc = ["script-src", "'self'", "https:", `'nonce-${nonce}'`];
+  if (!isProd) {
+    scriptSrc.push("'unsafe-inline'");
+    scriptSrc.push("'unsafe-eval'");
+  } else {
+    scriptSrc.push("'unsafe-inline'");
+  }
+
   const csp = [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https:",
+    scriptSrc.join(" "),
     "style-src 'self' 'unsafe-inline' https:",
     "img-src 'self' data: https:",
     "font-src 'self' https:",

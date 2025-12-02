@@ -1,5 +1,6 @@
 import { requireEnv } from "./env.server";
 import { logger } from "./logger.server";
+import { createGraphqlSdk } from "./graphqlSdk.server";
 
 export type AdminGraphqlClient = {
   graphql: (
@@ -57,9 +58,11 @@ const toNumber = (value: string, fallback: number) => {
 export const hasActiveSubscription = async (
   admin: AdminGraphqlClient,
   planName: string,
+  shopDomain?: string,
 ): Promise<boolean> => {
   try {
-    const response = await admin.graphql(ACTIVE_SUBSCRIPTIONS_QUERY, {});
+    const sdk = createGraphqlSdk(admin, shopDomain);
+    const response = await sdk.request("activeSubscriptions", ACTIVE_SUBSCRIPTIONS_QUERY, {});
     if (!response.ok) return false;
     const json = (await response.json()) as {
       data?: { currentAppInstallation?: { activeSubscriptions?: { id: string; name: string; status: string }[] } };
@@ -97,21 +100,24 @@ export const ensureBilling = async (
     }
   }
 
-  const ok = await hasActiveSubscription(admin, planName);
+  const ok = await hasActiveSubscription(admin, planName, shopDomain);
   if (ok) return;
 
   try {
     const returnUrl = `${appUrl}/app/billing/confirm`;
     const normalizedInterval = interval === "ANNUAL" ? "ANNUAL" : "EVERY_30_DAYS";
-    const response = await admin.graphql(buildAppSubscriptionCreateMutation(normalizedInterval), {
-      variables: {
+    const sdk = createGraphqlSdk(admin, shopDomain);
+    const response = await sdk.request(
+      "appSubscriptionCreate",
+      buildAppSubscriptionCreateMutation(normalizedInterval),
+      {
         name: planName,
         trialDays,
         returnUrl,
         amount,
         currencyCode,
       },
-    });
+    );
 
     if (!response.ok) {
       const text = await response.text();

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate, login } from "../shopify.server";
 import { requireEnv } from "../lib/env.server";
+import { LANGUAGE_EVENT, LANGUAGE_STORAGE_KEY } from "../lib/constants";
 import { ensureBilling, hasActiveSubscription } from "../lib/billing.server";
 import type { AdminGraphqlClient } from "../lib/billing.server";
 import { getSettings, syncShopPreferences } from "../lib/settings.server";
@@ -28,11 +29,11 @@ export default function Billing() {
   const [uiLanguage, setUiLanguage] = useState(language);
   useEffect(() => {
     try {
-      const stored = window.localStorage.getItem("aicc_language");
+      const stored = window.localStorage.getItem(LANGUAGE_STORAGE_KEY);
       if (stored && stored !== uiLanguage) setUiLanguage(stored);
     } catch { void 0; }
     const onStorage = (e: StorageEvent) => {
-      if (e.key === "aicc_language" && typeof e.newValue === "string") {
+      if (e.key === LANGUAGE_STORAGE_KEY && typeof e.newValue === "string") {
         setUiLanguage(e.newValue);
       }
     };
@@ -43,7 +44,7 @@ export default function Billing() {
       } catch { void 0; }
     };
     window.addEventListener("storage", onStorage);
-    window.addEventListener("aicc_language_change", onCustom as EventListener);
+    window.addEventListener(LANGUAGE_EVENT, onCustom as EventListener);
     return () => window.removeEventListener("storage", onStorage);
   }, [uiLanguage]);
   return (

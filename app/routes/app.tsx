@@ -6,8 +6,10 @@ import { AppProvider } from "@shopify/shopify-app-react-router/react";
 
 import { authenticate } from "../shopify.server";
 import { requireEnv } from "../lib/env.server";
+import { LANGUAGE_EVENT, LANGUAGE_STORAGE_KEY } from "../lib/constants";
 import { getSettings, syncShopPreferences } from "../lib/settings.server";
 import { ensureBilling } from "../lib/billing.server";
+import type { AdminGraphqlClient } from "../lib/billing.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
@@ -19,7 +21,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const url = new URL(request.url);
     const skipBilling = shouldSkipBilling(url.pathname);
     if (!skipBilling) {
-      await ensureBilling(admin as any, shopDomain, request);
+      await ensureBilling(admin as AdminGraphqlClient, shopDomain, request);
     }
   } catch (e) {
     if (e instanceof Response) throw e;
@@ -32,10 +34,10 @@ export default function App() {
   const { apiKey, language } = useLoaderData<typeof loader>();
   const [uiLanguage, setUiLanguage] = useState(language);
   useEffect(() => {
-    const stored = window.localStorage.getItem("aicc_language");
+    const stored = window.localStorage.getItem(LANGUAGE_STORAGE_KEY);
     if (stored && stored !== uiLanguage) setUiLanguage(stored);
     const onStorage = (e: StorageEvent) => {
-      if (e.key === "aicc_language" && typeof e.newValue === "string") {
+      if (e.key === LANGUAGE_STORAGE_KEY && typeof e.newValue === "string") {
         setUiLanguage(e.newValue);
       }
     };
@@ -45,7 +47,7 @@ export default function App() {
       if (detail && detail !== uiLanguage) setUiLanguage(detail);
     };
     window.addEventListener("storage", onStorage);
-    window.addEventListener("aicc_language_change", onCustom as EventListener);
+    window.addEventListener(LANGUAGE_EVENT, onCustom as EventListener);
     return () => window.removeEventListener("storage", onStorage);
   }, [uiLanguage]);
 

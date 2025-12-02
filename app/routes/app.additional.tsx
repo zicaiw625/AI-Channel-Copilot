@@ -5,8 +5,6 @@ import { useAppBridge } from "@shopify/app-bridge-react";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 
 import {
-  buildDashboardData,
-  buildDashboardFromOrders,
   channelList,
   resolveDateRange,
   type DateRange,
@@ -24,8 +22,8 @@ import { authenticate } from "../shopify.server";
 import styles from "../styles/app.settings.module.css";
 import { t } from "../lib/i18n";
 import { allowDemoData, getPlatform } from "../lib/runtime.server";
+import { LANGUAGE_EVENT, LANGUAGE_STORAGE_KEY, BACKFILL_COOLDOWN_MINUTES, DEFAULT_RANGE_KEY, MAX_BACKFILL_DURATION_MS, MAX_BACKFILL_ORDERS, MAX_BACKFILL_DAYS } from "../lib/constants";
 import { loadDashboardContext } from "../lib/dashboardContext.server";
-import { BACKFILL_COOLDOWN_MINUTES, DEFAULT_RANGE_KEY, MAX_BACKFILL_DURATION_MS, MAX_BACKFILL_ORDERS, MAX_BACKFILL_DAYS } from "../lib/constants";
 import { logger } from "../lib/logger.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -37,7 +35,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const exportRange = (url.searchParams.get("range") as TimeRangeKey) || "90d";
   const demoAllowed = allowDemoData();
 
-  const { dateRange, orders, clamped, displayTimezone } = await loadDashboardContext({
+  const { orders, clamped, displayTimezone } = await loadDashboardContext({
     shopDomain,
     admin,
     settings,
@@ -47,30 +45,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     fallbackIntent: "settings-export",
   });
 
-  const exports = orders.length
-    ? buildDashboardFromOrders(
-        orders,
-        dateRange,
-        settings.gmvMetric,
-        displayTimezone,
-        settings.primaryCurrency,
-      ).exports
-    : demoAllowed
-      ? buildDashboardData(dateRange, settings.gmvMetric, displayTimezone, settings.primaryCurrency).exports
-      : buildDashboardFromOrders(
-          [],
-          dateRange,
-          settings.gmvMetric,
-          displayTimezone,
-          settings.primaryCurrency,
-        ).exports;
+  void demoAllowed;
 
   const ordersSample = orders.slice(0, 20);
   const [webhookQueueSize, deadLetters] = await Promise.all([
     getWebhookQueueSize(),
     getDeadLetterJobs(10),
   ]);
-  return { settings, exports, exportRange, clamped, displayTimezone, ordersSample, webhookQueueSize, deadLetters };
+  return { settings, exportRange, clamped, displayTimezone, ordersSample, webhookQueueSize, deadLetters };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -190,14 +172,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
 };
 
-const toCsvHref = (content: string) =>
-  `data:text/csv;charset=utf-8,${encodeURIComponent(content)}`;
+type Lang = "English" | "中文";
 
 const isValidDomain = (value: string) => /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(value.trim());
 const isValidUtmSource = (value: string) => /^[a-z0-9_-]+$/i.test(value.trim());
 
 export default function SettingsAndExport() {
-  const { settings, exports, exportRange, clamped, ordersSample, webhookQueueSize, deadLetters } = useLoaderData<typeof loader>();
+  const { settings, exportRange, clamped, ordersSample, webhookQueueSize, deadLetters } = useLoaderData<typeof loader>();
   const shopify = useAppBridge();
   const fetcher = useFetcher<typeof action>();
   const navigate = useNavigate();
@@ -224,7 +205,7 @@ export default function SettingsAndExport() {
     settings.exposurePreferences,
   );
   const [timezone, setTimezone] = useState(settings.timezones[0] || "UTC");
-  const [language, setLanguage] = useState(settings.languages[0]);
+  const [language, setLanguage] = useState<Lang>(settings.languages[0] as Lang);
   const [gmvMetric, setGmvMetric] = useState(settings.gmvMetric || "current_total_price");
   const [exportWindow, setExportWindow] = useState<TimeRangeKey>(exportRange as TimeRangeKey);
 
@@ -340,17 +321,17 @@ export default function SettingsAndExport() {
         );
       }
     }
-  }, [fetcher.data, shopify]);
+  }, [fetcher.data, shopify, language]);
 
   return (
     <s-page heading={language === "English" ? "Settings / Rules & Export" : "设置 / 规则 & 导出"}>
       <div className={styles.page}>
       <div className={styles.lede}>
         <h1>{language === "English" ? "AI Channel Rules & Data Export" : "AI 渠道识别规则 & 数据导出"}</h1>
-        <p>{t(language as any, "settings_lede_desc")}</p>
-        <div className={styles.alert}>{t(language as any, "ai_conservative_alert")}</div>
-        <p className={styles.helpText}>{t(language as any, "default_rules_help")}</p>
-        <p className={styles.helpText}>{t(language as any, "tag_prefix_help")}</p>
+        <p>{t(language as Lang, "settings_lede_desc")}</p>
+        <div className={styles.alert}>{t(language as Lang, "ai_conservative_alert")}</div>
+        <p className={styles.helpText}>{t(language as Lang, "default_rules_help")}</p>
+        <p className={styles.helpText}>{t(language as Lang, "tag_prefix_help")}</p>
         <div className={styles.inlineStats}>
           <span>
             {language === "English" ? "Last webhook: " : "最近 webhook："}
@@ -408,18 +389,18 @@ export default function SettingsAndExport() {
             }
           >{language === "English" ? "Backfill Last 90 Days" : "补拉最近 90 天订单"}</button>
         </div>
-        <div className={styles.alert}>{t(language as any, "backfill_protect_alert")}</div>
-        <p className={styles.helpText}>{t(language as any, "backfill_help")}</p>
+        <div className={styles.alert}>{t(language as Lang, "backfill_protect_alert")}</div>
+        <p className={styles.helpText}>{t(language as Lang, "backfill_help")}</p>
       </div>
 
         <div className={styles.gridTwo}>
           <div className={styles.card}>
             <div className={styles.sectionHeader}>
               <div>
-                <p className={styles.sectionLabel}>{t(language as any, "channels_section_label")}</p>
+                <p className={styles.sectionLabel}>{t(language as Lang, "channels_section_label")}</p>
                 <h3 className={styles.sectionTitle}>{language === "English" ? "Referrer Domains" : "Referrer 域名表"}</h3>
               </div>
-              <span className={styles.badge}>{t(language as any, "badge_priority_high")}</span>
+              <span className={styles.badge}>{t(language as Lang, "badge_priority_high")}</span>
             </div>
             <div className={styles.ruleList}>
               {domains.map((rule) => (
@@ -434,10 +415,10 @@ export default function SettingsAndExport() {
                   <button
                     type="button"
                     className={styles.linkButton}
-                    title={rule.source === "default" ? t(language as any, "risk_remove_default_domain") : t(language as any, "title_delete_rule")}
+                    title={rule.source === "default" ? t(language as Lang, "risk_remove_default_domain") : t(language as Lang, "title_delete_rule")}
                     onClick={() => removeDomain(rule)}
                   >
-                    {t(language as any, "btn_delete")}
+                    {t(language as Lang, "btn_delete")}
                   </button>
                 </div>
               ))}
@@ -445,7 +426,7 @@ export default function SettingsAndExport() {
             <div className={styles.inlineForm}>
               <input
                 className={styles.input}
-                placeholder={t(language as any, "placeholder_add_domain")}
+                placeholder={t(language as Lang, "placeholder_add_domain")}
                 value={newDomain}
                 onChange={(event) => setNewDomain(event.target.value)}
               />
@@ -463,10 +444,10 @@ export default function SettingsAndExport() {
                 ))}
               </select>
               <button type="button" className={styles.primaryButton} onClick={addDomain}>
-                {t(language as any, "btn_add_domain")}
+                {t(language as Lang, "btn_add_domain")}
               </button>
             </div>
-            <p className={styles.helpText}>{t(language as any, "referrer_help")}</p>
+            <p className={styles.helpText}>{t(language as Lang, "referrer_help")}</p>
           </div>
 
           <div className={styles.card}>
@@ -475,7 +456,7 @@ export default function SettingsAndExport() {
                 <p className={styles.sectionLabel}>{language === "English" ? "UTM Rules" : "UTM 匹配规则"}</p>
                 <h3 className={styles.sectionTitle}>{language === "English" ? "utm_source → Channel Mapping" : "utm_source → 渠道映射"}</h3>
               </div>
-              <span className={styles.badge}>{t(language as any, "badge_assist")}</span>
+              <span className={styles.badge}>{t(language as Lang, "badge_assist")}</span>
             </div>
             <div className={styles.ruleList}>
               {utmMappings.map((rule) => (
@@ -489,7 +470,7 @@ export default function SettingsAndExport() {
                     className={styles.linkButton}
                     onClick={() => removeUtmMapping(rule.value)}
                   >
-                    {t(language as any, "btn_delete")}
+                    {t(language as Lang, "btn_delete")}
                   </button>
                 </div>
               ))}
@@ -515,7 +496,7 @@ export default function SettingsAndExport() {
                 ))}
               </select>
               <button type="button" className={styles.primaryButton} onClick={addUtmMapping}>
-                {t(language as any, "btn_add_utm")}
+                {t(language as Lang, "btn_add_utm")}
               </button>
             </div>
             <label className={styles.stackField}>
@@ -539,7 +520,7 @@ export default function SettingsAndExport() {
               </div>
               <div className={styles.inlineActions}>
                 <button type="button" className={styles.secondaryButton} onClick={submitSettings}>
-                  {language === "English" ? "Save" : "保存"}
+                  {t(language as Lang, "btn_save")}
                 </button>
                 <button
                   type="button"
@@ -566,7 +547,7 @@ export default function SettingsAndExport() {
                   }
                   disabled={!tagging.writeOrderTags && !tagging.writeCustomerTags}
                 >
-                  {language === "English" ? "Write Tags Now" : "立即写回标签"}
+                  {t(language as Lang, "btn_write_tags_now")}
                 </button>
               </div>
             </div>
@@ -613,7 +594,7 @@ export default function SettingsAndExport() {
                 </div>
               </div>
             </div>
-            <div className={styles.alert}>{t(language as any, "tagging_enable_alert")}</div>
+            <div className={styles.alert}>{t(language as Lang, "tagging_enable_alert")}</div>
             <label className={styles.stackField}>
               <span className={styles.fieldLabel}>{language === "English" ? "Order tag prefix" : "订单标签前缀"}</span>
               <input
@@ -643,7 +624,7 @@ export default function SettingsAndExport() {
                 <p className={styles.sectionLabel}>{language === "English" ? "llms.txt Preferences (Reserved)" : "llms.txt 偏好（预留）"}</p>
                 <h3 className={styles.sectionTitle}>{language === "English" ? "Site Types to Expose" : "希望向 AI 暴露的站点类型"}</h3>
               </div>
-              <span className={styles.badge}>{t(language as any, "badge_experiment")}</span>
+              <span className={styles.badge}>{t(language as Lang, "badge_experiment")}</span>
             </div>
             <p className={styles.helpText}>{language === "English" ? "Preferences only; no changes to storefront. Future llms.txt generation will respect these. Default off to avoid unnecessary exposure." : "仅存储偏好，不会改动店铺页面。未来生成 llms.txt 时会参考此配置；默认全部关闭以避免暴露不必要的内容。"}</p>
             <div className={styles.checkboxRow}>
@@ -702,10 +683,10 @@ export default function SettingsAndExport() {
                 <p className={styles.sectionLabel}>{language === "English" ? "llms.txt Preview" : "llms.txt 预览"}</p>
                 <h3 className={styles.sectionTitle}>{language === "English" ? "Draft Based on Preferences" : "根据偏好生成草稿"}</h3>
               </div>
-              <span className={styles.badge}>{t(language as any, "badge_experiment")}</span>
+              <span className={styles.badge}>{t(language as Lang, "badge_experiment")}</span>
             </div>
             <LlmsPreview language={language} />
-            <p className={styles.helpText}>{t(language as any, "llms_preview_help")}</p>
+            <p className={styles.helpText}>{t(language as Lang, "llms_preview_help")}</p>
           </div>
 
           <div className={styles.card}>
@@ -730,7 +711,7 @@ export default function SettingsAndExport() {
                   </tr>
                 </thead>
                 <tbody>
-                  {(ordersSample || []).map((o: any) => (
+                  {(ordersSample || []).map((o) => (
                     <tr key={o.id}>
                       <td>{o.name}</td>
                       <td>{o.referrer || ""}</td>
@@ -753,7 +734,7 @@ export default function SettingsAndExport() {
                 <p className={styles.sectionLabel}>{language === "English" ? "Language / Timezone" : "语言 / 时区"}</p>
                 <h3 className={styles.sectionTitle}>{language === "English" ? "Display Preferences & GMV Metric" : "展示偏好 & GMV 口径"}</h3>
               </div>
-              <span className={styles.badge}>{t(language as any, "badge_ui_only")}</span>
+              <span className={styles.badge}>{t(language as Lang, "badge_ui_only")}</span>
             </div>
             <label className={styles.stackField}>
               <span className={styles.fieldLabel}>{language === "English" ? "Language" : "语言"}</span>
@@ -761,10 +742,10 @@ export default function SettingsAndExport() {
                 className={styles.select}
                 value={language}
                 onChange={(event) => {
-                  const next = event.target.value;
+                  const next = event.target.value as Lang;
                   setLanguage(next);
-                  try { window.localStorage.setItem("aicc_language", next); } catch { void 0; }
-                  try { window.dispatchEvent(new CustomEvent("aicc_language_change", { detail: next })); } catch { void 0; }
+                  try { window.localStorage.setItem(LANGUAGE_STORAGE_KEY, next); } catch { void 0; }
+                  try { window.dispatchEvent(new CustomEvent(LANGUAGE_EVENT, { detail: next })); } catch { void 0; }
                   fetcher.submit(
                     {
                       settings: JSON.stringify({
@@ -822,7 +803,7 @@ export default function SettingsAndExport() {
                 <option value="subtotal_price">{language === "English" ? "subtotal_price (excludes taxes/shipping)" : "subtotal_price（不含税/运费）"}</option>
               </select>
             </label>
-            <p className={styles.helpText}>{t(language as any, "gmv_metric_help")}</p>
+            <p className={styles.helpText}>{t(language as Lang, "gmv_metric_help")}</p>
           </div>
         </div>
 
@@ -832,7 +813,7 @@ export default function SettingsAndExport() {
                 <p className={styles.sectionLabel}>{language === "English" ? "Data Export" : "数据导出"}</p>
                 <h3 className={styles.sectionTitle}>{language === "English" ? "CSV Download" : "CSV 下载"}</h3>
               </div>
-              <span className={styles.badge}>{t(language as any, "badge_analysis")}</span>
+              <span className={styles.badge}>{t(language as Lang, "badge_analysis")}</span>
             </div>
             <div className={styles.inlineForm}>
               <label className={styles.fieldLabel}>{language === "English" ? "Export Range" : "导出时间范围"}</label>
@@ -868,7 +849,7 @@ export default function SettingsAndExport() {
             </a>
           </div>
           <div className={styles.exportCard}>
-            <h4>{t(language as any, "products_section_title")}</h4>
+            <h4>{t(language as Lang, "products_section_title")}</h4>
             <p>{language === "English" ? "Fields: product title, AI orders, AI GMV, AI share, top channel, URL (with product ID/handle for analysis)." : "字段：产品名、AI 订单数、AI GMV、AI 占比、Top 渠道、URL（附产品 ID / handle 便于二次分析）。"}</p>
             <a
               className={styles.secondaryButton}
@@ -879,7 +860,7 @@ export default function SettingsAndExport() {
           </div>
           <div className={styles.exportCard}>
             <h4>{language === "English" ? "Customers LTV (Window)" : "Customers LTV（选定窗口）"}</h4>
-            <p>{t(language as any, "customers_ltv_desc")}</p>
+            <p>{t(language as Lang, "customers_ltv_desc")}</p>
             <a
               className={styles.secondaryButton}
               href={`/api/export/customers?range=${exportWindow}`}
@@ -934,7 +915,7 @@ export default function SettingsAndExport() {
                   </tr>
                 </thead>
                 <tbody>
-                  {deadLetters.map((j: any) => (
+                  {deadLetters.map((j) => (
                     <tr key={j.id}>
                       <td>{j.shopDomain}</td>
                       <td>{j.intent}</td>
@@ -970,7 +951,7 @@ function LlmsPreview({ language }: { language: string }) {
   const [copied, setCopied] = useState(false);
   useEffect(() => {
     fetcher.load(`/api/llms-txt-preview?ts=${Date.now()}`);
-  }, [language]);
+  }, [language, fetcher]);
 
   const text = fetcher.data?.text || (language === "English" ? "# Generating..." : "# 生成中...");
 

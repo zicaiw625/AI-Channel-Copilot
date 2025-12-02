@@ -5,8 +5,7 @@ import { hasActiveSubscription } from "../lib/billing.server";
 import type { AdminGraphqlClient } from "../lib/billing.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { admin, session } = await authenticate.admin(request);
-  const shopDomain = session?.shop || "";
+  const { admin } = await authenticate.admin(request);
   const planName = process.env.BILLING_PLAN_NAME || "AI Channel Copilot Basic";
   const ok = await hasActiveSubscription(admin as AdminGraphqlClient, planName);
   if (ok) {

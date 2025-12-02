@@ -13,6 +13,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     await billing.request({ plan: BILLING_PLAN, isTest, returnUrl: `${appUrl}/app/billing/confirm` });
     return null;
   } catch (e) {
+    if (e instanceof Response) throw e;
     const form = await request.formData();
     const url = new URL(request.url);
     const lang = url.searchParams.get("lang") === "en" ? "en" : "zh";

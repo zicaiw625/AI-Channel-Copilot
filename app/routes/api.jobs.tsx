@@ -4,12 +4,25 @@ import type { LoaderFunctionArgs } from "react-router";
 import prisma from "../db.server";
 import { authenticate } from "../shopify.server";
 
-let cached: any | null = null;
+type JobStatus = "queued" | "processing" | "completed" | "failed";
+interface JobSnapshot {
+  ok: boolean;
+  backfills: {
+    recent: Array<Record<string, unknown>>;
+    counts: Partial<Record<JobStatus, number>>;
+  };
+  webhooks: {
+    recent: Array<Record<string, unknown>>;
+    counts: Partial<Record<JobStatus, number>>;
+  };
+}
+
+let cached: { shopDomain: string; payload: JobSnapshot } | null = null;
 let cachedAt = 0;
 const TTL_MS = 10_000;
 
-const toCounts = (rows: { status: string; _count: { status: number } }[]) => {
-  return rows.reduce<Record<string, number>>((acc, row) => {
+const toCounts = (rows: { status: JobStatus; _count: { status: number } }[]) => {
+  return rows.reduce<Partial<Record<JobStatus, number>>>((acc, row) => {
     acc[row.status] = row._count.status;
     return acc;
   }, {});
@@ -50,7 +63,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     }),
   ]);
 
-  const payload = {
+  const payload: JobSnapshot = {
     ok: true,
     backfills: {
       recent: backfillRows,

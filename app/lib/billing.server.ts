@@ -1,13 +1,6 @@
 import { requireEnv } from "./env.server";
 import { logger } from "./logger.server";
-import { createGraphqlSdk } from "./graphqlSdk.server";
-
-export type AdminGraphqlClient = {
-  graphql: (
-    query: string,
-    options: { variables?: Record<string, unknown>; signal?: AbortSignal },
-  ) => Promise<Response>;
-};
+import { createGraphqlSdk, type AdminGraphqlClient } from "./graphqlSdk.server";
 
 const ACTIVE_SUBSCRIPTIONS_QUERY = `#graphql
   query ActiveSubscriptions {

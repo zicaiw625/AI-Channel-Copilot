@@ -13,7 +13,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   }
 
   const language = url.searchParams.get("lang") === "en" ? "English" : "中文";
-  return { showForm: Boolean(login), language };
+  const showForm = process.env.ENABLE_LOGIN_FORM === "true";
+  return { showForm, language };
 };
 
 export default function App() {

@@ -59,9 +59,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     logger.error("customers/data_request failed", { shopDomain: shop, topic }, {
       message: (error as Error).message,
     });
-    return jsonResponse({
-      ok: true,
-      message: "No customer-level data stored; nothing to export.",
-    });
+    return new Response(
+      JSON.stringify({ ok: false, message: "Internal error" }),
+      { status: 500, headers: { "Content-Type": "application/json" } },
+    );
   }
 };

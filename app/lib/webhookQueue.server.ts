@@ -18,6 +18,7 @@ const processingKeys = new Set<string>();
 const MAX_RETRIES = Number(process.env.WEBHOOK_MAX_RETRIES || 5);
 const BASE_DELAY_MS = Number(process.env.WEBHOOK_BASE_DELAY_MS || 500);
 const MAX_DELAY_MS = Number(process.env.WEBHOOK_MAX_DELAY_MS || 30000);
+const PENDING_COOLDOWN_MS = Number(process.env.WEBHOOK_PENDING_COOLDOWN_MS || 250);
 
 const dequeue = async (extraWhere?: Prisma.WebhookJobWhereInput) => {
   return prisma.$transaction(async (tx) => {
@@ -223,6 +224,10 @@ export const processWebhookQueueForShop = async (
   } finally {
     processingKeys.delete(key);
     const pending = await prisma.webhookJob.count({ where: { status: "queued", shopDomain } });
-    if (pending) void processWebhookQueueForShop(shopDomain, handlers);
+    if (pending) {
+      setTimeout(() => {
+        void processWebhookQueueForShop(shopDomain, handlers);
+      }, PENDING_COOLDOWN_MS);
+    }
   }
 };

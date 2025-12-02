@@ -1,6 +1,6 @@
 import { defaultSettings, mapShopifyOrderToRecord, type DateRange, type OrderRecord, type SettingsDefaults, type ShopifyOrderNode } from "./aiData";
 import { getPlatform, isDemoMode } from "./runtime.server";
-import { createGraphqlSdk } from "./graphqlSdk.server";
+import { createGraphqlSdk, type AdminGraphqlClient } from "./graphqlSdk.server";
 import {
   MAX_BACKFILL_DAYS,
   MAX_BACKFILL_DURATION_MS,
@@ -134,12 +134,6 @@ const ORDER_QUERY = `#graphql
   }
 `;
 
-type AdminGraphqlClient = {
-  graphql: (
-    query: string,
-    options: { variables?: Record<string, unknown>; signal?: AbortSignal },
-  ) => Promise<Response>;
-};
 
 const MAX_BACKFILL_PAGES = 20;
 const DEFAULT_GRAPHQL_TIMEOUT_MS = 4500;
@@ -156,8 +150,18 @@ const fetchOrdersPage = async (
 ) => {
   const sdk = createGraphqlSdk(admin, context.shopDomain);
   const response = await sdk.request("orders query", ORDERS_QUERY, { first: 50, after, query }, { timeoutMs: DEFAULT_GRAPHQL_TIMEOUT_MS });
+  if (!response.ok) {
+    const text = await response.text();
+    logger.error("[backfill] orders page fetch failed", {
+      platform,
+      shopDomain: context?.shopDomain,
+      jobType: "backfill",
+      intent: context?.intent,
+    }, { status: response.status, body: text });
+    throw new Error(`Orders query failed: ${response.status}`);
+  }
 
-  return (await response.json()) as {
+  const json = (await response.json()) as {
     data?: {
       orders?: {
         pageInfo: { hasNextPage: boolean; endCursor?: string | null };
@@ -166,6 +170,16 @@ const fetchOrdersPage = async (
     };
     errors?: unknown;
   };
+  if (json.errors) {
+    logger.error("[backfill] orders page GraphQL errors", {
+      platform,
+      shopDomain: context?.shopDomain,
+      jobType: "backfill",
+      intent: context?.intent,
+    }, { errors: json.errors });
+    throw new Error("Orders query returned GraphQL errors");
+  }
+  return json;
 };
 
 type FetchContext = {
@@ -338,8 +352,17 @@ export const fetchOrderById = async (
 
   const sdk = createGraphqlSdk(admin, context?.shopDomain);
   const response = await sdk.request("order query", ORDER_QUERY, { id }, { timeoutMs: DEFAULT_GRAPHQL_TIMEOUT_MS });
+  if (!response.ok) {
+    const text = await response.text();
+    logger.error("[webhook] order fetch failed", { platform, id, jobType: "webhook", shopDomain: context?.shopDomain }, { status: response.status, body: text });
+    return null;
+  }
 
-  const json = (await response.json()) as { data?: { order?: ShopifyOrderNode | null } };
+  const json = (await response.json()) as { data?: { order?: ShopifyOrderNode | null }; errors?: unknown };
+  if (json.errors) {
+    logger.error("[webhook] order GraphQL errors", { platform, id, jobType: "webhook", shopDomain: context?.shopDomain }, { errors: json.errors });
+    return null;
+  }
   if (!json.data?.order) return null;
 
   return mapShopifyOrderToRecord(json.data.order, settings);

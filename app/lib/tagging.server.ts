@@ -2,11 +2,8 @@ import type { OrderRecord, SettingsDefaults } from "./aiData";
 import { getPlatform, isDemoMode } from "./runtime.server";
 import { logger } from "./logger.server";
 import { BACKFILL_TAGGING_BATCH_SIZE } from "./constants";
-import { createGraphqlSdk } from "./graphqlSdk.server";
+import { createGraphqlSdk, type AdminGraphqlClient } from "./graphqlSdk.server";
 
-type AdminGraphqlClient = {
-  graphql: (query: string, options: { variables?: Record<string, unknown> }) => Promise<Response>;
-};
 
 const TAGS_ADD = `#graphql
   mutation AddTags($id: ID!, $tags: [String!]!) {

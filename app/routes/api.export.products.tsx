@@ -15,11 +15,36 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const timezone = settings.timezones[0] || "UTC";
   const dateRange = resolveDateRange(rangeKey, new Date(), from, to, timezone);
 
-  const { data } = await getAiDashboardData(shopDomain, dateRange, settings, {
-    timezone,
+  const { data } = await getAiDashboardData(shopDomain, dateRange, settings, { timezone });
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      const header = [
+        "product_title","ai_orders","ai_gmv","ai_share","top_ai_channel","product_url","product_id","handle",
+      ];
+      controller.enqueue(encoder.encode(`# 仅统计可识别的 AI 流量（依赖 referrer/UTM/标签，结果为保守估计）\n`));
+      controller.enqueue(encoder.encode(header.join(",") + "\n"));
+      const toCsv = (v: string | number | null | undefined) => {
+        const s = v === null || v === undefined ? "" : String(v);
+        return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+      };
+      for (const p of data.topProducts) {
+        const row = [
+          p.title,
+          p.aiOrders,
+          p.aiGMV,
+          (p.aiShare * 100).toFixed(1) + "%",
+          p.topChannel ?? "",
+          p.url,
+          p.id,
+          p.handle,
+        ].map(toCsv).join(",") + "\n";
+        controller.enqueue(encoder.encode(row));
+      }
+      controller.close();
+    },
   });
-
-  return new Response(data.exports.productsCsv, {
+  return new Response(stream, {
     headers: {
       "content-type": "text/csv; charset=utf-8",
       "content-disposition": `attachment; filename=ai-products-${rangeKey}.csv`,

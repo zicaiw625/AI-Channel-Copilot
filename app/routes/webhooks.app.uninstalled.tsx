@@ -31,6 +31,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       message: (error as Error).message,
     });
 
-    return new Response(undefined, { status: 202 });
+    return new Response(undefined, { status: 500 });
   }
 };

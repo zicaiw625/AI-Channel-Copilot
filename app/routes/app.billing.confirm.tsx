@@ -2,7 +2,7 @@ import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import { hasActiveSubscription } from "../lib/billing.server";
-import type { AdminGraphqlClient } from "../lib/billing.server";
+import type { AdminGraphqlClient } from "../lib/graphqlSdk.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin } = await authenticate.admin(request);

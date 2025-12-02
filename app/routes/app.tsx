@@ -9,7 +9,7 @@ import { requireEnv } from "../lib/env.server";
 import { LANGUAGE_EVENT, LANGUAGE_STORAGE_KEY } from "../lib/constants";
 import { getSettings, syncShopPreferences } from "../lib/settings.server";
 import { ensureBilling } from "../lib/billing.server";
-import type { AdminGraphqlClient } from "../lib/billing.server";
+import type { AdminGraphqlClient } from "../lib/graphqlSdk.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);

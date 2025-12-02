@@ -7,6 +7,7 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 
 import { login } from "../../shopify.server";
 import { loginErrorMessage } from "./error.server";
+import { requireEnv } from "../../lib/env.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const result = await login(request);
@@ -14,7 +15,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const errors = loginErrorMessage(result);
   const url = new URL(request.url);
   const language = url.searchParams.get("lang") === "en" ? "English" : "中文";
-  return { errors, language, apiKey: process.env.SHOPIFY_API_KEY ?? "" };
+  return { errors, language, apiKey: requireEnv("SHOPIFY_API_KEY") };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -26,7 +27,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   return {
     errors,
     language,
-    apiKey: process.env.SHOPIFY_API_KEY ?? "",
+    apiKey: requireEnv("SHOPIFY_API_KEY"),
   };
 };
 

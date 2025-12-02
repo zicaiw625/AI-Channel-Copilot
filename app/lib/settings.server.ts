@@ -3,7 +3,7 @@ import { defaultSettings, type AiDomainRule, type PipelineStatus, type SettingsD
 import { getPlatform, isDemoMode } from "./runtime.server";
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 import { logger } from "./logger.server";
-import { createGraphqlSdk } from "./graphqlSdk.server";
+import { createGraphqlSdk, type AdminGraphqlClient } from "./graphqlSdk.server";
 
 const tableMissing = (error: unknown) =>
   error instanceof PrismaClientKnownRequestError && error.code === "P2021";
@@ -12,9 +12,6 @@ const columnMissing = (error: unknown) =>
 const notFound = (error: unknown) =>
   error instanceof PrismaClientKnownRequestError && error.code === "P2025";
 
-type AdminGraphqlClient = {
-  graphql: (query: string, options: { variables?: Record<string, unknown> }) => Promise<Response>;
-};
 
 const SHOP_PREFS_QUERY = `#graphql
   query ShopPreferencesForAiCopilot {

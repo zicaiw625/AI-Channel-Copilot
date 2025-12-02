@@ -13,8 +13,6 @@ export const applySecurityHeaders = (request: Request, responseHeaders: Headers)
   if (!isProd) {
     scriptSrc.push("'unsafe-inline'");
     scriptSrc.push("'unsafe-eval'");
-  } else {
-    scriptSrc.push("'unsafe-inline'");
   }
 
   const csp = [
@@ -24,6 +22,7 @@ export const applySecurityHeaders = (request: Request, responseHeaders: Headers)
     "img-src 'self' data: https:",
     "font-src 'self' https:",
     "connect-src 'self' https: wss:",
+    "object-src 'none'",
     "frame-ancestors https://*.myshopify.com https://admin.shopify.com",
     "base-uri 'self'",
     "form-action 'self' https://*.myshopify.com https://admin.shopify.com",

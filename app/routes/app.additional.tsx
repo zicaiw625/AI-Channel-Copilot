@@ -33,7 +33,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   let settings = await getSettings(shopDomain);
   settings = await syncShopPreferences(admin, shopDomain, settings);
   const exportRange = (url.searchParams.get("range") as TimeRangeKey) || "90d";
-  const demoAllowed = allowDemoData();
 
   const { orders, clamped, displayTimezone } = await loadDashboardContext({
     shopDomain,
@@ -44,8 +43,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     fallbackToShopify: false,
     fallbackIntent: "settings-export",
   });
-
-  void demoAllowed;
+  
 
   const ordersSample = orders.slice(0, 20);
   const [webhookQueueSize, deadLetters] = await Promise.all([

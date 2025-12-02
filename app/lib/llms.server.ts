@@ -35,14 +35,24 @@ export const buildLlmsTxt = async (
   lines.push("");
 
   if (settings.exposurePreferences.exposeProducts) {
-    const products = await prisma.orderProduct.findMany({
+    const rows = await prisma.orderProduct.findMany({
       where: { order: { shopDomain, aiSource: { not: null }, createdAt: { gte: range.start, lte: range.end } } },
-      take: topN,
+      select: { url: true, price: true, quantity: true },
     });
+    const agg = new Map<string, { gmv: number }>();
+    for (const r of rows) {
+      const url = r.url || "";
+      if (!url) continue;
+      const gmv = (r.price || 0) * (r.quantity || 0);
+      const prev = agg.get(url)?.gmv || 0;
+      agg.set(url, { gmv: prev + gmv });
+    }
+    const top = Array.from(agg.entries())
+      .sort((a, b) => b[1].gmv - a[1].gmv)
+      .slice(0, topN)
+      .map(([url]) => url);
     lines.push(language === "English" ? "allow:" : "allow:");
-    products.forEach((p) => {
-      if (p.url) lines.push(`  - ${p.url}`);
-    });
+    top.forEach((url) => lines.push(`  - ${url}`));
   } else {
     lines.push(language === "English" ? "# Product page exposure is disabled (exposeProducts=false)" : "# 未开启产品页暴露（exposeProducts=false）");
   }

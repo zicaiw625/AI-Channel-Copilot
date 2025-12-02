@@ -6,7 +6,7 @@ import { authenticate, login } from "../shopify.server";
 import { requireEnv } from "../lib/env.server";
 import { LANGUAGE_EVENT, LANGUAGE_STORAGE_KEY } from "../lib/constants";
 import { ensureBilling, hasActiveSubscription } from "../lib/billing.server";
-import type { AdminGraphqlClient } from "../lib/billing.server";
+import type { AdminGraphqlClient } from "../lib/graphqlSdk.server";
 import { getSettings, syncShopPreferences } from "../lib/settings.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {

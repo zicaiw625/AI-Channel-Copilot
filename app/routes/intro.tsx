@@ -5,6 +5,7 @@ import { AppProvider } from "@shopify/shopify-app-react-router/react";
 import { authenticate } from "../shopify.server";
 import { getSettings } from "../lib/settings.server";
 import { requireEnv } from "../lib/env.server";
+import { useUILanguage } from "../lib/useUILanguage";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   let language = "中文";
@@ -62,7 +63,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
 export default function Intro() {
   const { language, apiKey } = useLoaderData<typeof loader>();
-  const en = language === "English";
+  const uiLanguage = useUILanguage(language);
+  const en = uiLanguage === "English";
   return (
     <AppProvider embedded apiKey={apiKey}>
       <section style={{ padding: 16 }}>
@@ -71,9 +73,9 @@ export default function Intro() {
         <p>{en ? "Permissions: read-only orders/customers; no modifications." : "权限：仅读取订单/客户信息，不会修改订单。"}</p>
         <p>{en ? "Historical sync may be started to populate dashboards." : "可进行历史订单同步以填充仪表盘。"}</p>
         <div style={{ display: "inline-block", marginTop: 12 }}>
-          <s-button href="/app/onboarding" variant="primary">
+          <s-link href="/app/onboarding">
             {en ? "Back to Onboarding" : "返回 Onboarding"}
-          </s-button>
+          </s-link>
         </div>
       </section>
     </AppProvider>

@@ -1,6 +1,6 @@
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
-import { authenticate, BILLING_PLAN, MONTHLY_PLAN } from "../shopify.server";
+import { authenticate, BILLING_PLAN } from "../shopify.server";
 import { computeIsTestMode, markSubscriptionCheck, getActiveSubscriptionDetails } from "../lib/billing.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -9,7 +9,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const isTest = await computeIsTestMode(shopDomain);
   const check = await billing.check({ plans: [BILLING_PLAN], isTest });
   if (check.hasActivePayment) {
-    const details = await getActiveSubscriptionDetails(admin, MONTHLY_PLAN);
+    const details = await getActiveSubscriptionDetails(admin, BILLING_PLAN);
     const trialEnd = details?.trialEnd || null;
     await markSubscriptionCheck(shopDomain, "active", null, trialEnd, true);
     const url = new URL(request.url);

@@ -14,9 +14,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const auth = await authenticate.admin(request);
     admin = auth.admin;
     session = auth.session;
-  } catch (e) {
-    if (!demo) throw e;
-  }
+  } catch (e) {}
   const shopDomain = session?.shop || "";
   let settings = await getSettings(shopDomain);
   settings = await syncShopPreferences(admin, shopDomain, settings);

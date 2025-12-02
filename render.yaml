@@ -52,7 +52,7 @@ services:
       - key: DATA_RETENTION_MONTHS
         value: 6
       - key: DEMO_MODE
-        value: true
+        value: false
 
 databases:
   - name: ai-channel-copilot-db

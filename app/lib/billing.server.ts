@@ -23,19 +23,19 @@ export type BillingState = {
 export const getBillingState = async (shopDomain: string): Promise<BillingState | null> => {
   if (!shopDomain) return null;
   try {
-    const record = await (prisma as any).shopBillingState.findUnique({
-      where: { billing_shop_platform: { shopDomain, platform: "shopify" } },
+    const record = await prisma.shopBillingState.findUnique({
+      where: { shopDomain_platform: { shopDomain, platform: "shopify" } },
     });
     return record
       ? {
-          shopDomain,
-          isDevShop: record.isDevShop,
-          hasEverSubscribed: record.hasEverSubscribed,
-          lastSubscriptionStatus: record.lastSubscriptionStatus,
-          lastTrialStartAt: record.lastTrialStartAt || null,
-          lastTrialEndAt: record.lastTrialEndAt || null,
-          lastCheckedAt: record.lastCheckedAt || null,
-        }
+        shopDomain,
+        isDevShop: record.isDevShop,
+        hasEverSubscribed: record.hasEverSubscribed,
+        lastSubscriptionStatus: record.lastSubscriptionStatus,
+        lastTrialStartAt: record.lastTrialStartAt || null,
+        lastTrialEndAt: record.lastTrialEndAt || null,
+        lastCheckedAt: record.lastCheckedAt || null,
+      }
       : null;
   } catch (error) {
     if (tableMissing(error) || columnMissing(error)) return null;
@@ -56,8 +56,8 @@ export const upsertBillingState = async (
     lastCheckedAt: updates.lastCheckedAt || new Date(),
   };
   try {
-    const record = await (prisma as any).shopBillingState.upsert({
-      where: { billing_shop_platform: { shopDomain, platform: "shopify" } },
+    const record = await prisma.shopBillingState.upsert({
+      where: { shopDomain_platform: { shopDomain, platform: "shopify" } },
       update: payload,
       create: { shopDomain, platform: "shopify", ...payload },
     });
@@ -72,10 +72,10 @@ export const upsertBillingState = async (
     };
   } catch (error) {
     if (!(tableMissing(error) || columnMissing(error) || notFound(error))) throw error;
-    const existing = await (prisma as any).shopBillingState.findFirst({ where: { shopDomain } });
+    const existing = await prisma.shopBillingState.findFirst({ where: { shopDomain } });
     if (existing) {
-      const updated = await (prisma as any).shopBillingState.update({
-        where: { id: (existing as any).id },
+      const updated = await prisma.shopBillingState.update({
+        where: { id: existing.id },
         data: payload,
       });
       return {
@@ -88,7 +88,7 @@ export const upsertBillingState = async (
         lastCheckedAt: updated.lastCheckedAt || null,
       };
     }
-    const created = await (prisma as any).shopBillingState.create({
+    const created = await prisma.shopBillingState.create({
       data: { shopDomain, platform: "shopify", ...payload },
     });
     return {
@@ -205,7 +205,8 @@ export const ensureBilling = async (
   if (ok) return;
   const amount = Number(process.env.BILLING_PRICE || "5");
   const currencyCode = (process.env.BILLING_CURRENCY || "USD").toUpperCase();
-  const interval = (process.env.BILLING_INTERVAL || "EVERY_30_DAYS").toUpperCase();
+  const intervalEnv = (process.env.BILLING_INTERVAL || "EVERY_30_DAYS").toUpperCase();
+  const interval = intervalEnv === "ANNUAL" ? "ANNUAL" : "EVERY_30_DAYS";
   const trialDays = Number(process.env.BILLING_TRIAL_DAYS || "7");
   const returnUrl = new URL("/app/billing/confirm", requireEnv("SHOPIFY_APP_URL")).toString();
   const MUTATION = `#graphql

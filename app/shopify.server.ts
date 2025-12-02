@@ -21,6 +21,7 @@ const scopes = requireEnv("SCOPES")
 const planName = (process.env.BILLING_PLAN_NAME || "AI Channel Copilot Basic").trim();
 export const MONTHLY_PLAN = planName;
 export const BILLING_PLAN = MONTHLY_PLAN;
+export type BillingPlanKey = keyof ShopifyAppConfig["billing"];
 const getBillingInterval = (value: string): BillingInterval.Annual | BillingInterval.Every30Days => {
   switch (value) {
     case "ANNUAL":
@@ -48,7 +49,7 @@ const billing = readBillingConfig();
 
 const appApiVersion = ApiVersion.July24;
 
-const shopify = shopifyApp({
+const appConfig = {
   apiKey,
   apiSecretKey,
   apiVersion: appApiVersion,
@@ -72,7 +73,9 @@ const shopify = shopifyApp({
   ...(process.env.SHOP_CUSTOM_DOMAIN
     ? { customShopDomains: [process.env.SHOP_CUSTOM_DOMAIN] }
     : {}),
-});
+};
+
+const shopify = shopifyApp(appConfig);
 
 runStartupSelfCheck();
 
@@ -84,3 +87,4 @@ export const unauthenticated = shopify.unauthenticated;
 export const login = shopify.login;
 export const registerWebhooks = shopify.registerWebhooks;
 export const sessionStorage = shopify.sessionStorage;
+export type ShopifyAppConfig = typeof appConfig;

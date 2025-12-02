@@ -1,6 +1,6 @@
 
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
-import { authenticate, BILLING_PLAN } from "../shopify.server";
+import shopify, { authenticate, BILLING_PLAN, type BillingPlanKey } from "../shopify.server";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { getSettings, markActivity } from "../lib/settings.server";
 import { detectAndPersistDevShop, computeIsTestMode } from "../lib/billing.server";
@@ -42,7 +42,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
       const isDev = await detectAndPersistDevShop(admin, shopDomain);
       const isTest = await computeIsTestMode(shopDomain);
-      const check = await billing.check({ plans: [BILLING_PLAN as unknown as never], isTest });
+      const check = await billing.check({ plans: [BILLING_PLAN as BillingPlanKey], isTest });
       if (!isDev && !check.hasActivePayment) {
         throw new Response(null, { status: 302, headers: { Location: "/app/onboarding" } });
       }

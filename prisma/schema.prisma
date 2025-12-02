@@ -189,3 +189,20 @@ model BackfillJob {
   @@index([shopDomain])
   @@index([status])
 }
+
+model ShopBillingState {
+  id                     Int       @id @default(autoincrement())
+  shopDomain             String
+  platform               String    @default("shopify")
+  isDevShop              Boolean   @default(false)
+  hasEverSubscribed      Boolean   @default(false)
+  lastSubscriptionStatus String?
+  lastTrialStartAt       DateTime?
+  lastTrialEndAt         DateTime?
+  lastCheckedAt          DateTime?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  @@index([shopDomain])
+  @@unique([shopDomain, platform], map: "billing_shop_platform")
+}

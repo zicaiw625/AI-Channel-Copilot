@@ -4,17 +4,21 @@ import { useEffect, useState } from "react";
 import { useUILanguage } from "../lib/useUILanguage";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate, login, BILLING_PLAN } from "../shopify.server";
-import { requireEnv, isNonProduction } from "../lib/env.server";
+import { requireEnv } from "../lib/env.server";
 import { LANGUAGE_EVENT, LANGUAGE_STORAGE_KEY } from "../lib/constants";
 import { getSettings, syncShopPreferences } from "../lib/settings.server";
+import { detectAndPersistDevShop, computeIsTestMode } from "../lib/billing.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, billing, session } = await authenticate.admin(request);
   const shopDomain = session?.shop || "";
   let settings = await getSettings(shopDomain);
   settings = await syncShopPreferences(admin, shopDomain, settings);
-  const isTest = isNonProduction();
-  const billingCheck = await billing.check({ plans: [BILLING_PLAN as unknown as never], isTest });
+  const isDev = await detectAndPersistDevShop(admin, shopDomain);
+  const isTest = await computeIsTestMode(shopDomain);
+  const billingCheck = isDev
+    ? { hasActivePayment: true }
+    : await billing.check({ plans: [BILLING_PLAN as unknown as never], isTest });
   const amount = Number(process.env.BILLING_PRICE || "5");
   const currencyCode = process.env.BILLING_CURRENCY || "USD";
   const trialDays = Number(process.env.BILLING_TRIAL_DAYS || "7");
@@ -54,8 +58,9 @@ export const headers: HeadersFunction = (headersArgs) => {
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   try {
-    const { billing } = await authenticate.admin(request);
-    const isTest = isNonProduction();
+    const { billing, session } = await authenticate.admin(request);
+    const shopDomain = session?.shop || "";
+    const isTest = await computeIsTestMode(shopDomain);
     const appUrl = requireEnv("SHOPIFY_APP_URL");
     await billing.request({ plan: BILLING_PLAN as unknown as never, isTest, returnUrl: `${appUrl}/app/billing/confirm` });
     return null;

@@ -1,8 +1,9 @@
 
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
-import { authenticate } from "../shopify.server";
+import { authenticate, BILLING_PLAN } from "../shopify.server";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { getSettings, markActivity } from "../lib/settings.server";
+import { detectAndPersistDevShop, computeIsTestMode } from "../lib/billing.server";
 import { resolveDateRange } from "../lib/aiData";
 import { fetchOrdersForRange } from "../lib/shopifyOrders.server";
 import { persistOrders } from "../lib/persistence.server";
@@ -11,7 +12,7 @@ import { ensureWebhooks } from "../lib/webhooks.server";
 import { logger } from "../lib/logger.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { admin, session } = await authenticate.admin(request);
+  const { admin, session, billing } = await authenticate.admin(request);
 
   try {
     if (session?.shop) {
@@ -37,6 +38,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           await persistOrders(shopDomain, orders);
           await markActivity(shopDomain, { lastBackfillAt: new Date() });
         }
+      }
+
+      const isDev = await detectAndPersistDevShop(admin, shopDomain);
+      const isTest = await computeIsTestMode(shopDomain);
+      const check = await billing.check({ plans: [BILLING_PLAN as unknown as never], isTest });
+      if (!isDev && !check.hasActivePayment) {
+        throw new Response(null, { status: 302, headers: { Location: "/app/onboarding" } });
       }
     }
   } catch (error) {

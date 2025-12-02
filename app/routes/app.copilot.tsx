@@ -2,23 +2,27 @@ import { useState } from "react";
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { useFetcher, useLoaderData } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
-import { authenticate } from "../shopify.server";
+import { authenticate, BILLING_PLAN } from "../shopify.server";
+import { detectAndPersistDevShop, computeIsTestMode } from "../lib/billing.server";
 import { getSettings } from "../lib/settings.server";
 import { resolveDateRange, type TimeRangeKey } from "../lib/aiData";
 import styles from "../styles/app.copilot.module.css";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const { session, admin, billing } = await authenticate.admin(request);
   const shopDomain = session?.shop || "";
   const settings = await getSettings(shopDomain);
   const timezone = settings.timezones[0] || "UTC";
   const range = "30d" as TimeRangeKey;
   const dateRange = resolveDateRange(range, new Date(), undefined, undefined, timezone);
-  return { shopDomain, settings, timezone, dateRange, range };
+  const isDev = await detectAndPersistDevShop(admin, shopDomain);
+  const isTest = await computeIsTestMode(shopDomain);
+  const check = isDev ? { hasActivePayment: true } : await billing.check({ plans: [BILLING_PLAN as unknown as never], isTest });
+  return { shopDomain, settings, timezone, dateRange, range, readOnly: !check.hasActivePayment };
 };
 
 export default function Copilot() {
-  const { settings, dateRange, range } = useLoaderData<typeof loader>();
+  const { settings, dateRange, range, readOnly } = useLoaderData<typeof loader>();
   const fetcher = useFetcher();
   const [question, setQuestion] = useState("");
   const language = settings.languages[0] || "中文";
@@ -43,10 +47,21 @@ export default function Copilot() {
           </div>
         </div>
 
+        {readOnly && (
+          <div className={styles.callout}>
+            {language === "English" ? "Subscription inactive: Copilot is disabled in read-only mode." : "订阅未激活：只读模式下 Copilot 问答已禁用。"}
+          </div>
+        )}
         <div className={styles.quickButtons}>
-          <button className={styles.primaryButton} onClick={() => ask("ai_performance")}>{language === "English" ? "AI channel performance in last 30 days?" : "过去 30 天 AI 渠道表现如何？"}</button>
-          <button className={styles.secondaryButton} onClick={() => ask("ai_vs_all_aov")}>{language === "English" ? "AI channel vs all channels AOV?" : "AI 渠道 vs 全部渠道 AOV？"}</button>
-          <button className={styles.secondaryButton} onClick={() => ask("ai_top_products")}>{language === "English" ? "Top-selling products from AI channels recently?" : "最近 AI 渠道销量最高的产品？"}</button>
+          <button className={styles.primaryButton} onClick={() => ask("ai_performance")}>
+            {language === "English" ? "AI channel performance in last 30 days?" : "过去 30 天 AI 渠道表现如何？"}
+          </button>
+          <button className={styles.secondaryButton} onClick={() => ask("ai_vs_all_aov")}>
+            {language === "English" ? "AI channel vs all channels AOV?" : "AI 渠道 vs 全部渠道 AOV？"}
+          </button>
+          <button className={styles.secondaryButton} onClick={() => ask("ai_top_products")}>
+            {language === "English" ? "Top-selling products from AI channels recently?" : "最近 AI 渠道销量最高的产品？"}
+          </button>
         </div>
 
         <div className={styles.askBlock}>
@@ -56,7 +71,9 @@ export default function Copilot() {
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
           />
-          <button className={styles.primaryButton} onClick={() => ask()}>{language === "English" ? "Ask" : "提问"}</button>
+          <button className={styles.primaryButton} onClick={() => ask()} disabled={readOnly}>
+            {language === "English" ? "Ask" : "提问"}
+          </button>
         </div>
 
         {fetcher.data && (

@@ -18,7 +18,8 @@ const scopes = requireEnv("SCOPES")
   .map((item) => item.trim())
   .filter(Boolean);
 
-export const MONTHLY_PLAN = "AI Channel Copilot Basic" as const;
+const planName = (process.env.BILLING_PLAN_NAME || "AI Channel Copilot Basic").trim();
+export const MONTHLY_PLAN = planName;
 export const BILLING_PLAN = MONTHLY_PLAN;
 const getBillingInterval = (value: string): BillingInterval.Annual | BillingInterval.Every30Days => {
   switch (value) {

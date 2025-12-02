@@ -21,16 +21,21 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const skipBilling = shouldSkipBilling(url.pathname);
     if (!skipBilling) {
       const isTest = isNonProduction();
-      await billing.require({
-        plans: [BILLING_PLAN as unknown as never],
-        isTest,
-        onFailure: async () =>
-          billing.request({
-            plan: BILLING_PLAN as unknown as never,
-            isTest,
-            returnUrl: `${requireEnv("SHOPIFY_APP_URL")}/app/billing/confirm`,
-          }),
-      });
+      const enforce = shouldEnforceBilling();
+      if (enforce) {
+        await billing.require({
+          plans: [BILLING_PLAN as unknown as never],
+          isTest,
+          onFailure: async () =>
+            billing.request({
+              plan: BILLING_PLAN as unknown as never,
+              isTest,
+              returnUrl: `${requireEnv("SHOPIFY_APP_URL")}/app/billing/confirm`,
+            }),
+        });
+      } else {
+        await billing.check({ plans: [BILLING_PLAN as unknown as never], isTest });
+      }
     }
   } catch (e) {
     if (e instanceof Response) throw e;
@@ -69,3 +74,5 @@ const shouldSkipBilling = (pathname: string) => {
   const path = pathname.toLowerCase();
   return path.includes("/app/billing") || path.includes("/app/additional");
 };
+
+const shouldEnforceBilling = () => process.env.BILLING_ENFORCE === "true";

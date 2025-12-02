@@ -1,23 +1,29 @@
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { useLoaderData } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
-import { getSettings, syncShopPreferences } from "../lib/settings.server";
+import { authenticate } from "../shopify.server";
+import { getSettings } from "../lib/settings.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   let language = "中文";
+  const url = new URL(request.url);
+  const langParam = url.searchParams.get("lang");
+  if (langParam === "en") language = "English";
+
+  let shopDomain = url.searchParams.get("shop") || "";
+
   try {
-    const url = new URL(request.url);
-    const langParam = url.searchParams.get("lang");
-    if (langParam === "en") language = "English";
+    const auth = await authenticate.admin(request);
+    shopDomain = auth.session?.shop || shopDomain;
   } catch {}
-  try {
-    const url = new URL(request.url);
-    const shopDomain = url.searchParams.get("shop") || "";
-    if (shopDomain) {
+
+  if (shopDomain) {
+    try {
       const settings = await getSettings(shopDomain);
       language = settings.languages[0] || language;
-    }
-  } catch {}
+    } catch {}
+  }
+
   return { language };
 };
 

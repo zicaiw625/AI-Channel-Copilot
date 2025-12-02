@@ -7,7 +7,7 @@ import { AppProvider } from "@shopify/shopify-app-react-router/react";
 import { authenticate, BILLING_PLAN } from "../shopify.server";
 import { requireEnv, isNonProduction } from "../lib/env.server";
 import { LANGUAGE_EVENT, LANGUAGE_STORAGE_KEY } from "../lib/constants";
-import { getSettings, syncShopPreferences } from "../lib/settings.server";
+import { getSettings, syncShopPreferences, getInstallCreatedAt } from "../lib/settings.server";
  
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -21,7 +21,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const skipBilling = shouldSkipBilling(url.pathname);
     if (!skipBilling) {
       const isTest = isNonProduction();
-      const enforce = shouldEnforceBilling();
+      const enforce = await resolveEnforceBilling(shopDomain);
       if (enforce) {
         await billing.require({
           plans: [BILLING_PLAN as unknown as never],
@@ -76,3 +76,12 @@ const shouldSkipBilling = (pathname: string) => {
 };
 
 const shouldEnforceBilling = () => process.env.BILLING_ENFORCE === "true";
+const resolveEnforceBilling = async (shopDomain: string) => {
+  if (shouldEnforceBilling()) return true;
+  const freeDays = Number(process.env.BILLING_FREE_DAYS || "7");
+  const createdAt = await getInstallCreatedAt(shopDomain);
+  if (!createdAt) return false;
+  const now = Date.now();
+  const ageDays = Math.floor((now - createdAt.getTime()) / (24 * 60 * 60 * 1000));
+  return ageDays >= Math.max(0, freeDays);
+};

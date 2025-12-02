@@ -379,6 +379,21 @@ export const deleteSettings = async (shopDomain: string) => {
   }
 };
 
+export const getInstallCreatedAt = async (shopDomain: string): Promise<Date | null> => {
+  if (!shopDomain || isDemoMode()) return null;
+  try {
+    const record = await prisma.shopSettings.findUnique({ where: { shopDomain_platform: { shopDomain, platform } } });
+    return record?.createdAt ?? null;
+  } catch {
+    try {
+      const legacy = await prisma.shopSettings.findFirst({ where: { shopDomain } });
+      return legacy?.createdAt ?? null;
+    } catch {
+      return null;
+    }
+  }
+};
+
 export const normalizeSettingsPayload = (incoming: unknown): SettingsDefaults => {
   const parsed =
     typeof incoming === "string"

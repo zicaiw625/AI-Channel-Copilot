@@ -54,16 +54,16 @@ export default function Onboarding() {
           </form>
         )}
         {!isDevShop && (
-          <a href="/app" style={{ display: "inline-block", marginTop: 8 }}>
+          <s-link href="/app" style={{ display: "inline-block", marginTop: 8 }}>
             {en ? "Maybe later, view intro only" : "稍后再说，仅查看介绍"}
-          </a>
+          </s-link>
         )}
         {isDevShop && (
           <div>
             <p>{en ? "Development store detected: app is free for testing." : "检测到开发者商店：本应用在开发者商店环境中永久免费，仅限测试使用。"}</p>
-            <a href="/app" style={{ display: "inline-block", marginTop: 8 }}>
+            <s-link href="/app" style={{ display: "inline-block", marginTop: 8 }}>
               {en ? "Enter Dashboard (Test Mode)" : "进入仪表盘（测试模式）"}
-            </a>
+            </s-link>
           </div>
         )}
       </div>

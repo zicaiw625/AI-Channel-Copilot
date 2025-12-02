@@ -1,7 +1,7 @@
 import { AppProvider } from "@shopify/shopify-app-react-router/react";
 import { useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs, HeadersFunction } from "react-router";
-import { useActionData, useLoaderData, useRouteError } from "react-router";
+import { useActionData, useLoaderData, useRouteError, Form } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 
@@ -38,30 +38,10 @@ export default function Auth() {
   const { errors, language, apiKey } = actionData || loaderData;
   useAppBridge();
 
-  const submit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    const lang = language === "English" ? "en" : "zh";
-    const resp = await fetch(`/auth/login.data?lang=${lang}`, { method: "POST", body: formData });
-    if (resp.status === 202) {
-      let target = resp.headers.get("Location") || "";
-      const data = await resp.clone().json().catch(() => null);
-      if (!target && data && typeof data.url === "string") target = data.url;
-      if (!target && apiKey && shop) {
-        const store = shop.replace(/\.myshopify\.com$/i, "");
-        target = `https://admin.shopify.com/store/${store}/oauth/install?client_id=${apiKey}`;
-      }
-      if (target) {
-        try { (window.top || window).location.href = target; } catch { window.location.href = target; }
-        return;
-      }
-    }
-  };
-
   return (
     <AppProvider embedded apiKey={apiKey}>
       <s-page>
-        <form method="post" onSubmit={submit}>
+        <Form method="post" replace>
         <s-section heading={language === "English" ? "Log in" : "登录"}>
           <s-text-field
             name="shop"
@@ -74,7 +54,7 @@ export default function Auth() {
           ></s-text-field>
           <s-button type="submit">{language === "English" ? "Log in" : "登录"}</s-button>
         </s-section>
-        </form>
+        </Form>
       </s-page>
     </AppProvider>
   );

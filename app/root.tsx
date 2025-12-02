@@ -1,10 +1,21 @@
-import { Links, Meta, Outlet, Scripts, ScrollRestoration } from "react-router";
+import { Links, Meta, Outlet, Scripts, ScrollRestoration, useLoaderData } from "react-router";
+import type { LoaderFunctionArgs } from "react-router";
 import { useEffect } from "react";
 import { useUILanguage } from "./lib/useUILanguage";
 import { useNonce } from "./lib/nonce";
 
+export const loader = async ({ request }: LoaderFunctionArgs) => {
+  const url = new URL(request.url);
+  const qlang = url.searchParams.get("lang");
+  const header = request.headers.get("accept-language") || "";
+  const lang = qlang === "en" ? "en" : qlang === "zh" ? "zh" : /\ben\b/i.test(header) ? "en" : "zh";
+  const uiLanguage = lang === "en" ? "English" : "中文";
+  return { lang, uiLanguage };
+};
+
 export default function App() {
-  const uiLanguage = useUILanguage("中文");
+  const { lang, uiLanguage: initialUILanguage } = useLoaderData<typeof loader>();
+  const uiLanguage = useUILanguage(initialUILanguage);
   const nonce = useNonce();
   useEffect(() => {
     const lang = uiLanguage === "English" ? "en" : "zh";
@@ -13,7 +24,7 @@ export default function App() {
     }
   }, [uiLanguage]);
   return (
-    <html lang="zh">
+    <html lang={lang}>
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width,initial-scale=1" />
@@ -29,8 +40,8 @@ export default function App() {
         <Outlet />
         <ScrollRestoration />
         {(() => {
-          const ScriptsAny: any = Scripts;
-          return <ScriptsAny nonce={nonce} />;
+          const ScriptsWithNonce = Scripts as unknown as (props: { nonce?: string }) => JSX.Element;
+          return <ScriptsWithNonce nonce={nonce} />;
         })()}
       </body>
     </html>

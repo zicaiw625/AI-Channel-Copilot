@@ -22,9 +22,11 @@ export default function Intro() {
       <p>{en ? "Detect AI-attributed orders and analyze AOV/LTV." : "识别 AI 渠道订单，分析 AOV/LTV。"}</p>
       <p>{en ? "Permissions: read-only orders/customers; no modifications." : "权限：仅读取订单/客户信息，不会修改订单。"}</p>
       <p>{en ? "Historical sync may be started to populate dashboards." : "可进行历史订单同步以填充仪表盘。"}</p>
-      <s-link href="/app/onboarding" style={{ display: "inline-block", marginTop: 12 }}>
-        {en ? "Back to Onboarding" : "返回 Onboarding"}
-      </s-link>
+      <div style={{ display: "inline-block", marginTop: 12 }}>
+        <s-link href="/app/onboarding">
+          {en ? "Back to Onboarding" : "返回 Onboarding"}
+        </s-link>
+      </div>
     </section>
   );
 }

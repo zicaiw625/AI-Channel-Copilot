@@ -5,7 +5,7 @@ services:
     buildCommand: npm install --include=dev && bash scripts/render-setup.sh && npm run build
     startCommand: npm run start
     autoDeploy: true
-    healthCheckPath: /
+    healthCheckPath: /healthz
     envVars:
       - key: NPM_CONFIG_PRODUCTION
         value: false

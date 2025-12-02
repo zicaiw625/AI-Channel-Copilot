@@ -54,7 +54,7 @@ export default function Onboarding() {
           </form>
         )}
         {!isDevShop && (
-          <s-link href="/app" style={{ display: "inline-block", marginTop: 8 }}>
+          <s-link href="/intro" style={{ display: "inline-block", marginTop: 8 }}>
             {en ? "Maybe later, view intro only" : "稍后再说，仅查看介绍"}
           </s-link>
         )}

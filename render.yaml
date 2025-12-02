@@ -2,7 +2,7 @@ services:
   - type: web
     name: ai-channel-copilot
     env: node
-    buildCommand: npm install --include=dev && npm run setup && npm run build
+    buildCommand: npm install --include=dev && bash scripts/render-setup.sh && npm run build
     startCommand: npm run start
     autoDeploy: true
     healthCheckPath: /

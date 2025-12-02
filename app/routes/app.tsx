@@ -24,7 +24,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     let readOnly = false;
     if (!skipBilling) {
       const isTest = await computeIsTestMode(shopDomain);
-      const result = await billing.check({ plans: [BILLING_PLAN as unknown as never], isTest });
+      const result = await billing.check({ plans: [BILLING_PLAN], isTest });
       readOnly = !result.hasActivePayment;
       await markSubscriptionCheck(shopDomain, result.hasActivePayment ? "active" : "inactive");
       const path = url.pathname.toLowerCase();

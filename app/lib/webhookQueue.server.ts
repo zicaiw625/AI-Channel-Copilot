@@ -19,6 +19,8 @@ const MAX_RETRIES = Number(process.env.WEBHOOK_MAX_RETRIES || 5);
 const BASE_DELAY_MS = Number(process.env.WEBHOOK_BASE_DELAY_MS || 500);
 const MAX_DELAY_MS = Number(process.env.WEBHOOK_MAX_DELAY_MS || 30000);
 const PENDING_COOLDOWN_MS = Number(process.env.WEBHOOK_PENDING_COOLDOWN_MS || 250);
+const MAX_BATCH = Number(process.env.WEBHOOK_MAX_BATCH || 50);
+const PENDING_MAX_COOLDOWN_MS = Number(process.env.WEBHOOK_PENDING_MAX_COOLDOWN_MS || 2000);
 
 const dequeue = async (extraWhere?: Prisma.WebhookJobWhereInput) => {
   return prisma.$transaction(async (tx) => {
@@ -165,7 +167,9 @@ export const processWebhookQueueForShop = async (
   processingKeys.add(key);
   try {
     await withAdvisoryLock(hashKey(key), async () => {
+      let processed = 0;
       for (;;) {
+        if (processed >= Math.max(1, MAX_BATCH)) break;
         const job = await dequeue({ shopDomain });
         if (!job) break;
 
@@ -219,15 +223,17 @@ export const processWebhookQueueForShop = async (
             await updateJobStatus(job.id, "failed", message);
           }
         }
+        processed++;
       }
     });
   } finally {
     processingKeys.delete(key);
     const pending = await prisma.webhookJob.count({ where: { status: "queued", shopDomain } });
     if (pending) {
+      const dynamicDelay = Math.min(PENDING_COOLDOWN_MS + Math.floor(pending / Math.max(1, MAX_BATCH)) * 50, PENDING_MAX_COOLDOWN_MS);
       setTimeout(() => {
         void processWebhookQueueForShop(shopDomain, handlers);
-      }, PENDING_COOLDOWN_MS);
+      }, dynamicDelay);
     }
   }
 };

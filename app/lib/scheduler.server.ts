@@ -47,10 +47,19 @@ const runBackfillSweep = async () => {
       }
 
       void processBackfillQueue(
-        async () => ({
-          admin: (await unauthenticated.admin(shopDomain)) as unknown as { graphql: (query: string, options: { variables?: Record<string, unknown> }) => Promise<Response> },
-          settings,
-        }),
+        async () => {
+          let client: unknown = null;
+          try {
+            client = await unauthenticated.admin(shopDomain);
+          } catch {
+            client = null;
+          }
+          const hasGraphql = client && typeof (client as any).graphql === "function";
+          const admin = hasGraphql
+            ? (client as { graphql: (query: string, options: { variables?: Record<string, unknown> }) => Promise<Response> })
+            : null;
+          return { admin, settings };
+        },
         { shopDomain },
       );
     }

@@ -7,7 +7,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { billing, session } = await authenticate.admin(request);
   const shopDomain = session?.shop || "";
   const isTest = await computeIsTestMode(shopDomain);
-  const check = await billing.check({ plans: [BILLING_PLAN as unknown as never], isTest });
+  const check = await billing.check({ plans: [BILLING_PLAN], isTest });
   if (check.hasActivePayment) {
     const trialDays = await shouldOfferTrial(shopDomain);
     const trialStart = trialDays > 0 ? new Date() : null;

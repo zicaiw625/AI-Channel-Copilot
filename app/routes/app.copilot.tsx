@@ -17,7 +17,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const dateRange = resolveDateRange(range, new Date(), undefined, undefined, timezone);
   const isDev = await detectAndPersistDevShop(admin, shopDomain);
   const isTest = await computeIsTestMode(shopDomain);
-  const check = isDev ? { hasActivePayment: true } : await billing.check({ plans: [BILLING_PLAN as unknown as never], isTest });
+  const check = isDev ? { hasActivePayment: true } : await billing.check({ plans: [BILLING_PLAN], isTest });
   return { shopDomain, settings, timezone, dateRange, range, readOnly: !check.hasActivePayment };
 };
 

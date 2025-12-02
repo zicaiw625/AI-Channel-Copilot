@@ -18,7 +18,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const isTest = await computeIsTestMode(shopDomain);
   const billingCheck = isDev
     ? { hasActivePayment: true }
-    : await billing.check({ plans: [BILLING_PLAN as unknown as never], isTest });
+    : await billing.check({ plans: [BILLING_PLAN], isTest });
   const amount = Number(process.env.BILLING_PRICE || "5");
   const currencyCode = process.env.BILLING_CURRENCY || "USD";
   const trialDays = Number(process.env.BILLING_TRIAL_DAYS || "7");
@@ -62,7 +62,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const shopDomain = session?.shop || "";
     const isTest = await computeIsTestMode(shopDomain);
     const appUrl = requireEnv("SHOPIFY_APP_URL");
-    await billing.request({ plan: BILLING_PLAN as unknown as never, isTest, returnUrl: `${appUrl}/app/billing/confirm` });
+    await billing.request({ plan: BILLING_PLAN, isTest, returnUrl: `${appUrl}/app/billing/confirm` });
     return null;
   } catch (error) {
     if (error instanceof Response) throw error;

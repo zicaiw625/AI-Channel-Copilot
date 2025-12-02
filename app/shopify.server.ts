@@ -20,8 +20,8 @@ const scopes = requireEnv("SCOPES")
 
 const planName = (process.env.BILLING_PLAN_NAME || "AI Channel Copilot Basic").trim();
 export const MONTHLY_PLAN = planName;
-export const BILLING_PLAN = MONTHLY_PLAN;
 export type BillingPlanKey = keyof ShopifyAppConfig["billing"];
+export const BILLING_PLAN: BillingPlanKey = MONTHLY_PLAN as BillingPlanKey;
 const getBillingInterval = (value: string): BillingInterval.Annual | BillingInterval.Every30Days => {
   switch (value) {
     case "ANNUAL":

@@ -22,20 +22,23 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const isDevShop = await detectAndPersistDevShop(admin, shopDomain);
     const skipBilling = shouldSkipBillingForPath(url.pathname, isDevShop);
     let readOnly = false;
+    let trialDaysLeft: number | null = null;
     if (!skipBilling) {
       const isTest = await computeIsTestMode(shopDomain);
       const result = await billing.check({ plans: [BILLING_PLAN], isTest });
       readOnly = !result.hasActivePayment;
       await markSubscriptionCheck(shopDomain, result.hasActivePayment ? "active" : "inactive");
+      trialDaysLeft = await getTrialRemainingDays(shopDomain);
+      const trialActive = typeof trialDaysLeft === "number" && trialDaysLeft > 0;
+      if (trialActive) readOnly = false;
       const path = url.pathname.toLowerCase();
       const isProtected = path === "/app" || (path.startsWith("/app/") && !path.includes("/app/onboarding") && !path.includes("/app/billing") && !path.includes("/app/additional"));
-      if (isProtected && readOnly) {
+      if (isProtected && readOnly && !trialActive) {
         const next = new URL("/app/onboarding", url.origin);
         next.search = url.search;
         throw new Response(null, { status: 302, headers: { Location: next.toString() } });
       }
     }
-    const trialDaysLeft = await getTrialRemainingDays(shopDomain);
     return { apiKey: requireEnv("SHOPIFY_API_KEY"), language: settings.languages[0] || "中文", readOnly, trialDaysLeft };
   } catch (e) {
     if (e instanceof Response) throw e;

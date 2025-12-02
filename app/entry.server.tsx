@@ -8,6 +8,7 @@ import { addDocumentResponseHeaders } from "./shopify.server";
 import { logger } from "./lib/logger.server";
 import { initScheduler } from "./lib/scheduler.server";
 import { applySecurityHeaders } from "./lib/securityHeaders.server";
+import { NonceProvider } from "./lib/nonce";
 
 export const streamTimeout = 5000;
 
@@ -25,13 +26,16 @@ export default async function handleRequest(
   const callbackName = isbot(userAgent ?? '')
     ? "onAllReady"
     : "onShellReady";
+  const nonce = responseHeaders.get("X-CSP-Nonce") || undefined;
 
   return new Promise((resolve, reject) => {
     const { pipe, abort } = renderToPipeableStream(
-      <ServerRouter
-        context={reactRouterContext}
-        url={request.url}
-      />,
+      <NonceProvider value={nonce}>
+        <ServerRouter
+          context={reactRouterContext}
+          url={request.url}
+        />
+      </NonceProvider>,
       {
         [callbackName]: () => {
           const body = new PassThrough();

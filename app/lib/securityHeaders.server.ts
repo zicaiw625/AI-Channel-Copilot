@@ -29,5 +29,8 @@ export const applySecurityHeaders = (request: Request, responseHeaders: Headers)
   ].join("; ");
   responseHeaders.set("Content-Security-Policy", csp);
 
-  responseHeaders.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  const isHttps = request.url.startsWith("https://");
+  if (isProd && isHttps) {
+    responseHeaders.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  }
 };

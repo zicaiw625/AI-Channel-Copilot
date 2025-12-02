@@ -121,10 +121,6 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
           let localCreated = 0;
           let localUpdated = 0;
 
-          await tx.orderProduct.deleteMany({ where: { orderId: { in: orderIds } } });
-
-          const productBuffer: Prisma.OrderProductCreateManyInput[] = [];
-
           for (const order of chunk) {
             const aiSource = toAiEnum(order.aiSource);
             const createdAt = new Date(order.createdAt);
@@ -159,20 +155,54 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
               create: orderData,
               update: orderData,
             });
+            const newLines = order.products || [];
+            const existingLines = await tx.orderProduct.findMany({ where: { orderId: order.id } });
+            const existingByPid = new Map(existingLines.map((p) => [p.productId, p]));
+            const nextByPid = new Map(newLines.map((l) => [l.id, l]));
 
-            if (order.products?.length) {
-              productBuffer.push(
-                ...order.products.map((line) => ({
-                  orderId: order.id,
-                  productId: line.id,
-                  title: line.title,
-                  handle: line.handle || null,
-                  url: line.url || null,
-                  price: line.price,
-                  currency: line.currency,
-                  quantity: line.quantity,
-                })),
-              );
+            for (const line of newLines) {
+              const prev = existingByPid.get(line.id);
+              if (prev) {
+                const changed =
+                  prev.title !== line.title ||
+                  prev.handle !== (line.handle || null) ||
+                  prev.url !== (line.url || null) ||
+                  prev.price !== line.price ||
+                  prev.currency !== (line.currency || prev.currency) ||
+                  prev.quantity !== line.quantity;
+                if (changed) {
+                  await tx.orderProduct.update({
+                    where: { id: prev.id },
+                    data: {
+                      title: line.title,
+                      handle: line.handle || null,
+                      url: line.url || null,
+                      price: line.price,
+                      currency: line.currency,
+                      quantity: line.quantity,
+                    },
+                  });
+                }
+              } else {
+                await tx.orderProduct.create({
+                  data: {
+                    orderId: order.id,
+                    productId: line.id,
+                    title: line.title,
+                    handle: line.handle || null,
+                    url: line.url || null,
+                    price: line.price,
+                    currency: line.currency,
+                    quantity: line.quantity,
+                  },
+                });
+              }
+            }
+
+            for (const prev of existingLines) {
+              if (!nextByPid.has(prev.productId)) {
+                await tx.orderProduct.delete({ where: { id: prev.id } });
+              }
             }
 
             if (order.customerId) {
@@ -257,10 +287,6 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
             } else {
               localCreated += 1;
             }
-          }
-
-          if (productBuffer.length) {
-            await tx.orderProduct.createMany({ data: productBuffer });
           }
 
           return { created: localCreated, updated: localUpdated };

@@ -128,6 +128,11 @@ export const ensureBilling = async (
       return;
     }
 
+    logger.info(
+      "[billing] redirecting to confirmation",
+      { shopDomain },
+      { planName, amount, currencyCode, trialDays, interval, confirmationUrl }
+    );
     throw new Response(null, { status: 302, headers: { Location: confirmationUrl } });
   } catch (error) {
     const message = (error as Error)?.message || "unknown error";

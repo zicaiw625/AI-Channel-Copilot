@@ -17,6 +17,20 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     shopDomain = auth.session?.shop || shopDomain;
   } catch {}
 
+  if (!shopDomain) {
+    const token = url.searchParams.get("id_token") || "";
+    try {
+      const parts = token.split(".");
+      const payload = parts.length > 1 ? parts[1] : "";
+      const base64 = payload.replace(/-/g, "+").replace(/_/g, "/");
+      const json = Buffer.from(base64, "base64").toString("utf8");
+      const obj = JSON.parse(json) as { dest?: string };
+      const dest = obj.dest || "";
+      const host = dest ? new URL(dest).hostname : "";
+      shopDomain = host || shopDomain;
+    } catch {}
+  }
+
   if (shopDomain) {
     try {
       const settings = await getSettings(shopDomain);
@@ -37,9 +51,9 @@ export default function Intro() {
       <p>{en ? "Permissions: read-only orders/customers; no modifications." : "权限：仅读取订单/客户信息，不会修改订单。"}</p>
       <p>{en ? "Historical sync may be started to populate dashboards." : "可进行历史订单同步以填充仪表盘。"}</p>
       <div style={{ display: "inline-block", marginTop: 12 }}>
-        <s-link href="/app/onboarding">
+        <s-button href="/app/onboarding" variant="primary">
           {en ? "Back to Onboarding" : "返回 Onboarding"}
-        </s-link>
+        </s-button>
       </div>
     </section>
   );

@@ -34,11 +34,20 @@ export default function Onboarding() {
         </p>
         {!isDevShop && trialDays >= 0 && (
           <form method="post">
-            <button type="submit">{en ? "Start Free Trial" : "开始免费试用"}</button>
+            <button type="submit">
+              {en
+                ? (trialDays > 0 ? `Start ${trialDays}-day Free Trial` : "Start Subscription")
+                : (trialDays > 0 ? `开始 ${trialDays} 天免费试用` : "开始订阅")}
+            </button>
           </form>
         )}
         {isDevShop && (
-          <p>{en ? "Development store detected: app is free for testing." : "检测到开发/测试店：应用将永久免费用于测试。"}</p>
+          <div>
+            <p>{en ? "Development store detected: app is free for testing." : "检测到开发者商店：本应用在开发者商店环境中永久免费，仅限测试使用。"}</p>
+            <a href="/app" style={{ display: "inline-block", marginTop: 8 }}>
+              {en ? "Enter Dashboard (Test Mode)" : "进入仪表盘（测试模式）"}
+            </a>
+          </div>
         )}
       </div>
     </section>

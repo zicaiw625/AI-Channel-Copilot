@@ -106,3 +106,14 @@
 - `SCOPES`：例如 `read_orders,read_customers,read_products,write_orders,write_customers`
 - `DATABASE_URL`：由 Render 数据库自动注入
 - 可选：`DEFAULT_RANGE_KEY=30d`、`MAX_BACKFILL_ORDERS=1000`、`MAX_BACKFILL_DAYS=90`、`MAX_BACKFILL_DURATION_MS=5000`、`BACKFILL_TAGGING_BATCH_SIZE=25`、`DATA_RETENTION_MONTHS=6`
+
+### 计费与免费期
+- 计费计划在 `app/shopify.server.ts` 中定义（line items：金额/货币/周期/试用天数）。
+- 门禁逻辑：
+  - `ENABLE_BILLING` 为 `true` 才启用任何计费检查；否则完全跳过，应用可自由使用。
+  - `BILLING_ENFORCE=true` 时启用硬门禁：进入应用会调用 `billing.require`，未订阅则跳转确认页。
+  - 软门禁 + 免费期：当 `ENABLE_BILLING=true` 且 `BILLING_ENFORCE!=true`，应用只做 `billing.check`；超过 `BILLING_FREE_DAYS`（默认 7）后自动切换为硬门禁。
+- 相关环境变量示例：
+  - `ENABLE_BILLING=true`
+  - `BILLING_FREE_DAYS=7`
+  - `BILLING_ENFORCE=false`

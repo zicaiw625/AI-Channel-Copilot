@@ -28,8 +28,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       const json = Buffer.from(base64, "base64").toString("utf8");
       const obj = JSON.parse(json) as { dest?: string };
       const dest = obj.dest || "";
-      const host = dest ? new URL(dest).hostname : "";
-      shopDomain = host || shopDomain;
+      if (dest) {
+        const destUrl = new URL(dest);
+        const match = destUrl.pathname.match(/\/(?:store)\/([a-zA-Z0-9-_.]+)/);
+        if (match && match[1]) {
+          shopDomain = `${match[1]}.myshopify.com`;
+        }
+      }
     } catch {}
   }
 

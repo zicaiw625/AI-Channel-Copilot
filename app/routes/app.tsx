@@ -4,15 +4,14 @@ import { useEffect, useState } from "react";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { AppProvider } from "@shopify/shopify-app-react-router/react";
 
-import { authenticate } from "../shopify.server";
+import { authenticate, BILLING_PLAN } from "../shopify.server";
 import { requireEnv } from "../lib/env.server";
 import { LANGUAGE_EVENT, LANGUAGE_STORAGE_KEY } from "../lib/constants";
 import { getSettings, syncShopPreferences } from "../lib/settings.server";
-import { ensureBilling } from "../lib/billing.server";
-import type { AdminGraphqlClient } from "../lib/graphqlSdk.server";
+ 
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { admin, session } = await authenticate.admin(request);
+  const { admin, billing, session } = await authenticate.admin(request);
   const shopDomain = session?.shop || "";
   let settings = await getSettings(shopDomain);
   settings = await syncShopPreferences(admin, shopDomain, settings);
@@ -21,7 +20,17 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const url = new URL(request.url);
     const skipBilling = shouldSkipBilling(url.pathname);
     if (!skipBilling) {
-      await ensureBilling(admin as AdminGraphqlClient, shopDomain, request);
+      const isTest = process.env.NODE_ENV !== "production";
+      await billing.require({
+        plans: [BILLING_PLAN as any],
+        isTest,
+        onFailure: async () =>
+          billing.request({
+            plan: BILLING_PLAN as any,
+            isTest,
+            returnUrl: `${requireEnv("SHOPIFY_APP_URL")}/app/billing/confirm`,
+          }),
+      });
     }
   } catch (e) {
     if (e instanceof Response) throw e;

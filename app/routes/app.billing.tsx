@@ -2,26 +2,24 @@ import type { HeadersFunction, LoaderFunctionArgs, ActionFunctionArgs } from "re
 import { useLoaderData } from "react-router";
 import { useEffect, useState } from "react";
 import { boundary } from "@shopify/shopify-app-react-router/server";
-import { authenticate, login } from "../shopify.server";
+import { authenticate, login, BILLING_PLAN } from "../shopify.server";
 import { requireEnv } from "../lib/env.server";
 import { LANGUAGE_EVENT, LANGUAGE_STORAGE_KEY } from "../lib/constants";
-import { ensureBilling, hasActiveSubscription } from "../lib/billing.server";
-import type { AdminGraphqlClient } from "../lib/graphqlSdk.server";
 import { getSettings, syncShopPreferences } from "../lib/settings.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { admin, session } = await authenticate.admin(request);
+  const { admin, billing, session } = await authenticate.admin(request);
   const shopDomain = session?.shop || "";
   let settings = await getSettings(shopDomain);
   settings = await syncShopPreferences(admin, shopDomain, settings);
-  const planName = requireEnv("BILLING_PLAN_NAME");
-  const ok = await hasActiveSubscription(admin as AdminGraphqlClient, planName);
+  const isTest = process.env.NODE_ENV !== "production";
+  const billingCheck = await billing.check({ plans: [BILLING_PLAN as any], isTest });
   const amount = Number(process.env.BILLING_PRICE || "5");
   const currencyCode = process.env.BILLING_CURRENCY || "USD";
   const trialDays = Number(process.env.BILLING_TRIAL_DAYS || "7");
   const interval = process.env.BILLING_INTERVAL || "EVERY_30_DAYS";
   const language = settings.languages[0] || "中文";
-  return { language, planName, active: ok, amount, currencyCode, trialDays, interval, shopDomain };
+  return { language, planName: BILLING_PLAN, active: billingCheck.hasActivePayment, amount, currencyCode, trialDays, interval, shopDomain };
 };
 
 export default function Billing() {
@@ -75,9 +73,10 @@ export const headers: HeadersFunction = (headersArgs) => {
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   try {
-    const { admin, session } = await authenticate.admin(request);
-    const shopDomain = session?.shop || "";
-    await ensureBilling(admin as AdminGraphqlClient, shopDomain, request);
+    const { billing } = await authenticate.admin(request);
+    const isTest = process.env.NODE_ENV !== "production";
+    const appUrl = requireEnv("SHOPIFY_APP_URL");
+    await billing.request({ plan: BILLING_PLAN as any, isTest, returnUrl: `${appUrl}/app/billing/confirm` });
     return null;
   } catch (error) {
     if (error instanceof Response) throw error;

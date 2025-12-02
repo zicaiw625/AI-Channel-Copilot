@@ -65,6 +65,7 @@ export const headers: HeadersFunction = (headersArgs) => {
 };
 
 const shouldSkipBilling = (pathname: string) => {
+  if (process.env.ENABLE_BILLING !== "true") return true;
   const path = pathname.toLowerCase();
   return path.includes("/app/billing") || path.includes("/app/additional");
 };

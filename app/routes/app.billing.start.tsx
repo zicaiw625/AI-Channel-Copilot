@@ -1,6 +1,6 @@
 import type { HeadersFunction, ActionFunctionArgs } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
-import { authenticate, BILLING_PLAN } from "../shopify.server";
+import { authenticate, BILLING_PLAN, login } from "../shopify.server";
 import { requireEnv } from "../lib/env.server";
 import { computeIsTestMode } from "../lib/billing.server";
 
@@ -13,12 +13,15 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     await billing.request({ plan: BILLING_PLAN, isTest, returnUrl: `${appUrl}/app/billing/confirm` });
     return null;
   } catch (e) {
-    if (e instanceof Response) throw e;
-    return null;
+    const form = await request.formData();
+    const url = new URL(request.url);
+    const lang = url.searchParams.get("lang") === "en" ? "en" : "zh";
+    const nextUrl = new URL(`/auth/login?lang=${lang}`, url.origin);
+    const next = new Request(nextUrl.toString(), { method: "POST", body: form, headers: request.headers });
+    throw await login(next);
   }
 };
 
 export const headers: HeadersFunction = (headersArgs) => {
   return boundary.headers(headersArgs);
 };
-

@@ -25,11 +25,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const url = new URL(request.url);
   const reason = url.searchParams.get("reason") || "";
   const enabled = process.env.ENABLE_BILLING === "true";
-  return { language: settings.languages[0] || "中文", planName: BILLING_PLAN, trialDays, price, currency, isDevShop, reason, enabled };
+  return { language: settings.languages[0] || "中文", planName: BILLING_PLAN, trialDays, price, currency, isDevShop, reason, enabled, shopDomain };
 };
 
 export default function Onboarding() {
-  const { language, planName, trialDays, price, currency, isDevShop, reason, enabled } = useLoaderData<typeof loader>();
+  const { language, planName, trialDays, price, currency, isDevShop, reason, enabled, shopDomain } = useLoaderData<typeof loader>();
   const en = language === "English";
   return (
     <section style={{ padding: 16 }}>
@@ -54,6 +54,7 @@ export default function Onboarding() {
         )}
         {enabled && !isDevShop && trialDays >= 0 && (
           <form method="post" action="/app/billing/start" style={{ display: "inline-block", marginRight: 12 }}>
+            <input type="hidden" name="shop" value={shopDomain} />
             <button type="submit">
               {en
                 ? (trialDays > 0 ? `Start ${trialDays}-day Free Trial` : "Start Subscription")

@@ -1,9 +1,10 @@
 import type { HeadersFunction, LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
 import { useLoaderData } from "react-router";
 import { useEffect, useState } from "react";
+import { useUILanguage } from "../lib/useUILanguage";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate, login, BILLING_PLAN } from "../shopify.server";
-import { requireEnv } from "../lib/env.server";
+import { requireEnv, isNonProduction } from "../lib/env.server";
 import { LANGUAGE_EVENT, LANGUAGE_STORAGE_KEY } from "../lib/constants";
 import { getSettings, syncShopPreferences } from "../lib/settings.server";
 
@@ -12,8 +13,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const shopDomain = session?.shop || "";
   let settings = await getSettings(shopDomain);
   settings = await syncShopPreferences(admin, shopDomain, settings);
-  const isTest = process.env.NODE_ENV !== "production";
-  const billingCheck = await billing.check({ plans: [BILLING_PLAN as any], isTest });
+  const isTest = isNonProduction();
+  const billingCheck = await billing.check({ plans: [BILLING_PLAN as unknown as never], isTest });
   const amount = Number(process.env.BILLING_PRICE || "5");
   const currencyCode = process.env.BILLING_CURRENCY || "USD";
   const trialDays = Number(process.env.BILLING_TRIAL_DAYS || "7");
@@ -24,27 +25,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
 export default function Billing() {
   const { language, planName, active, amount, currencyCode, trialDays, interval, shopDomain } = useLoaderData<typeof loader>();
-  const [uiLanguage, setUiLanguage] = useState(language);
-  useEffect(() => {
-    try {
-      const stored = window.localStorage.getItem(LANGUAGE_STORAGE_KEY);
-      if (stored && stored !== uiLanguage) setUiLanguage(stored);
-    } catch { void 0; }
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === LANGUAGE_STORAGE_KEY && typeof e.newValue === "string") {
-        setUiLanguage(e.newValue);
-      }
-    };
-    const onCustom = (e: Event) => {
-      try {
-        const detail = (e as CustomEvent).detail as string | undefined;
-        if (detail && detail !== uiLanguage) setUiLanguage(detail);
-      } catch { void 0; }
-    };
-    window.addEventListener("storage", onStorage);
-    window.addEventListener(LANGUAGE_EVENT, onCustom as EventListener);
-    return () => window.removeEventListener("storage", onStorage);
-  }, [uiLanguage]);
+  const uiLanguage = useUILanguage(language);
   return (
     <section style={{ padding: 16 }}>
       <h2>{active ? (uiLanguage === "English" ? "Subscription Active" : "订阅已激活") : (uiLanguage === "English" ? "Subscription & Trial" : "订阅与试用")}</h2>
@@ -74,9 +55,9 @@ export const headers: HeadersFunction = (headersArgs) => {
 export const action = async ({ request }: ActionFunctionArgs) => {
   try {
     const { billing } = await authenticate.admin(request);
-    const isTest = process.env.NODE_ENV !== "production";
+    const isTest = isNonProduction();
     const appUrl = requireEnv("SHOPIFY_APP_URL");
-    await billing.request({ plan: BILLING_PLAN as any, isTest, returnUrl: `${appUrl}/app/billing/confirm` });
+    await billing.request({ plan: BILLING_PLAN as unknown as never, isTest, returnUrl: `${appUrl}/app/billing/confirm` });
     return null;
   } catch (error) {
     if (error instanceof Response) throw error;

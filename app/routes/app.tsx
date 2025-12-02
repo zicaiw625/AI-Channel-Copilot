@@ -1,11 +1,11 @@
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { Outlet, useLoaderData, useRouteError } from "react-router";
-import { useEffect, useState } from "react";
+import { useUILanguage } from "../lib/useUILanguage";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { AppProvider } from "@shopify/shopify-app-react-router/react";
 
 import { authenticate, BILLING_PLAN } from "../shopify.server";
-import { requireEnv } from "../lib/env.server";
+import { requireEnv, isNonProduction } from "../lib/env.server";
 import { LANGUAGE_EVENT, LANGUAGE_STORAGE_KEY } from "../lib/constants";
 import { getSettings, syncShopPreferences } from "../lib/settings.server";
  
@@ -20,13 +20,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const url = new URL(request.url);
     const skipBilling = shouldSkipBilling(url.pathname);
     if (!skipBilling) {
-      const isTest = process.env.NODE_ENV !== "production";
+      const isTest = isNonProduction();
       await billing.require({
-        plans: [BILLING_PLAN as any],
+        plans: [BILLING_PLAN as unknown as never],
         isTest,
         onFailure: async () =>
           billing.request({
-            plan: BILLING_PLAN as any,
+            plan: BILLING_PLAN as unknown as never,
             isTest,
             returnUrl: `${requireEnv("SHOPIFY_APP_URL")}/app/billing/confirm`,
           }),
@@ -41,24 +41,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
 export default function App() {
   const { apiKey, language } = useLoaderData<typeof loader>();
-  const [uiLanguage, setUiLanguage] = useState(language);
-  useEffect(() => {
-    const stored = window.localStorage.getItem(LANGUAGE_STORAGE_KEY);
-    if (stored && stored !== uiLanguage) setUiLanguage(stored);
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === LANGUAGE_STORAGE_KEY && typeof e.newValue === "string") {
-        setUiLanguage(e.newValue);
-      }
-    };
-    const onCustom = (e: Event) => {
-      const ce = e as CustomEvent;
-      const detail = typeof ce.detail === "string" ? ce.detail : undefined;
-      if (detail && detail !== uiLanguage) setUiLanguage(detail);
-    };
-    window.addEventListener("storage", onStorage);
-    window.addEventListener(LANGUAGE_EVENT, onCustom as EventListener);
-    return () => window.removeEventListener("storage", onStorage);
-  }, [uiLanguage]);
+  const uiLanguage = useUILanguage(language);
 
   return (
     <AppProvider embedded apiKey={apiKey}>

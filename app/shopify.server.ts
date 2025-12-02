@@ -7,7 +7,7 @@ import {
 } from "@shopify/shopify-app-react-router/server";
 import { PrismaSessionStorage } from "@shopify/shopify-app-session-storage-prisma";
 import prisma from "./db.server";
-import { requireEnv } from "./lib/env.server";
+import { requireEnv, isProduction } from "./lib/env.server";
 import { runStartupSelfCheck } from "./lib/selfcheck.server";
 
 const apiKey = requireEnv("SHOPIFY_API_KEY");
@@ -18,12 +18,9 @@ const scopes = requireEnv("SCOPES")
   .map((item) => item.trim())
   .filter(Boolean);
 
-export const BILLING_PLAN = requireEnv("BILLING_PLAN_NAME");
-const billingAmount = Number(process.env.BILLING_PRICE || "5");
-const billingCurrencyCode = (process.env.BILLING_CURRENCY || "USD").toUpperCase();
-const billingTrialDays = Number(process.env.BILLING_TRIAL_DAYS || "7");
-const billingIntervalEnv = (process.env.BILLING_INTERVAL || "EVERY_30_DAYS").toUpperCase();
-const getBillingInterval = (value: string): BillingInterval => {
+export const MONTHLY_PLAN = "AI Channel Copilot Basic" as const;
+export const BILLING_PLAN = MONTHLY_PLAN;
+const getBillingInterval = (value: string): BillingInterval.Annual | BillingInterval.Every30Days => {
   switch (value) {
     case "ANNUAL":
       return BillingInterval.Annual;
@@ -32,7 +29,21 @@ const getBillingInterval = (value: string): BillingInterval => {
       return BillingInterval.Every30Days;
   }
 };
-const billingInterval = getBillingInterval(billingIntervalEnv);
+const readBillingConfig = () => {
+  const amount = Number(process.env.BILLING_PRICE || "5");
+  const currencyCode = (process.env.BILLING_CURRENCY || "USD").toUpperCase();
+  const trialDays = Number(process.env.BILLING_TRIAL_DAYS || "7");
+  const intervalEnv = (process.env.BILLING_INTERVAL || "EVERY_30_DAYS").toUpperCase();
+  const interval = getBillingInterval(intervalEnv);
+  const validCurrency = /^[A-Z]{3}$/.test(currencyCode);
+  const validAmount = amount > 0 && Number.isFinite(amount);
+  const validTrial = trialDays >= 0 && Number.isInteger(trialDays);
+  if (isProduction() && (!validCurrency || !validAmount || !validTrial)) {
+    throw new Error("Invalid billing configuration");
+  }
+  return { amount, currencyCode, interval, trialDays };
+};
+const billing = readBillingConfig();
 
 const appApiVersion = ApiVersion.July24;
 
@@ -45,14 +56,18 @@ const shopify = shopifyApp({
   authPathPrefix: "/auth",
   sessionStorage: new PrismaSessionStorage(prisma),
   distribution: AppDistribution.AppStore,
-  billing: ({
-    [BILLING_PLAN]: {
-      amount: billingAmount,
-      currencyCode: billingCurrencyCode as any,
-      interval: billingInterval,
-      trialDays: billingTrialDays,
+  billing: {
+    [MONTHLY_PLAN]: {
+      lineItems: [
+        {
+          amount: billing.amount,
+          currencyCode: billing.currencyCode,
+          interval: billing.interval,
+        },
+      ],
+      trialDays: billing.trialDays,
     },
-  } as any),
+  },
   ...(process.env.SHOP_CUSTOM_DOMAIN
     ? { customShopDomains: [process.env.SHOP_CUSTOM_DOMAIN] }
     : {}),

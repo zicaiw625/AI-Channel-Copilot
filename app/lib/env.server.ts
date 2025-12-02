@@ -32,3 +32,6 @@ export const readCriticalEnv = () => {
   }
   return { SHOPIFY_API_KEY, SHOPIFY_API_SECRET, SHOPIFY_APP_URL, SCOPES } as const;
 };
+
+export const isProduction = () => process.env.NODE_ENV === "production";
+export const isNonProduction = () => process.env.NODE_ENV !== "production";

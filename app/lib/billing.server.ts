@@ -134,6 +134,7 @@ export const computeIsTestMode = async (shopDomain: string): Promise<boolean> =>
 
 export const shouldSkipBillingForPath = (pathname: string, isDevShop: boolean): boolean => {
   if (process.env.ENABLE_BILLING !== "true") return true;
+  if (isNonProduction()) return true;
   if (isDevShop) return true;
   const path = pathname.toLowerCase();
   if (path.includes("/webhooks/")) return true;

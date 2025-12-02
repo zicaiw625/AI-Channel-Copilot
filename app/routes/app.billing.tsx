@@ -5,6 +5,7 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate, login } from "../shopify.server";
 import { requireEnv } from "../lib/env.server";
 import { ensureBilling, hasActiveSubscription } from "../lib/billing.server";
+import type { AdminGraphqlClient } from "../lib/billing.server";
 import { getSettings, syncShopPreferences } from "../lib/settings.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -13,7 +14,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   let settings = await getSettings(shopDomain);
   settings = await syncShopPreferences(admin, shopDomain, settings);
   const planName = requireEnv("BILLING_PLAN_NAME");
-  const ok = await hasActiveSubscription(admin as any, planName);
+  const ok = await hasActiveSubscription(admin as AdminGraphqlClient, planName);
   const amount = Number(process.env.BILLING_PRICE || "5");
   const currencyCode = process.env.BILLING_CURRENCY || "USD";
   const trialDays = Number(process.env.BILLING_TRIAL_DAYS || "7");
@@ -75,7 +76,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   try {
     const { admin, session } = await authenticate.admin(request);
     const shopDomain = session?.shop || "";
-    await ensureBilling(admin as any, shopDomain, request);
+    await ensureBilling(admin as AdminGraphqlClient, shopDomain, request);
     return null;
   } catch (error) {
     if (error instanceof Response) throw error;

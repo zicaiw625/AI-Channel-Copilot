@@ -1,7 +1,7 @@
 import { requireEnv } from "./env.server";
 import { logger } from "./logger.server";
 
-type AdminGraphqlClient = {
+export type AdminGraphqlClient = {
   graphql: (
     query: string,
     options: { variables?: Record<string, unknown>; signal?: AbortSignal },

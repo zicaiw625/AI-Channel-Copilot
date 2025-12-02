@@ -2,7 +2,7 @@ import type { HeadersFunction, LoaderFunctionArgs, ActionFunctionArgs } from "re
 import { useLoaderData } from "react-router";
 import { useUILanguage } from "../lib/useUILanguage";
 import { boundary } from "@shopify/shopify-app-react-router/server";
-import { authenticate, login, BILLING_PLAN } from "../shopify.server";
+import { authenticate, BILLING_PLAN } from "../shopify.server";
 import { requireEnv } from "../lib/env.server";
 import { getSettings, syncShopPreferences } from "../lib/settings.server";
 import { detectAndPersistDevShop, computeIsTestMode } from "../lib/billing.server";
@@ -77,11 +77,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return null;
   } catch (error) {
     if (error instanceof Response) throw error;
-    const form = await request.formData();
-    const url = new URL(request.url);
-    const lang = url.searchParams.get("lang") === "en" ? "en" : "zh";
-    const nextUrl = new URL(`/auth/login?lang=${lang}`, url.origin);
-    const next = new Request(nextUrl.toString(), { method: "POST", body: form, headers: request.headers });
-    throw await login(next);
+    throw error;
   }
 };

@@ -12,13 +12,15 @@ services:
       - key: NODE_VERSION
         value: 22.16.0
       - key: SHOPIFY_API_KEY
-        sync: false
+        value: placeholder
       - key: SHOPIFY_API_SECRET
-        sync: false
+        value: placeholder
       - key: SHOPIFY_APP_URL
         value: https://ai-channel-copilot.onrender.com
       - key: SCOPES
         value: read_orders,read_customers,read_products,write_orders,write_customers,read_shop
+      - key: ENABLE_LOGIN_FORM
+        value: true
       - key: BILLING_PLAN_NAME
         value: AI Channel Copilot Basic
       - key: BILLING_PRICE

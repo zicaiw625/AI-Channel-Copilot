@@ -30,7 +30,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       const path = url.pathname.toLowerCase();
       const isProtected = path === "/app" || (path.startsWith("/app/") && !path.includes("/app/onboarding") && !path.includes("/app/billing") && !path.includes("/app/additional"));
       if (isProtected && readOnly) {
-        throw new Response(null, { status: 302, headers: { Location: "/app/onboarding" } });
+        const next = new URL("/app/onboarding", url.origin);
+        next.search = url.search;
+        throw new Response(null, { status: 302, headers: { Location: next.toString() } });
       }
     }
     const trialDaysLeft = await getTrialRemainingDays(shopDomain);

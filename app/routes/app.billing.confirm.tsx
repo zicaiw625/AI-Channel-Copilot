@@ -16,7 +16,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   } else {
     await markSubscriptionCheck(shopDomain, "inactive", null, null, false);
   }
-  throw new Response(null, { status: 302, headers: { Location: "/app" } });
+  const url = new URL(request.url);
+  const next = new URL("/app", url.origin);
+  next.search = url.search;
+  throw new Response(null, { status: 302, headers: { Location: next.toString() } });
 };
 
 export const headers: HeadersFunction = (headersArgs) => {

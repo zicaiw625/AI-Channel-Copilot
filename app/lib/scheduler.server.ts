@@ -5,6 +5,7 @@ import { resolveDateRange } from "./aiData";
 import { BACKFILL_COOLDOWN_MINUTES, MAX_BACKFILL_DURATION_MS, MAX_BACKFILL_ORDERS } from "./constants";
 import { startBackfill, processBackfillQueue } from "./backfill.server";
 import { unauthenticated } from "../shopify.server";
+import { logger } from "./logger.server";
 
 let initialized = false;
 
@@ -16,9 +17,7 @@ const runRetentionSweep = async () => {
       await ensureRetentionOncePerDay(shop.shopDomain, settings);
     }
   } catch (error) {
-    // Soft-fail if schema/table not ready or DB unavailable
-    // eslint-disable-next-line no-console
-    console.warn("[scheduler] retention sweep skipped", { message: (error as Error).message });
+    logger.warn("[scheduler] retention sweep skipped", undefined, { message: (error as Error).message });
   }
 };
 
@@ -56,8 +55,7 @@ const runBackfillSweep = async () => {
       );
     }
   } catch (error) {
-    // eslint-disable-next-line no-console
-    console.warn("[scheduler] backfill sweep skipped", { message: (error as Error).message });
+    logger.warn("[scheduler] backfill sweep skipped", undefined, { message: (error as Error).message });
   }
 };
 

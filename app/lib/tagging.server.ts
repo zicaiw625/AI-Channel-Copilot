@@ -34,6 +34,7 @@ const addTags = async (admin: AdminGraphqlClient, id: string, tags: string[]) =>
 };
 
 const platform = getPlatform();
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export const applyAiTags = async (
   admin: AdminGraphqlClient,
@@ -58,11 +59,32 @@ export const applyAiTags = async (
 
   const runInBatches = async (targets: { id: string; tags: string[] }[]) => {
     const batchSize = BACKFILL_TAGGING_BATCH_SIZE;
+    const failures: { id: string; error: string }[] = [];
+    let successes = 0;
     for (let i = 0; i < targets.length; i += batchSize) {
       const slice = targets.slice(i, i + batchSize);
-      await Promise.all(slice.map((target) => addTags(admin, target.id, target.tags)));
+      for (const target of slice) {
+        let attempt = 0;
+        let done = false;
+        while (attempt <= 2 && !done) {
+          try {
+            await addTags(admin, target.id, target.tags);
+            successes += 1;
+            done = true;
+          } catch (error) {
+            const delay = 200 * 2 ** attempt;
+            if (attempt === 2) {
+              failures.push({ id: target.id, error: (error as Error).message });
+            } else {
+              await sleep(delay);
+            }
+            attempt += 1;
+          }
+        }
+      }
     }
-  }
+    return { successes, failures };
+  };
 
   for (const order of orders) {
     if (!order.aiSource) continue;
@@ -87,9 +109,11 @@ export const applyAiTags = async (
     }
   }
 
+  let orderResult: { successes: number; failures: { id: string; error: string }[] } | null = null;
+  let customerResult: { successes: number; failures: { id: string; error: string }[] } | null = null;
   if (!dryRun) {
-    await runInBatches(orderTagTargets);
-    await runInBatches(customerTagTargets);
+    orderResult = await runInBatches(orderTagTargets);
+    customerResult = await runInBatches(customerTagTargets);
   }
 
   logger.info(
@@ -100,6 +124,10 @@ export const applyAiTags = async (
       ordersAttempted: orders.length,
       orderTagTargets: orderTagTargets.length,
       customerTagTargets: customerTagTargets.length,
+      orderSuccesses: orderResult?.successes || 0,
+      orderFailures: orderResult?.failures.length || 0,
+      customerSuccesses: customerResult?.successes || 0,
+      customerFailures: customerResult?.failures.length || 0,
     },
   );
   }

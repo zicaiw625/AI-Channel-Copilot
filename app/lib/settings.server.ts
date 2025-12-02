@@ -138,7 +138,9 @@ export const syncShopPreferences = async (
       let bodyText: string | undefined;
       try {
         bodyText = await response.text();
-      } catch {}
+      } catch {
+        bodyText = undefined;
+      }
       logger.error(
         "Failed to sync shop preferences",
         { shopDomain, platform },

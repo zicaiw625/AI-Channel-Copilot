@@ -29,7 +29,7 @@ export default function Billing() {
     try {
       const stored = window.localStorage.getItem("aicc_language");
       if (stored && stored !== uiLanguage) setUiLanguage(stored);
-    } catch {}
+    } catch { void 0; }
     const onStorage = (e: StorageEvent) => {
       if (e.key === "aicc_language" && typeof e.newValue === "string") {
         setUiLanguage(e.newValue);
@@ -39,7 +39,7 @@ export default function Billing() {
       try {
         const detail = (e as CustomEvent).detail as string | undefined;
         if (detail && detail !== uiLanguage) setUiLanguage(detail);
-      } catch {}
+      } catch { void 0; }
     };
     window.addEventListener("storage", onStorage);
     window.addEventListener("aicc_language_change", onCustom as EventListener);

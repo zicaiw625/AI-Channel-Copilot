@@ -16,13 +16,8 @@ import {
   type UtmSourceRule,
 } from "../lib/aiData";
 import { fetchOrdersForRange } from "../lib/shopifyOrders.server";
-import {
-  getSettings,
-  markActivity,
-  normalizeSettingsPayload,
-  saveSettings,
-  syncShopPreferences,
-} from "../lib/settings.server";
+import { getSettings, markActivity, normalizeSettingsPayload, saveSettings, syncShopPreferences } from "../lib/settings.server";
+import { getDeadLetterJobs, getWebhookQueueSize } from "../lib/webhookQueue.server";
 import { persistOrders } from "../lib/persistence.server";
 import { applyAiTags } from "../lib/tagging.server";
 import { authenticate } from "../shopify.server";
@@ -30,12 +25,7 @@ import styles from "../styles/app.settings.module.css";
 import { t } from "../lib/i18n";
 import { allowDemoData, getPlatform } from "../lib/runtime.server";
 import { loadDashboardContext } from "../lib/dashboardContext.server";
-import {
-  BACKFILL_COOLDOWN_MINUTES,
-  DEFAULT_RANGE_KEY,
-  MAX_BACKFILL_DURATION_MS,
-  MAX_BACKFILL_ORDERS,
-} from "../lib/constants";
+import { BACKFILL_COOLDOWN_MINUTES, DEFAULT_RANGE_KEY, MAX_BACKFILL_DURATION_MS, MAX_BACKFILL_ORDERS, MAX_BACKFILL_DAYS } from "../lib/constants";
 import { logger } from "../lib/logger.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -76,7 +66,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         ).exports;
 
   const ordersSample = orders.slice(0, 20);
-  return { settings, exports, exportRange, clamped, displayTimezone, ordersSample };
+  const [webhookQueueSize, deadLetters] = await Promise.all([
+    getWebhookQueueSize(),
+    getDeadLetterJobs(10),
+  ]);
+  return { settings, exports, exportRange, clamped, displayTimezone, ordersSample, webhookQueueSize, deadLetters };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -203,7 +197,7 @@ const isValidDomain = (value: string) => /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(value.
 const isValidUtmSource = (value: string) => /^[a-z0-9_-]+$/i.test(value.trim());
 
 export default function SettingsAndExport() {
-  const { settings, exports, exportRange, clamped, ordersSample } = useLoaderData<typeof loader>();
+  const { settings, exports, exportRange, clamped, ordersSample, webhookQueueSize, deadLetters } = useLoaderData<typeof loader>();
   const shopify = useAppBridge();
   const fetcher = useFetcher<typeof action>();
   const navigate = useNavigate();
@@ -769,8 +763,8 @@ export default function SettingsAndExport() {
                 onChange={(event) => {
                   const next = event.target.value;
                   setLanguage(next);
-                  try { window.localStorage.setItem("aicc_language", next); } catch {}
-                  try { window.dispatchEvent(new CustomEvent("aicc_language_change", { detail: next })); } catch {}
+                  try { window.localStorage.setItem("aicc_language", next); } catch { void 0; }
+                  try { window.dispatchEvent(new CustomEvent("aicc_language_change", { detail: next })); } catch { void 0; }
                   fetcher.submit(
                     {
                       settings: JSON.stringify({
@@ -916,20 +910,48 @@ export default function SettingsAndExport() {
                   <div className={styles.ruleTitle}>{item.title}</div>
                   <div className={styles.ruleMeta}>{item.detail}</div>
                 </div>
-                <span
-                  className={`${styles.statusBadge} ${
-                    item.status === "healthy"
-                      ? styles.statusHealthy
-                      : item.status === "warning"
-                        ? styles.statusWarning
-                        : styles.statusInfo
-                  }`}
-                >
-                  {item.status}
-                </span>
+                <span className={`${styles.statusBadge} ${item.status === "healthy" ? styles.statusHealthy : item.status === "warning" ? styles.statusWarning : styles.statusInfo}`}>{item.status}</span>
               </div>
             ))}
+            <div className={styles.statusRow}>
+              <div>
+                <div className={styles.ruleTitle}>{language === "English" ? "Webhook Queue Size" : "Webhook 队列长度"}</div>
+                <div className={styles.ruleMeta}>{webhookQueueSize}</div>
+              </div>
+              <span className={`${styles.statusBadge} ${webhookQueueSize > 0 ? styles.statusInfo : styles.statusHealthy}`}>{webhookQueueSize > 0 ? (language === "English" ? "pending" : "待处理") : (language === "English" ? "idle" : "空闲")}</span>
+            </div>
           </div>
+          {deadLetters && deadLetters.length > 0 && (
+            <div className={styles.tableWrap}>
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    <th>{language === "English" ? "Shop" : "店铺"}</th>
+                    <th>{language === "English" ? "Intent" : "意图"}</th>
+                    <th>{language === "English" ? "Topic" : "主题"}</th>
+                    <th>{language === "English" ? "Error" : "错误"}</th>
+                    <th>{language === "English" ? "Finished" : "完成时间"}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {deadLetters.map((j: any) => (
+                    <tr key={j.id}>
+                      <td>{j.shopDomain}</td>
+                      <td>{j.intent}</td>
+                      <td>{j.topic}</td>
+                      <td>{j.error || ""}</td>
+                      <td>{j.finishedAt ? new Date(j.finishedAt).toLocaleString(locale) : ""}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <p className={styles.helpText}>
+            {language === "English"
+              ? `Backfill limits: days=${MAX_BACKFILL_DAYS}, orders=${MAX_BACKFILL_ORDERS}, duration=${MAX_BACKFILL_DURATION_MS}ms.`
+              : `补拉限制：天数=${MAX_BACKFILL_DAYS}，订单数=${MAX_BACKFILL_ORDERS}，时长=${MAX_BACKFILL_DURATION_MS}ms。`}
+          </p>
           <p className={styles.helpText}>
             {language === "English" ? "Enable both webhook and scheduled backfill to avoid gaps from short outages; tag write-back only works when enabled here." : "建议同时开启 webhook + 定时补拉，避免短时异常导致的漏数；写回标签需在此处开启后才会生效。"}
           </p>
@@ -957,7 +979,7 @@ function LlmsPreview({ language }: { language: string }) {
       await navigator.clipboard.writeText(text);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 2000);
-    } catch {}
+    } catch { void 0; }
   };
 
   return (

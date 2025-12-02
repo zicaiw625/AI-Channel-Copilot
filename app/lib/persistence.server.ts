@@ -88,8 +88,34 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
             : [];
 
           const orderMap = new Map(existingOrders.map((o) => [o.id, o]));
-          const customerState = new Map<string, any>(
-            existingCustomers.map((c) => [c.id, { ...c }]),
+          type CustomerState = {
+            id: string;
+            shopDomain: string;
+            platform: string;
+            firstOrderAt: Date | null;
+            firstOrderId: string | null;
+            lastOrderAt: Date | null;
+            orderCount: number;
+            totalSpent: number;
+            acquiredViaAi: boolean;
+            firstAiOrderId: string | null;
+          };
+          const customerState = new Map<string, CustomerState>(
+            existingCustomers.map((c) => [
+              c.id,
+              {
+                id: c.id,
+                shopDomain: c.shopDomain,
+                platform: c.platform,
+                firstOrderAt: c.firstOrderAt,
+                firstOrderId: c.firstOrderId,
+                lastOrderAt: c.lastOrderAt,
+                orderCount: c.orderCount,
+                totalSpent: c.totalSpent,
+                acquiredViaAi: Boolean(c.acquiredViaAi),
+                firstAiOrderId: c.firstAiOrderId,
+              },
+            ]),
           );
 
           let localCreated = 0;

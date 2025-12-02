@@ -15,15 +15,18 @@ type WebhookJob = {
 };
 
 let processing = false;
+const processingKeys = new Set<string>();
 const MAX_RETRIES = Number(process.env.WEBHOOK_MAX_RETRIES || 5);
 const BASE_DELAY_MS = Number(process.env.WEBHOOK_BASE_DELAY_MS || 500);
 const MAX_DELAY_MS = Number(process.env.WEBHOOK_MAX_DELAY_MS || 30000);
 
-const dequeue = async () => {
+const dequeue = async (extraWhere?: Prisma.WebhookJobWhereInput) => {
   return prisma.$transaction(async (tx) => {
     const now = new Date();
+    const baseWhere: Prisma.WebhookJobWhereInput = { status: "queued", OR: [{ nextRunAt: null }, { nextRunAt: { lte: now } }] };
+    const where = extraWhere ? { AND: [baseWhere, extraWhere] } : baseWhere;
     const pending = await tx.webhookJob.findFirst({
-      where: { status: "queued", OR: [{ nextRunAt: null }, { nextRunAt: { lte: now } }] },
+      where,
       orderBy: [{ nextRunAt: "asc" }, { id: "asc" }],
     });
 
@@ -207,7 +210,7 @@ export const enqueueWebhookJob = async (job: WebhookJob) => {
     });
   }
 
-  void processQueue(handlers);
+  void processWebhookQueueForShop(job.shopDomain, handlers);
 };
 
 export const getWebhookQueueSize = async () =>
@@ -215,3 +218,83 @@ export const getWebhookQueueSize = async () =>
 
 export const getDeadLetterJobs = async (limit = 50) =>
   prisma.webhookJob.findMany({ where: { status: "failed" }, orderBy: { finishedAt: "desc" }, take: limit });
+const hashKey = (value: string) => {
+  let h = 0;
+  for (let i = 0; i < value.length; i++) {
+    h = (h * 31 + value.charCodeAt(i)) >>> 0;
+  }
+  return 1100 + (h % 1000000);
+};
+
+export const processWebhookQueueForShop = async (
+  shopDomain: string,
+  handlers: Map<string, WebhookJob["run"]>,
+) => {
+  if (!shopDomain) return;
+  const key = `shop:${shopDomain}`;
+  if (processingKeys.has(key)) return;
+  processingKeys.add(key);
+  try {
+    await withAdvisoryLock(hashKey(key), async () => {
+      for (;;) {
+        const job = await dequeue({ shopDomain });
+        if (!job) break;
+
+        const startedAt = Date.now();
+        const handler = handlers.get(job.intent);
+        const context: LogContext = {
+          shopDomain: job.shopDomain,
+          jobId: job.id,
+          jobType: "webhook",
+          intent: job.intent,
+        };
+
+        if (!handler) {
+          logger.warn("[webhook] no handler registered", context, { topic: job.topic });
+          await updateJobStatus(job.id, "failed", "no handler registered");
+          continue;
+        }
+
+        try {
+          await handler(job.payload as Record<string, unknown>);
+          await updateJobStatus(job.id, "completed");
+          logger.info("[webhook] job completed", context, {
+            topic: job.topic,
+            elapsedMs: Date.now() - startedAt,
+          });
+        } catch (error) {
+          const message = (error as Error).message;
+          logger.error("[webhook] job failed", context, {
+            topic: job.topic,
+            message,
+          });
+
+          const attempts = job.attempts || 0;
+          if (attempts < MAX_RETRIES) {
+            const jitter = Math.floor(Math.random() * BASE_DELAY_MS);
+            const calc = BASE_DELAY_MS * 2 ** attempts + jitter;
+            const nextDelay = Math.min(MAX_DELAY_MS, calc);
+            const nextRun = new Date(Date.now() + nextDelay);
+            await prisma.webhookJob.update({
+              where: { id: job.id },
+              data: {
+                status: "queued",
+                error: message,
+                attempts: attempts + 1,
+                nextRunAt: nextRun,
+                finishedAt: null,
+              },
+            });
+            logger.warn("[webhook] job scheduled for retry", context, { attempts: attempts + 1, nextDelay });
+          } else {
+            await updateJobStatus(job.id, "failed", message);
+          }
+        }
+      }
+    });
+  } finally {
+    processingKeys.delete(key);
+    const pending = await prisma.webhookJob.count({ where: { status: "queued", shopDomain } });
+    if (pending) void processWebhookQueueForShop(shopDomain, handlers);
+  }
+};

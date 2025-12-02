@@ -178,7 +178,7 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
                       handle: line.handle || null,
                       url: line.url || null,
                       price: line.price,
-                      currency: line.currency,
+                      currency: line.currency ?? prev.currency,
                       quantity: line.quantity,
                     },
                   });
@@ -192,7 +192,7 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
                     handle: line.handle || null,
                     url: line.url || null,
                     price: line.price,
-                    currency: line.currency,
+                    currency: line.currency || order.currency || "USD",
                     quantity: line.quantity,
                   },
                 });

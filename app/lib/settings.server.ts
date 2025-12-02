@@ -395,10 +395,16 @@ export const getInstallCreatedAt = async (shopDomain: string): Promise<Date | nu
 };
 
 export const normalizeSettingsPayload = (incoming: unknown): SettingsDefaults => {
-  const parsed =
-    typeof incoming === "string"
-      ? (JSON.parse(incoming) as Partial<SettingsDefaults>)
-      : (incoming as Partial<SettingsDefaults>);
+  let parsed: Partial<SettingsDefaults> = {};
+  if (typeof incoming === "string") {
+    try {
+      parsed = JSON.parse(incoming) as Partial<SettingsDefaults>;
+    } catch {
+      parsed = {};
+    }
+  } else {
+    parsed = incoming as Partial<SettingsDefaults>;
+  }
 
   return {
     aiDomains: Array.isArray(parsed.aiDomains)

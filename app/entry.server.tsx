@@ -7,12 +7,14 @@ import { isbot } from "isbot";
 import { addDocumentResponseHeaders } from "./shopify.server";
 import { logger } from "./lib/logger.server";
 import { initScheduler } from "./lib/scheduler.server";
+import { registerDefaultOrderWebhookHandlers } from "./lib/orderWebhooks.server";
 import { applySecurityHeaders } from "./lib/securityHeaders.server";
 import { NonceProvider } from "./lib/nonce";
 
 export const streamTimeout = 5000;
 
 initScheduler();
+registerDefaultOrderWebhookHandlers();
 
 export default async function handleRequest(
   request: Request,

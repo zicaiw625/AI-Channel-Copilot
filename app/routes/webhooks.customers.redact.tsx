@@ -15,7 +15,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     logger.info(`Received ${topic} webhook`, { shopDomain: shop, topic });
 
-    if (!shop) return new Response();
+    if (!shop) return new Response(undefined, { status: 400 });
 
     const { customerIds, orderIds, customerEmail } = extractGdprIdentifiers(source);
     const extraOrders = Array.isArray((source as Record<string, unknown>)?.orders_to_redact)

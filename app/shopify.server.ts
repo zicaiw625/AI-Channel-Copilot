@@ -47,7 +47,7 @@ const readBillingConfig = () => {
 };
 const billing = readBillingConfig();
 
-const appApiVersion = ApiVersion.July24;
+const appApiVersion = ApiVersion.October25;
 
 const appConfig = {
   apiKey,

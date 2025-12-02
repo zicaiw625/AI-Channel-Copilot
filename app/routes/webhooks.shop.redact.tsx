@@ -22,7 +22,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       typeof webhookPayload.shop_domain === "string" && webhookPayload.shop_domain
         ? webhookPayload.shop_domain
         : shop;
-    if (!shopDomain) return new Response();
+    if (!shopDomain) return new Response(undefined, { status: 400 });
 
     await wipeShopData(shopDomain);
   } catch (error) {

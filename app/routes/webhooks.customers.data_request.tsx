@@ -28,7 +28,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     logger.info(`Received ${topic} webhook`, { shopDomain: shop, topic });
 
-    if (!shop) return jsonResponse({ ok: true, message: "Missing shop domain" });
+    if (!shop)
+      return new Response(
+        JSON.stringify({ ok: false, message: "Missing shop domain" }),
+        { status: 400, headers: { "Content-Type": "application/json" } },
+      );
 
     const { customerIds, customerEmail, orderIds } = extractGdprIdentifiers(webhookPayload);
     const footprint = await describeCustomerFootprint(shop, customerIds);

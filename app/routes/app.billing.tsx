@@ -70,7 +70,6 @@ export const headers: HeadersFunction = (headersArgs) => {
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   try {
-    if (process.env.DEMO_MODE === "true" || process.env.ENABLE_BILLING !== "true") return null;
     const { billing, session } = await authenticate.admin(request);
     const shopDomain = session?.shop || "";
     const isTest = await computeIsTestMode(shopDomain);

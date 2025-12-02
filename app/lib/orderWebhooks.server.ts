@@ -1,10 +1,10 @@
-import { authenticate } from "../shopify.server";
+import { authenticate, unauthenticated } from "../shopify.server";
 import { applyAiTags } from "./tagging.server";
 import { fetchOrderById } from "./shopifyOrders.server";
 import { persistOrders } from "./persistence.server";
 import { getSettings, markActivity, updatePipelineStatuses } from "./settings.server";
 import { getPlatform, isDemoMode } from "./runtime.server";
-import { enqueueWebhookJob, getWebhookQueueSize } from "./webhookQueue.server";
+import { enqueueWebhookJob, getWebhookQueueSize, registerWebhookHandler } from "./webhookQueue.server";
 import { logger } from "./logger.server";
 
 const setWebhookStatus = async (
@@ -196,4 +196,63 @@ export const handleOrderWebhook = async (request: Request, expectedTopic: string
     }
     return new Response("Webhook processing failed", { status: 500 });
   }
+};
+
+export const registerDefaultOrderWebhookHandlers = () => {
+  const intents = ["orders/create", "orders/updated"] as const;
+  intents.forEach((intent) => {
+    registerWebhookHandler(intent, async (jobPayload: Record<string, unknown>) => {
+      const jobOrderGid = jobPayload.orderGid as string | undefined;
+      const jobShopDomain = jobPayload.shopDomain as string | undefined;
+      if (!jobOrderGid || !jobShopDomain) {
+        logger.warn("[webhook] default handler missing identifiers", undefined, {
+          orderGid: jobOrderGid || null,
+          shopDomain: jobShopDomain || null,
+        });
+        return;
+      }
+
+      const settings = await getSettings(jobShopDomain);
+      let client: unknown = null;
+      try {
+        client = await unauthenticated.admin(jobShopDomain);
+      } catch {
+        client = null;
+      }
+      const adminCandidate = (client as { graphql?: unknown }) || null;
+      const admin = adminCandidate && typeof adminCandidate.graphql === "function"
+        ? (adminCandidate as {
+            graphql: (
+              query: string,
+              options: { variables?: Record<string, unknown> }
+            ) => Promise<Response>;
+          })
+        : null;
+
+      if (!admin) {
+        logger.warn("[webhook] default handler admin unavailable", { shopDomain: jobShopDomain });
+        return;
+      }
+
+      const record = await fetchOrderById(admin, jobOrderGid, settings, { shopDomain: jobShopDomain });
+      if (!record) {
+        logger.warn("[webhook] default handler order not found", { shopDomain: jobShopDomain });
+        return;
+      }
+
+      await persistOrders(jobShopDomain, [record]);
+      await markActivity(jobShopDomain, { lastOrdersWebhookAt: new Date() });
+
+      if (record.aiSource && (settings.tagging.writeOrderTags || settings.tagging.writeCustomerTags)) {
+        try {
+          await applyAiTags(admin, [record], settings, { shopDomain: jobShopDomain, intent });
+          await markActivity(jobShopDomain, { lastTaggingAt: new Date() });
+        } catch (error) {
+          logger.error("applyAiTags failed", { shop: jobShopDomain, topic: intent }, {
+            message: (error as Error).message,
+          });
+        }
+      }
+    });
+  });
 };

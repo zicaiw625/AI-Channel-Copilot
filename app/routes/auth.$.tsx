@@ -1,18 +1,16 @@
 
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
-import { authenticate, BILLING_PLAN, type BillingPlanKey } from "../shopify.server";
+import { authenticate } from "../shopify.server";
 import { boundary } from "@shopify/shopify-app-react-router/server";
-import { getSettings, markActivity } from "../lib/settings.server";
-import { detectAndPersistDevShop, computeIsTestMode } from "../lib/billing.server";
+import { getSettings } from "../lib/settings.server";
 import { resolveDateRange } from "../lib/aiData";
-import { fetchOrdersForRange } from "../lib/shopifyOrders.server";
-import { persistOrders } from "../lib/persistence.server";
+import { startBackfill, processBackfillQueue } from "../lib/backfill.server";
 import { BACKFILL_COOLDOWN_MINUTES, MAX_BACKFILL_DURATION_MS, MAX_BACKFILL_ORDERS } from "../lib/constants";
 import { ensureWebhooks } from "../lib/webhooks.server";
 import { logger } from "../lib/logger.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { admin, session, billing } = await authenticate.admin(request);
+  const { admin, session } = await authenticate.admin(request);
 
   try {
     if (session?.shop) {
@@ -27,16 +25,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       if (admin && !withinCooldown && !lastBackfillAt) {
         const calculationTimezone = settings.timezones[0] || "UTC";
         const range = resolveDateRange("90d", new Date(), undefined, undefined, calculationTimezone);
-        const { orders } = await fetchOrdersForRange(
-          admin,
-          range,
-          settings,
-          { shopDomain, intent: "auth-initial-backfill", rangeLabel: range.label },
-          { maxOrders: MAX_BACKFILL_ORDERS, maxDurationMs: MAX_BACKFILL_DURATION_MS },
-        );
-        if (orders.length) {
-          await persistOrders(shopDomain, orders);
-          await markActivity(shopDomain, { lastBackfillAt: new Date() });
+        const queued = await startBackfill(shopDomain, range, {
+          maxOrders: MAX_BACKFILL_ORDERS,
+          maxDurationMs: MAX_BACKFILL_DURATION_MS,
+        });
+        if (queued.queued) {
+          void processBackfillQueue(async () => ({ admin, settings }), { shopDomain });
         }
       }
 

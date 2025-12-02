@@ -6,7 +6,7 @@ import { detectAiFromFields as detectAiFromFieldsRef, extractUtm as extractUtmRe
   - 因此，本模块的识别结果偏下限，可能低估 AI 真实贡献；仪表盘与导出均按保守估计展示。
   - 优先级：referrer > UTM > 其它（标签/备注），并记录冲突与命中 signals 供调试。
 */
-import { metricOrderValue, sumGMV, sumNetGMV, computeLTV } from "./metrics";
+import { metricOrderValue, computeLTV } from "./metrics";
 import {
   buildTopCustomers,
   buildOverview as aggBuildOverview,
@@ -207,15 +207,6 @@ export const timeRanges: Record<
   "90d": { label: "最近 90 天", days: 90 },
   custom: { label: "自定义", days: 30, isCustom: true },
 };
-
-const channelColors: Record<AIChannel, string> = {
-  ChatGPT: "#635bff",
-  Perplexity: "#00a2ff",
-  Gemini: "#4285f4",
-  Copilot: "#0078d4",
-  "Other-AI": "#6c6f78",
-};
-
 
 const storeUrl = "https://demo-store.ai-beauty.example.com";
 const now = Date.now();
@@ -1122,20 +1113,6 @@ const detectFromNoteAttributes = (
   return null;
 };
 
-const extractUtm = (...urls: (string | null | undefined)[]) => {
-  let utmSource: string | undefined;
-  let utmMedium: string | undefined;
-
-  urls.forEach((value) => {
-    const parsed = safeUrl(value);
-    if (!parsed) return;
-    if (!utmSource) utmSource = parsed.searchParams.get("utm_source") || undefined;
-    if (!utmMedium) utmMedium = parsed.searchParams.get("utm_medium") || undefined;
-  });
-
-  return { utmSource, utmMedium };
-};
-
 export const detectAiFromFields = (
   referrer: string,
   landingPage: string,
@@ -1253,8 +1230,6 @@ export const channelList: AIChannel[] = [
   "Copilot",
   "Other-AI",
 ];
-
-type TrendBucket = "day" | "week" | "month";
 
 
 

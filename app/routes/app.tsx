@@ -12,9 +12,10 @@ import { detectAndPersistDevShop, shouldSkipBillingForPath, computeIsTestMode, m
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const demo = process.env.DEMO_MODE === "true";
-  let admin: any = null;
-  let billing: any = null;
-  let session: any = null;
+  type AuthShape = Awaited<ReturnType<typeof authenticate.admin>>;
+  let admin: AuthShape["admin"] | null = null;
+  let billing: AuthShape["billing"] | null = null;
+  let session: AuthShape["session"] | null = null;
   try {
     const auth = await authenticate.admin(request);
     admin = auth.admin;
@@ -40,7 +41,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     }
     let readOnly = false;
     let trialDaysLeft: number | null = null;
-    let devBanner = isDevShop;
+    const devBanner = isDevShop;
     if (!skipBilling) {
       const state = await getBillingState(shopDomain);
       const ttlMinutes = Number(process.env.BILLING_CHECK_TTL_MINUTES || "10");

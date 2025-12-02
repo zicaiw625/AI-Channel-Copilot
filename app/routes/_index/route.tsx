@@ -1,8 +1,6 @@
 import type { LoaderFunctionArgs } from "react-router";
 import { redirect, Form, useLoaderData } from "react-router";
 
-import { login } from "../../shopify.server";
-
 import styles from "../../styles/index.module.css";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {

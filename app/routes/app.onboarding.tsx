@@ -24,22 +24,32 @@ export default function Onboarding() {
   return (
     <section style={{ padding: 16 }}>
       <h2>{en ? "Welcome to AI Channel Copilot" : "欢迎使用 AI Channel Copilot"}</h2>
-      <p>{en ? "Understand what the app does and permissions required." : "了解应用功能与所需权限说明。"}</p>
-      <p>{en ? "We may start a historical order sync without payment." : "无需付费即可启动历史订单数据同步。"}</p>
+      <div style={{ marginTop: 12 }}>
+        <p>{en ? "Value: detect AI-attributed orders, analyze AOV/LTV, cohorts." : "应用价值：识别 AI 渠道订单，分析 AOV/LTV、留存分群等。"}</p>
+        <p>{en ? "Permissions: read orders/customers only; we do not modify orders." : "权限与数据：仅读取订单/客户信息，不会修改订单等数据。"}</p>
+        <p>{en ? "We may start historical sync to populate dashboards." : "可启动历史订单同步以填充仪表盘。"}</p>
+      </div>
       <div style={{ marginTop: 16, padding: 12, background: "#f7f7f7" }}>
-        <p>
-          {en
-            ? `Start ${trialDays} days free trial, then ${price}/${currency} every 30 days (cancel anytime in Shopify).`
-            : `开始 ${trialDays} 天免费试用，之后每 30 天 ${price}/${currency}（可在 Shopify 随时取消）。`}
-        </p>
+        {!isDevShop && (
+          <p>
+            {en
+              ? `Plan: ${planName}, $${price} / 30 days, ${trialDays} days free trial.`
+              : `计划：${planName}，$${price} / 每 30 天，含 ${trialDays} 天免费试用。`}
+          </p>
+        )}
         {!isDevShop && trialDays >= 0 && (
-          <form method="post">
+          <form method="post" action="/app/billing/start" style={{ display: "inline-block", marginRight: 12 }}>
             <button type="submit">
               {en
                 ? (trialDays > 0 ? `Start ${trialDays}-day Free Trial` : "Start Subscription")
                 : (trialDays > 0 ? `开始 ${trialDays} 天免费试用` : "开始订阅")}
             </button>
           </form>
+        )}
+        {!isDevShop && (
+          <a href="/app" style={{ display: "inline-block", marginTop: 8 }}>
+            {en ? "Maybe later, view intro only" : "稍后再说，仅查看介绍"}
+          </a>
         )}
         {isDevShop && (
           <div>
@@ -59,10 +69,15 @@ export const headers: HeadersFunction = (headersArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { billing, session } = await authenticate.admin(request);
-  const shopDomain = session?.shop || "";
-  const isTest = await computeIsTestMode(shopDomain);
-  const appUrl = requireEnv("SHOPIFY_APP_URL");
-  await billing.request({ plan: BILLING_PLAN, isTest, returnUrl: `${appUrl}/app/billing/confirm` });
-  return null;
+  try {
+    const { billing, session } = await authenticate.admin(request);
+    const shopDomain = session?.shop || "";
+    const isTest = await computeIsTestMode(shopDomain);
+    const appUrl = requireEnv("SHOPIFY_APP_URL");
+    await billing.request({ plan: BILLING_PLAN, isTest, returnUrl: `${appUrl}/app/billing/confirm` });
+    return null;
+  } catch (e) {
+    if (e instanceof Response) throw e;
+    return null;
+  }
 };

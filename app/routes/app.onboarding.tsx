@@ -15,15 +15,22 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const isDevShop = await detectAndPersistDevShop(admin, shopDomain);
   const price = Number(process.env.BILLING_PRICE || "5");
   const currency = process.env.BILLING_CURRENCY || "USD";
-  return { language: settings.languages[0] || "中文", planName: BILLING_PLAN, trialDays, price, currency, isDevShop };
+  const url = new URL(request.url);
+  const reason = url.searchParams.get("reason") || "";
+  return { language: settings.languages[0] || "中文", planName: BILLING_PLAN, trialDays, price, currency, isDevShop, reason };
 };
 
 export default function Onboarding() {
-  const { language, planName, trialDays, price, currency, isDevShop } = useLoaderData<typeof loader>();
+  const { language, planName, trialDays, price, currency, isDevShop, reason } = useLoaderData<typeof loader>();
   const en = language === "English";
   return (
     <section style={{ padding: 16 }}>
       <h2>{en ? "Welcome to AI Channel Copilot" : "欢迎使用 AI Channel Copilot"}</h2>
+      {reason === "subscription_inactive" && (
+        <div style={{ marginTop: 8, padding: 10, background: "#fff2e8", border: "1px solid #ffd7c2", color: "#b25b1a" }}>
+          {en ? "You haven't completed the subscription yet." : "你尚未完成订阅"}
+        </div>
+      )}
       <div style={{ marginTop: 12 }}>
         <p>{en ? "Value: detect AI-attributed orders, analyze AOV/LTV, cohorts." : "应用价值：识别 AI 渠道订单，分析 AOV/LTV、留存分群等。"}</p>
         <p>{en ? "Permissions: read orders/customers only; we do not modify orders." : "权限与数据：仅读取订单/客户信息，不会修改订单等数据。"}</p>

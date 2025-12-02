@@ -12,13 +12,19 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const details = await getActiveSubscriptionDetails(admin, MONTHLY_PLAN);
     const trialEnd = details?.trialEnd || null;
     await markSubscriptionCheck(shopDomain, "active", null, trialEnd, true);
+    const url = new URL(request.url);
+    const next = new URL("/app", url.origin);
+    next.search = url.search;
+    throw new Response(null, { status: 302, headers: { Location: next.toString() } });
   } else {
     await markSubscriptionCheck(shopDomain, "inactive", null, null, false);
+    const url = new URL(request.url);
+    const next = new URL("/app/onboarding", url.origin);
+    const sp = new URLSearchParams(url.search);
+    sp.set("reason", "subscription_inactive");
+    next.search = sp.toString();
+    throw new Response(null, { status: 302, headers: { Location: next.toString() } });
   }
-  const url = new URL(request.url);
-  const next = new URL("/app", url.origin);
-  next.search = url.search;
-  throw new Response(null, { status: 302, headers: { Location: next.toString() } });
 };
 
 export const headers: HeadersFunction = (headersArgs) => {

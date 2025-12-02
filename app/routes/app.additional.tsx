@@ -21,7 +21,7 @@ import { applyAiTags } from "../lib/tagging.server";
 import { authenticate } from "../shopify.server";
 import styles from "../styles/app.settings.module.css";
 import { t } from "../lib/i18n";
-import { allowDemoData, getPlatform } from "../lib/runtime.server";
+import { getPlatform } from "../lib/runtime.server";
 import { LANGUAGE_EVENT, LANGUAGE_STORAGE_KEY, BACKFILL_COOLDOWN_MINUTES, DEFAULT_RANGE_KEY, MAX_BACKFILL_DURATION_MS, MAX_BACKFILL_ORDERS, MAX_BACKFILL_DAYS } from "../lib/constants";
 import { loadDashboardContext } from "../lib/dashboardContext.server";
 import { logger } from "../lib/logger.server";

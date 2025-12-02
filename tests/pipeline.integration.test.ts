@@ -8,7 +8,7 @@ import { fetchOrderById } from "../app/lib/shopifyOrders.server";
 import { persistOrders, loadOrdersFromDb } from "../app/lib/persistence.server";
 import { applyAiTags } from "../app/lib/tagging.server";
 import { getAiDashboardData } from "../app/lib/aiQueries.server";
-import { getSettings, syncShopPreferences, markActivity } from "../app/lib/settings.server";
+import { getSettings, markActivity } from "../app/lib/settings.server";
 import { isBackfillRunning } from "../app/lib/backfill.server";
 
 vi.mock("../app/shopify.server", () => ({

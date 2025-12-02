@@ -4,6 +4,7 @@ import { getPlatform, isDemoMode } from "./runtime.server";
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 import { logger } from "./logger.server";
 import { createGraphqlSdk, type AdminGraphqlClient } from "./graphqlSdk.server";
+import type { ShopSettings } from "@prisma/client";
 
 const tableMissing = (error: unknown) =>
   error instanceof PrismaClientKnownRequestError && error.code === "P2021";
@@ -30,27 +31,7 @@ const clampRetention = (value?: number | null) => {
   return Math.max(1, numeric);
 };
 
-const mapRecordToSettings = (record: {
-  aiDomains: unknown;
-  utmSources: unknown;
-  utmMediumKeywords: unknown;
-  gmvMetric: string;
-  primaryCurrency?: string | null;
-  orderTagPrefix: string;
-  customerTag: string;
-  writeOrderTags: boolean;
-  writeCustomerTags: boolean;
-  language: string;
-  timezone: string;
-  pipelineStatuses?: unknown;
-  aiExposurePreferences?: unknown;
-  retentionMonths?: number | null;
-  lastOrdersWebhookAt?: Date | null;
-  lastBackfillAt?: Date | null;
-  lastTaggingAt?: Date | null;
-  lastCleanupAt?: Date | null;
-  taggingDryRun?: boolean | null;
-}): SettingsDefaults => ({
+const mapRecordToSettings = (record: ShopSettings): SettingsDefaults => ({
   aiDomains: (record.aiDomains as AiDomainRule[]) || defaultSettings.aiDomains,
   utmSources: (record.utmSources as UtmSourceRule[]) || defaultSettings.utmSources,
   utmMediumKeywords:
@@ -114,7 +95,7 @@ export const getSettings = async (shopDomain: string): Promise<SettingsDefaults>
     if (tableMissing(error) || columnMissing(error)) {
       try {
         const legacy = await prisma.shopSettings.findFirst({ where: { shopDomain } });
-        return legacy ? mapRecordToSettings(legacy as any) : defaultSettings;
+        return legacy ? mapRecordToSettings(legacy) : defaultSettings;
       } catch {
         return defaultSettings;
       }
@@ -181,19 +162,16 @@ export const syncShopPreferences = async (
       return next;
     }
   } catch (error) {
-    if (error instanceof Response) {
-      logger.warn(
-        "Failed to sync shop preferences",
-        { shopDomain, platform },
-        { message: "auth/session missing or interrupted" },
-      );
-    } else {
-      logger.error(
-        "Failed to sync shop preferences",
-        { shopDomain, platform },
-        { message: (error as any)?.message ?? String(error) },
-      );
-    }
+      if (error instanceof Response) {
+        logger.warn(
+          "Failed to sync shop preferences",
+          { shopDomain, platform },
+          { message: "auth/session missing or interrupted" },
+        );
+      } else {
+        const message = error instanceof Error ? error.message : String(error);
+        logger.error("Failed to sync shop preferences", { shopDomain, platform }, { message });
+      }
   }
 
   return settings;
@@ -250,9 +228,9 @@ export const saveSettings = async (
       throw error;
     }
     const existing = await prisma.shopSettings.findFirst({ where: { shopDomain } });
-    if (existing) {
-      await prisma.shopSettings.update({ where: { id: (existing as any).id }, data: { ...baseData, ...updateOptionals } });
-    } else {
+      if (existing) {
+        await prisma.shopSettings.update({ where: { id: existing.id }, data: { ...baseData, ...updateOptionals } });
+      } else {
       await prisma.shopSettings.create({ data: { shopDomain, ...withOptionalsCreate } });
     }
   }
@@ -310,10 +288,10 @@ export const markActivity = async (
       throw error;
     }
     const existing = await prisma.shopSettings.findFirst({ where: { shopDomain } });
-    if (existing) {
-      await prisma.shopSettings.update({
-        where: { id: (existing as any).id },
-        data: {
+      if (existing) {
+        await prisma.shopSettings.update({
+          where: { id: existing.id },
+          data: {
           ...(updates.lastOrdersWebhookAt ? { lastOrdersWebhookAt: updates.lastOrdersWebhookAt } : {}),
           ...(updates.lastBackfillAt ? { lastBackfillAt: updates.lastBackfillAt } : {}),
           ...(updates.lastTaggingAt ? { lastTaggingAt: updates.lastTaggingAt } : {}),
@@ -373,9 +351,9 @@ export const deleteSettings = async (shopDomain: string) => {
       throw error;
     }
     const existing = await prisma.shopSettings.findFirst({ where: { shopDomain } });
-    if (existing) {
-      await prisma.shopSettings.delete({ where: { id: (existing as any).id } });
-    }
+      if (existing) {
+        await prisma.shopSettings.delete({ where: { id: existing.id } });
+      }
   }
 };
 

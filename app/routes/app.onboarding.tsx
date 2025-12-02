@@ -7,12 +7,21 @@ import { shouldOfferTrial, computeIsTestMode, detectAndPersistDevShop } from "..
 import { getSettings, syncShopPreferences } from "../lib/settings.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { admin, session } = await authenticate.admin(request);
+  const demo = process.env.DEMO_MODE === "true";
+  let admin: any = null;
+  let session: any = null;
+  try {
+    const auth = await authenticate.admin(request);
+    admin = auth.admin;
+    session = auth.session;
+  } catch (e) {
+    if (!demo) throw e;
+  }
   const shopDomain = session?.shop || "";
   let settings = await getSettings(shopDomain);
   settings = await syncShopPreferences(admin, shopDomain, settings);
   const trialDays = await shouldOfferTrial(shopDomain);
-  const isDevShop = await detectAndPersistDevShop(admin, shopDomain);
+  const isDevShop = admin ? await detectAndPersistDevShop(admin, shopDomain) : false;
   const price = Number(process.env.BILLING_PRICE || "5");
   const currency = process.env.BILLING_CURRENCY || "USD";
   const url = new URL(request.url);

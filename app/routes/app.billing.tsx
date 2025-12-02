@@ -10,14 +10,25 @@ import { getSettings, syncShopPreferences } from "../lib/settings.server";
 import { detectAndPersistDevShop, computeIsTestMode } from "../lib/billing.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { admin, billing, session } = await authenticate.admin(request);
+  const demo = process.env.DEMO_MODE === "true";
+  let admin: any = null;
+  let billing: any = null;
+  let session: any = null;
+  try {
+    const auth = await authenticate.admin(request);
+    admin = auth.admin;
+    billing = auth.billing;
+    session = auth.session;
+  } catch (e) {
+    if (!demo) throw e;
+  }
   const shopDomain = session?.shop || "";
   let settings = await getSettings(shopDomain);
   settings = await syncShopPreferences(admin, shopDomain, settings);
   const isDev = await detectAndPersistDevShop(admin, shopDomain);
   const isTest = await computeIsTestMode(shopDomain);
   const billingEnabled = process.env.ENABLE_BILLING === "true";
-  const billingCheck = (!billingEnabled || isDev)
+  const billingCheck = (demo || !billingEnabled || isDev)
     ? { hasActivePayment: true }
     : await billing.check({ plans: [BILLING_PLAN], isTest });
   const amount = Number(process.env.BILLING_PRICE || "5");
@@ -59,7 +70,7 @@ export const headers: HeadersFunction = (headersArgs) => {
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   try {
-    if (process.env.ENABLE_BILLING !== "true") return null;
+    if (process.env.DEMO_MODE === "true" || process.env.ENABLE_BILLING !== "true") return null;
     const { billing, session } = await authenticate.admin(request);
     const shopDomain = session?.shop || "";
     const isTest = await computeIsTestMode(shopDomain);

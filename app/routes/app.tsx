@@ -11,14 +11,25 @@ import { detectAndPersistDevShop, shouldSkipBillingForPath, computeIsTestMode, m
  
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { admin, billing, session } = await authenticate.admin(request);
+  const demo = process.env.DEMO_MODE === "true";
+  let admin: any = null;
+  let billing: any = null;
+  let session: any = null;
+  try {
+    const auth = await authenticate.admin(request);
+    admin = auth.admin;
+    billing = auth.billing;
+    session = auth.session;
+  } catch (e) {
+    if (!demo) throw e;
+  }
   const shopDomain = session?.shop || "";
   let settings = await getSettings(shopDomain);
   settings = await syncShopPreferences(admin, shopDomain, settings);
 
   try {
     const url = new URL(request.url);
-    const isDevShop = await detectAndPersistDevShop(admin, shopDomain);
+    const isDevShop = admin ? await detectAndPersistDevShop(admin, shopDomain) : false;
     const skipBilling = shouldSkipBillingForPath(url.pathname, isDevShop);
     const billingEnabled = process.env.ENABLE_BILLING === "true";
     if (!billingEnabled) {
@@ -61,7 +72,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 export default function App() {
   const { apiKey, language, readOnly, trialDaysLeft, isDevShop } = useLoaderData<typeof loader>();
   const uiLanguage = useUILanguage(language);
-  const invalidApiKey = !apiKey || apiKey === "placeholder" || apiKey.length < 10;
 
   return (
     <AppProvider embedded apiKey={apiKey}>
@@ -83,13 +93,6 @@ export default function App() {
           </span>
         )}
       </s-app-nav>
-      {invalidApiKey && (
-        <div style={{ padding: 12, margin: 12, border: "1px solid #ffd7c2", background: "#fff2e8", color: "#b25b1a" }}>
-          {uiLanguage === "English"
-            ? "Environment misconfigured: set SHOPIFY_API_KEY/SHOPIFY_API_SECRET in Render and redeploy."
-            : "环境变量未配置：请在 Render 设置 SHOPIFY_API_KEY/SHOPIFY_API_SECRET 并重新部署。"}
-        </div>
-      )}
       <Outlet />
     </AppProvider>
   );

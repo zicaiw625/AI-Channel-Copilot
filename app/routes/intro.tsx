@@ -5,7 +5,16 @@ import { authenticate } from "../shopify.server";
 import { getSettings, syncShopPreferences } from "../lib/settings.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { admin, session } = await authenticate.admin(request);
+  const demo = process.env.DEMO_MODE === "true";
+  let admin: any = null;
+  let session: any = null;
+  try {
+    const auth = await authenticate.admin(request);
+    admin = auth.admin;
+    session = auth.session;
+  } catch (e) {
+    if (!demo) throw e;
+  }
   const shopDomain = session?.shop || "";
   let settings = await getSettings(shopDomain);
   settings = await syncShopPreferences(admin, shopDomain, settings);

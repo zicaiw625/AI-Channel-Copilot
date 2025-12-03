@@ -12,6 +12,7 @@ import {
   activateFreePlan,
   getActiveSubscriptionDetails,
   cancelSubscription,
+  getBillingState,
 } from "../lib/billing.server";
 import { getEffectivePlan, type PlanTier } from "../lib/access.server";
 import { BILLING_PLANS, PRIMARY_BILLABLE_PLAN_ID, type PlanId } from "../lib/billing/plans";
@@ -48,6 +49,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const trialMap = Object.fromEntries(trialEntries) as Record<PlanId, number>;
   const language = settings.languages[0] || "中文";
   
+  // Get billing state for trial end date
+  const billingState = await getBillingState(shopDomain);
+  const trialEndDate = billingState?.lastTrialEndAt?.toISOString() || null;
+  const isTrialing = billingState?.billingState?.includes("TRIALING") || false;
+  
   return { 
       language, 
       currentPlan: planTier, 
@@ -57,12 +63,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       })), 
       shopDomain, 
       demo,
-      apiKey: process.env.SHOPIFY_API_KEY
+      apiKey: process.env.SHOPIFY_API_KEY,
+      trialEndDate,
+      isTrialing,
   };
 };
 
 export default function Billing() {
-  const { language, currentPlan, plans, shopDomain, demo, apiKey } = useLoaderData<typeof loader>();
+  const { language, currentPlan, plans, shopDomain, demo, apiKey, trialEndDate, isTrialing } = useLoaderData<typeof loader>();
   const fetcher = useFetcher<{ ok: boolean; message?: string }>();
   const uiLanguage = useUILanguage(language);
   const en = uiLanguage === "English";
@@ -71,7 +79,19 @@ export default function Billing() {
   const activePlanId = normalizePlanId(currentPlan);
   const activePlan = plans.find((plan) => plan.id === activePlanId) ?? plans[0];
   const priceLabel = activePlan.priceUsd === 0 ? "$0" : `$${activePlan.priceUsd}`;
-  const showTrialBanner = activePlan.trialSupported && activePlan.remainingTrialDays > 0;
+  const showTrialBanner = isTrialing && activePlan.remainingTrialDays > 0;
+  const isTrialExpiringSoon = showTrialBanner && activePlan.remainingTrialDays <= 3;
+  
+  // Format trial end date
+  const formattedTrialEndDate = trialEndDate
+    ? new Intl.DateTimeFormat(en ? "en-US" : "zh-CN", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      }).format(new Date(trialEndDate))
+    : null;
   
   const handleUpgrade = (planId: PlanId) => {
     fetcher.submit(
@@ -120,10 +140,26 @@ export default function Billing() {
           </div>
 
           {showTrialBanner && (
-            <div style={{ marginBottom: 16, padding: 10, background: "#e6f7ff", borderRadius: 4, color: "#0050b3" }}>
-              {en
-                ? `Trial: ${activePlan.remainingTrialDays} days remaining.`
-                : `试用剩余 ${activePlan.remainingTrialDays} 天。`}
+            <div style={{ 
+              marginBottom: 16, 
+              padding: 12, 
+              background: isTrialExpiringSoon ? "#fff2e8" : "#e6f7ff", 
+              border: isTrialExpiringSoon ? "1px solid #ffbb96" : "1px solid #91d5ff",
+              borderRadius: 4, 
+              color: isTrialExpiringSoon ? "#d4380d" : "#0050b3" 
+            }}>
+              <div style={{ fontWeight: isTrialExpiringSoon ? "bold" : "normal" }}>
+                {isTrialExpiringSoon ? "⚠️ " : ""}
+                {en
+                  ? `Trial: ${activePlan.remainingTrialDays} day${activePlan.remainingTrialDays === 1 ? '' : 's'} remaining`
+                  : `试用剩余 ${activePlan.remainingTrialDays} 天`}
+                {isTrialExpiringSoon && (en ? " - Subscribe now to keep your access!" : " - 立即订阅以保持访问权限！")}
+              </div>
+              {formattedTrialEndDate && (
+                <div style={{ fontSize: 12, marginTop: 4, opacity: 0.8 }}>
+                  {en ? `Trial ends: ${formattedTrialEndDate}` : `试用结束时间：${formattedTrialEndDate}`}
+                </div>
+              )}
             </div>
           )}
           
@@ -291,7 +327,15 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           return Response.json({ ok: true });
         }
         const isTest = await computeIsTestMode(shopDomain);
-        const trialDays = await calculateRemainingTrialDays(shopDomain, planId);
+        
+        // Check if user already has an active paid subscription (upgrade scenario)
+        // In upgrade scenario, don't give trial days
+        const currentState = await getBillingState(shopDomain);
+        const isUpgradeFromPaid = currentState?.billingState?.includes("ACTIVE") && 
+          currentState?.billingPlan !== "free" && 
+          currentState?.billingPlan !== "NO_PLAN";
+        
+        const trialDays = isUpgradeFromPaid ? 0 : await calculateRemainingTrialDays(shopDomain, planId);
         const confirmationUrl = await requestSubscription(admin, shopDomain, planId, isTest, trialDays);
         if (confirmationUrl) {
           throw new Response(null, { status: 302, headers: { Location: confirmationUrl } });

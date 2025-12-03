@@ -77,61 +77,18 @@ describe("billing.server", () => {
     ).resolves.toBeUndefined();
   });
 
-  it("ensureBilling redirects to confirmationUrl when not active", async () => {
-    process.env.SHOPIFY_APP_URL = "https://app.example.com";
-    const confirmationUrl = "https://shopify.com/confirm/subscription";
-    const admin: AdminGraphqlClient = {
-      graphql: async (query) => {
-        if (query.includes("query ActiveSubscriptions")) {
-          return new Response(
-            JSON.stringify({
-              data: {
-                currentAppInstallation: { activeSubscriptions: [] },
-              },
-            }),
-            { status: 200 },
-          );
-        }
-        if (query.includes("mutation AppSubscriptionCreate")) {
-          return new Response(
-            JSON.stringify({
-              data: {
-                appSubscriptionCreate: { confirmationUrl },
-              },
-            }),
-            { status: 200 },
-          );
-        }
-        throw new Error("unexpected query");
-      },
-    };
-
-    try {
-      await ensureBilling(admin as any, "test-shop.myshopify.com", new Request("https://app.example.com/app"));
-      throw new Error("expected redirect");
-    } catch (e) {
-      const resp = e as Response;
-      expect(resp.status).toBe(302);
-      expect(resp.headers.get("Location")).toBe(confirmationUrl);
-    }
-  });
-
-  it("ensureBilling continues without redirect when appSubscriptionCreate fails", async () => {
+  // Note: ensureBilling is now a no-op function in the new billing flow.
+  // The billing check happens through getEffectivePlan and access control instead.
+  // These tests reflect the current implementation where ensureBilling always returns void.
+  
+  it("ensureBilling returns void (legacy no-op)", async () => {
     process.env.SHOPIFY_APP_URL = "https://app.example.com";
     const admin: AdminGraphqlClient = {
-      graphql: async (query) => {
-        if (query.includes("query ActiveSubscriptions")) {
-          return new Response(
-            JSON.stringify({ data: { currentAppInstallation: { activeSubscriptions: [] } } }),
-            { status: 200 },
-          );
-        }
-        if (query.includes("mutation AppSubscriptionCreate")) {
-          return new Response("bad request", { status: 400 });
-        }
-        throw new Error("unexpected query");
+      graphql: async () => {
+        throw new Error("should not be called");
       },
     };
+    // ensureBilling is now a no-op, always returns void
     await expect(
       ensureBilling(admin as any, "test-shop.myshopify.com", new Request("https://app.example.com/app")),
     ).resolves.toBeUndefined();

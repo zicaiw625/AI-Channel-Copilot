@@ -37,8 +37,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       await setSubscriptionActiveState(shopDomain, plan.id, status);
     }
   } else if (status === "CANCELLED") {
+    // Set to EXPIRED_NO_SUBSCRIPTION instead of directly activating Free plan
+    // This allows the user to choose their next plan (Free or re-subscribe)
+    // The access control will redirect them to onboarding to make a choice
     await setSubscriptionExpiredState(shopDomain, plan.id, status);
-    await activateFreePlan(shopDomain);
+    // Note: We intentionally do NOT call activateFreePlan here
+    // The user will be prompted to choose a plan when they next access the app
   } else if (status === "EXPIRED") {
     await setSubscriptionExpiredState(shopDomain, plan.id, status);
   }

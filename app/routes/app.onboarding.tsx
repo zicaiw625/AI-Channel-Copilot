@@ -9,6 +9,7 @@ import {
   calculateRemainingTrialDays,
   requestSubscription,
   activateFreePlan,
+  getBillingState,
 } from "../lib/billing.server";
 import { getSettings, syncShopPreferences } from "../lib/settings.server";
 import { useUILanguage } from "../lib/useUILanguage";
@@ -43,6 +44,17 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   );
   const trialDays = Object.fromEntries(trialDaysEntries) as Record<PlanId, number>;
   
+  // Check if this is a reinstall with remaining trial
+  const billingState = await getBillingState(shopDomain);
+  const isReinstall = billingState?.lastUninstalledAt != null && billingState?.lastReinstalledAt != null;
+  const hasRemainingTrial = trialDays[PRIMARY_BILLABLE_PLAN_ID] > 0 && 
+    trialDays[PRIMARY_BILLABLE_PLAN_ID] < BILLING_PLANS[PRIMARY_BILLABLE_PLAN_ID].defaultTrialDays;
+  const showReinstallTrialBanner = isReinstall && hasRemainingTrial && !billingState?.hasEverSubscribed;
+  
+  // Check if subscription was cancelled/expired (user needs to choose a plan)
+  const isSubscriptionExpired = billingState?.billingState === "EXPIRED_NO_SUBSCRIPTION";
+  const wasSubscribed = billingState?.hasEverSubscribed || false;
+  
   return { 
     language: settings.languages[0] || "中文", 
     shopDomain, 
@@ -51,6 +63,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       ...plan,
       remainingTrialDays: trialDays[plan.id] || 0,
     })),
+    showReinstallTrialBanner,
+    remainingTrialDays: trialDays[PRIMARY_BILLABLE_PLAN_ID] || 0,
+    isSubscriptionExpired,
+    wasSubscribed,
   };
 };
 
@@ -59,11 +75,16 @@ export default function Onboarding() {
     language, 
     shopDomain, 
     authorized,
-    plans
+    plans,
+    showReinstallTrialBanner,
+    remainingTrialDays,
+    isSubscriptionExpired,
+    wasSubscribed,
   } = useLoaderData<typeof loader>();
   
   const [searchParams, setSearchParams] = useSearchParams();
   const step = searchParams.get("step") || "value_snapshot";
+  const reason = searchParams.get("reason");
   
   const fetcher = useFetcher<{ ok: boolean; message?: string }>();
   const uiLanguage = useUILanguage(language);
@@ -120,6 +141,73 @@ export default function Onboarding() {
   return (
     <section style={{ maxWidth: 900, margin: "40px auto", padding: 20, fontFamily: "system-ui, sans-serif" }}>
       <h2 style={{ textAlign: "center", marginBottom: 30 }}>{en ? "Choose Your Plan" : "选择适合您的计划"}</h2>
+      
+      {/* Subscription expired/cancelled banner */}
+      {isSubscriptionExpired && (
+        <div style={{ 
+          marginBottom: 20, 
+          padding: 16, 
+          background: "#fff2e8", 
+          border: "1px solid #ffbb96",
+          borderRadius: 8, 
+          textAlign: "center" 
+        }}>
+          <div style={{ fontSize: 18, fontWeight: "bold", color: "#d4380d", marginBottom: 8 }}>
+            {en ? "Your subscription has ended" : "您的订阅已结束"}
+          </div>
+          <div style={{ color: "#d4380d" }}>
+            {wasSubscribed 
+              ? (en 
+                  ? "Your paid subscription has been cancelled. Choose a plan below to continue."
+                  : "您的付费订阅已取消。请选择一个计划以继续使用。")
+              : (en 
+                  ? "Your trial has ended. Choose a plan below to continue."
+                  : "您的试用期已结束。请选择一个计划以继续使用。")}
+          </div>
+        </div>
+      )}
+      
+      {/* Subscription declined banner */}
+      {reason === "subscription_declined" && (
+        <div style={{ 
+          marginBottom: 20, 
+          padding: 16, 
+          background: "#fff2e8", 
+          border: "1px solid #ffbb96",
+          borderRadius: 8, 
+          textAlign: "center" 
+        }}>
+          <div style={{ fontSize: 18, fontWeight: "bold", color: "#d4380d", marginBottom: 8 }}>
+            {en ? "Subscription not completed" : "订阅未完成"}
+          </div>
+          <div style={{ color: "#d4380d" }}>
+            {en 
+              ? "The subscription was not confirmed. Please try again or choose a different plan."
+              : "订阅确认未完成。请重试或选择其他计划。"}
+          </div>
+        </div>
+      )}
+      
+      {/* Reinstall trial banner */}
+      {showReinstallTrialBanner && !isSubscriptionExpired && (
+        <div style={{ 
+          marginBottom: 20, 
+          padding: 16, 
+          background: "#e6f7ff", 
+          border: "1px solid #91d5ff",
+          borderRadius: 8, 
+          textAlign: "center" 
+        }}>
+          <div style={{ fontSize: 18, fontWeight: "bold", color: "#0050b3", marginBottom: 8 }}>
+            🎉 {en ? "Welcome back!" : "欢迎回来！"}
+          </div>
+          <div style={{ color: "#0050b3" }}>
+            {en 
+              ? `You still have ${remainingTrialDays} days of Pro trial remaining. Pick up where you left off!`
+              : `您还有 ${remainingTrialDays} 天的 Pro 试用期。继续您的体验吧！`}
+          </div>
+        </div>
+      )}
       
       {fetcher.data && !fetcher.data.ok && (
         <div style={{ marginBottom: 20, padding: 12, background: "#fff2e8", color: "#d4380d", borderRadius: 4, textAlign: "center" }}>

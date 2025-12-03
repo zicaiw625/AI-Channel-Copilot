@@ -108,8 +108,18 @@ export default function App() {
         )}
         
         {(plan === "pro" || plan === "growth") && trialDaysLeft !== null && trialDaysLeft > 0 && (
-          <span style={{ marginLeft: 12, color: "#008060" }}>
-            {uiLanguage === "English" ? `Pro Trial: ${trialDaysLeft} days left` : `Pro 试用：剩余 ${trialDaysLeft} 天`}
+          <span style={{ 
+            marginLeft: 12, 
+            color: trialDaysLeft <= 3 ? "#d4380d" : "#008060",
+            fontWeight: trialDaysLeft <= 3 ? "bold" : "normal"
+          }}>
+            {trialDaysLeft <= 3 
+              ? (uiLanguage === "English" 
+                  ? `⚠️ Trial ending soon: ${trialDaysLeft} day${trialDaysLeft === 1 ? '' : 's'} left!` 
+                  : `⚠️ 试用即将结束：剩余 ${trialDaysLeft} 天！`)
+              : (uiLanguage === "English" 
+                  ? `Pro Trial: ${trialDaysLeft} days left` 
+                  : `Pro 试用：剩余 ${trialDaysLeft} 天`)}
           </span>
         )}
         

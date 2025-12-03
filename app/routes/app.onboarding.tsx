@@ -61,7 +61,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const isReinstall = billingState?.lastUninstalledAt != null && billingState?.lastReinstalledAt != null;
   const hasRemainingTrial = trialDays[PRIMARY_BILLABLE_PLAN_ID] > 0 && 
     trialDays[PRIMARY_BILLABLE_PLAN_ID] < BILLING_PLANS[PRIMARY_BILLABLE_PLAN_ID].defaultTrialDays;
-  const showReinstallTrialBanner = isReinstall && hasRemainingTrial && !billingState?.hasEverSubscribed;
+  const showReinstallTrialBanner = isReinstall && hasRemainingTrial;
   
   // Check if subscription was cancelled/expired (user needs to choose a plan)
   const isSubscriptionExpired = billingState?.billingState === "EXPIRED_NO_SUBSCRIPTION";

@@ -32,7 +32,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     session = auth.session;
   } catch (e) {
     authFailed = true;
-    if (!demo) throw e;
   }
   
   const shopDomain = session?.shop || "";
@@ -353,95 +352,79 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const demo = readAppFlags().demoMode;
   if (demo) return Response.json({ ok: false, message: "Demo mode" });
   
+  let admin: Awaited<ReturnType<typeof authenticate.admin>>["admin"] | null = null;
+  let session: Awaited<ReturnType<typeof authenticate.admin>>["session"] | null = null;
+  let shopDomain = "";
+
   try {
-    const { admin, session } = await authenticate.admin(request);
-    const shopDomain = session?.shop || "";
-    const formData = await request.formData();
-    const intent = formData.get("intent");
-    
-    if (intent === "upgrade") {
-        const planId = (formData.get("planId") as PlanId) || PRIMARY_BILLABLE_PLAN_ID;
-        const plan = BILLING_PLANS[planId];
-        if (!plan) {
-          return Response.json({ ok: false, message: "Unknown plan" }, { status: 400 });
-        }
-        if (plan.status !== "live") {
-          return Response.json({ ok: false, message: "Plan unavailable" }, { status: 400 });
-        }
-        if (plan.priceUsd === 0) {
-          await activateFreePlan(shopDomain);
-          return Response.json({ ok: true });
-        }
-        const isTest = await computeIsTestMode(shopDomain);
-        
-        // Check if user already has an active paid subscription (upgrade scenario)
-        // In upgrade scenario, don't give trial days
-        const currentState = await getBillingState(shopDomain);
-        const isUpgradeFromPaid = currentState?.billingState?.includes("ACTIVE") && 
-          currentState?.billingPlan !== "free" && 
-          currentState?.billingPlan !== "NO_PLAN";
-        
-        const trialDays = isUpgradeFromPaid ? 0 : await calculateRemainingTrialDays(shopDomain, planId);
-        const confirmationUrl = await requestSubscription(admin, shopDomain, planId, isTest, trialDays);
-        if (confirmationUrl) {
-          const next = new URL("/app/redirect", new URL(request.url).origin);
-          next.searchParams.set("to", confirmationUrl);
-          throw new Response(null, { status: 302, headers: { Location: next.toString() } });
-        }
-        return Response.json({
-          ok: false,
-          message: "Failed to create subscription. confirmationUrl is missing.",
-        });
-    }
-    
-    if (intent === "downgrade") {
-        const paidPlans = Object.values(BILLING_PLANS).filter((plan) => plan.priceUsd > 0);
-        let activeDetails: { id: string; planId: PlanId } | null = null;
-        for (const plan of paidPlans) {
-          const details = await getActiveSubscriptionDetails(admin, plan.shopifyName);
-          if (details?.id) {
-            activeDetails = { id: details.id, planId: plan.id };
-            break;
-          }
-        }
-        if (activeDetails) {
-          try {
-            await cancelSubscription(admin, activeDetails.id, true);
-          } catch (error) {
-            console.error(error);
-            return Response.json({ ok: false, message: "Failed to cancel subscription in Shopify." }, { status: 500 });
-          }
-        }
-        await activateFreePlan(shopDomain);
-        return Response.json({ ok: true });
-    }
-    
-    return null;
-  } catch (error) {
-    if (error instanceof Response) throw error;
-    // 当鉴权失败（例如缺少访问令牌）时，降级到登录流程，保留语言与 Cookie
+    const auth = await authenticate.admin(request);
+    admin = auth.admin;
+    session = auth.session;
+    shopDomain = session?.shop || "";
+  } catch (authError) {
     try {
       const originalUrl = new URL(request.url);
       const lang = originalUrl.searchParams.get("lang") === "en" ? "en" : "zh";
       const loginUrl = new URL("/auth/login", originalUrl.origin);
       loginUrl.searchParams.set("lang", lang);
-
       const originalForm = await request.formData().catch(() => new FormData());
       const forwardForm = new FormData();
       if (originalForm.has("shop")) {
         forwardForm.set("shop", String(originalForm.get("shop")));
       }
-
-      const forwardReq = new Request(loginUrl.toString(), {
-        method: "POST",
-        headers: request.headers,
-        body: forwardForm,
-      });
+      const forwardReq = new Request(loginUrl.toString(), { method: "POST", headers: request.headers, body: forwardForm });
       const result = await login(forwardReq as any);
       if (result instanceof Response) throw result;
-    } catch (e) {
+      return null;
+    } catch {
       return Response.json({ ok: false, message: "Action failed." });
     }
+  }
+
+  try {
+    const formData = await request.formData();
+    const intent = formData.get("intent");
+
+    if (intent === "upgrade") {
+      const planId = (formData.get("planId") as PlanId) || PRIMARY_BILLABLE_PLAN_ID;
+      const plan = BILLING_PLANS[planId];
+      if (!plan) return Response.json({ ok: false, message: "Unknown plan" }, { status: 400 });
+      if (plan.status !== "live") return Response.json({ ok: false, message: "Plan unavailable" }, { status: 400 });
+      if (plan.priceUsd === 0) {
+        await activateFreePlan(shopDomain);
+        return Response.json({ ok: true });
+      }
+      const isTest = await computeIsTestMode(shopDomain);
+      const currentState = await getBillingState(shopDomain);
+      const isUpgradeFromPaid = currentState?.billingState?.includes("ACTIVE") && currentState?.billingPlan !== "free" && currentState?.billingPlan !== "NO_PLAN";
+      const trialDays = isUpgradeFromPaid ? 0 : await calculateRemainingTrialDays(shopDomain, planId);
+      const confirmationUrl = await requestSubscription(admin!, shopDomain, planId, isTest, trialDays);
+      if (confirmationUrl) {
+        const next = new URL("/app/redirect", new URL(request.url).origin);
+        next.searchParams.set("to", confirmationUrl);
+        throw new Response(null, { status: 302, headers: { Location: next.toString() } });
+      }
+      return Response.json({ ok: false, message: "Failed to create subscription. confirmationUrl is missing." });
+    }
+
+    if (intent === "downgrade") {
+      const paidPlans = Object.values(BILLING_PLANS).filter((plan) => plan.priceUsd > 0);
+      let activeDetails: { id: string; planId: PlanId } | null = null;
+      for (const plan of paidPlans) {
+        const details = await getActiveSubscriptionDetails(admin!, plan.shopifyName);
+        if (details?.id) { activeDetails = { id: details.id, planId: plan.id }; break; }
+      }
+      if (activeDetails) {
+        try { await cancelSubscription(admin!, activeDetails.id, true); }
+        catch { return Response.json({ ok: false, message: "Failed to cancel subscription in Shopify." }, { status: 500 }); }
+      }
+      await activateFreePlan(shopDomain);
+      return Response.json({ ok: true });
+    }
+
     return null;
+  } catch (error) {
+    if (error instanceof Response) throw error;
+    return Response.json({ ok: false, message: "Action failed." });
   }
 };

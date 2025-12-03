@@ -33,7 +33,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     session = auth.session;
   } catch (error) {
     authFailed = true;
-    if (!demo) throw error;
   }
 
   const shopDomain = session?.shop || "";

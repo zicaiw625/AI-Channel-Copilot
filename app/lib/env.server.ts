@@ -100,3 +100,95 @@ export const readCriticalEnv = () => {
 
 export const isProduction = () => process.env.NODE_ENV === "production";
 export const isNonProduction = () => process.env.NODE_ENV !== "production";
+
+type BillingConfig = {
+  amount: number;
+  currencyCode: string;
+  trialDays: number;
+  interval: "ANNUAL" | "EVERY_30_DAYS";
+  planName: string;
+};
+
+type QueueConfig = {
+  maxRetries: number;
+  baseDelayMs: number;
+  maxDelayMs: number;
+  pendingCooldownMs: number;
+  pendingMaxCooldownMs: number;
+  maxBatch: number;
+};
+
+type ServerConfig = {
+  appUrl: string;
+  port: number;
+};
+
+type AppConfig = {
+  core: ReturnType<typeof readCriticalEnv>;
+  flags: AppFlags;
+  billing: BillingConfig;
+  queue: QueueConfig;
+  server: ServerConfig;
+};
+
+let cachedConfig: AppConfig | null = null;
+let cachedQueue: QueueConfig | null = null;
+
+const readBillingInterval = (value: string): BillingConfig["interval"] => {
+  const v = value.toUpperCase();
+  return v === "ANNUAL" ? "ANNUAL" : "EVERY_30_DAYS";
+};
+
+export const getAppConfig = (): AppConfig => {
+  if (cachedConfig) return cachedConfig;
+
+  const core = readCriticalEnv();
+  const flags = readAppFlags();
+
+  const amountRaw = process.env.BILLING_PRICE ?? "29";
+  const amount = Number(amountRaw);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new Error("BILLING_PRICE must be a positive number");
+  }
+
+  const currencyCode = (process.env.BILLING_CURRENCY || "USD").toUpperCase();
+  if (!/^[A-Z]{3}$/.test(currencyCode)) {
+    throw new Error("BILLING_CURRENCY must be a three-letter ISO code");
+  }
+
+  const trialDays = readIntegerEnv("BILLING_TRIAL_DAYS", 14, 0)!;
+  const interval = readBillingInterval(process.env.BILLING_INTERVAL || "EVERY_30_DAYS");
+  const planName = (process.env.BILLING_PLAN_NAME || "AI Copilot Pro").trim();
+
+  const billing: BillingConfig = { amount, currencyCode, trialDays, interval, planName };
+
+  const queue: QueueConfig = {
+    maxRetries: readIntegerEnv("WEBHOOK_MAX_RETRIES", 5, 0)!,
+    baseDelayMs: readIntegerEnv("WEBHOOK_BASE_DELAY_MS", 500, 0)!,
+    maxDelayMs: readIntegerEnv("WEBHOOK_MAX_DELAY_MS", 30000, 0)!,
+    pendingCooldownMs: readIntegerEnv("WEBHOOK_PENDING_COOLDOWN_MS", 250, 0)!,
+    pendingMaxCooldownMs: readIntegerEnv("WEBHOOK_PENDING_MAX_COOLDOWN_MS", 2000, 0)!,
+    maxBatch: readIntegerEnv("WEBHOOK_MAX_BATCH", 50, 1)!,
+  };
+
+  const server: ServerConfig = {
+    appUrl: core.SHOPIFY_APP_URL,
+    port: readIntegerEnv("PORT", 3000, 1)!,
+  };
+
+  cachedConfig = { core, flags, billing, queue, server };
+  return cachedConfig;
+};
+
+export const getQueueConfig = (): QueueConfig => {
+  if (cachedQueue) return cachedQueue;
+  cachedQueue = {
+    maxRetries: readIntegerEnv("WEBHOOK_MAX_RETRIES", 5, 0)!,
+    baseDelayMs: readIntegerEnv("WEBHOOK_BASE_DELAY_MS", 500, 0)!,
+    maxDelayMs: readIntegerEnv("WEBHOOK_MAX_DELAY_MS", 30000, 0)!,
+    pendingCooldownMs: readIntegerEnv("WEBHOOK_PENDING_COOLDOWN_MS", 250, 0)!,
+    pendingMaxCooldownMs: readIntegerEnv("WEBHOOK_PENDING_MAX_COOLDOWN_MS", 2000, 0)!,
+    maxBatch: readIntegerEnv("WEBHOOK_MAX_BATCH", 50, 1)!,
+  };
+  return cachedQueue;
+};

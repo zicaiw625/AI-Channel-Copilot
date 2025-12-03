@@ -1,5 +1,6 @@
 import prisma from "../db.server";
 import { withAdvisoryLock } from "./locks.server";
+import { getQueueConfig } from "./env.server";
 import { Prisma } from "@prisma/client";
 import { logger, type LogContext } from "./logger.server";
 
@@ -15,12 +16,13 @@ type WebhookJob = {
 };
 
 const processingKeys = new Set<string>();
-const MAX_RETRIES = Number(process.env.WEBHOOK_MAX_RETRIES || 5);
-const BASE_DELAY_MS = Number(process.env.WEBHOOK_BASE_DELAY_MS || 500);
-const MAX_DELAY_MS = Number(process.env.WEBHOOK_MAX_DELAY_MS || 30000);
-const PENDING_COOLDOWN_MS = Number(process.env.WEBHOOK_PENDING_COOLDOWN_MS || 250);
-const MAX_BATCH = Number(process.env.WEBHOOK_MAX_BATCH || 50);
-const PENDING_MAX_COOLDOWN_MS = Number(process.env.WEBHOOK_PENDING_MAX_COOLDOWN_MS || 2000);
+const queue = getQueueConfig();
+const MAX_RETRIES = queue.maxRetries;
+const BASE_DELAY_MS = queue.baseDelayMs;
+const MAX_DELAY_MS = queue.maxDelayMs;
+const PENDING_COOLDOWN_MS = queue.pendingCooldownMs;
+const MAX_BATCH = queue.maxBatch;
+const PENDING_MAX_COOLDOWN_MS = queue.pendingMaxCooldownMs;
 const STUCK_JOB_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
 const recoverStuckJobs = async (shopDomain: string) => {

@@ -1,5 +1,5 @@
 import prisma from "../db.server";
-import { isNonProduction, readAppFlags, requireEnv } from "./env.server";
+import { isNonProduction, readAppFlags, requireEnv, getAppConfig } from "./env.server";
 import { isSchemaMissing, isIgnorableMigrationError, isInitializationError } from "./prismaErrors";
 import { createGraphqlSdk, type AdminGraphqlClient } from "./graphqlSdk.server";
 import { logger } from "./logger.server";
@@ -496,11 +496,11 @@ export const requestSubscription = async (
     throw new Error(`Plan ${planId} does not require a Shopify subscription.`);
   }
 
+  const cfg = getAppConfig();
   const amount = plan.priceUsd;
-  const currencyCode = (process.env.BILLING_CURRENCY || "USD").toUpperCase();
-  const intervalEnv = (process.env.BILLING_INTERVAL || plan.interval).toUpperCase();
-  const interval = intervalEnv === "ANNUAL" ? "ANNUAL" : "EVERY_30_DAYS";
-  const returnUrl = new URL("/app/billing/confirm", requireEnv("SHOPIFY_APP_URL")).toString();
+  const currencyCode = cfg.billing.currencyCode;
+  const interval = cfg.billing.interval;
+  const returnUrl = new URL("/app/billing/confirm", cfg.server.appUrl).toString();
 
   const MUTATION = `#graphql
     mutation AppSubscriptionCreate($name: String!, $lineItems: [AppSubscriptionLineItemInput!]!, $returnUrl: URL!, $test: Boolean, $trialDays: Int) {

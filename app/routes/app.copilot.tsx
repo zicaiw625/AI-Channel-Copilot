@@ -10,24 +10,43 @@ import styles from "../styles/app.copilot.module.css";
 import { hasFeature, FEATURES } from "../lib/access.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
+  const demo = process.env.DEMO_MODE === "true";
   let session;
+  
   try {
     const auth = await authenticate.admin(request);
     session = auth.session;
   } catch (error) {
-    if (process.env.DEMO_MODE !== "true") throw error;
+    if (!demo) {
+      // If authentication fails and not in demo mode, redirect to app root
+      // which will handle the onboarding flow
+      const url = new URL(request.url);
+      const redirectUrl = new URL("/app", url.origin);
+      throw new Response(null, { 
+        status: 302, 
+        headers: { Location: redirectUrl.toString() } 
+      });
+    }
   }
 
   const shopDomain = session?.shop || "";
+  
+  // If no shop domain and not demo, redirect
+  if (!shopDomain && !demo) {
+    throw new Response(null, { 
+      status: 302, 
+      headers: { Location: "/app" } 
+    });
+  }
+  
   const settings = await getSettings(shopDomain);
   const timezone = settings.timezones[0] || "UTC";
   const range = "30d" as TimeRangeKey;
   const dateRange = resolveDateRange(range, new Date(), undefined, undefined, timezone);
   
   const canUseCopilot = await hasFeature(shopDomain, FEATURES.COPILOT);
-  const demo = process.env.DEMO_MODE === "true";
   
-  // If demo, allow
+  // If demo, allow; otherwise check feature access
   const readOnly = !canUseCopilot && !demo;
 
   return { shopDomain, settings, timezone, dateRange, range, readOnly, demo };

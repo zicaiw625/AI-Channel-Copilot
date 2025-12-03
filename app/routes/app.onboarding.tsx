@@ -19,21 +19,32 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   type AuthShape = Awaited<ReturnType<typeof authenticate.admin>>;
   let admin: AuthShape["admin"] | null = null;
   let session: AuthShape["session"] | null = null;
+  let authFailed = false;
+  
   try {
     const auth = await authenticate.admin(request);
     admin = auth.admin;
     session = auth.session;
   } catch (error) {
-    void error;
+    authFailed = true;
+    // In onboarding, we allow unauthorized access to show plan selection
+    // But we mark authFailed to avoid using invalid admin client
   }
   
   if (!session) return { language: "中文", authorized: false };
 
   const shopDomain = session.shop;
   let settings = await getSettings(shopDomain);
-  if (admin) {
-    settings = await syncShopPreferences(admin, shopDomain, settings);
-    await detectAndPersistDevShop(admin, shopDomain);
+  
+  // Only use admin if authentication succeeded
+  if (admin && !authFailed) {
+    try {
+      settings = await syncShopPreferences(admin, shopDomain, settings);
+      await detectAndPersistDevShop(admin, shopDomain);
+    } catch (e) {
+      // If these fail, continue with cached data
+      console.warn("Admin operations failed in onboarding:", (e as Error).message);
+    }
   }
   const trialDaysEntries = await Promise.all(
     (Object.keys(BILLING_PLANS) as PlanId[]).map(async (planId) => {

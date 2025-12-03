@@ -15,12 +15,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   type AuthShape = Awaited<ReturnType<typeof authenticate.admin>>;
   let admin: AuthShape["admin"] | null = null;
   let session: AuthShape["session"] | null = null;
+  let authFailed = false;
 
   try {
     const auth = await authenticate.admin(request);
     admin = auth.admin;
     session = auth.session;
   } catch (e) {
+    authFailed = true;
     const url = new URL(request.url);
     const path = url.pathname.toLowerCase();
     const allowUnauth = path.includes("/app/onboarding") || path.includes("/app/billing");
@@ -29,13 +31,23 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   const shopDomain = session?.shop || "";
   let settings = await getSettings(shopDomain);
-  if (admin && shopDomain) {
-    settings = await syncShopPreferences(admin, shopDomain, settings);
+  
+  // Only use admin client if authentication was successful
+  if (admin && shopDomain && !authFailed) {
+    try {
+      settings = await syncShopPreferences(admin, shopDomain, settings);
+    } catch (e) {
+      // If syncShopPreferences fails, log but continue with default settings
+      console.warn("syncShopPreferences failed:", (e as Error).message);
+    }
   }
 
   try {
     const url = new URL(request.url);
-    const isDevShop = admin ? await detectAndPersistDevShop(admin, shopDomain) : false;
+    // Only call detectAndPersistDevShop if authentication was successful
+    const isDevShop = (admin && shopDomain && !authFailed) 
+      ? await detectAndPersistDevShop(admin, shopDomain) 
+      : false;
     const skipBilling = shouldSkipBillingForPath(url.pathname, isDevShop);
     const billingEnabled = process.env.ENABLE_BILLING === "true";
 

@@ -22,21 +22,31 @@ import { getEffectivePlan, hasFeature, FEATURES } from "../lib/access.server";
 type Lang = "English" | "中文";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
+  const demo = process.env.DEMO_MODE === "true";
   let admin, session;
+  let authFailed = false;
+  
   try {
     const auth = await authenticate.admin(request);
     admin = auth.admin;
     session = auth.session;
   } catch (error) {
-    if (process.env.DEMO_MODE !== "true") throw error;
+    authFailed = true;
+    if (!demo) throw error;
   }
 
   const shopDomain = session?.shop || "";
   const url = new URL(request.url);
 
   let settings = await getSettings(shopDomain);
-  if (admin && shopDomain) {
-    settings = await syncShopPreferences(admin, shopDomain, settings);
+  // Only use admin if authentication succeeded
+  if (admin && shopDomain && !authFailed) {
+    try {
+      settings = await syncShopPreferences(admin, shopDomain, settings);
+    } catch (e) {
+      // If sync fails, continue with cached settings
+      console.warn("syncShopPreferences failed in dashboard:", (e as Error).message);
+    }
   }
 
   const plan = await getEffectivePlan(shopDomain);

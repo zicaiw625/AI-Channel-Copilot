@@ -2,6 +2,7 @@ import prisma from "../db.server";
 import { isNonProduction, requireEnv } from "./env.server";
 import { isSchemaMissing, isIgnorableMigrationError } from "./prismaErrors";
 import { createGraphqlSdk, type AdminGraphqlClient } from "./graphqlSdk.server";
+import { logger } from "./logger.server";
 import {
   PRIMARY_BILLABLE_PLAN_ID,
   getPlanConfig,
@@ -284,17 +285,20 @@ export const detectAndPersistDevShop = async (
 ): Promise<boolean> => {
   const existing = await getBillingState(shopDomain);
   
-  // Bug 1 Fix: Always check plan if admin is available, do not rely on cached 'firstInstalledAt' check to skip
+  // If no admin client, return cached value or default to false
   if (!admin) {
       if (existing && typeof existing.isDevShop === "boolean") return existing.isDevShop;
-      // Default to false if we can't check
       return false;
   }
   
-  // Initialize firstInstalledAt if missing
-  // Note: We do not upsert here to avoid redundant DB writes if the subsequent GraphQL call succeeds.
-  // The final upsert updates both isDevShop and firstInstalledAt (via updates construction below).
-  // If GraphQL fails and we return false, we accept firstInstalledAt isn't set yet.
+  // Safety check: If we have cached data and it's recent (within 24 hours), use it
+  // This prevents unnecessary API calls and handles cases where admin token might be invalid
+  if (existing?.lastCheckedAt && existing.isDevShop !== undefined) {
+    const hoursSinceCheck = (Date.now() - existing.lastCheckedAt.getTime()) / (1000 * 60 * 60);
+    if (hoursSinceCheck < 24) {
+      return existing.isDevShop;
+    }
+  }
 
   const sdk = createGraphqlSdk(admin, shopDomain);
   const query = `#graphql
@@ -302,8 +306,26 @@ export const detectAndPersistDevShop = async (
       shop { plan { displayName } }
     }
   `;
-  const response = await sdk.request("shopPlan", query, {});
-  if (!response.ok) return false;
+  
+  // Wrap in try-catch to handle token issues gracefully
+  let response;
+  try {
+    response = await sdk.request("shopPlan", query, {});
+  } catch (error) {
+    // If GraphQL fails (e.g., invalid token), return cached value or false
+    logger.warn("detectAndPersistDevShop GraphQL failed, using cached value", {
+      shopDomain,
+      error: (error as Error).message,
+    });
+    if (existing && typeof existing.isDevShop === "boolean") return existing.isDevShop;
+    return false;
+  }
+  
+  if (!response.ok) {
+    // Response not OK, use cached value or default
+    if (existing && typeof existing.isDevShop === "boolean") return existing.isDevShop;
+    return false;
+  }
   const json = (await response.json()) as { data?: { shop?: { plan?: { displayName?: string | null } } } };
   const planName = json?.data?.shop?.plan?.displayName?.toLowerCase() || "";
   const isDev = planName.includes("development") || planName.includes("trial") || planName.includes("affiliate");

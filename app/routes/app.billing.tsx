@@ -22,20 +22,28 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   type AuthShape = Awaited<ReturnType<typeof authenticate.admin>>;
   let admin: AuthShape["admin"] | null = null;
   let session: AuthShape["session"] | null = null;
+  let authFailed = false;
   
   try {
     const auth = await authenticate.admin(request);
     admin = auth.admin;
     session = auth.session;
   } catch (e) {
+    authFailed = true;
     if (!demo) throw e;
   }
   
   const shopDomain = session?.shop || "";
   let settings = await getSettings(shopDomain);
-  if (admin) {
+  
+  // Only use admin if authentication succeeded
+  if (admin && !authFailed) {
+    try {
       settings = await syncShopPreferences(admin, shopDomain, settings);
       await detectAndPersistDevShop(admin, shopDomain);
+    } catch (e) {
+      console.warn("Admin operations failed in billing:", (e as Error).message);
+    }
   }
   
   const planTier = await getEffectivePlan(shopDomain);

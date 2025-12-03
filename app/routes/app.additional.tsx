@@ -27,20 +27,29 @@ import { loadDashboardContext } from "../lib/dashboardContext.server";
 import { logger } from "../lib/logger.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
+  const demo = process.env.DEMO_MODE === "true";
   let admin, session;
+  let authFailed = false;
+  
   try {
     const auth = await authenticate.admin(request);
     admin = auth.admin;
     session = auth.session;
   } catch (error) {
-    if (process.env.DEMO_MODE !== "true") throw error;
+    authFailed = true;
+    if (!demo) throw error;
   }
 
   const url = new URL(request.url);
   const shopDomain = session?.shop || "";
   let settings = await getSettings(shopDomain);
-  if (admin && shopDomain) {
-    settings = await syncShopPreferences(admin, shopDomain, settings);
+  // Only use admin if authentication succeeded
+  if (admin && shopDomain && !authFailed) {
+    try {
+      settings = await syncShopPreferences(admin, shopDomain, settings);
+    } catch (e) {
+      console.warn("syncShopPreferences failed in settings:", (e as Error).message);
+    }
   }
   const exportRange = (url.searchParams.get("range") as TimeRangeKey) || "90d";
 

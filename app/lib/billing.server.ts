@@ -377,7 +377,7 @@ export const shouldSkipBillingForPath = (pathname: string, isDevShop: boolean): 
   const path = pathname.toLowerCase();
   if (path.includes("/webhooks/")) return true;
   if (path.includes("/public") || path.endsWith(".css") || path.endsWith(".js")) return true;
-  if (path.includes("/app/onboarding") || path.includes("/app/billing")) return true;
+  if (path.includes("/app/onboarding") || path.includes("/app/billing") || path.includes("/app/redirect")) return true;
   return false;
 };
 

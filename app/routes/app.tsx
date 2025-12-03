@@ -26,7 +26,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     authFailed = true;
     const url = new URL(request.url);
     const path = url.pathname.toLowerCase();
-    const allowUnauth = path.includes("/app/onboarding") || path.includes("/app/billing");
+    const allowUnauth = path.includes("/app/onboarding") || path.includes("/app/billing") || path.includes("/app/redirect");
     if (!demo && !allowUnauth) throw e;
   }
 
@@ -70,7 +70,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
             (path.startsWith("/app/") &&
                 !path.includes("/app/onboarding") &&
                 !path.includes("/app/billing") &&
-                !path.includes("/app/additional"));
+                !path.includes("/app/additional") &&
+                !path.includes("/app/redirect"));
 
         if (isProtected && plan === "none") {
             const next = new URL("/app/onboarding", url.origin);

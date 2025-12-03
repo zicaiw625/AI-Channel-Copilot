@@ -1,14 +1,7 @@
 import prisma from "../db.server";
-import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 import { isNonProduction, requireEnv } from "./env.server";
+import { isSchemaMissing, isIgnorableMigrationError } from "./prismaErrors";
 import { createGraphqlSdk, type AdminGraphqlClient } from "./graphqlSdk.server";
-
-const tableMissing = (error: unknown) =>
-  error instanceof PrismaClientKnownRequestError && error.code === "P2021";
-const columnMissing = (error: unknown) =>
-  error instanceof PrismaClientKnownRequestError && error.code === "P2022";
-const notFound = (error: unknown) =>
-  error instanceof PrismaClientKnownRequestError && error.code === "P2025";
 
 export type BillingState = {
   shopDomain: string;
@@ -38,7 +31,7 @@ export const getBillingState = async (shopDomain: string): Promise<BillingState 
       }
       : null;
   } catch (error) {
-    if (tableMissing(error) || columnMissing(error)) return null;
+    if (isSchemaMissing(error)) return null;
     throw error;
   }
 };
@@ -71,7 +64,7 @@ export const upsertBillingState = async (
       lastCheckedAt: record.lastCheckedAt || null,
     };
   } catch (error) {
-    if (!(tableMissing(error) || columnMissing(error) || notFound(error))) throw error;
+    if (!isIgnorableMigrationError(error)) throw error;
     const existing = await prisma.shopBillingState.findFirst({ where: { shopDomain } });
     if (existing) {
       const updated = await prisma.shopBillingState.update({

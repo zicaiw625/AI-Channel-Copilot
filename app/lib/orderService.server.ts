@@ -4,11 +4,10 @@
  */
 
 import prisma from "../db.server";
-import type { DateRange, OrderRecord } from "./aiData";
-import type { SettingsDefaults } from "./aiData";
+import type { DateRange, OrderRecord, SettingsDefaults } from "./aiTypes";
 import { DatabaseError, ValidationError } from "./errors";
 import { logger } from "./logger.server";
-import { toPrismaAiSource } from "./aiSourceMapper";
+import { fromPrismaAiSource } from "./aiSourceMapper";
 
 export interface OrderQueryOptions {
   limit?: number;
@@ -58,8 +57,8 @@ export const loadOrdersFromDb = async (
       } : undefined,
     });
 
-    // 转换数据格式
-    const orderRecords: OrderRecord[] = orders.map(order => ({
+    // 转换数据格式，包括 AI 来源枚举转换
+    const orderRecords: OrderRecord[] = orders.map((order) => ({
       id: order.id,
       name: order.name,
       createdAt: order.createdAt.toISOString(),
@@ -67,25 +66,27 @@ export const loadOrdersFromDb = async (
       currency: order.currency,
       subtotalPrice: order.subtotalPrice ?? order.totalPrice,
       refundTotal: order.refundTotal,
-      aiSource: order.aiSource, // 这将在后续处理中转换
-      detection: order.detection,
-      signals: order.detectionSignals as any || {},
-      referrer: order.referrer,
-      landingPage: order.landingPage,
-      utmSource: order.utmSource,
-      utmMedium: order.utmMedium,
-      sourceName: order.sourceName,
+      aiSource: fromPrismaAiSource(order.aiSource),
+      detection: order.detection || "",
+      signals: Array.isArray(order.detectionSignals) ? (order.detectionSignals as string[]) : [],
+      referrer: order.referrer || "",
+      landingPage: order.landingPage || "",
+      utmSource: order.utmSource || undefined,
+      utmMedium: order.utmMedium || undefined,
+      sourceName: order.sourceName || undefined,
       customerId: order.customerId,
       isNewCustomer: order.isNewCustomer,
-      products: includeProducts ? order.products.map(p => ({
-        id: p.productId,
-        title: p.title,
-        handle: p.handle,
-        url: p.url,
-        price: p.price,
-        currency: p.currency,
-        quantity: p.quantity,
-      })) : [],
+      products: includeProducts
+        ? order.products.map((p) => ({
+            id: p.productId,
+            title: p.title,
+            handle: p.handle || "",
+            url: p.url || "",
+            price: p.price,
+            currency: p.currency,
+            quantity: p.quantity,
+          }))
+        : [],
     }));
 
     logger.info("[orderService] Loaded orders from database", {

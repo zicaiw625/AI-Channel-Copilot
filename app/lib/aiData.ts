@@ -1,11 +1,14 @@
+/**
+ * AI 数据模块
+ * 
+ * AI 渠道识别说明（保守估计）
+ * - 识别基于 referrer 域名与 UTM（utm_source/utm_medium）等显式信号；部分 AI/浏览器可能隐藏来源。
+ * - 因此，本模块的识别结果偏下限，可能低估 AI 真实贡献；仪表盘与导出均按保守估计展示。
+ * - 优先级：referrer > UTM > 其它（标签/备注），并记录冲突与命中 signals 供调试。
+ */
+
 import { DEFAULT_RANGE_KEY } from "./constants";
 import { detectAiFromFields as detectAiFromFieldsRef, extractUtm as extractUtmRef } from "./aiAttribution";
-/*
-  AI 渠道识别说明（保守估计）
-  - 识别基于 referrer 域名与 UTM（utm_source/utm_medium）等显式信号；部分 AI/浏览器可能隐藏来源。
-  - 因此，本模块的识别结果偏下限，可能低估 AI 真实贡献；仪表盘与导出均按保守估计展示。
-  - 优先级：referrer > UTM > 其它（标签/备注），并记录冲突与命中 signals 供调试。
-*/
 import { metricOrderValue, computeLTV } from "./metrics";
 import {
   buildTopCustomers,
@@ -16,187 +19,49 @@ import {
   buildProducts as aggBuildProducts,
 } from "./aiAggregation";
 
-export type AIChannel = "ChatGPT" | "Perplexity" | "Gemini" | "Copilot" | "Other-AI";
+// 从 aiTypes 重新导出所有类型，保持向后兼容
+export type {
+  AIChannel,
+  TimeRangeKey,
+  DateRange,
+  OrderLine,
+  OrderRecord,
+  OverviewMetrics,
+  ChannelStat,
+  ComparisonRow,
+  TrendPoint,
+  ProductRow,
+  RawOrderRow,
+  PipelineStatus,
+  TaggingSettings,
+  ExposurePreferences,
+  SettingsDefaults,
+  DashboardData,
+  AiDomainRule,
+  UtmSourceRule,
+  DetectionConfig,
+  TopCustomerRow,
+} from "./aiTypes";
 
-export type TimeRangeKey = "7d" | "30d" | "90d" | "custom";
+import type {
+  AIChannel,
+  TimeRangeKey,
+  DateRange,
+  OrderRecord,
+  ProductRow,
+  RawOrderRow,
+  AiDomainRule,
+  UtmSourceRule,
+  SettingsDefaults,
+  DashboardData,
+} from "./aiTypes";
+import { AI_CHANNELS } from "./aiTypes";
 
-export type DateRange = {
-  key: TimeRangeKey;
-  label: string;
-  start: Date;
-  end: Date;
-  days: number;
-  fromParam?: string | null;
-  toParam?: string | null;
-};
+// 从 dateUtils 导入日期工具
+import { startOfDay, endOfDay, formatDateOnly, parseDateInput } from "./dateUtils";
 
-type OrderLine = {
-  id: string;
-  title: string;
-  handle: string;
-  url: string;
-  price: number;
-  currency: string;
-  quantity: number;
-};
-
-export type OrderRecord = {
-  id: string;
-  name: string;
-  createdAt: string;
-  totalPrice: number;
-  currency: string;
-  subtotalPrice?: number;
-  refundTotal?: number;
-  aiSource: AIChannel | null;
-  referrer: string;
-  landingPage: string;
-  utmSource?: string;
-  utmMedium?: string;
-  sourceName?: string;
-  tags?: string[];
-  customerId: string | null;
-  isNewCustomer: boolean;
-  products: OrderLine[];
-  detection: string;
-  signals: string[];
-};
-
-export type OverviewMetrics = {
-  totalGMV: number;
-  netGMV: number;
-  aiGMV: number;
-  netAiGMV: number;
-  aiShare: number;
-  aiOrders: number;
-  aiOrderShare: number;
-  totalOrders: number;
-  aiNewCustomers: number;
-  aiNewCustomerRate: number;
-  totalNewCustomers: number;
-  lastSyncedAt: string;
-  currency: string;
-};
-
-export type ChannelStat = {
-  channel: AIChannel;
-  gmv: number;
-  orders: number;
-  newCustomers: number;
-  color: string;
-};
-
-export type ComparisonRow = {
-  channel: string;
-  aov: number;
-  newCustomerRate: number;
-  repeatRate: number;
-  sampleSize: number;
-  isLowSample: boolean;
-};
-
-export type TrendPoint = {
-  label: string;
-  aiGMV: number;
-  aiOrders: number;
-  overallGMV: number;
-  overallOrders: number;
-  byChannel: Partial<Record<AIChannel, { gmv: number; orders: number }>>;
-};
-
-export type ProductRow = {
-  id: string;
-  title: string;
-  handle: string;
-  url: string;
-  aiOrders: number;
-  aiGMV: number;
-  aiShare: number;
-  topChannel: AIChannel | null;
-};
-
-export type RawOrderRow = {
-  id: string;
-  name: string;
-  createdAt: string;
-  aiSource: AIChannel | null;
-  totalPrice: number;
-  currency: string;
-  referrer: string;
-  landingPage: string;
-  utmSource?: string;
-  utmMedium?: string;
-  customerId: string | null;
-  sourceName?: string;
-  isNewCustomer: boolean;
-  detection: string;
-  signals: string[];
-};
-
-export type PipelineStatus = {
-  title: string;
-  status: "healthy" | "warning" | "info";
-  detail: string;
-};
-
-export type TaggingSettings = {
-  orderTagPrefix: string;
-  customerTag: string;
-  writeOrderTags: boolean;
-  writeCustomerTags: boolean;
-  dryRun?: boolean;
-};
-
-export type ExposurePreferences = {
-  exposeProducts: boolean;
-  exposeCollections: boolean;
-  exposeBlogs: boolean;
-};
-
-export type SettingsDefaults = {
-  aiDomains: AiDomainRule[];
-  utmSources: UtmSourceRule[];
-  utmMediumKeywords: string[];
-  gmvMetric: "current_total_price" | "subtotal_price";
-  primaryCurrency?: string;
-  tagging: TaggingSettings;
-  exposurePreferences: ExposurePreferences;
-  languages: string[];
-  timezones: string[];
-  pipelineStatuses: PipelineStatus[];
-  retentionMonths?: number;
-  lastOrdersWebhookAt?: string | null;
-  lastBackfillAt?: string | null;
-  lastTaggingAt?: string | null;
-  lastCleanupAt?: string | null;
-};
-
-export type DashboardData = {
-  overview: OverviewMetrics;
-  channels: ChannelStat[];
-  comparison: ComparisonRow[];
-  trend: TrendPoint[];
-  topProducts: ProductRow[];
-  topCustomers: { customerId: string; ltv: number; orders: number; ai: boolean; firstAIAcquired: boolean; repeatCount: number }[];
-  recentOrders: RawOrderRow[];
-  sampleNote: string | null;
-  exports: {
-    ordersCsv: string;
-    productsCsv: string;
-    customersCsv: string;
-  };
-};
-
-export type AiDomainRule = {
-  domain: string;
-  channel: AIChannel | "Other-AI";
-  source: "default" | "custom";
-};
-
-export type UtmSourceRule = {
-  value: string;
-  channel: AIChannel | "Other-AI";
-};
+// 重新导出 AI_CHANNELS 常量
+export { AI_CHANNELS } from "./aiTypes";
 
 export const timeRanges: Record<
   TimeRangeKey,
@@ -208,59 +73,12 @@ export const timeRanges: Record<
   custom: { label: "自定义", days: 30, isCustom: true },
 };
 
-const storeUrl = "https://demo-store.ai-beauty.example.com";
-const now = Date.now();
+// Mock 数据配置（仅用于演示）
+const DEMO_STORE_URL = "https://demo-store.ai-beauty.example.com";
+const DEMO_NOW = Date.now();
 
-const daysAgo = (days: number) => new Date(now - days * 86_400_000).toISOString();
-
-const formatDateOnly = (date: Date, timeZone?: string) =>
-  new Intl.DateTimeFormat("en-CA", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(date);
-
-const toZonedDate = (date: Date, timeZone?: string) => {
-  if (!timeZone) return new Date(date);
-
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hourCycle: "h23",
-  }).formatToParts(date);
-
-  const get = (type: Intl.DateTimeFormatPartTypes) =>
-    Number(parts.find((part) => part.type === type)?.value || 0);
-
-  return new Date(
-    Date.UTC(get("year"), get("month") - 1, get("day"), get("hour"), get("minute"), get("second")),
-  );
-};
-
-const parseDateInput = (value?: string | null) => {
-  if (!value) return null;
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return null;
-  return parsed;
-};
-
-const startOfDay = (date: Date, timeZone?: string) => {
-  const copy = toZonedDate(date, timeZone);
-  copy.setUTCHours(0, 0, 0, 0);
-  return copy;
-};
-
-const endOfDay = (date: Date, timeZone?: string) => {
-  const copy = toZonedDate(date, timeZone);
-  copy.setUTCHours(23, 59, 59, 999);
-  return copy;
-};
+/** 计算 N 天前的 ISO 日期字符串（用于 mock 数据） */
+const daysAgoISO = (days: number): string => new Date(DEMO_NOW - days * 86_400_000).toISOString();
 
 export const resolveDateRange = (
   key: TimeRangeKey,
@@ -316,12 +134,12 @@ const seedOrders: (Omit<OrderRecord, "signals"> & { signals?: string[] })[] = [
   {
     id: "4310",
     name: "#4310",
-    createdAt: daysAgo(2),
+    createdAt: daysAgoISO(2),
     totalPrice: 188,
     currency: "USD",
     aiSource: "ChatGPT",
     referrer: "https://chat.openai.com/share/insight?id=4310",
-    landingPage: `${storeUrl}/products/starter-kit?utm_source=chatgpt&utm_medium=ai-agent`,
+    landingPage: `${DEMO_STORE_URL}/products/starter-kit?utm_source=chatgpt&utm_medium=ai-agent`,
     utmSource: "chatgpt",
     utmMedium: "ai-agent",
     sourceName: "web",
@@ -333,7 +151,7 @@ const seedOrders: (Omit<OrderRecord, "signals"> & { signals?: string[] })[] = [
         id: "p-kit",
         title: "Starter Discovery Kit",
         handle: "starter-kit",
-        url: `${storeUrl}/products/starter-kit`,
+        url: `${DEMO_STORE_URL}/products/starter-kit`,
         price: 96,
         currency: "USD",
         quantity: 1,
@@ -342,7 +160,7 @@ const seedOrders: (Omit<OrderRecord, "signals"> & { signals?: string[] })[] = [
         id: "p-vitc",
         title: "Radiance Vitamin C Drops",
         handle: "vitamin-c-drops",
-        url: `${storeUrl}/products/vitamin-c-drops`,
+        url: `${DEMO_STORE_URL}/products/vitamin-c-drops`,
         price: 92,
         currency: "USD",
         quantity: 1,
@@ -353,12 +171,12 @@ const seedOrders: (Omit<OrderRecord, "signals"> & { signals?: string[] })[] = [
   {
     id: "4304",
     name: "#4304",
-    createdAt: daysAgo(6),
+    createdAt: daysAgoISO(6),
     totalPrice: 96,
     currency: "USD",
     aiSource: "Perplexity",
     referrer: "https://www.perplexity.ai/search?q=best+cleanser",
-    landingPage: `${storeUrl}/products/calm-foam-cleanser?utm_source=perplexity&utm_medium=organic`,
+    landingPage: `${DEMO_STORE_URL}/products/calm-foam-cleanser?utm_source=perplexity&utm_medium=organic`,
     utmSource: "perplexity",
     utmMedium: "organic",
     sourceName: "web",
@@ -370,7 +188,7 @@ const seedOrders: (Omit<OrderRecord, "signals"> & { signals?: string[] })[] = [
         id: "p-clean",
         title: "Calm Foam Cleanser",
         handle: "calm-foam-cleanser",
-        url: `${storeUrl}/products/calm-foam-cleanser`,
+        url: `${DEMO_STORE_URL}/products/calm-foam-cleanser`,
         price: 48,
         currency: "USD",
         quantity: 2,
@@ -381,12 +199,12 @@ const seedOrders: (Omit<OrderRecord, "signals"> & { signals?: string[] })[] = [
   {
     id: "4299",
     name: "#4299",
-    createdAt: daysAgo(11),
+    createdAt: daysAgoISO(11),
     totalPrice: 178,
     currency: "USD",
     aiSource: null,
     referrer: "https://www.instagram.com/",
-    landingPage: `${storeUrl}/products/hydra-barrier-cream?utm_source=instagram&utm_medium=paid-social`,
+    landingPage: `${DEMO_STORE_URL}/products/hydra-barrier-cream?utm_source=instagram&utm_medium=paid-social`,
     utmSource: "instagram",
     utmMedium: "paid-social",
     sourceName: "web",
@@ -398,7 +216,7 @@ const seedOrders: (Omit<OrderRecord, "signals"> & { signals?: string[] })[] = [
         id: "p-hydra",
         title: "Hydra Barrier Cream",
         handle: "hydra-barrier-cream",
-        url: `${storeUrl}/products/hydra-barrier-cream`,
+        url: `${DEMO_STORE_URL}/products/hydra-barrier-cream`,
         price: 124,
         currency: "USD",
         quantity: 1,
@@ -407,7 +225,7 @@ const seedOrders: (Omit<OrderRecord, "signals"> & { signals?: string[] })[] = [
         id: "p-mask",
         title: "Enzyme Reset Mask",
         handle: "enzyme-reset-mask",
-        url: `${storeUrl}/products/enzyme-reset-mask`,
+        url: `${DEMO_STORE_URL}/products/enzyme-reset-mask`,
         price: 54,
         currency: "USD",
         quantity: 1,
@@ -418,12 +236,12 @@ const seedOrders: (Omit<OrderRecord, "signals"> & { signals?: string[] })[] = [
   {
     id: "4287",
     name: "#4287",
-    createdAt: daysAgo(25),
+    createdAt: daysAgoISO(25),
     totalPrice: 218,
     currency: "USD",
     aiSource: "ChatGPT",
     referrer: "https://chat.openai.com/share/beauty-shortlist",
-    landingPage: `${storeUrl}/products/ceramide-repair-serum`,
+    landingPage: `${DEMO_STORE_URL}/products/ceramide-repair-serum`,
     sourceName: "web",
     customerId: "c-101",
     isNewCustomer: true,
@@ -432,7 +250,7 @@ const seedOrders: (Omit<OrderRecord, "signals"> & { signals?: string[] })[] = [
         id: "p-serum",
         title: "Ceramide Repair Serum",
         handle: "ceramide-repair-serum",
-        url: `${storeUrl}/products/ceramide-repair-serum`,
+        url: `${DEMO_STORE_URL}/products/ceramide-repair-serum`,
         price: 109,
         currency: "USD",
         quantity: 2,
@@ -443,12 +261,12 @@ const seedOrders: (Omit<OrderRecord, "signals"> & { signals?: string[] })[] = [
   {
     id: "4291",
     name: "#4291",
-    createdAt: daysAgo(14),
+    createdAt: daysAgoISO(14),
     totalPrice: 178,
     currency: "USD",
     aiSource: "Perplexity",
     referrer: "https://www.perplexity.ai/",
-    landingPage: `${storeUrl}/products/hydra-barrier-cream?utm_source=perplexity&utm_medium=ai-agent`,
+    landingPage: `${DEMO_STORE_URL}/products/hydra-barrier-cream?utm_source=perplexity&utm_medium=ai-agent`,
     utmSource: "perplexity",
     utmMedium: "ai-agent",
     sourceName: "web",
@@ -459,7 +277,7 @@ const seedOrders: (Omit<OrderRecord, "signals"> & { signals?: string[] })[] = [
         id: "p-hydra",
         title: "Hydra Barrier Cream",
         handle: "hydra-barrier-cream",
-        url: `${storeUrl}/products/hydra-barrier-cream`,
+        url: `${DEMO_STORE_URL}/products/hydra-barrier-cream`,
         price: 124,
         currency: "USD",
         quantity: 1,
@@ -468,7 +286,7 @@ const seedOrders: (Omit<OrderRecord, "signals"> & { signals?: string[] })[] = [
         id: "p-mask",
         title: "Enzyme Reset Mask",
         handle: "enzyme-reset-mask",
-        url: `${storeUrl}/products/enzyme-reset-mask`,
+        url: `${DEMO_STORE_URL}/products/enzyme-reset-mask`,
         price: 54,
         currency: "USD",
         quantity: 1,
@@ -479,12 +297,12 @@ const seedOrders: (Omit<OrderRecord, "signals"> & { signals?: string[] })[] = [
   {
     id: "4290",
     name: "#4290",
-    createdAt: daysAgo(20),
+    createdAt: daysAgoISO(20),
     totalPrice: 198,
     currency: "USD",
     aiSource: null,
     referrer: "https://l.instagram.com/",
-    landingPage: `${storeUrl}/products/starter-kit?utm_source=meta&utm_medium=retargeting`,
+    landingPage: `${DEMO_STORE_URL}/products/starter-kit?utm_source=meta&utm_medium=retargeting`,
     utmSource: "meta",
     utmMedium: "retargeting",
     sourceName: "web",
@@ -495,7 +313,7 @@ const seedOrders: (Omit<OrderRecord, "signals"> & { signals?: string[] })[] = [
         id: "p-clean",
         title: "Calm Foam Cleanser",
         handle: "calm-foam-cleanser",
-        url: `${storeUrl}/products/calm-foam-cleanser`,
+        url: `${DEMO_STORE_URL}/products/calm-foam-cleanser`,
         price: 48,
         currency: "USD",
         quantity: 1,
@@ -504,7 +322,7 @@ const seedOrders: (Omit<OrderRecord, "signals"> & { signals?: string[] })[] = [
         id: "p-mask",
         title: "Enzyme Reset Mask",
         handle: "enzyme-reset-mask",
-        url: `${storeUrl}/products/enzyme-reset-mask`,
+        url: `${DEMO_STORE_URL}/products/enzyme-reset-mask`,
         price: 54,
         currency: "USD",
         quantity: 1,
@@ -513,7 +331,7 @@ const seedOrders: (Omit<OrderRecord, "signals"> & { signals?: string[] })[] = [
         id: "p-kit",
         title: "Starter Discovery Kit",
         handle: "starter-kit",
-        url: `${storeUrl}/products/starter-kit`,
+        url: `${DEMO_STORE_URL}/products/starter-kit`,
         price: 96,
         currency: "USD",
         quantity: 1,
@@ -524,12 +342,12 @@ const seedOrders: (Omit<OrderRecord, "signals"> & { signals?: string[] })[] = [
   {
     id: "4301",
     name: "#4301",
-    createdAt: daysAgo(8),
+    createdAt: daysAgoISO(8),
     totalPrice: 124,
     currency: "USD",
     aiSource: "Gemini",
     referrer: "https://gemini.google.com/app",
-    landingPage: `${storeUrl}/products/hydra-barrier-cream?utm_source=gemini&utm_medium=assistant`,
+    landingPage: `${DEMO_STORE_URL}/products/hydra-barrier-cream?utm_source=gemini&utm_medium=assistant`,
     utmSource: "gemini",
     utmMedium: "assistant",
     sourceName: "web",
@@ -540,7 +358,7 @@ const seedOrders: (Omit<OrderRecord, "signals"> & { signals?: string[] })[] = [
         id: "p-hydra",
         title: "Hydra Barrier Cream",
         handle: "hydra-barrier-cream",
-        url: `${storeUrl}/products/hydra-barrier-cream`,
+        url: `${DEMO_STORE_URL}/products/hydra-barrier-cream`,
         price: 124,
         currency: "USD",
         quantity: 1,
@@ -551,12 +369,12 @@ const seedOrders: (Omit<OrderRecord, "signals"> & { signals?: string[] })[] = [
   {
     id: "4276",
     name: "#4276",
-    createdAt: daysAgo(45),
+    createdAt: daysAgoISO(45),
     totalPrice: 144,
     currency: "USD",
     aiSource: "Gemini",
     referrer: "https://gemini.google.com/app/discover",
-    landingPage: `${storeUrl}/products/starter-kit`,
+    landingPage: `${DEMO_STORE_URL}/products/starter-kit`,
     sourceName: "web",
     customerId: "c-106",
     isNewCustomer: true,
@@ -565,7 +383,7 @@ const seedOrders: (Omit<OrderRecord, "signals"> & { signals?: string[] })[] = [
         id: "p-clean",
         title: "Calm Foam Cleanser",
         handle: "calm-foam-cleanser",
-        url: `${storeUrl}/products/calm-foam-cleanser`,
+        url: `${DEMO_STORE_URL}/products/calm-foam-cleanser`,
         price: 48,
         currency: "USD",
         quantity: 1,
@@ -574,7 +392,7 @@ const seedOrders: (Omit<OrderRecord, "signals"> & { signals?: string[] })[] = [
         id: "p-kit",
         title: "Starter Discovery Kit",
         handle: "starter-kit",
-        url: `${storeUrl}/products/starter-kit`,
+        url: `${DEMO_STORE_URL}/products/starter-kit`,
         price: 96,
         currency: "USD",
         quantity: 1,
@@ -585,12 +403,12 @@ const seedOrders: (Omit<OrderRecord, "signals"> & { signals?: string[] })[] = [
   {
     id: "4281",
     name: "#4281",
-    createdAt: daysAgo(32),
+    createdAt: daysAgoISO(32),
     totalPrice: 188,
     currency: "USD",
     aiSource: "Perplexity",
     referrer: "",
-    landingPage: `${storeUrl}/products/vitamin-c-drops?utm_source=perplexity&utm_medium=ai-agent`,
+    landingPage: `${DEMO_STORE_URL}/products/vitamin-c-drops?utm_source=perplexity&utm_medium=ai-agent`,
     utmSource: "perplexity",
     utmMedium: "ai-agent",
     sourceName: "web",
@@ -601,7 +419,7 @@ const seedOrders: (Omit<OrderRecord, "signals"> & { signals?: string[] })[] = [
         id: "p-vitc",
         title: "Radiance Vitamin C Drops",
         handle: "vitamin-c-drops",
-        url: `${storeUrl}/products/vitamin-c-drops`,
+        url: `${DEMO_STORE_URL}/products/vitamin-c-drops`,
         price: 92,
         currency: "USD",
         quantity: 1,
@@ -610,7 +428,7 @@ const seedOrders: (Omit<OrderRecord, "signals"> & { signals?: string[] })[] = [
         id: "p-kit",
         title: "Starter Discovery Kit",
         handle: "starter-kit",
-        url: `${storeUrl}/products/starter-kit`,
+        url: `${DEMO_STORE_URL}/products/starter-kit`,
         price: 96,
         currency: "USD",
         quantity: 1,
@@ -621,12 +439,12 @@ const seedOrders: (Omit<OrderRecord, "signals"> & { signals?: string[] })[] = [
   {
     id: "4289",
     name: "#4289",
-    createdAt: daysAgo(21),
+    createdAt: daysAgoISO(21),
     totalPrice: 156,
     currency: "USD",
     aiSource: "Copilot",
     referrer: "https://copilot.microsoft.com/",
-    landingPage: `${storeUrl}/products/enzyme-reset-mask?utm_source=copilot&utm_medium=ai-assistant`,
+    landingPage: `${DEMO_STORE_URL}/products/enzyme-reset-mask?utm_source=copilot&utm_medium=ai-assistant`,
     utmSource: "copilot",
     utmMedium: "ai-assistant",
     sourceName: "web",
@@ -637,7 +455,7 @@ const seedOrders: (Omit<OrderRecord, "signals"> & { signals?: string[] })[] = [
         id: "p-mask",
         title: "Enzyme Reset Mask",
         handle: "enzyme-reset-mask",
-        url: `${storeUrl}/products/enzyme-reset-mask`,
+        url: `${DEMO_STORE_URL}/products/enzyme-reset-mask`,
         price: 54,
         currency: "USD",
         quantity: 2,
@@ -646,7 +464,7 @@ const seedOrders: (Omit<OrderRecord, "signals"> & { signals?: string[] })[] = [
         id: "p-clean",
         title: "Calm Foam Cleanser",
         handle: "calm-foam-cleanser",
-        url: `${storeUrl}/products/calm-foam-cleanser`,
+        url: `${DEMO_STORE_URL}/products/calm-foam-cleanser`,
         price: 48,
         currency: "USD",
         quantity: 1,
@@ -657,12 +475,12 @@ const seedOrders: (Omit<OrderRecord, "signals"> & { signals?: string[] })[] = [
   {
     id: "4267",
     name: "#4267",
-    createdAt: daysAgo(60),
+    createdAt: daysAgoISO(60),
     totalPrice: 150,
     currency: "USD",
     aiSource: "Copilot",
     referrer: "https://copilot.microsoft.com/chat",
-    landingPage: `${storeUrl}/products/starter-kit`,
+    landingPage: `${DEMO_STORE_URL}/products/starter-kit`,
     sourceName: "web",
     customerId: "c-105",
     isNewCustomer: true,
@@ -671,7 +489,7 @@ const seedOrders: (Omit<OrderRecord, "signals"> & { signals?: string[] })[] = [
         id: "p-kit",
         title: "Starter Discovery Kit",
         handle: "starter-kit",
-        url: `${storeUrl}/products/starter-kit`,
+        url: `${DEMO_STORE_URL}/products/starter-kit`,
         price: 96,
         currency: "USD",
         quantity: 1,
@@ -680,7 +498,7 @@ const seedOrders: (Omit<OrderRecord, "signals"> & { signals?: string[] })[] = [
         id: "p-mask",
         title: "Enzyme Reset Mask",
         handle: "enzyme-reset-mask",
-        url: `${storeUrl}/products/enzyme-reset-mask`,
+        url: `${DEMO_STORE_URL}/products/enzyme-reset-mask`,
         price: 54,
         currency: "USD",
         quantity: 1,
@@ -691,12 +509,12 @@ const seedOrders: (Omit<OrderRecord, "signals"> & { signals?: string[] })[] = [
   {
     id: "4254",
     name: "#4254",
-    createdAt: daysAgo(70),
+    createdAt: daysAgoISO(70),
     totalPrice: 220,
     currency: "USD",
     aiSource: "ChatGPT",
     referrer: "https://chat.openai.com/",
-    landingPage: `${storeUrl}/products/hydra-barrier-cream?utm_source=chatgpt&utm_medium=assistant`,
+    landingPage: `${DEMO_STORE_URL}/products/hydra-barrier-cream?utm_source=chatgpt&utm_medium=assistant`,
     utmSource: "chatgpt",
     utmMedium: "assistant",
     sourceName: "web",
@@ -707,7 +525,7 @@ const seedOrders: (Omit<OrderRecord, "signals"> & { signals?: string[] })[] = [
         id: "p-hydra",
         title: "Hydra Barrier Cream",
         handle: "hydra-barrier-cream",
-        url: `${storeUrl}/products/hydra-barrier-cream`,
+        url: `${DEMO_STORE_URL}/products/hydra-barrier-cream`,
         price: 124,
         currency: "USD",
         quantity: 1,
@@ -716,7 +534,7 @@ const seedOrders: (Omit<OrderRecord, "signals"> & { signals?: string[] })[] = [
         id: "p-kit",
         title: "Starter Discovery Kit",
         handle: "starter-kit",
-        url: `${storeUrl}/products/starter-kit`,
+        url: `${DEMO_STORE_URL}/products/starter-kit`,
         price: 96,
         currency: "USD",
         quantity: 1,
@@ -727,12 +545,12 @@ const seedOrders: (Omit<OrderRecord, "signals"> & { signals?: string[] })[] = [
   {
     id: "4241",
     name: "#4241",
-    createdAt: daysAgo(3),
+    createdAt: daysAgoISO(3),
     totalPrice: 146,
     currency: "USD",
     aiSource: "Other-AI",
     referrer: "https://claude.ai/chat",
-    landingPage: `${storeUrl}/products/vitamin-c-drops?utm_medium=ai-assistant`,
+    landingPage: `${DEMO_STORE_URL}/products/vitamin-c-drops?utm_medium=ai-assistant`,
     utmMedium: "ai-assistant",
     sourceName: "web",
     customerId: "c-111",
@@ -742,7 +560,7 @@ const seedOrders: (Omit<OrderRecord, "signals"> & { signals?: string[] })[] = [
         id: "p-vitc",
         title: "Radiance Vitamin C Drops",
         handle: "vitamin-c-drops",
-        url: `${storeUrl}/products/vitamin-c-drops`,
+        url: `${DEMO_STORE_URL}/products/vitamin-c-drops`,
         price: 92,
         currency: "USD",
         quantity: 1,
@@ -751,7 +569,7 @@ const seedOrders: (Omit<OrderRecord, "signals"> & { signals?: string[] })[] = [
         id: "p-mask",
         title: "Enzyme Reset Mask",
         handle: "enzyme-reset-mask",
-        url: `${storeUrl}/products/enzyme-reset-mask`,
+        url: `${DEMO_STORE_URL}/products/enzyme-reset-mask`,
         price: 54,
         currency: "USD",
         quantity: 1,
@@ -762,12 +580,12 @@ const seedOrders: (Omit<OrderRecord, "signals"> & { signals?: string[] })[] = [
   {
     id: "4229",
     name: "#4229",
-    createdAt: daysAgo(85),
+    createdAt: daysAgoISO(85),
     totalPrice: 102,
     currency: "USD",
     aiSource: "Other-AI",
     referrer: "https://deepseek.com/assistant",
-    landingPage: `${storeUrl}/products/enzyme-reset-mask?utm_source=deepseek`,
+    landingPage: `${DEMO_STORE_URL}/products/enzyme-reset-mask?utm_source=deepseek`,
     utmSource: "deepseek",
     sourceName: "web",
     customerId: "c-111",
@@ -777,7 +595,7 @@ const seedOrders: (Omit<OrderRecord, "signals"> & { signals?: string[] })[] = [
         id: "p-clean",
         title: "Calm Foam Cleanser",
         handle: "calm-foam-cleanser",
-        url: `${storeUrl}/products/calm-foam-cleanser`,
+        url: `${DEMO_STORE_URL}/products/calm-foam-cleanser`,
         price: 48,
         currency: "USD",
         quantity: 1,
@@ -786,7 +604,7 @@ const seedOrders: (Omit<OrderRecord, "signals"> & { signals?: string[] })[] = [
         id: "p-mask",
         title: "Enzyme Reset Mask",
         handle: "enzyme-reset-mask",
-        url: `${storeUrl}/products/enzyme-reset-mask`,
+        url: `${DEMO_STORE_URL}/products/enzyme-reset-mask`,
         price: 54,
         currency: "USD",
         quantity: 1,
@@ -797,12 +615,12 @@ const seedOrders: (Omit<OrderRecord, "signals"> & { signals?: string[] })[] = [
   {
     id: "4309",
     name: "#4309",
-    createdAt: daysAgo(1),
+    createdAt: daysAgoISO(1),
     totalPrice: 96,
     currency: "USD",
     aiSource: null,
     referrer: "https://t.co/brand-email",
-    landingPage: `${storeUrl}/products/starter-kit?utm_source=email&utm_medium=crm`,
+    landingPage: `${DEMO_STORE_URL}/products/starter-kit?utm_source=email&utm_medium=crm`,
     utmSource: "email",
     utmMedium: "crm",
     sourceName: "web",
@@ -813,7 +631,7 @@ const seedOrders: (Omit<OrderRecord, "signals"> & { signals?: string[] })[] = [
         id: "p-kit",
         title: "Starter Discovery Kit",
         handle: "starter-kit",
-        url: `${storeUrl}/products/starter-kit`,
+        url: `${DEMO_STORE_URL}/products/starter-kit`,
         price: 96,
         currency: "USD",
         quantity: 1,
@@ -824,12 +642,12 @@ const seedOrders: (Omit<OrderRecord, "signals"> & { signals?: string[] })[] = [
   {
     id: "4306",
     name: "#4306",
-    createdAt: daysAgo(4),
+    createdAt: daysAgoISO(4),
     totalPrice: 102,
     currency: "USD",
     aiSource: null,
     referrer: "https://www.google.com/",
-    landingPage: `${storeUrl}/products/enzyme-reset-mask?utm_source=google&utm_medium=organic`,
+    landingPage: `${DEMO_STORE_URL}/products/enzyme-reset-mask?utm_source=google&utm_medium=organic`,
     utmSource: "google",
     utmMedium: "organic",
     sourceName: "web",
@@ -840,7 +658,7 @@ const seedOrders: (Omit<OrderRecord, "signals"> & { signals?: string[] })[] = [
         id: "p-clean",
         title: "Calm Foam Cleanser",
         handle: "calm-foam-cleanser",
-        url: `${storeUrl}/products/calm-foam-cleanser`,
+        url: `${DEMO_STORE_URL}/products/calm-foam-cleanser`,
         price: 48,
         currency: "USD",
         quantity: 1,
@@ -849,7 +667,7 @@ const seedOrders: (Omit<OrderRecord, "signals"> & { signals?: string[] })[] = [
         id: "p-mask",
         title: "Enzyme Reset Mask",
         handle: "enzyme-reset-mask",
-        url: `${storeUrl}/products/enzyme-reset-mask`,
+        url: `${DEMO_STORE_URL}/products/enzyme-reset-mask`,
         price: 54,
         currency: "USD",
         quantity: 1,
@@ -860,12 +678,12 @@ const seedOrders: (Omit<OrderRecord, "signals"> & { signals?: string[] })[] = [
   {
     id: "4269",
     name: "#4269",
-    createdAt: daysAgo(50),
+    createdAt: daysAgoISO(50),
     totalPrice: 233,
     currency: "USD",
     aiSource: null,
     referrer: "https://www.reddit.com/",
-    landingPage: `${storeUrl}/products/hydra-barrier-cream?utm_source=reddit&utm_medium=organic`,
+    landingPage: `${DEMO_STORE_URL}/products/hydra-barrier-cream?utm_source=reddit&utm_medium=organic`,
     utmSource: "reddit",
     utmMedium: "organic",
     sourceName: "web",
@@ -876,7 +694,7 @@ const seedOrders: (Omit<OrderRecord, "signals"> & { signals?: string[] })[] = [
         id: "p-hydra",
         title: "Hydra Barrier Cream",
         handle: "hydra-barrier-cream",
-        url: `${storeUrl}/products/hydra-barrier-cream`,
+        url: `${DEMO_STORE_URL}/products/hydra-barrier-cream`,
         price: 124,
         currency: "USD",
         quantity: 1,
@@ -885,7 +703,7 @@ const seedOrders: (Omit<OrderRecord, "signals"> & { signals?: string[] })[] = [
         id: "p-serum",
         title: "Ceramide Repair Serum",
         handle: "ceramide-repair-serum",
-        url: `${storeUrl}/products/ceramide-repair-serum`,
+        url: `${DEMO_STORE_URL}/products/ceramide-repair-serum`,
         price: 109,
         currency: "USD",
         quantity: 1,
@@ -896,12 +714,12 @@ const seedOrders: (Omit<OrderRecord, "signals"> & { signals?: string[] })[] = [
   {
     id: "4295",
     name: "#4295",
-    createdAt: daysAgo(12),
+    createdAt: daysAgoISO(12),
     totalPrice: 216,
     currency: "USD",
     aiSource: null,
     referrer: "https://www.bing.com/",
-    landingPage: `${storeUrl}/products/hydra-barrier-cream?utm_source=bing&utm_medium=seo`,
+    landingPage: `${DEMO_STORE_URL}/products/hydra-barrier-cream?utm_source=bing&utm_medium=seo`,
     utmSource: "bing",
     utmMedium: "seo",
     sourceName: "web",
@@ -912,7 +730,7 @@ const seedOrders: (Omit<OrderRecord, "signals"> & { signals?: string[] })[] = [
         id: "p-hydra",
         title: "Hydra Barrier Cream",
         handle: "hydra-barrier-cream",
-        url: `${storeUrl}/products/hydra-barrier-cream`,
+        url: `${DEMO_STORE_URL}/products/hydra-barrier-cream`,
         price: 124,
         currency: "USD",
         quantity: 1,
@@ -921,7 +739,7 @@ const seedOrders: (Omit<OrderRecord, "signals"> & { signals?: string[] })[] = [
         id: "p-vitc",
         title: "Radiance Vitamin C Drops",
         handle: "vitamin-c-drops",
-        url: `${storeUrl}/products/vitamin-c-drops`,
+        url: `${DEMO_STORE_URL}/products/vitamin-c-drops`,
         price: 92,
         currency: "USD",
         quantity: 1,
@@ -1223,13 +1041,8 @@ export const detectAiFromFields = (
 
 export const mockOrders = orders;
 
-export const channelList: AIChannel[] = [
-  "ChatGPT",
-  "Perplexity",
-  "Gemini",
-  "Copilot",
-  "Other-AI",
-];
+/** @deprecated 使用 AI_CHANNELS 代替 */
+export const channelList: AIChannel[] = [...AI_CHANNELS];
 
 
 

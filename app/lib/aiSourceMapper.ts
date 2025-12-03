@@ -3,23 +3,25 @@
  * 处理AI渠道枚举与数据库枚举之间的转换
  */
 
-import type { AIChannel } from "./aiData";
+import type { AIChannel } from "./aiTypes";
 import type { AiSource as PrismaAiSource } from "@prisma/client";
 
+/** 应用层 AIChannel 到 Prisma AiSource 的映射 */
 const AI_SOURCE_MAP: Record<AIChannel, PrismaAiSource> = {
-  "ChatGPT": "ChatGPT",
-  "Perplexity": "Perplexity",
-  "Gemini": "Gemini",
-  "Copilot": "Copilot",
+  ChatGPT: "ChatGPT",
+  Perplexity: "Perplexity",
+  Gemini: "Gemini",
+  Copilot: "Copilot",
   "Other-AI": "Other_AI",
 };
 
+/** Prisma AiSource 到应用层 AIChannel 的映射 */
 const REVERSE_AI_SOURCE_MAP: Record<PrismaAiSource, AIChannel> = {
-  "ChatGPT": "ChatGPT",
-  "Perplexity": "Perplexity",
-  "Gemini": "Gemini",
-  "Copilot": "Copilot",
-  "Other_AI": "Other-AI",
+  ChatGPT: "ChatGPT",
+  Perplexity: "Perplexity",
+  Gemini: "Gemini",
+  Copilot: "Copilot",
+  Other_AI: "Other-AI",
 };
 
 /**

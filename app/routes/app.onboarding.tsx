@@ -1,5 +1,5 @@
 import type { HeadersFunction, LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
-import { useFetcher, useLoaderData, useSearchParams } from "react-router";
+import { useLoaderData, useSearchParams, useActionData, Form } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import { requireEnv } from "../lib/env.server";
@@ -98,7 +98,7 @@ export default function Onboarding() {
   const step = searchParams.get("step") || "value_snapshot";
   const reason = searchParams.get("reason");
   
-  const fetcher = useFetcher<{ ok: boolean; message?: string }>();
+  const actionData = useActionData<typeof action>() as { ok?: boolean; message?: string } | undefined;
   const uiLanguage = useUILanguage(language);
   const en = uiLanguage === "English";
   
@@ -106,12 +106,7 @@ export default function Onboarding() {
     return <div style={{padding: 20}}>Unauthorized. Please access via Shopify Admin.</div>;
   }
 
-  const handleSelectPlan = (planId: PlanId) => {
-    fetcher.submit(
-      { intent: "select_plan", planId, shop: shopDomain },
-      { method: "post" }
-    );
-  };
+  const handleSelectPlan = undefined as never;
   
   // Render Step 2: Value Snapshot
   if (step === "value_snapshot") {
@@ -224,9 +219,9 @@ export default function Onboarding() {
         </div>
       )}
       
-      {fetcher.data && !fetcher.data.ok && (
+      {actionData && actionData.ok === false && (
         <div style={{ marginBottom: 20, padding: 12, background: "#fff2e8", color: "#d4380d", borderRadius: 4, textAlign: "center" }}>
-          {fetcher.data.message}
+          {actionData.message}
         </div>
       )}
 
@@ -234,7 +229,7 @@ export default function Onboarding() {
         {plans.map((plan) => {
           const isFree = plan.id === 'free';
           const recommended = plan.id === PRIMARY_BILLABLE_PLAN_ID;
-          const disabled = plan.status !== 'live' || fetcher.state !== 'idle';
+          const disabled = plan.status !== 'live';
           const priceLabel = plan.priceUsd === 0 ? "$0" : `$${plan.priceUsd}`;
           const trialLabel = plan.trialSupported
             ? plan.remainingTrialDays > 0
@@ -250,9 +245,7 @@ export default function Onboarding() {
           const buttonLabel =
             plan.status === 'coming_soon'
               ? (en ? "Coming soon" : "敬请期待")
-              : fetcher.state !== 'idle'
-                ? "..."
-                : en
+              : en
                   ? `Choose ${plan.name}`
                   : `选择 ${plan.name}`;
 
@@ -322,29 +315,33 @@ export default function Onboarding() {
                   <li key={feature}>✓ {feature}</li>
                 ))}
               </ul>
-              <button
-                type="button"
-                onClick={() => handleSelectPlan(plan.id)}
-                disabled={disabled}
-                data-action="onboarding-select-plan"
-                data-plan-id={plan.id}
-                aria-label={disabled
-                  ? (en ? "Disabled" : "不可用")
-                  : (en ? `Choose ${plan.name}` : `选择 ${plan.name}`)}
-                style={{
-                  width: "100%",
-                  padding: "12px",
-                  background: isFree ? "white" : "#008060",
-                  color: isFree ? "#333" : "white",
-                  border: isFree ? "1px solid #babfc3" : "none",
-                  borderRadius: 4,
-                  cursor: disabled ? "not-allowed" : "pointer",
-                  fontWeight: 600,
-                  boxShadow: isFree ? "none" : "0 2px 5px rgba(0,0,0,0.1)",
-                }}
-              >
-                {buttonLabel}
-              </button>
+              <Form method="post" replace>
+                <input type="hidden" name="intent" value="select_plan" />
+                <input type="hidden" name="planId" value={plan.id} />
+                <input type="hidden" name="shop" value={shopDomain} />
+                <button
+                  type="submit"
+                  disabled={disabled}
+                  data-action="onboarding-select-plan"
+                  data-plan-id={plan.id}
+                  aria-label={disabled
+                    ? (en ? "Disabled" : "不可用")
+                    : (en ? `Choose ${plan.name}` : `选择 ${plan.name}`)}
+                  style={{
+                    width: "100%",
+                    padding: "12px",
+                    background: isFree ? "white" : "#008060",
+                    color: isFree ? "#333" : "white",
+                    border: isFree ? "1px solid #babfc3" : "none",
+                    borderRadius: 4,
+                    cursor: disabled ? "not-allowed" : "pointer",
+                    fontWeight: 600,
+                    boxShadow: isFree ? "none" : "0 2px 5px rgba(0,0,0,0.1)",
+                  }}
+                >
+                  {buttonLabel}
+                </button>
+              </Form>
               {plan.trialSupported && (
                 <div style={{ textAlign: "center", fontSize: 12, color: "#666", marginTop: 8 }}>
                   {trialLabel}

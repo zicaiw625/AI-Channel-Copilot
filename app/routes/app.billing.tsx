@@ -1,5 +1,5 @@
 import type { HeadersFunction, LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
-import { useFetcher, useLoaderData } from "react-router";
+import { useLoaderData, useActionData, Form } from "react-router";
 import { useUILanguage } from "../lib/useUILanguage";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate, login } from "../shopify.server";
@@ -81,7 +81,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
 export default function Billing() {
   const { language, currentPlan, plans, shopDomain, demo, apiKey, trialEndDate, isTrialing } = useLoaderData<typeof loader>();
-  const fetcher = useFetcher<{ ok: boolean; message?: string }>();
+  const actionData = useActionData<typeof action>() as { ok?: boolean; message?: string } | undefined;
   const uiLanguage = useUILanguage(language);
   const en = uiLanguage === "English";
   const normalizePlanId = (plan: PlanTier): PlanId =>
@@ -103,29 +103,17 @@ export default function Billing() {
       }).format(new Date(trialEndDate))
     : null;
   
-  const handleUpgrade = (planId: PlanId) => {
-    fetcher.submit(
-      { intent: "upgrade", shop: shopDomain, planId },
-      { method: "post" }
-    );
-  };
-
-  const handleDowngrade = () => {
-      if (confirm(en ? "Are you sure you want to downgrade to Free? You will lose access to detailed history and Copilot." : "确定要降级到免费版吗？您将失去历史数据详情和 Copilot 功能。")) {
-        fetcher.submit(
-        { intent: "downgrade", shop: shopDomain },
-        { method: "post" }
-        );
-      }
+  const handleDowngradeConfirm = () => {
+      return confirm(en ? "Are you sure you want to downgrade to Free? You will lose access to detailed history and Copilot." : "确定要降级到免费版吗？您将失去历史数据详情和 Copilot 功能。");
   };
   
   return (
     <section style={{ padding: 20, maxWidth: 800, margin: "0 auto", fontFamily: "system-ui" }}>
       <h2 style={{ marginBottom: 20 }}>{en ? "Subscription Management" : "订阅管理"}</h2>
       
-      {fetcher.data && !fetcher.data.ok && (
+      {actionData && actionData.ok === false && (
         <div style={{ marginBottom: 20, padding: 10, background: "#fff2e8", color: "#b25b1a", borderRadius: 4 }}>
-          {fetcher.data.message}
+          {actionData.message}
         </div>
       )}
       
@@ -177,10 +165,13 @@ export default function Billing() {
           
           <div style={{ display: "flex", gap: 12 }}>
               {activePlanId === "free" ? (
+                <Form method="post" replace>
+                  <input type="hidden" name="intent" value="upgrade" />
+                  <input type="hidden" name="planId" value={PRIMARY_BILLABLE_PLAN_ID} />
+                  <input type="hidden" name="shop" value={shopDomain} />
                   <button 
-                    type="button"
-                    onClick={() => handleUpgrade(PRIMARY_BILLABLE_PLAN_ID)}
-                    disabled={fetcher.state !== "idle" || demo}
+                    type="submit"
+                    disabled={demo}
                     data-action="billing-upgrade"
                     aria-label={en ? `Upgrade to ${BILLING_PLANS[PRIMARY_BILLABLE_PLAN_ID].name}` : `升级到 ${BILLING_PLANS[PRIMARY_BILLABLE_PLAN_ID].name}`}
                     style={{ 
@@ -193,12 +184,9 @@ export default function Billing() {
                         fontSize: 16
                     }}
                   >
-                      {fetcher.state !== "idle"
-                        ? "..."
-                        : (en
-                            ? `Upgrade to ${BILLING_PLANS[PRIMARY_BILLABLE_PLAN_ID].name}`
-                            : `升级到 ${BILLING_PLANS[PRIMARY_BILLABLE_PLAN_ID].name}`)}
+                    {en ? `Upgrade to ${BILLING_PLANS[PRIMARY_BILLABLE_PLAN_ID].name}` : `升级到 ${BILLING_PLANS[PRIMARY_BILLABLE_PLAN_ID].name}`}
                   </button>
+                </Form>
               ) : (
                  <>
                     {/* For paid plans, usually we send them to Shopify billing */}
@@ -219,22 +207,25 @@ export default function Billing() {
                          {en ? "Manage in Shopify" : "在 Shopify 中管理"}
                      </a>
                      
-                    <button
-                       type="button"
-                       onClick={handleDowngrade}
-                       disabled={fetcher.state !== "idle" || demo}
-                       data-action="billing-downgrade"
-                       aria-label={en ? "Downgrade to Free" : "降级到免费版"}
-                       style={{
-                           background: "none",
-                           border: "none",
-                           color: "#d4380d",
-                           cursor: "pointer",
-                           textDecoration: "underline"
-                       }}
-                     >
-                         {en ? "Downgrade to Free" : "降级到免费版"}
-                     </button>
+                    <Form method="post" replace onSubmit={(e) => { if (!handleDowngradeConfirm()) e.preventDefault(); }}>
+                      <input type="hidden" name="intent" value="downgrade" />
+                      <input type="hidden" name="shop" value={shopDomain} />
+                      <button
+                         type="submit"
+                         disabled={demo}
+                         data-action="billing-downgrade"
+                         aria-label={en ? "Downgrade to Free" : "降级到免费版"}
+                         style={{
+                             background: "none",
+                             border: "none",
+                             color: "#d4380d",
+                             cursor: "pointer",
+                             textDecoration: "underline"
+                         }}
+                       >
+                           {en ? "Downgrade to Free" : "降级到免费版"}
+                       </button>
+                    </Form>
                  </>
               )}
           </div>
@@ -245,7 +236,7 @@ export default function Billing() {
         <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
           {plans.map((plan) => {
             const isActive = plan.id === activePlanId;
-            const disabled = fetcher.state !== "idle" || demo || plan.status !== "live" || isActive;
+            const disabled = demo || plan.status !== "live" || isActive;
             return (
               <div
                 key={plan.id}
@@ -277,40 +268,68 @@ export default function Billing() {
                     <li key={feature}>{feature}</li>
                   ))}
                 </ul>
-                <button
-                  type="button"
-                  onClick={() => (plan.id === "free" ? handleDowngrade() : handleUpgrade(plan.id))}
-                  disabled={disabled}
-                  data-action="billing-select-plan"
-                  data-plan-id={plan.id}
-                  aria-label={
-                    isActive
-                      ? (en ? "Current Plan" : "当前方案")
-                      : plan.status === "coming_soon"
-                        ? (en ? "Coming soon" : "敬请期待")
-                        : plan.id === "free"
-                          ? (en ? "Switch to Free" : "切换到免费版")
-                          : (en ? `Switch to ${plan.name}` : `切换到 ${plan.name}`)
-                  }
-                  style={{
-                    width: "100%",
-                    padding: "10px",
-                    marginTop: 8,
-                    background: disabled ? "#f5f5f5" : plan.id === "free" ? "white" : "#008060",
-                    color: disabled ? "#999" : plan.id === "free" ? "#333" : "white",
-                    border: plan.id === "free" ? "1px solid #babfc3" : "none",
-                    borderRadius: 4,
-                    cursor: disabled ? "not-allowed" : "pointer",
-                  }}
-                >
-                  {isActive
-                    ? (en ? "Current Plan" : "当前方案")
-                    : plan.status === "coming_soon"
-                      ? (en ? "Coming soon" : "敬请期待")
-                      : plan.id === "free"
-                        ? (en ? "Switch to Free" : "切换到免费版")
-                        : (en ? `Switch to ${plan.name}` : `切换到 ${plan.name}`)}
-                </button>
+                {plan.id === "free" ? (
+                  <Form method="post" replace onSubmit={(e) => { if (!handleDowngradeConfirm()) e.preventDefault(); }}>
+                    <input type="hidden" name="intent" value="downgrade" />
+                    <input type="hidden" name="shop" value={shopDomain} />
+                    <button
+                      type="submit"
+                      disabled={disabled}
+                      data-action="billing-select-plan"
+                      data-plan-id={plan.id}
+                      aria-label={
+                        isActive ? (en ? "Current Plan" : "当前方案") : (en ? "Switch to Free" : "切换到免费版")
+                      }
+                      style={{
+                        width: "100%",
+                        padding: "10px",
+                        marginTop: 8,
+                        background: disabled ? "#f5f5f5" : "white",
+                        color: disabled ? "#999" : "#333",
+                        border: "1px solid #babfc3",
+                        borderRadius: 4,
+                        cursor: disabled ? "not-allowed" : "pointer",
+                      }}
+                    >
+                      {isActive ? (en ? "Current Plan" : "当前方案") : (en ? "Switch to Free" : "切换到免费版")}
+                    </button>
+                  </Form>
+                ) : (
+                  <Form method="post" replace>
+                    <input type="hidden" name="intent" value="upgrade" />
+                    <input type="hidden" name="planId" value={plan.id} />
+                    <input type="hidden" name="shop" value={shopDomain} />
+                    <button
+                      type="submit"
+                      disabled={disabled}
+                      data-action="billing-select-plan"
+                      data-plan-id={plan.id}
+                      aria-label={
+                        isActive
+                          ? (en ? "Current Plan" : "当前方案")
+                          : plan.status === "coming_soon"
+                            ? (en ? "Coming soon" : "敬请期待")
+                            : (en ? `Switch to ${plan.name}` : `切换到 ${plan.name}`)
+                      }
+                      style={{
+                        width: "100%",
+                        padding: "10px",
+                        marginTop: 8,
+                        background: disabled ? "#f5f5f5" : "#008060",
+                        color: disabled ? "#999" : "white",
+                        border: "none",
+                        borderRadius: 4,
+                        cursor: disabled ? "not-allowed" : "pointer",
+                      }}
+                    >
+                      {isActive
+                        ? (en ? "Current Plan" : "当前方案")
+                        : plan.status === "coming_soon"
+                          ? (en ? "Coming soon" : "敬请期待")
+                          : (en ? `Switch to ${plan.name}` : `切换到 ${plan.name}`)}
+                    </button>
+                  </Form>
+                )}
               </div>
             );
           })}

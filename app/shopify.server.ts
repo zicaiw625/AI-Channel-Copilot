@@ -7,47 +7,90 @@ import {
 } from "@shopify/shopify-app-react-router/server";
 import { PrismaSessionStorage } from "@shopify/shopify-app-session-storage-prisma";
 import prisma from "./db.server";
-import { requireEnv, isProduction } from "./lib/env.server";
+import { readCriticalEnv } from "./lib/env.server";
 import { runStartupSelfCheck } from "./lib/selfcheck.server";
 import { BILLING_PLANS, PRIMARY_BILLABLE_PLAN_ID } from "./lib/billing/plans";
 
-const apiKey = requireEnv("SHOPIFY_API_KEY");
-const apiSecretKey = requireEnv("SHOPIFY_API_SECRET");
-const appUrl = requireEnv("SHOPIFY_APP_URL");
-const scopes = requireEnv("SCOPES")
-  .split(",")
-  .map((item) => item.trim())
-  .filter(Boolean);
+const { SHOPIFY_API_KEY: apiKey, SHOPIFY_API_SECRET: apiSecretKey, SHOPIFY_APP_URL: appUrl, SCOPES: scopes } =
+  readCriticalEnv();
 
 const primaryPlan = BILLING_PLANS[PRIMARY_BILLABLE_PLAN_ID];
-const planName = (process.env.BILLING_PLAN_NAME || primaryPlan.shopifyName).trim();
-export const MONTHLY_PLAN = planName;
-export type BillingPlanKey = keyof ShopifyAppConfig["billing"];
-export const BILLING_PLAN: BillingPlanKey = MONTHLY_PLAN as BillingPlanKey;
+const resolveBillingPlanName = (planNameEnv?: string | null): string => {
+  const resolved = (planNameEnv ?? primaryPlan.shopifyName).trim();
+  if (!resolved) {
+    throw new Error("BILLING_PLAN_NAME must not be empty");
+  }
+  return resolved;
+};
+
+const parsePositiveNumber = (raw: string, name: string) => {
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new Error(`${name} must be a positive number`);
+  }
+  return parsed;
+};
+
+const parseNonNegativeInteger = (raw: string, name: string) => {
+  const parsed = Number(raw);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    throw new Error(`${name} must be a non-negative integer`);
+  }
+  return parsed;
+};
+
 const getBillingInterval = (value: string): BillingInterval.Annual | BillingInterval.Every30Days => {
   switch (value) {
     case "ANNUAL":
       return BillingInterval.Annual;
     case "EVERY_30_DAYS":
-    default:
       return BillingInterval.Every30Days;
+    default:
+      throw new Error(`Unsupported BILLING_INTERVAL: ${value}`);
   }
 };
+
 const readBillingConfig = () => {
-  const amount = Number(process.env.BILLING_PRICE || primaryPlan.priceUsd);
+  const amount = parsePositiveNumber(String(process.env.BILLING_PRICE ?? primaryPlan.priceUsd), "BILLING_PRICE");
   const currencyCode = (process.env.BILLING_CURRENCY || "USD").toUpperCase();
-  const trialDays = Number(process.env.BILLING_TRIAL_DAYS || primaryPlan.defaultTrialDays);
+  const trialDays = parseNonNegativeInteger(
+    String(process.env.BILLING_TRIAL_DAYS ?? primaryPlan.defaultTrialDays),
+    "BILLING_TRIAL_DAYS",
+  );
   const intervalEnv = (process.env.BILLING_INTERVAL || primaryPlan.interval).toUpperCase();
   const interval = getBillingInterval(intervalEnv);
-  const validCurrency = /^[A-Z]{3}$/.test(currencyCode);
-  const validAmount = amount > 0 && Number.isFinite(amount);
-  const validTrial = trialDays >= 0 && Number.isInteger(trialDays);
-  if (isProduction() && (!validCurrency || !validAmount || !validTrial)) {
-    throw new Error("Invalid billing configuration");
+
+  if (!/^[A-Z]{3}$/.test(currencyCode)) {
+    throw new Error("BILLING_CURRENCY must be a three-letter ISO code");
   }
-  return { amount, currencyCode, interval, trialDays };
+
+  return { amount, currencyCode, interval, trialDays } as const;
 };
+
+const resolveCustomShopDomains = () => {
+  const customDomainsEnv = process.env.SHOP_CUSTOM_DOMAIN;
+  if (!customDomainsEnv) return [] as string[];
+
+  const domains = customDomainsEnv
+    .split(",")
+    .map((domain) => domain.trim())
+    .filter(Boolean);
+
+  const uniqueDomains = Array.from(new Set(domains));
+
+  if (!uniqueDomains.length) {
+    throw new Error("SHOP_CUSTOM_DOMAIN must contain at least one domain when defined");
+  }
+
+  return uniqueDomains;
+};
+
 const billing = readBillingConfig();
+const customShopDomains = resolveCustomShopDomains();
+const monthlyPlanName = resolveBillingPlanName(process.env.BILLING_PLAN_NAME);
+export const MONTHLY_PLAN = monthlyPlanName;
+export type BillingPlanKey = keyof ShopifyAppConfig["billing"];
+export const BILLING_PLAN: BillingPlanKey = MONTHLY_PLAN as BillingPlanKey;
 
 const appApiVersion = ApiVersion.October25;
 
@@ -72,9 +115,7 @@ const appConfig = {
       trialDays: billing.trialDays,
     },
   },
-  ...(process.env.SHOP_CUSTOM_DOMAIN
-    ? { customShopDomains: [process.env.SHOP_CUSTOM_DOMAIN] }
-    : {}),
+  ...(customShopDomains.length ? { customShopDomains } : {}),
 };
 
 const shopify = shopifyApp(appConfig);

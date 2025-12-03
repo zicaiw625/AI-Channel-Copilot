@@ -1,10 +1,15 @@
 import prisma from "../db.server";
-import type { Prisma, AiSource as PrismaAiSource } from "@prisma/client";
-import { type AIChannel, type DateRange, type OrderRecord } from "./aiData";
+import type { Prisma } from "@prisma/client";
+import { type DateRange, type OrderRecord } from "./aiData";
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 import { getPlatform, isDemoMode } from "./runtime.server";
 import { MAX_DASHBOARD_ORDERS, MAX_DETECTION_LENGTH } from "./constants";
 import { getSettings } from "./settings.server";
+import { toPrismaAiSource } from "./aiSourceMapper";
+import { loadCustomersByIds } from "./customerService.server";
+import { validateOrderData } from "./orderService.server";
+import { DatabaseError, ValidationError } from "./errors";
+import { logger } from "./logger.server";
 
 const tableMissing = (error: unknown) =>
   (error instanceof PrismaClientKnownRequestError && error.code === "P2021") ||
@@ -12,53 +17,25 @@ const tableMissing = (error: unknown) =>
 
 const platform = getPlatform();
 
-const toAiEnum = (source: AIChannel | null): PrismaAiSource | null => {
-  switch (source) {
-    case "ChatGPT":
-      return "ChatGPT";
-    case "Perplexity":
-      return "Perplexity";
-    case "Gemini":
-      return "Gemini";
-    case "Copilot":
-      return "Copilot";
-    case "Other-AI":
-      return "Other_AI";
-    default:
-      return null;
-  }
-};
-
-const fromAiEnum = (source: PrismaAiSource | null): AIChannel | null => {
-  if (!source) return null;
-  if (source === "Other_AI") return "Other-AI";
-  return source as AIChannel;
-};
-
-let cachedModels:
-  | {
-      orderModel: typeof prisma.order;
-      customerModel: typeof prisma.customer;
-      productModel: typeof prisma.orderProduct;
-    }
-  | null = null;
-
-const ensureTables = () => {
-  if (!cachedModels) {
-    const orderModel = prisma.order;
-    const customerModel = prisma.customer;
-    const productModel = prisma.orderProduct;
-
-    cachedModels = { orderModel, customerModel, productModel };
-  }
-
-  return cachedModels;
-};
-
-const models = ensureTables();
-
 export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) => {
-  if (!shopDomain || !orders.length || isDemoMode()) return { created: 0, updated: 0 };
+  // 输入验证
+  if (!shopDomain) {
+    throw new ValidationError("Shop domain is required");
+  }
+
+  if (!Array.isArray(orders)) {
+    throw new ValidationError("Orders must be an array");
+  }
+
+  if (!orders.length || isDemoMode()) {
+    logger.info("[persistence] Skipping order persistence", { shopDomain, orderCount: orders.length, isDemo: isDemoMode() });
+    return { created: 0, updated: 0 };
+  }
+
+  // 验证每笔订单的数据
+  for (const order of orders) {
+    validateOrderData(order);
+  }
 
   const settings = await getSettings(shopDomain);
   const timeZone = settings.timezones?.[0];
@@ -74,6 +51,12 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
     let created = 0;
     let updated = 0;
 
+    logger.info("[persistence] Starting order persistence", {
+      shopDomain,
+      totalOrders: orders.length,
+      chunks: chunks.length,
+    });
+
     for (const chunk of chunks) {
       const orderIds = chunk.map((order) => order.id);
       const customerIds = Array.from(
@@ -84,45 +67,19 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
         async (tx) => {
           const existingOrders = await tx.order.findMany({ where: { id: { in: orderIds } } });
           const existingCustomers = customerIds.length
-            ? await tx.customer.findMany({ where: { id: { in: customerIds } } })
+            ? await loadCustomersByIds(shopDomain, customerIds)
             : [];
 
           const orderMap = new Map(existingOrders.map((o) => [o.id, o]));
-          type CustomerState = {
-            id: string;
-            shopDomain: string;
-            platform: string;
-            firstOrderAt: Date | null;
-            firstOrderId: string | null;
-            lastOrderAt: Date | null;
-            orderCount: number;
-            totalSpent: number;
-            acquiredViaAi: boolean;
-            firstAiOrderId: string | null;
-          };
-          const customerState = new Map<string, CustomerState>(
-            existingCustomers.map((c) => [
-              c.id,
-              {
-                id: c.id,
-                shopDomain: c.shopDomain,
-                platform: c.platform,
-                firstOrderAt: c.firstOrderAt,
-                firstOrderId: c.firstOrderId,
-                lastOrderAt: c.lastOrderAt,
-                orderCount: c.orderCount,
-                totalSpent: c.totalSpent,
-                acquiredViaAi: Boolean(c.acquiredViaAi),
-                firstAiOrderId: c.firstAiOrderId,
-              },
-            ]),
+          const customerState = new Map<string, any>(
+            existingCustomers.map((c) => [c.id, { ...c }])
           );
 
           let localCreated = 0;
           let localUpdated = 0;
 
           for (const order of chunk) {
-            const aiSource = toAiEnum(order.aiSource);
+            const aiSource = toPrismaAiSource(order.aiSource);
             const createdAt = new Date(order.createdAt);
             const existingOrder = orderMap.get(order.id);
             const detection = (order.detection || "").slice(0, MAX_DETECTION_LENGTH);
@@ -297,12 +254,33 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
       updated += batchUpdated;
     }
 
+    logger.info("[persistence] Order persistence completed", {
+      shopDomain,
+      totalCreated: created,
+      totalUpdated: updated,
+    });
+
     return { created, updated };
   } catch (error) {
     if (tableMissing(error)) {
+      logger.warn("[persistence] Database tables not available", { shopDomain });
       return { created: 0, updated: 0 };
     }
-    throw error;
+
+    logger.error("[persistence] Order persistence failed", {
+      shopDomain,
+      orderCount: orders.length,
+      error: error instanceof Error ? error.message : String(error),
+    });
+
+    if (error instanceof ValidationError || error instanceof DatabaseError) {
+      throw error;
+    }
+
+    throw new DatabaseError("Failed to persist orders", {
+      shopDomain,
+      orderCount: orders.length,
+    });
   }
 };
 
@@ -313,68 +291,25 @@ export const loadOrdersFromDb = async (
   if (!shopDomain || isDemoMode()) return { orders: [], clamped: false };
 
   try {
-    const { orderModel, productModel } = models;
-
-    const orders = await orderModel.findMany({
-      where: {
-        shopDomain,
-        platform,
-        createdAt: { gte: range.start, lte: range.end },
-      },
-      orderBy: { createdAt: "desc" },
-      take: MAX_DASHBOARD_ORDERS,
-    });
-
-    if (!orders.length) return { orders: [], clamped: false };
-
-    const orderIds = orders.map((order) => order.id);
-    const products = await productModel.findMany({
-      where: { orderId: { in: orderIds } },
-    });
-
-    const productMap = products.reduce<Record<string, OrderRecord["products"]>>((acc, item) => {
-      acc[item.orderId] = acc[item.orderId] || [];
-      acc[item.orderId].push({
-        id: item.productId,
-        title: item.title,
-        handle: item.handle || "",
-        url: item.url || "",
-        price: item.price,
-        currency: item.currency,
-        quantity: item.quantity,
-      });
-      return acc;
-    }, {});
-
-    const mappedOrders = orders.map((order) => ({
-      id: order.id,
-      name: order.name,
-      createdAt: order.createdAt.toISOString(),
-      totalPrice: order.totalPrice,
-      currency: order.currency,
-      subtotalPrice: order.subtotalPrice ?? undefined,
-      aiSource: fromAiEnum(order.aiSource),
-      referrer: order.referrer || "",
-      landingPage: order.landingPage || "",
-      utmSource: order.utmSource || undefined,
-      utmMedium: order.utmMedium || undefined,
-      sourceName: order.sourceName || undefined,
-      tags: [],
-      customerId: order.customerId ?? null,
-      isNewCustomer: order.isNewCustomer,
-      products: productMap[order.id] || [],
-      detection: (order.detection || "").slice(0, MAX_DETECTION_LENGTH),
-      signals: Array.isArray(order.detectionSignals)
-        ? (order.detectionSignals as unknown[]).filter((v) => typeof v === "string") as string[]
-        : [],
-    }));
-
-    return { orders: mappedOrders, clamped: orders.length >= MAX_DASHBOARD_ORDERS };
+    // 使用新的orderService
+    const { loadOrdersFromDb: loadOrders } = await import("./orderService.server");
+    return await loadOrders(shopDomain, range, { limit: MAX_DASHBOARD_ORDERS });
   } catch (error) {
     if (tableMissing(error)) {
+      logger.warn("[persistence] Database tables not available for order loading", { shopDomain });
       return { orders: [], clamped: false };
     }
-    throw error;
+
+    logger.error("[persistence] Failed to load orders", {
+      shopDomain,
+      range: range.label,
+      error: error instanceof Error ? error.message : String(error),
+    });
+
+    throw new DatabaseError("Failed to load orders from database", {
+      shopDomain,
+      range: range.label,
+    });
   }
 };
 
@@ -383,15 +318,27 @@ export const loadCustomersByIds = async (
   ids: string[],
 ): Promise<{ id: string; acquiredViaAi: boolean }[]> => {
   if (!shopDomain || !ids.length || isDemoMode()) return [];
+
   try {
-    const { customerModel } = models;
-    const customers = await customerModel.findMany({ where: { shopDomain, id: { in: ids } }, select: { id: true, acquiredViaAi: true } });
-    return customers.map((c) => ({ id: c.id, acquiredViaAi: Boolean(c.acquiredViaAi) }));
+    const { loadCustomersByIds: loadCustomers } = await import("./customerService.server");
+    const customers = await loadCustomers(shopDomain, ids);
+    return customers.map(c => ({ id: c.id, acquiredViaAi: c.acquiredViaAi }));
   } catch (error) {
     if (tableMissing(error)) {
+      logger.warn("[persistence] Database tables not available for customer loading", { shopDomain });
       return [];
     }
-    throw error;
+
+    logger.error("[persistence] Failed to load customers", {
+      shopDomain,
+      customerCount: ids.length,
+      error: error instanceof Error ? error.message : String(error),
+    });
+
+    throw new DatabaseError("Failed to load customers", {
+      shopDomain,
+      customerIds: ids.slice(0, 10),
+    });
   }
 };
 

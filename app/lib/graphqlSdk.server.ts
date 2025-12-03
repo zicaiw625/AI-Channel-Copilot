@@ -89,33 +89,38 @@ export const graphqlRequest = async (
         jobType: "shopify-graphql",
       });
       await sleep(delay);
-    } catch (error) {
-      clearTimeout(timeout);
-      const isAbortError = (error as Error).name === "AbortError";
-      const message = isAbortError ? `graphql request timed out after ${timeoutMs}ms` : (error as Error).message;
-      const shouldRetry = isAbortError && attempt < maxRetries;
+  } catch (error) {
+    clearTimeout(timeout);
+    const isAbortError = (error as Error).name === "AbortError";
+    const message = (() => {
+      if (isAbortError) return `graphql request timed out after ${timeoutMs}ms`;
+      if (error instanceof Response) return `${error.status} ${error.statusText || "Response"}`;
+      const m = (error as Error).message;
+      return m || "unknown";
+    })();
+    const shouldRetry = isAbortError && attempt < maxRetries;
 
-      recordGraphqlCall({
-        operation,
+    recordGraphqlCall({
+      operation,
+      shopDomain: context?.shopDomain,
+      durationMs: Date.now() - startedAt,
+      retries: attempt,
+      status: lastResponse?.status ?? (error instanceof Response ? error.status : undefined),
+      ok: false,
+      error: message,
+    });
+
+    if (!shouldRetry) {
+      logger.error("[shopify] graphql request failed", {
+        platform,
         shopDomain: context?.shopDomain,
-        durationMs: Date.now() - startedAt,
-        retries: attempt,
-        status: lastResponse?.status,
-        ok: false,
-        error: message,
+        operation,
+        status: lastResponse?.status ?? (error instanceof Response ? error.status : undefined),
+        message,
+        jobType: "shopify-graphql",
       });
-
-      if (!shouldRetry) {
-        logger.error("[shopify] graphql request failed", {
-          platform,
-          shopDomain: context?.shopDomain,
-          operation,
-          status: lastResponse?.status,
-          message,
-          jobType: "shopify-graphql",
-        });
-        throw new Error(`Shopify ${operation} failed: ${message} (attempt ${attempt + 1}/${maxRetries + 1})`);
-      }
+      throw new Error(`Shopify ${operation} failed: ${message} (attempt ${attempt + 1}/${maxRetries + 1})`);
+    }
 
       const delay = 200 * 2 ** attempt;
       logger.warn("[shopify] retrying graphql", {
@@ -123,7 +128,7 @@ export const graphqlRequest = async (
         shopDomain: context?.shopDomain,
         operation,
         attempt: attempt + 1,
-        status: lastResponse?.status || "timeout",
+        status: lastResponse?.status ?? (isAbortError ? "timeout" : undefined),
         delay,
         jobType: "shopify-graphql",
       });
@@ -154,4 +159,3 @@ export const createGraphqlSdk = (admin: AdminGraphqlClient, shopDomain?: string)
     ) => graphqlRequest(admin, operation, query, variables, { shopDomain }, options),
   };
 };
-

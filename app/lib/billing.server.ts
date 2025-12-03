@@ -517,7 +517,7 @@ export const requestSubscription = async (
       }
     }
   `;
-  const sdk = createGraphqlSdk(admin);
+  const sdk = createGraphqlSdk(admin, shopDomain);
   const resp = await sdk.request("createSubscription", MUTATION, {
     name: plan.shopifyName,
     lineItems: [

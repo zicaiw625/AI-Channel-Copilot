@@ -4,12 +4,13 @@
  */
 
 import prisma from '../db.server';
+import { defaultSettings, type SettingsDefaults } from './aiData';
 import { cache, CacheKeys, CacheTTL } from './cache.enhanced';
 import { metrics, MetricNames } from './metrics/collector';
 import { logger } from './logger.server';
-import { defaultSettings, type SettingsDefaults } from './aiData';
-import type { SettingsUpdate } from './validation/schemas';
+import { buildSettingsUpdatePayload, mapRecordToSettings } from './settings/utils';
 import { SettingsUpdateSchema } from './validation/schemas';
+import type { SettingsUpdate } from './validation/schemas';
 
 /**
  * 获取商店设置 (带缓存)
@@ -49,7 +50,7 @@ export async function getSettings(
       },
     });
 
-    const settings = record ? mapRecordToSettings(record) : defaultSettings;
+    const settings = mapRecordToSettings(record) || defaultSettings;
     
     // 写入缓存
     if (useCache) {
@@ -81,59 +82,11 @@ export async function updateSettings(
 
   // 验证输入
   const validated = SettingsUpdateSchema.parse(updates);
+  const { updateData, createData } = buildSettingsUpdatePayload(validated);
 
   const timer = metrics.startTimer('settings.update', { shopDomain });
 
   try {
-    // 准备更新数据
-    const updateData: any = {
-      updatedAt: new Date(),
-    };
-
-    if (validated.primaryCurrency) {
-      updateData.primaryCurrency = validated.primaryCurrency;
-    }
-
-    if (validated.aiDomains) {
-      updateData.aiDomains = validated.aiDomains;
-    }
-
-    if (validated.utmSources) {
-      updateData.utmSources = validated.utmSources;
-    }
-
-    if (validated.utmMediumKeywords) {
-      updateData.utmMediumKeywords = validated.utmMediumKeywords;
-    }
-
-    if (validated.gmvMetric) {
-      updateData.gmvMetric = validated.gmvMetric;
-    }
-
-    if (validated.language) {
-      updateData.language = validated.language;
-    }
-
-    if (validated.timezone) {
-      updateData.timezone = validated.timezone;
-    }
-
-    if (validated.retentionMonths !== undefined) {
-      updateData.retentionMonths = validated.retentionMonths;
-    }
-
-    if (validated.tagging) {
-      updateData.orderTagPrefix = validated.tagging.orderTagPrefix;
-      updateData.customerTag = validated.tagging.customerTag;
-      updateData.writeOrderTags = validated.tagging.writeOrderTags;
-      updateData.writeCustomerTags = validated.tagging.writeCustomerTags;
-      updateData.taggingDryRun = validated.tagging.dryRun;
-    }
-
-    if (validated.exposurePreferences) {
-      updateData.aiExposurePreferences = validated.exposurePreferences;
-    }
-
     // Upsert 到数据库
     const record = await prisma.shopSettings.upsert({
       where: {
@@ -146,21 +99,7 @@ export async function updateSettings(
       create: {
         shopDomain,
         platform: 'shopify',
-        ...updateData,
-        // 使用默认值填充缺失字段
-        primaryCurrency: updateData.primaryCurrency || defaultSettings.primaryCurrency,
-        aiDomains: updateData.aiDomains || defaultSettings.aiDomains,
-        utmSources: updateData.utmSources || defaultSettings.utmSources,
-        utmMediumKeywords: updateData.utmMediumKeywords || defaultSettings.utmMediumKeywords,
-        orderTagPrefix: updateData.orderTagPrefix || defaultSettings.tagging.orderTagPrefix,
-        customerTag: updateData.customerTag || defaultSettings.tagging.customerTag,
-        writeOrderTags: updateData.writeOrderTags ?? defaultSettings.tagging.writeOrderTags,
-        writeCustomerTags: updateData.writeCustomerTags ?? defaultSettings.tagging.writeCustomerTags,
-        taggingDryRun: updateData.taggingDryRun ?? defaultSettings.tagging.dryRun,
-        language: updateData.language || defaultSettings.languages[0],
-        timezone: updateData.timezone || defaultSettings.timezones[0],
-        gmvMetric: updateData.gmvMetric || defaultSettings.gmvMetric,
-        retentionMonths: updateData.retentionMonths ?? defaultSettings.retentionMonths,
+        ...createData,
       },
     });
 

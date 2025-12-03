@@ -384,7 +384,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         const trialDays = isUpgradeFromPaid ? 0 : await calculateRemainingTrialDays(shopDomain, planId);
         const confirmationUrl = await requestSubscription(admin, shopDomain, planId, isTest, trialDays);
         if (confirmationUrl) {
-          throw new Response(null, { status: 302, headers: { Location: confirmationUrl } });
+          const next = new URL("/app/redirect", new URL(request.url).origin);
+          next.searchParams.set("to", confirmationUrl);
+          throw new Response(null, { status: 302, headers: { Location: next.toString() } });
         }
         return Response.json({
           ok: false,

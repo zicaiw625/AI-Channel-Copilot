@@ -408,7 +408,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         );
 
         if (confirmationUrl) {
-          throw new Response(null, { status: 302, headers: { Location: confirmationUrl } });
+          const next = new URL("/app/redirect", new URL(request.url).origin);
+          next.searchParams.set("to", confirmationUrl);
+          throw new Response(null, { status: 302, headers: { Location: next.toString() } });
         } else {
           return Response.json({
             ok: false,

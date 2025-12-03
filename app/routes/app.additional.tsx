@@ -768,7 +768,7 @@ export default function SettingsAndExport() {
               <span className={styles.helpText}>
                 {language === "English"
                   ? "Language change takes effect immediately in UI. Click Save to persist to server."
-                  : "语言更改立即在界面生效。点击"保存"按钮以持久化到服务器。"}
+                  : "语言更改立即在界面生效。点击“保存”按钮以持久化到服务器。"}
               </span>
             </label>
             <label className={styles.stackField}>

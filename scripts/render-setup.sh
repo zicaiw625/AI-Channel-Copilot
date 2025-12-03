@@ -20,6 +20,10 @@ export DATABASE_URL="$DB_URL"
 
 echo "[render-setup] Using DATABASE_URL=$DATABASE_URL" >&2
 
+# 尝试修复失败的迁移状态 (仅针对已知的失败迁移)
+# 注意：这只是一个临时修复，成功部署后应该移除
+echo "[render-setup] Attempting to resolve potential failed migration state..."
+npx prisma migrate resolve --rolled-back 20251203_add_performance_indexes || true
+
 npx prisma generate
 npx prisma migrate deploy
-

@@ -1,10 +1,15 @@
 import prisma from "../db.server";
 import { defaultSettings, type AiDomainRule, type PipelineStatus, type SettingsDefaults, type UtmSourceRule } from "./aiData";
-import { getPlatform, isDemoMode } from "./runtime.server";
-import { isSchemaMissing, isIgnorableMigrationError } from "./prismaErrors";
-import { logger } from "./logger.server";
 import { createGraphqlSdk, type AdminGraphqlClient } from "./graphqlSdk.server";
-import type { ShopSettings } from "@prisma/client";
+import { logger } from "./logger.server";
+import { isIgnorableMigrationError, isSchemaMissing } from "./prismaErrors";
+import { getPlatform, isDemoMode } from "./runtime.server";
+import {
+  buildActivityUpdates,
+  buildPersistenceData,
+  mapRecordToSettings,
+  normalizeRetentionMonths,
+} from "./settings/utils";
 
 
 const SHOP_PREFS_QUERY = `#graphql
@@ -17,63 +22,6 @@ const SHOP_PREFS_QUERY = `#graphql
 `;
 
 const platform = getPlatform();
-
-const clampRetention = (value?: number | null) => {
-  const numeric = typeof value === "number" ? Math.floor(value) : null;
-  if (!numeric || Number.isNaN(numeric)) return defaultSettings.retentionMonths ?? 6;
-  return Math.max(1, numeric);
-};
-
-const mapRecordToSettings = (record: ShopSettings): SettingsDefaults => ({
-  aiDomains: (record.aiDomains as AiDomainRule[]) || defaultSettings.aiDomains,
-  utmSources: (record.utmSources as UtmSourceRule[]) || defaultSettings.utmSources,
-  utmMediumKeywords:
-    (record.utmMediumKeywords as string[]) || defaultSettings.utmMediumKeywords,
-  gmvMetric:
-    record.gmvMetric === "subtotal_price" ? "subtotal_price" : "current_total_price",
-  primaryCurrency: record.primaryCurrency || defaultSettings.primaryCurrency,
-  tagging: {
-    orderTagPrefix: record.orderTagPrefix,
-    customerTag: record.customerTag,
-    writeOrderTags: record.writeOrderTags,
-    writeCustomerTags: record.writeCustomerTags,
-    dryRun: record.taggingDryRun ?? true,
-  },
-  exposurePreferences: (() => {
-    const preferences = record.aiExposurePreferences as
-      | SettingsDefaults["exposurePreferences"]
-      | null
-      | undefined;
-
-    return {
-      exposeProducts:
-        typeof preferences?.exposeProducts === "boolean"
-          ? preferences.exposeProducts
-          : defaultSettings.exposurePreferences.exposeProducts,
-      exposeCollections:
-        typeof preferences?.exposeCollections === "boolean"
-          ? preferences.exposeCollections
-          : defaultSettings.exposurePreferences.exposeCollections,
-      exposeBlogs:
-        typeof preferences?.exposeBlogs === "boolean"
-          ? preferences.exposeBlogs
-          : defaultSettings.exposurePreferences.exposeBlogs,
-    };
-  })(),
-  retentionMonths:
-    typeof record.retentionMonths === "number"
-      ? clampRetention(record.retentionMonths)
-      : defaultSettings.retentionMonths,
-  languages: [record.language, ...defaultSettings.languages.filter((l) => l !== record.language)],
-  timezones: [record.timezone, ...defaultSettings.timezones.filter((t) => t !== record.timezone)],
-  pipelineStatuses:
-    (record.pipelineStatuses as SettingsDefaults["pipelineStatuses"]) ||
-    defaultSettings.pipelineStatuses,
-  lastOrdersWebhookAt: record.lastOrdersWebhookAt?.toISOString() || null,
-  lastBackfillAt: record.lastBackfillAt?.toISOString() || null,
-  lastTaggingAt: record.lastTaggingAt?.toISOString() || null,
-  lastCleanupAt: record.lastCleanupAt?.toISOString() || null,
-});
 
 export const getSettings = async (shopDomain: string): Promise<SettingsDefaults> => {
   if (!shopDomain || isDemoMode()) return defaultSettings;
@@ -150,71 +98,35 @@ export const syncShopPreferences = async (
       changed = true;
     }
 
-  if (changed) {
+    if (changed) {
       await saveSettings(shopDomain, next);
       return next;
     }
   } catch (error) {
-      if (error instanceof Response) {
-        logger.warn(
-          "Failed to sync shop preferences",
-          { shopDomain, platform },
-          { message: "auth/session missing or interrupted" },
-        );
-      } else {
-        const message = error instanceof Error ? error.message : String(error);
-        logger.error("Failed to sync shop preferences", { shopDomain, platform }, { message });
-      }
+    if (error instanceof Response) {
+      logger.warn(
+        "Failed to sync shop preferences",
+        { shopDomain, platform },
+        { message: "auth/session missing or interrupted" },
+      );
+    } else {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error("Failed to sync shop preferences", { shopDomain, platform }, { message });
+    }
   }
 
   return settings;
 };
 
-export const saveSettings = async (
-  shopDomain: string,
-  payload: SettingsDefaults,
-): Promise<SettingsDefaults> => {
+export const saveSettings = async (shopDomain: string, payload: SettingsDefaults): Promise<SettingsDefaults> => {
   if (!shopDomain || isDemoMode()) return payload;
-  const primaryCurrency = payload.primaryCurrency || defaultSettings.primaryCurrency || "USD";
-  const baseData = {
-    aiDomains: payload.aiDomains,
-    utmSources: payload.utmSources,
-    utmMediumKeywords: payload.utmMediumKeywords,
-    gmvMetric: payload.gmvMetric,
-    primaryCurrency,
-    orderTagPrefix: payload.tagging.orderTagPrefix,
-    customerTag: payload.tagging.customerTag,
-    writeOrderTags: payload.tagging.writeOrderTags,
-    writeCustomerTags: payload.tagging.writeCustomerTags,
-    taggingDryRun: payload.tagging.dryRun ?? true,
-    retentionMonths: clampRetention(payload.retentionMonths ?? defaultSettings.retentionMonths ?? 6),
-    language: payload.languages[0] || "中文",
-    timezone: payload.timezones[0] || "UTC",
-    pipelineStatuses: payload.pipelineStatuses,
-    aiExposurePreferences: payload.exposurePreferences,
-  };
-
-  const withOptionalsCreate = {
-    ...baseData,
-    lastBackfillAt: payload.lastBackfillAt ? new Date(payload.lastBackfillAt) : null,
-    lastTaggingAt: payload.lastTaggingAt ? new Date(payload.lastTaggingAt) : null,
-    lastCleanupAt: payload.lastCleanupAt ? new Date(payload.lastCleanupAt) : null,
-    lastOrdersWebhookAt: payload.lastOrdersWebhookAt ? new Date(payload.lastOrdersWebhookAt) : null,
-  };
-
-  const updateOptionals: Record<string, Date | null | undefined | PipelineStatus[] | SettingsDefaults["exposurePreferences"]> = {};
-  if (payload.lastBackfillAt) updateOptionals.lastBackfillAt = new Date(payload.lastBackfillAt);
-  if (payload.lastTaggingAt) updateOptionals.lastTaggingAt = new Date(payload.lastTaggingAt);
-  if (payload.lastCleanupAt) updateOptionals.lastCleanupAt = new Date(payload.lastCleanupAt);
-  if (payload.lastOrdersWebhookAt) updateOptionals.lastOrdersWebhookAt = new Date(payload.lastOrdersWebhookAt);
-  if (payload.pipelineStatuses) updateOptionals.pipelineStatuses = payload.pipelineStatuses;
-  if (payload.exposurePreferences) updateOptionals.aiExposurePreferences = payload.exposurePreferences;
+  const persistence = buildPersistenceData(payload);
 
   try {
     await prisma.shopSettings.upsert({
       where: { shopDomain_platform: { shopDomain, platform } },
-      create: { shopDomain, platform, ...withOptionalsCreate },
-      update: { ...baseData, ...updateOptionals },
+      create: { shopDomain, platform, ...persistence.create },
+      update: persistence.update,
     });
   } catch (error) {
     if (!isSchemaMissing(error)) {
@@ -222,9 +134,9 @@ export const saveSettings = async (
     }
     const existing = await prisma.shopSettings.findFirst({ where: { shopDomain } });
     if (existing) {
-      await prisma.shopSettings.update({ where: { id: existing.id }, data: { ...baseData, ...updateOptionals } });
+      await prisma.shopSettings.update({ where: { id: existing.id }, data: persistence.update });
     } else {
-      await prisma.shopSettings.create({ data: { shopDomain, ...withOptionalsCreate } });
+      await prisma.shopSettings.create({ data: { shopDomain, ...persistence.create } });
     }
   }
 
@@ -243,16 +155,12 @@ export const markActivity = async (
 ) => {
   if (!shopDomain || isDemoMode()) return;
 
+  const prepared = buildActivityUpdates(updates);
+
   try {
     await prisma.shopSettings.upsert({
       where: { shopDomain_platform: { shopDomain, platform } },
-      update: {
-        ...(updates.lastOrdersWebhookAt ? { lastOrdersWebhookAt: updates.lastOrdersWebhookAt } : {}),
-        ...(updates.lastBackfillAt ? { lastBackfillAt: updates.lastBackfillAt } : {}),
-        ...(updates.lastTaggingAt ? { lastTaggingAt: updates.lastTaggingAt } : {}),
-        ...(updates.lastCleanupAt ? { lastCleanupAt: updates.lastCleanupAt } : {}),
-        ...(updates.pipelineStatuses ? { pipelineStatuses: updates.pipelineStatuses } : {}),
-      },
+      update: prepared,
       create: {
         shopDomain,
         platform,
@@ -268,12 +176,11 @@ export const markActivity = async (
         language: defaultSettings.languages[0] || "中文",
         timezone: defaultSettings.timezones[0] || "UTC",
         gmvMetric: defaultSettings.gmvMetric,
-        retentionMonths: clampRetention(defaultSettings.retentionMonths ?? 6),
-        ...(updates.lastOrdersWebhookAt ? { lastOrdersWebhookAt: updates.lastOrdersWebhookAt } : {}),
-        ...(updates.lastBackfillAt ? { lastBackfillAt: updates.lastBackfillAt } : {}),
-        ...(updates.lastTaggingAt ? { lastTaggingAt: updates.lastTaggingAt } : {}),
-        ...(updates.lastCleanupAt ? { lastCleanupAt: updates.lastCleanupAt } : {}),
-        ...(updates.pipelineStatuses ? { pipelineStatuses: updates.pipelineStatuses } : {}),
+        retentionMonths: normalizeRetentionMonths(
+          defaultSettings.retentionMonths ?? 6,
+          defaultSettings.retentionMonths ?? 6,
+        ),
+        ...prepared,
       },
     });
   } catch (error) {
@@ -284,13 +191,7 @@ export const markActivity = async (
     if (existing) {
       await prisma.shopSettings.update({
         where: { id: existing.id },
-        data: {
-          ...(updates.lastOrdersWebhookAt ? { lastOrdersWebhookAt: updates.lastOrdersWebhookAt } : {}),
-          ...(updates.lastBackfillAt ? { lastBackfillAt: updates.lastBackfillAt } : {}),
-          ...(updates.lastTaggingAt ? { lastTaggingAt: updates.lastTaggingAt } : {}),
-          ...(updates.lastCleanupAt ? { lastCleanupAt: updates.lastCleanupAt } : {}),
-          ...(updates.pipelineStatuses ? { pipelineStatuses: updates.pipelineStatuses } : {}),
-        },
+        data: prepared,
       });
     } else {
       await prisma.shopSettings.create({
@@ -308,12 +209,11 @@ export const markActivity = async (
           language: defaultSettings.languages[0] || "中文",
           timezone: defaultSettings.timezones[0] || "UTC",
           gmvMetric: defaultSettings.gmvMetric,
-          retentionMonths: clampRetention(defaultSettings.retentionMonths ?? 6),
-          ...(updates.lastOrdersWebhookAt ? { lastOrdersWebhookAt: updates.lastOrdersWebhookAt } : {}),
-          ...(updates.lastBackfillAt ? { lastBackfillAt: updates.lastBackfillAt } : {}),
-          ...(updates.lastTaggingAt ? { lastTaggingAt: updates.lastTaggingAt } : {}),
-          ...(updates.lastCleanupAt ? { lastCleanupAt: updates.lastCleanupAt } : {}),
-          ...(updates.pipelineStatuses ? { pipelineStatuses: updates.pipelineStatuses } : {}),
+          retentionMonths: normalizeRetentionMonths(
+            defaultSettings.retentionMonths ?? 6,
+            defaultSettings.retentionMonths ?? 6,
+          ),
+          ...prepared,
         },
       });
     }
@@ -436,5 +336,9 @@ export const normalizeSettingsPayload = (incoming: unknown): SettingsDefaults =>
     lastOrdersWebhookAt: parsed.lastOrdersWebhookAt || undefined,
     lastBackfillAt: parsed.lastBackfillAt || undefined,
     lastTaggingAt: parsed.lastTaggingAt || undefined,
+    retentionMonths: normalizeRetentionMonths(
+      parsed.retentionMonths,
+      defaultSettings.retentionMonths ?? 6,
+    ),
   };
 };

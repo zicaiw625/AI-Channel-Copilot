@@ -8,9 +8,10 @@ import { resolveDateRange, type TimeRangeKey } from "../lib/aiData";
 import { useUILanguage } from "../lib/useUILanguage";
 import styles from "../styles/app.copilot.module.css";
 import { hasFeature, FEATURES } from "../lib/access.server";
+import { isDemoMode } from "../lib/runtime.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const demo = process.env.DEMO_MODE === "true";
+  const demo = isDemoMode();
   let session;
   
   try {

@@ -5,6 +5,7 @@ import { resolveDateRange, type TimeRangeKey } from "../lib/aiData";
 import { loadOrdersFromDb } from "../lib/orderService.server";
 import { computeLTV } from "../lib/metrics";
 import { requireFeature, FEATURES } from "../lib/access.server";
+import { isDemoMode } from "../lib/runtime.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   let session;
@@ -12,7 +13,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const auth = await authenticate.admin(request);
     session = auth.session;
   } catch (error) {
-    if (process.env.DEMO_MODE !== "true") throw error;
+    if (!isDemoMode()) throw error;
   }
 
   const shopDomain = session?.shop || "";

@@ -14,6 +14,7 @@ import {
 import { getSettings, syncShopPreferences } from "../lib/settings.server";
 import { useUILanguage } from "../lib/useUILanguage";
 import { BILLING_PLANS, PRIMARY_BILLABLE_PLAN_ID, type PlanId } from "../lib/billing/plans";
+import { isDemoMode } from "../lib/runtime.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   type AuthShape = Awaited<ReturnType<typeof authenticate.admin>>;
@@ -355,7 +356,7 @@ export const headers: HeadersFunction = (headersArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const demo = process.env.DEMO_MODE === "true";
+  const demo = isDemoMode();
   
   if (demo) {
     return Response.json({

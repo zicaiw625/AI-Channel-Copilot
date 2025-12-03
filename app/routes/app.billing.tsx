@@ -3,6 +3,7 @@ import { useFetcher, useLoaderData } from "react-router";
 import { useUILanguage } from "../lib/useUILanguage";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
+import { readAppFlags } from "../lib/env.server";
 import { getSettings, syncShopPreferences } from "../lib/settings.server";
 import {
   detectAndPersistDevShop,
@@ -18,7 +19,8 @@ import { getEffectivePlan, type PlanTier } from "../lib/access.server";
 import { BILLING_PLANS, PRIMARY_BILLABLE_PLAN_ID, type PlanId } from "../lib/billing/plans";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const demo = process.env.DEMO_MODE === "true";
+  const { demoMode } = readAppFlags();
+  const demo = demoMode;
   type AuthShape = Awaited<ReturnType<typeof authenticate.admin>>;
   let admin: AuthShape["admin"] | null = null;
   let session: AuthShape["session"] | null = null;
@@ -312,7 +314,7 @@ export const headers: HeadersFunction = (headersArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const demo = process.env.DEMO_MODE === "true";
+  const demo = readAppFlags().demoMode;
   if (demo) return Response.json({ ok: false, message: "Demo mode" });
   
   try {

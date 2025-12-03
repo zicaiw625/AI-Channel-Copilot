@@ -6,6 +6,7 @@ import { parseIntent, type CopilotIntent } from "./copilot.intent";
 import { ValidationError, AppError, ErrorCode } from "./errors";
 import { logger } from "./logger.server";
 import { INTENT_TEMPLATES, buildOverviewShape } from "./ai/prompts";
+import { isDemoMode } from "./runtime.server";
 
 type CopilotRequest = {
   intent?: CopilotIntent;
@@ -27,14 +28,14 @@ export const copilotAnswer = async (request: Request, payload: CopilotRequest) =
       const auth = await authenticate.admin(request);
       session = auth.session;
     } catch (error) {
-      if (process.env.DEMO_MODE === "true") {
+      if (isDemoMode()) {
         // Allow demo mode to proceed without session
       } else {
         throw error;
       }
     }
 
-    if (!session?.shop && process.env.DEMO_MODE !== "true") {
+    if (!session?.shop && !isDemoMode()) {
       throw new ValidationError("Invalid session: missing shop domain");
     }
 
@@ -51,7 +52,7 @@ export const copilotAnswer = async (request: Request, payload: CopilotRequest) =
     const dateRange = resolveDateRange(rangeKey, new Date(), payload.from, payload.to, timezone);
 
     // 如果是 Demo 模式且无 shop，允许使用 demo 数据
-    const allowDemo = process.env.DEMO_MODE === "true" && !shopDomain;
+    const allowDemo = isDemoMode() && !shopDomain;
 
     const { data } = await getAiDashboardData(shopDomain, dateRange, settings, {
       timezone,

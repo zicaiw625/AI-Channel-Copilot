@@ -2,6 +2,7 @@ import type { LoaderFunctionArgs } from "react-router";
 import { redirect, Form, useLoaderData } from "react-router";
 
 import styles from "../../styles/index.module.css";
+import { readAppFlags } from "../../lib/env.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const url = new URL(request.url);
@@ -11,7 +12,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   }
 
   const language = url.searchParams.get("lang") === "en" ? "English" : "中文";
-  const showForm = process.env.ENABLE_LOGIN_FORM === "true";
+  const showForm = readAppFlags().enableLoginForm;
   return { showForm, language };
 };
 

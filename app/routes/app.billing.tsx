@@ -178,8 +178,11 @@ export default function Billing() {
           <div style={{ display: "flex", gap: 12 }}>
               {activePlanId === "free" ? (
                   <button 
+                    type="button"
                     onClick={() => handleUpgrade(PRIMARY_BILLABLE_PLAN_ID)}
                     disabled={fetcher.state !== "idle" || demo}
+                    data-action="billing-upgrade"
+                    aria-label={en ? `Upgrade to ${BILLING_PLANS[PRIMARY_BILLABLE_PLAN_ID].name}` : `升级到 ${BILLING_PLANS[PRIMARY_BILLABLE_PLAN_ID].name}`}
                     style={{ 
                         background: "#008060", 
                         color: "white", 
@@ -216,16 +219,19 @@ export default function Billing() {
                          {en ? "Manage in Shopify" : "在 Shopify 中管理"}
                      </a>
                      
-                     <button
-                        onClick={handleDowngrade}
-                        disabled={fetcher.state !== "idle" || demo}
-                        style={{
-                            background: "none",
-                            border: "none",
-                            color: "#d4380d",
-                            cursor: "pointer",
-                            textDecoration: "underline"
-                        }}
+                    <button
+                       type="button"
+                       onClick={handleDowngrade}
+                       disabled={fetcher.state !== "idle" || demo}
+                       data-action="billing-downgrade"
+                       aria-label={en ? "Downgrade to Free" : "降级到免费版"}
+                       style={{
+                           background: "none",
+                           border: "none",
+                           color: "#d4380d",
+                           cursor: "pointer",
+                           textDecoration: "underline"
+                       }}
                      >
                          {en ? "Downgrade to Free" : "降级到免费版"}
                      </button>
@@ -275,6 +281,17 @@ export default function Billing() {
                   type="button"
                   onClick={() => (plan.id === "free" ? handleDowngrade() : handleUpgrade(plan.id))}
                   disabled={disabled}
+                  data-action="billing-select-plan"
+                  data-plan-id={plan.id}
+                  aria-label={
+                    isActive
+                      ? (en ? "Current Plan" : "当前方案")
+                      : plan.status === "coming_soon"
+                        ? (en ? "Coming soon" : "敬请期待")
+                        : plan.id === "free"
+                          ? (en ? "Switch to Free" : "切换到免费版")
+                          : (en ? `Switch to ${plan.name}` : `切换到 ${plan.name}`)
+                  }
                   style={{
                     width: "100%",
                     padding: "10px",

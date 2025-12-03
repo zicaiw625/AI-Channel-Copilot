@@ -132,7 +132,10 @@ export default function Onboarding() {
            </div>
         </div>
         <button 
+          type="button"
           onClick={() => setSearchParams({ step: "plan_selection" })}
+          data-action="onboarding-next-plan"
+          aria-label={en ? "Next: Choose a Plan" : "下一步：选择方案"}
           style={{ 
             background: "#008060", 
             color: "white", 
@@ -323,6 +326,11 @@ export default function Onboarding() {
                 type="button"
                 onClick={() => handleSelectPlan(plan.id)}
                 disabled={disabled}
+                data-action="onboarding-select-plan"
+                data-plan-id={plan.id}
+                aria-label={disabled
+                  ? (en ? "Disabled" : "不可用")
+                  : (en ? `Choose ${plan.name}` : `选择 ${plan.name}`)}
                 style={{
                   width: "100%",
                   padding: "12px",

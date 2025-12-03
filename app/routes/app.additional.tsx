@@ -426,6 +426,7 @@ export default function SettingsAndExport() {
                 { method: "post", encType: "application/x-www-form-urlencoded" },
               )
             }
+            data-action="settings-backfill"
           >{language === "English" ? "Backfill Last 90 Days" : "补拉最近 90 天订单"}</button>
         </div>
         <div className={styles.alert}>{t(language as Lang, "backfill_protect_alert")}</div>
@@ -456,6 +457,7 @@ export default function SettingsAndExport() {
                     className={styles.linkButton}
                     title={rule.source === "default" ? t(language as Lang, "risk_remove_default_domain") : t(language as Lang, "title_delete_rule")}
                     onClick={() => removeDomain(rule)}
+                    data-action="settings-remove-domain"
                   >
                     {t(language as Lang, "btn_delete")}
                   </button>
@@ -482,7 +484,7 @@ export default function SettingsAndExport() {
                   </option>
                 ))}
               </select>
-              <button type="button" className={styles.primaryButton} onClick={addDomain}>
+              <button type="button" className={styles.primaryButton} onClick={addDomain} data-action="settings-add-domain">
                 {t(language as Lang, "btn_add_domain")}
               </button>
             </div>
@@ -508,6 +510,7 @@ export default function SettingsAndExport() {
                     type="button"
                     className={styles.linkButton}
                     onClick={() => removeUtmMapping(rule.value)}
+                    data-action="settings-remove-utm"
                   >
                     {t(language as Lang, "btn_delete")}
                   </button>
@@ -534,7 +537,7 @@ export default function SettingsAndExport() {
                   </option>
                 ))}
               </select>
-              <button type="button" className={styles.primaryButton} onClick={addUtmMapping}>
+              <button type="button" className={styles.primaryButton} onClick={addUtmMapping} data-action="settings-add-utm">
                 {t(language as Lang, "btn_add_utm")}
               </button>
             </div>
@@ -558,7 +561,7 @@ export default function SettingsAndExport() {
                 <h3 className={styles.sectionTitle}>{language === "English" ? "Control Shopify Tagging" : "控制 Shopify 标签行为"}</h3>
               </div>
               <div className={styles.inlineActions}>
-                <button type="button" className={styles.secondaryButton} onClick={submitSettings}>
+                <button type="button" className={styles.secondaryButton} onClick={submitSettings} data-action="settings-save">
                   {t(language as Lang, "btn_save")}
                 </button>
                 <button
@@ -585,6 +588,7 @@ export default function SettingsAndExport() {
                     )
                   }
                   disabled={!tagging.writeOrderTags && !tagging.writeCustomerTags}
+                  data-action="settings-tag-write"
                 >
                   {t(language as Lang, "btn_write_tags_now")}
                 </button>
@@ -996,7 +1000,7 @@ function LlmsPreview({ language }: { language: string }) {
     <div>
       <textarea readOnly className={styles.textarea} value={text} rows={10} />
       <div className={styles.inlineActions}>
-        <button type="button" className={styles.secondaryButton} onClick={copy}>
+        <button type="button" className={styles.secondaryButton} onClick={copy} data-action="llms-copy">
           {copied ? (language === "English" ? "Copied" : "已复制") : (language === "English" ? "Copy" : "复制")}
         </button>
         <a href="/api/llms-txt-preview?download=1" className={styles.primaryButton}>

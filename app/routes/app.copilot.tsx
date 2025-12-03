@@ -115,23 +115,29 @@ export default function Copilot() {
         
         <div className={styles.quickButtons} style={readOnly ? { opacity: 0.5, pointerEvents: "none" } : {}}>
           <button 
+            type="button"
             className={styles.primaryButton} 
             onClick={() => ask("ai_performance")}
             disabled={readOnly || isLoading}
+            data-action="copilot-ai_performance"
           >
             {isLoading ? (language === "English" ? "Loading..." : "加载中...") : (language === "English" ? "AI channel performance in last 30 days?" : "过去 30 天 AI 渠道表现如何？")}
           </button>
           <button 
+            type="button"
             className={styles.secondaryButton} 
             onClick={() => ask("ai_vs_all_aov")}
             disabled={readOnly || isLoading}
+            data-action="copilot-ai_vs_all_aov"
           >
             {language === "English" ? "AI channel vs all channels AOV?" : "AI 渠道 vs 全部渠道 AOV？"}
           </button>
           <button 
+            type="button"
             className={styles.secondaryButton} 
             onClick={() => ask("ai_top_products")}
             disabled={readOnly || isLoading}
+            data-action="copilot-ai_top_products"
           >
             {language === "English" ? "Top-selling products from AI channels recently?" : "最近 AI 渠道销量最高的产品？"}
           </button>
@@ -145,7 +151,7 @@ export default function Copilot() {
             onChange={(e) => setQuestion(e.target.value)}
             disabled={readOnly}
           />
-          <button className={styles.primaryButton} onClick={() => ask()} disabled={readOnly || isLoading}>
+          <button type="button" className={styles.primaryButton} onClick={() => ask()} disabled={readOnly || isLoading} data-action="copilot-ask">
             {isLoading ? (language === "English" ? "Loading..." : "加载中...") : (language === "English" ? "Ask" : "提问")}
           </button>
         </div>

@@ -1,8 +1,8 @@
 import type { ActionFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
-import { wipeShopData } from "../lib/gdpr.server";
 import { logger } from "../lib/logger.server";
 import { markShopUninstalled } from "../lib/billing.server";
+import prisma from "../db.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   let shop = "";
@@ -23,8 +23,19 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     // Webhook requests can trigger multiple times and after an app has already been uninstalled.
     // If this webhook already ran, the session may have been deleted previously.
     if (session || shopDomain) {
-      await markShopUninstalled(shopDomain || shop);
-      await wipeShopData(shopDomain || shop);
+      const domain = shopDomain || shop;
+      await markShopUninstalled(domain);
+      
+      // We do NOT wipe shop data here, as we want to retain historical analysis data
+      // in case the merchant reinstalls (per design doc v0.1).
+      // However, we should clean up sessions to force re-authentication.
+      try {
+        if (domain) {
+             await prisma.session.deleteMany({ where: { shop: domain } });
+        }
+      } catch (e) {
+          logger.warn("Failed to clean up sessions on uninstall", { shopDomain: domain, error: (e as Error).message });
+      }
     }
 
     return new Response();

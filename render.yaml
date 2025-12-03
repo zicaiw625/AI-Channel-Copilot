@@ -51,6 +51,10 @@ services:
         value: 6
       - key: DEMO_MODE
         value: false
+      - key: ENABLE_BACKFILL_SWEEP
+        value: 1
+      - key: ENABLE_RETENTION_SWEEP
+        value: 1
 
 databases:
   - name: ai-channel-copilot-db

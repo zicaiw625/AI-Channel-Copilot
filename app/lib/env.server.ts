@@ -19,17 +19,27 @@ export const validateAppUrl = (urlStr: string) => {
   return parsed.toString();
 };
 
+export const normalizeScopes = (value: string) => {
+  const scopes = value
+    .split(",")
+    .map((scope) => scope.trim())
+    .filter(Boolean);
+
+  const uniqueScopes = Array.from(new Set(scopes));
+
+  if (!uniqueScopes.length) {
+    throw new Error("SCOPES must not be empty");
+  }
+
+  return uniqueScopes.sort();
+};
+
 export const readCriticalEnv = () => {
   const SHOPIFY_API_KEY = requireEnv("SHOPIFY_API_KEY");
   const SHOPIFY_API_SECRET = requireEnv("SHOPIFY_API_SECRET");
   const SHOPIFY_APP_URL = validateAppUrl(requireEnv("SHOPIFY_APP_URL"));
-  const SCOPES = requireEnv("SCOPES")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-  if (!SCOPES.length) {
-    throw new Error("SCOPES must not be empty");
-  }
+  const SCOPES = normalizeScopes(requireEnv("SCOPES"));
+
   return { SHOPIFY_API_KEY, SHOPIFY_API_SECRET, SHOPIFY_APP_URL, SCOPES } as const;
 };
 

@@ -519,7 +519,7 @@ export const requestSubscription = async (
   `;
   const sdk = createGraphqlSdk(admin);
   const resp = await sdk.request("createSubscription", MUTATION, {
-    name: cfg.billing.planName,
+    name: plan.shopifyName,
     lineItems: [
       {
         plan: {

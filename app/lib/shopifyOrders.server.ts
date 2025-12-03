@@ -39,8 +39,13 @@ const ORDERS_QUERY = `#graphql
           }
         }
         landingPageUrl
+        referringSite
         sourceName
         tags
+        noteAttributes {
+          name
+          value
+        }
         customer {
           id
           numberOfOrders
@@ -100,8 +105,13 @@ const ORDER_QUERY = `#graphql
         }
       }
       landingPageUrl
+      referringSite
       sourceName
       tags
+      noteAttributes {
+        name
+        value
+      }
       customer {
         id
         numberOfOrders

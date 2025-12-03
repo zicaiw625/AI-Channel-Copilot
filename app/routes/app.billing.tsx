@@ -2,7 +2,7 @@ import type { HeadersFunction, LoaderFunctionArgs, ActionFunctionArgs } from "re
 import { useFetcher, useLoaderData } from "react-router";
 import { useUILanguage } from "../lib/useUILanguage";
 import { boundary } from "@shopify/shopify-app-react-router/server";
-import { authenticate } from "../shopify.server";
+import { authenticate, login } from "../shopify.server";
 import { readAppFlags } from "../lib/env.server";
 import { getSettings, syncShopPreferences } from "../lib/settings.server";
 import {
@@ -381,10 +381,29 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return null;
   } catch (error) {
     if (error instanceof Response) throw error;
-    return Response.json({
-      ok: false,
-      message: "Action failed."
-    });
+    // 当鉴权失败（例如缺少访问令牌）时，降级到登录流程，保留语言与 Cookie
+    try {
+      const originalUrl = new URL(request.url);
+      const lang = originalUrl.searchParams.get("lang") === "en" ? "en" : "zh";
+      const loginUrl = new URL("/auth/login", originalUrl.origin);
+      loginUrl.searchParams.set("lang", lang);
+
+      const originalForm = await request.formData().catch(() => new FormData());
+      const forwardForm = new FormData();
+      if (originalForm.has("shop")) {
+        forwardForm.set("shop", String(originalForm.get("shop")));
+      }
+
+      const forwardReq = new Request(loginUrl.toString(), {
+        method: "POST",
+        headers: request.headers,
+        body: forwardForm,
+      });
+      const result = await login(forwardReq as any);
+      if (result instanceof Response) throw result;
+    } catch (e) {
+      return Response.json({ ok: false, message: "Action failed." });
+    }
+    return null;
   }
 };
-

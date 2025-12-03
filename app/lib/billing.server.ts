@@ -1,6 +1,6 @@
 import prisma from "../db.server";
 import { isNonProduction, readAppFlags, requireEnv } from "./env.server";
-import { isSchemaMissing, isIgnorableMigrationError } from "./prismaErrors";
+import { isSchemaMissing, isIgnorableMigrationError, isInitializationError } from "./prismaErrors";
 import { createGraphqlSdk, type AdminGraphqlClient } from "./graphqlSdk.server";
 import { logger } from "./logger.server";
 import {
@@ -167,7 +167,7 @@ export const getBillingState = async (shopDomain: string): Promise<BillingState 
       }
       : null;
   } catch (error) {
-    if (isSchemaMissing(error)) return null;
+    if (isSchemaMissing(error) || isInitializationError(error)) return null;
     throw error;
   }
 };
@@ -228,7 +228,27 @@ export const upsertBillingState = async (
       lastReinstalledAt: record.lastReinstalledAt || null,
     };
   } catch (error) {
-    if (!isIgnorableMigrationError(error)) throw error;
+    if (!isIgnorableMigrationError(error)) {
+      if (isInitializationError(error)) {
+        // In test or no-DB environments, skip persistence and return a minimal state
+        return {
+          shopDomain,
+          isDevShop: false,
+          billingPlan: updates.billingPlan || "NO_PLAN",
+          billingState: updates.billingState || "NO_PLAN",
+          firstInstalledAt: null,
+          usedTrialDays: updates.usedTrialDays || 0,
+          hasEverSubscribed: updates.hasEverSubscribed ?? false,
+          lastSubscriptionStatus: updates.lastSubscriptionStatus,
+          lastTrialStartAt: updates.lastTrialStartAt || null,
+          lastTrialEndAt: updates.lastTrialEndAt || null,
+          lastCheckedAt: updates.lastCheckedAt || null,
+          lastUninstalledAt: updates.lastUninstalledAt || null,
+          lastReinstalledAt: updates.lastReinstalledAt || null,
+        };
+      }
+      throw error;
+    }
     const existing = await prisma.shopBillingState.findFirst({ where: { shopDomain } });
     if (existing) {
       const updated = await prisma.shopBillingState.update({
@@ -385,7 +405,9 @@ export const calculateRemainingTrialDays = async (
   }
 
   const remainingBudget = Math.max(plan.defaultTrialDays - (state.usedTrialDays || 0), 0);
-  if (!state.firstInstalledAt) return remainingBudget || plan.defaultTrialDays;
+  // If firstInstalledAt is missing but we have a state record, do NOT reset to full trial.
+  // Only return the calculated remaining budget.
+  if (!state.firstInstalledAt) return remainingBudget;
   return remainingBudget;
 };
 

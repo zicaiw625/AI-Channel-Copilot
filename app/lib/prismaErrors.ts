@@ -66,6 +66,14 @@ export const isIgnorableMigrationError = (error: unknown): boolean =>
   isSchemaMissing(error) || isNotFound(error);
 
 /**
+ * 检查是否为数据库初始化错误（例如连接失败）
+ */
+export const isInitializationError = (error: unknown): boolean => {
+  const name = (error as any)?.name || (error as any)?.constructor?.name;
+  return String(name) === "PrismaClientInitializationError";
+};
+
+/**
  * 获取 Prisma 错误的详细信息
  */
 export const getPrismaErrorDetails = (error: unknown): {
@@ -87,4 +95,3 @@ export const getPrismaErrorDetails = (error: unknown): {
     meta: error.meta as Record<string, unknown> | null,
   };
 };
-

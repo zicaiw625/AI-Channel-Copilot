@@ -68,6 +68,9 @@ import { startOfDay, endOfDay, formatDateOnly, parseDateInput } from "./dateUtil
 
 // 重新导出 AI_CHANNELS 常量
 export { AI_CHANNELS } from "./aiTypes";
+// 向外暴露底层识别工具，供测试与其它模块直接使用
+export const detectAiFromFields = detectAiFromFieldsRef;
+export const extractUtm = extractUtmRef;
 
 export const timeRanges: Record<
   TimeRangeKey,

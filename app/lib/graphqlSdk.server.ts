@@ -55,6 +55,26 @@ export const graphqlRequest = async (
       const shouldRetry =
         response.status === 429 || response.status === 500 || response.status === 502 || response.status === 503;
       if (!shouldRetry || attempt === maxRetries) {
+        if (response.status === 302) {
+          recordGraphqlCall({
+            operation,
+            shopDomain: context?.shopDomain,
+            durationMs: Date.now() - startedAt,
+            retries: attempt,
+            status: response.status,
+            ok: false,
+            error: "302 Response",
+          });
+          logger.warn("[shopify] graphql auth redirect", {
+            platform,
+            shopDomain: context?.shopDomain,
+            operation,
+            status: response.status,
+            message: "Response",
+            jobType: "shopify-graphql",
+          });
+          throw response;
+        }
         const text = await response.text();
         recordGraphqlCall({
           operation,

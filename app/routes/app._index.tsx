@@ -18,11 +18,12 @@ import {
 import { loadDashboardContext } from "../lib/dashboardContext.server";
 import { t } from "../lib/i18n";
 import { getEffectivePlan, hasFeature, FEATURES } from "../lib/access.server";
+import { isDemoMode } from "../lib/runtime.server";
 
 type Lang = "English" | "中文";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const demo = process.env.DEMO_MODE === "true";
+  const demo = isDemoMode();
   let admin, session;
   let authFailed = false;
   

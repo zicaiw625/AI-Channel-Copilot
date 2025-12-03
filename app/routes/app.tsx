@@ -5,13 +5,14 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { AppProvider } from "@shopify/shopify-app-react-router/react";
 
 import { authenticate } from "../shopify.server";
-import { requireEnv } from "../lib/env.server";
+import { readAppFlags, requireEnv } from "../lib/env.server";
 import { getSettings, syncShopPreferences } from "../lib/settings.server";
 import { detectAndPersistDevShop, shouldSkipBillingForPath, calculateRemainingTrialDays } from "../lib/billing.server";
 import { getEffectivePlan, FEATURES, hasFeature, type PlanTier } from "../lib/access.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const demo = process.env.DEMO_MODE === "true";
+  const { demoMode, enableBilling } = readAppFlags();
+  const demo = demoMode;
   type AuthShape = Awaited<ReturnType<typeof authenticate.admin>>;
   let admin: AuthShape["admin"] | null = null;
   let session: AuthShape["session"] | null = null;
@@ -49,7 +50,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       ? await detectAndPersistDevShop(admin, shopDomain) 
       : false;
     const skipBilling = shouldSkipBillingForPath(url.pathname, isDevShop);
-    const billingEnabled = process.env.ENABLE_BILLING === "true";
+    const billingEnabled = enableBilling;
 
     let plan: PlanTier = "none";
     let trialDaysLeft: number | null = null;

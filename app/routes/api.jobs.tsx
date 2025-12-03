@@ -3,6 +3,7 @@ import type { LoaderFunctionArgs } from "react-router";
 
 import prisma from "../db.server";
 import { authenticate } from "../shopify.server";
+import { isDemoMode } from "../lib/runtime.server";
 
 type JobStatus = "queued" | "processing" | "completed" | "failed";
 interface JobSnapshot {
@@ -34,12 +35,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const auth = await authenticate.admin(request);
     session = auth.session;
   } catch (error) {
-    if (process.env.DEMO_MODE !== "true") throw error;
+    if (!isDemoMode()) throw error;
   }
 
   const shopDomain = session?.shop || "";
   // In demo mode, if we can't determine shop domain, return empty or mock data instead of 401
-  if (!shopDomain && process.env.DEMO_MODE === "true") {
+  if (!shopDomain && isDemoMode()) {
     // Return empty snapshot for demo
     return Response.json({
       ok: true,

@@ -1,5 +1,5 @@
 import prisma from "../db.server";
-import { isNonProduction, requireEnv } from "./env.server";
+import { isNonProduction, readAppFlags, requireEnv } from "./env.server";
 import { isSchemaMissing, isIgnorableMigrationError } from "./prismaErrors";
 import { createGraphqlSdk, type AdminGraphqlClient } from "./graphqlSdk.server";
 import { logger } from "./logger.server";
@@ -346,7 +346,7 @@ export const detectAndPersistDevShop = async (
 };
 
 export const computeIsTestMode = async (shopDomain: string): Promise<boolean> => {
-  if (process.env.BILLING_FORCE_TEST === "true") return true;
+  if (readAppFlags().billingForceTest) return true;
   const state = await getBillingState(shopDomain);
   if (state?.isDevShop) return true;
   return isNonProduction();

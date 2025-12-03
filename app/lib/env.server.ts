@@ -1,9 +1,64 @@
+const TRUE_VALUES = new Set(["true", "1", "yes", "on"]);
+const FALSE_VALUES = new Set(["false", "0", "no", "off"]);
+
 export const requireEnv = (name: string): string => {
   const value = process.env[name];
   if (value === undefined || value === null || value === "") {
     throw new Error(`Missing required environment variable: ${name}`);
   }
   return value;
+};
+
+export const readBooleanEnv = (name: string, defaultValue = false): boolean => {
+  const raw = process.env[name];
+  if (raw === undefined || raw === null || raw === "") return defaultValue;
+
+  const normalized = raw.toLowerCase();
+  if (TRUE_VALUES.has(normalized)) return true;
+  if (FALSE_VALUES.has(normalized)) return false;
+
+  throw new Error(`Invalid boolean value for ${name}: ${raw}`);
+};
+
+export const readIntegerEnv = (name: string, defaultValue?: number, minimum?: number): number | undefined => {
+  const raw = process.env[name];
+  if (raw === undefined || raw === null || raw === "") return defaultValue;
+
+  const parsed = Number(raw);
+  if (!Number.isInteger(parsed)) {
+    throw new Error(`${name} must be an integer value`);
+  }
+  if (minimum !== undefined && parsed < minimum) {
+    throw new Error(`${name} must be greater than or equal to ${minimum}`);
+  }
+
+  return parsed;
+};
+
+type AppFlags = {
+  demoMode: boolean;
+  enableBilling: boolean;
+  enableLoginForm: boolean;
+  enableBackfillSweep: boolean;
+  enableRetentionSweep: boolean;
+  billingForceTest: boolean;
+};
+
+let cachedFlags: AppFlags | null = null;
+
+export const readAppFlags = (): AppFlags => {
+  if (cachedFlags) return cachedFlags;
+
+  cachedFlags = {
+    demoMode: readBooleanEnv("DEMO_MODE", false),
+    enableBilling: readBooleanEnv("ENABLE_BILLING", false),
+    enableLoginForm: readBooleanEnv("ENABLE_LOGIN_FORM", false),
+    enableBackfillSweep: readBooleanEnv("ENABLE_BACKFILL_SWEEP", true),
+    enableRetentionSweep: readBooleanEnv("ENABLE_RETENTION_SWEEP", true),
+    billingForceTest: readBooleanEnv("BILLING_FORCE_TEST", false),
+  };
+
+  return cachedFlags;
 };
 
 export const validateAppUrl = (urlStr: string) => {

@@ -6,6 +6,7 @@ import { describeBackfill, processBackfillQueue, startBackfill } from "../lib/ba
 import { getSettings } from "../lib/settings.server";
 import { authenticate } from "../shopify.server";
 import { DEFAULT_RANGE_KEY, MAX_BACKFILL_DURATION_MS, MAX_BACKFILL_ORDERS } from "../lib/constants";
+import { isDemoMode } from "../lib/runtime.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   if (request.method !== "POST")
@@ -18,12 +19,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     admin = auth.admin;
     session = auth.session;
   } catch (error) {
-    if (process.env.DEMO_MODE !== "true") throw error;
+    if (!isDemoMode()) throw error;
   }
 
   const shopDomain = session?.shop || "";
   // In demo mode, if no shop domain, we can't trigger backfill
-  if (!shopDomain && process.env.DEMO_MODE === "true") {
+  if (!shopDomain && isDemoMode()) {
     return Response.json({
       ok: false,
       queued: false,

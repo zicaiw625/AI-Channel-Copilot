@@ -6,6 +6,7 @@ import { BACKFILL_COOLDOWN_MINUTES, MAX_BACKFILL_DURATION_MS, MAX_BACKFILL_ORDER
 import { startBackfill, processBackfillQueue } from "./backfill.server";
 import { unauthenticated } from "../shopify.server";
 import { logger } from "./logger.server";
+import { readAppFlags } from "./env.server";
 
 let initialized = false;
 
@@ -22,7 +23,7 @@ const runRetentionSweep = async () => {
 };
 
 const runBackfillSweep = async () => {
-  if (process.env.ENABLE_BACKFILL_SWEEP === "0") return;
+  if (!readAppFlags().enableBackfillSweep) return;
   try {
     const shops = await prisma.shopSettings.findMany({ select: { shopDomain: true, timezone: true, lastBackfillAt: true } });
     for (const shop of shops) {
@@ -76,7 +77,7 @@ const runBackfillSweep = async () => {
 export const initScheduler = () => {
   if (initialized) return;
   initialized = true;
-  if (process.env.ENABLE_RETENTION_SWEEP === "0") {
+  if (!readAppFlags().enableRetentionSweep) {
     return;
   }
   setTimeout(() => {

@@ -3,9 +3,10 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate, BILLING_PLAN } from "../shopify.server";
 import { requireEnv } from "../lib/env.server";
 import { computeIsTestMode } from "../lib/billing.server";
+import { isDemoMode } from "../lib/runtime.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const demo = process.env.DEMO_MODE === "true";
+  const demo = isDemoMode();
   
   // Demo 模式下，订阅功能不可用
   if (demo) {

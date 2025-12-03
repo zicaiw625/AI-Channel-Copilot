@@ -4,14 +4,13 @@ import { getPlatform } from "./runtime.server";
 import { markActivity } from "./settings.server";
 import { DEFAULT_RETENTION_MONTHS } from "./constants";
 import { logger } from "./logger.server";
+import { readAppFlags, readIntegerEnv } from "./env.server";
 
 const platform = getPlatform();
 
 const parseEnvRetention = () => {
-  const value = process.env.DATA_RETENTION_MONTHS;
-  if (!value) return null;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : null;
+  const parsed = readIntegerEnv("DATA_RETENTION_MONTHS", undefined, 1);
+  return parsed ?? null;
 };
 
 export const resolveRetentionMonths = (settings?: SettingsDefaults) => {
@@ -58,7 +57,7 @@ export const pruneHistoricalData = async (shopDomain: string, months: number) =>
 };
 
 export const ensureRetentionOncePerDay = async (shopDomain: string, settings?: SettingsDefaults) => {
-  if (process.env.ENABLE_RETENTION_SWEEP === "0") {
+  if (!readAppFlags().enableRetentionSweep) {
     return { skipped: true, reason: "disabled", lastCleanupAt: settings?.lastCleanupAt || null };
   }
   const retentionMonths = resolveRetentionMonths(settings);

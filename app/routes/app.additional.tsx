@@ -21,13 +21,13 @@ import { applyAiTags } from "../lib/tagging.server";
 import { authenticate } from "../shopify.server";
 import styles from "../styles/app.settings.module.css";
 import { t } from "../lib/i18n";
-import { getPlatform } from "../lib/runtime.server";
+import { getPlatform, isDemoMode } from "../lib/runtime.server";
 import { LANGUAGE_EVENT, LANGUAGE_STORAGE_KEY, BACKFILL_COOLDOWN_MINUTES, DEFAULT_RANGE_KEY, MAX_BACKFILL_DURATION_MS, MAX_BACKFILL_ORDERS, MAX_BACKFILL_DAYS } from "../lib/constants";
 import { loadDashboardContext } from "../lib/dashboardContext.server";
 import { logger } from "../lib/logger.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const demo = process.env.DEMO_MODE === "true";
+  const demo = isDemoMode();
   let admin, session;
   let authFailed = false;
   
@@ -83,7 +83,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     session = auth.session;
     shopDomain = session?.shop || "";
   } catch (error) {
-    if (process.env.DEMO_MODE !== "true") throw error;
+    if (!isDemoMode()) throw error;
     // Demo mode: shopDomain remains empty
   }
 

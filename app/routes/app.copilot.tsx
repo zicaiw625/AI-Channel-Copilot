@@ -6,6 +6,7 @@ import { authenticate, BILLING_PLAN } from "../shopify.server";
 import { detectAndPersistDevShop, computeIsTestMode } from "../lib/billing.server";
 import { getSettings } from "../lib/settings.server";
 import { resolveDateRange, type TimeRangeKey } from "../lib/aiData";
+import { useUILanguage } from "../lib/useUILanguage";
 import styles from "../styles/app.copilot.module.css";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -25,7 +26,8 @@ export default function Copilot() {
   const { settings, dateRange, range, readOnly } = useLoaderData<typeof loader>();
   const fetcher = useFetcher();
   const [question, setQuestion] = useState("");
-  const language = settings.languages[0] || "中文";
+  // 使用 useUILanguage 保持语言设置的客户端一致性
+  const language = useUILanguage(settings.languages[0] || "中文");
 
   const ask = (intent?: string) => {
     const payload: Record<string, string> = intent ? { intent } : { question };

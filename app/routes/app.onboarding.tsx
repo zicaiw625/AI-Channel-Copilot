@@ -5,6 +5,7 @@ import { authenticate, BILLING_PLAN } from "../shopify.server";
 import { requireEnv } from "../lib/env.server";
 import { shouldOfferTrial, computeIsTestMode, detectAndPersistDevShop } from "../lib/billing.server";
 import { getSettings, syncShopPreferences } from "../lib/settings.server";
+import { useUILanguage } from "../lib/useUILanguage";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   type AuthShape = Awaited<ReturnType<typeof authenticate.admin>>;
@@ -32,7 +33,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
 export default function Onboarding() {
   const { language, planName, trialDays, price, isDevShop, reason, enabled, shopDomain } = useLoaderData<typeof loader>();
-  const en = language === "English";
+  // 使用 useUILanguage 保持语言设置的客户端一致性
+  const uiLanguage = useUILanguage(language);
+  const en = uiLanguage === "English";
   return (
     <section style={{ padding: 16 }}>
       <h2>{en ? "Welcome to AI Channel Copilot" : "欢迎使用 AI Channel Copilot"}</h2>

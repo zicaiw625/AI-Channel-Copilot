@@ -203,7 +203,18 @@ export default function SettingsAndExport() {
     settings.exposurePreferences,
   );
   const [timezone, setTimezone] = useState(settings.timezones[0] || "UTC");
-  const [language, setLanguage] = useState<Lang>(settings.languages[0] as Lang);
+  // 优先从 localStorage 读取语言，保持客户端一致性
+  const [language, setLanguage] = useState<Lang>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const stored = window.localStorage.getItem(LANGUAGE_STORAGE_KEY);
+        if (stored === "English" || stored === "中文") {
+          return stored as Lang;
+        }
+      } catch { /* ignore */ }
+    }
+    return settings.languages[0] as Lang;
+  });
   const [gmvMetric, setGmvMetric] = useState(settings.gmvMetric || "current_total_price");
   const [exportWindow, setExportWindow] = useState<TimeRangeKey>(exportRange as TimeRangeKey);
 
@@ -742,25 +753,10 @@ export default function SettingsAndExport() {
                 onChange={(event) => {
                   const next = event.target.value as Lang;
                   setLanguage(next);
+                  // 更新本地存储和派发事件以立即更新 UI
                   try { window.localStorage.setItem(LANGUAGE_STORAGE_KEY, next); } catch { void 0; }
                   try { window.dispatchEvent(new CustomEvent(LANGUAGE_EVENT, { detail: next })); } catch { void 0; }
-                  fetcher.submit(
-                    {
-                      settings: JSON.stringify({
-                        aiDomains: sanitizedDomains,
-                        utmSources: sanitizedUtmSources,
-                        utmMediumKeywords,
-                        gmvMetric,
-                        primaryCurrency: settings.primaryCurrency,
-                        tagging,
-                        exposurePreferences,
-                        languages: [next, ...settings.languages.filter((l) => l !== next)],
-                        timezones: [timezone, ...settings.timezones.filter((t) => t !== timezone)],
-                        pipelineStatuses: settings.pipelineStatuses,
-                      }),
-                    },
-                    { method: "post", encType: "application/x-www-form-urlencoded" },
-                  );
+                  // 注意：语言变更不再自动提交到服务器，需要用户点击"保存"按钮
                 }}
               >
                 {settings.languages.map((option) => (
@@ -769,6 +765,11 @@ export default function SettingsAndExport() {
                   </option>
                 ))}
               </select>
+              <span className={styles.helpText}>
+                {language === "English"
+                  ? "Language change takes effect immediately in UI. Click Save to persist to server."
+                  : "语言更改立即在界面生效。点击"保存"按钮以持久化到服务器。"}
+              </span>
             </label>
             <label className={styles.stackField}>
               <span className={styles.fieldLabel}>{language === "English" ? "Timezone" : "时区"}</span>

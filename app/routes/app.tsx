@@ -16,6 +16,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   let admin: AuthShape["admin"] | null = null;
   let billing: AuthShape["billing"] | null = null;
   let session: AuthShape["session"] | null = null;
+
   try {
     const auth = await authenticate.admin(request);
     admin = auth.admin;
@@ -27,50 +28,130 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const allowUnauth = path.includes("/app/onboarding") || path.includes("/app/billing");
     if (!demo && !allowUnauth) throw e;
   }
+
   const shopDomain = session?.shop || "";
   let settings = await getSettings(shopDomain);
-  settings = await syncShopPreferences(admin, shopDomain, settings);
+  // 只在有 admin 且有 shopDomain 时同步偏好，避免不必要的调用
+  if (admin && shopDomain) {
+    settings = await syncShopPreferences(admin, shopDomain, settings);
+  }
 
   try {
     const url = new URL(request.url);
     const isDevShop = admin ? await detectAndPersistDevShop(admin, shopDomain) : false;
     const skipBilling = shouldSkipBillingForPath(url.pathname, isDevShop);
     const billingEnabled = process.env.ENABLE_BILLING === "true";
+
     if (!billingEnabled) {
-      return { apiKey: requireEnv("SHOPIFY_API_KEY"), language: settings.languages[0] || "中文", readOnly: false, trialDaysLeft: null, isDevShop };
+      return {
+        apiKey: requireEnv("SHOPIFY_API_KEY"),
+        language: settings.languages[0] || "中文",
+        readOnly: false,
+        trialDaysLeft: null,
+        isDevShop,
+      };
     }
+
     let readOnly = false;
     let trialDaysLeft: number | null = null;
     const devBanner = isDevShop;
-    if (!skipBilling) {
+
+    if (!skipBilling && billing) {
       const state = await getBillingState(shopDomain);
       const ttlMinutes = Number(process.env.BILLING_CHECK_TTL_MINUTES || "10");
-      const fresh = state?.lastCheckedAt && Date.now() - state.lastCheckedAt.getTime() < ttlMinutes * 60 * 1000;
-      const cachedActive = state?.lastSubscriptionStatus === "active" || (typeof state?.lastTrialEndAt === "object" && state?.lastTrialEndAt && state.lastTrialEndAt.getTime() > Date.now());
+      const now = Date.now();
+      const fresh = state?.lastCheckedAt && now - state.lastCheckedAt.getTime() < ttlMinutes * 60 * 1000;
+
+      // 检查缓存的订阅状态或 trial 是否仍然有效
+      const cachedSubscriptionActive = state?.lastSubscriptionStatus === "active";
+      const cachedTrialActive = state?.lastTrialEndAt && state.lastTrialEndAt.getTime() > now;
+      const cachedActive = cachedSubscriptionActive || cachedTrialActive;
+
       if (fresh && cachedActive) {
+        // 使用缓存结果，不重新检查
         readOnly = false;
+        if (cachedTrialActive && state?.lastTrialEndAt) {
+          trialDaysLeft = Math.max(0, Math.ceil((state.lastTrialEndAt.getTime() - now) / (24 * 60 * 60 * 1000)));
+        }
       } else {
+        // 重新检查订阅状态
         const isTest = await computeIsTestMode(shopDomain);
         const result = await billing.check({ plans: [BILLING_PLAN], isTest });
+
+        // 计算 trial 信息
+        const baseTrial = Number(process.env.BILLING_TRIAL_DAYS || "7");
+        const hasEverSubscribed = state?.hasEverSubscribed || result.hasActivePayment;
+        let trialEnd: Date | null = null;
+
+        if (!hasEverSubscribed && baseTrial > 0) {
+          // 首次使用，设置 trial 结束时间
+          const installCreatedAt = state?.lastTrialStartAt || new Date();
+          trialEnd = new Date(installCreatedAt.getTime() + baseTrial * 24 * 60 * 60 * 1000);
+        } else if (state?.lastTrialEndAt) {
+          trialEnd = state.lastTrialEndAt;
+        }
+
+        // 保存订阅检查结果（包含 trial 信息）
+        await markSubscriptionCheck(
+          shopDomain,
+          result.hasActivePayment ? "active" : "inactive",
+          state?.lastTrialStartAt || (hasEverSubscribed ? null : new Date()),
+          trialEnd,
+          hasEverSubscribed,
+        );
+
         readOnly = !result.hasActivePayment;
-        await markSubscriptionCheck(shopDomain, result.hasActivePayment ? "active" : "inactive");
+
+        // 检查 trial 是否仍然有效
+        if (trialEnd && trialEnd.getTime() > now) {
+          trialDaysLeft = Math.max(0, Math.ceil((trialEnd.getTime() - now) / (24 * 60 * 60 * 1000)));
+          readOnly = false; // trial 期间不是只读
+        }
       }
-      trialDaysLeft = await getTrialRemainingDays(shopDomain);
-      const trialActive = typeof trialDaysLeft === "number" && trialDaysLeft > 0;
-      if (trialActive) readOnly = false;
+
+      // 如果还没有 trialDaysLeft 但需要检查，从数据库再次获取
+      if (trialDaysLeft === null) {
+        trialDaysLeft = await getTrialRemainingDays(shopDomain);
+        if (typeof trialDaysLeft === "number" && trialDaysLeft > 0) {
+          readOnly = false;
+        }
+      }
+
       const path = url.pathname.toLowerCase();
-      const isProtected = path === "/app" || (path.startsWith("/app/") && !path.includes("/app/onboarding") && !path.includes("/app/billing") && !path.includes("/app/additional"));
+      const isProtected =
+        path === "/app" ||
+        (path.startsWith("/app/") &&
+          !path.includes("/app/onboarding") &&
+          !path.includes("/app/billing") &&
+          !path.includes("/app/additional"));
+
+      const trialActive = typeof trialDaysLeft === "number" && trialDaysLeft > 0;
+
       if (isProtected && readOnly && !trialActive) {
         const next = new URL("/app/onboarding", url.origin);
         next.search = url.search;
         throw new Response(null, { status: 302, headers: { Location: next.toString() } });
       }
     }
-    return { apiKey: requireEnv("SHOPIFY_API_KEY"), language: settings.languages[0] || "中文", readOnly, trialDaysLeft, isDevShop: devBanner };
+
+    return {
+      apiKey: requireEnv("SHOPIFY_API_KEY"),
+      language: settings.languages[0] || "中文",
+      readOnly,
+      trialDaysLeft,
+      isDevShop: devBanner,
+    };
   } catch (e) {
     if (e instanceof Response) throw e;
+    // 发生未知错误时，返回默认非只读状态，避免用户被锁定
+    return {
+      apiKey: requireEnv("SHOPIFY_API_KEY"),
+      language: settings.languages[0] || "中文",
+      readOnly: false,
+      trialDaysLeft: null,
+      isDevShop: false,
+    };
   }
-  return { apiKey: requireEnv("SHOPIFY_API_KEY"), language: settings.languages[0] || "中文", readOnly: false, trialDaysLeft: null, isDevShop: false };
 };
 
 export default function App() {

@@ -249,7 +249,7 @@ export const upsertBillingState = async (
       }
       throw error;
     }
-    const existing = await prisma.shopBillingState.findFirst({ where: { shopDomain } });
+    const existing = await prisma.shopBillingState.findFirst({ where: { shopDomain, platform: "shopify" } });
     if (existing) {
       const updated = await prisma.shopBillingState.update({
         where: { id: existing.id },

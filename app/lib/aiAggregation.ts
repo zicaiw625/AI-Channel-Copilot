@@ -15,11 +15,78 @@ import type {
 } from "./aiTypes";
 import { AI_CHANNELS } from "./aiTypes";
 import type { MetricKey } from "./metrics";
-import { metricOrderValue, sumGMV, sumNetGMV } from "./metrics";
+import { metricOrderValue } from "./metrics";
 import { startOfDay, formatDateOnly } from "./dateUtils";
 
 // 重新导出 TopCustomerRow 以保持向后兼容
 export type { TopCustomerRow } from "./aiTypes";
+
+type ChannelAccumulator = {
+  gmv: number;
+  netGmv: number;
+  orders: number;
+  newCustomers: number;
+  customers: Map<string, number>;
+};
+
+type AggregationResult = {
+  overall: ChannelAccumulator;
+  ai: ChannelAccumulator;
+  channels: Record<AIChannel, ChannelAccumulator>;
+};
+
+const createAccumulator = (): ChannelAccumulator => ({
+  gmv: 0,
+  netGmv: 0,
+  orders: 0,
+  newCustomers: 0,
+  customers: new Map(),
+});
+
+const updateAccumulator = (
+  accumulator: ChannelAccumulator,
+  order: OrderRecord,
+  orderValue: number,
+  netOrderValue: number,
+) => {
+  accumulator.orders += 1;
+  accumulator.gmv += orderValue;
+  accumulator.netGmv += netOrderValue;
+  if (order.isNewCustomer) accumulator.newCustomers += 1;
+  if (order.customerId) {
+    const prev = accumulator.customers.get(order.customerId) || 0;
+    accumulator.customers.set(order.customerId, prev + 1);
+  }
+};
+
+const aggregateOrders = (orders: OrderRecord[], metric: MetricKey): AggregationResult => {
+  const overall = createAccumulator();
+  const ai = createAccumulator();
+  const channels = AI_CHANNELS.reduce<Record<AIChannel, ChannelAccumulator>>((acc, channel) => {
+    acc[channel] = createAccumulator();
+    return acc;
+  }, {} as Record<AIChannel, ChannelAccumulator>);
+
+  orders.forEach((order) => {
+    const orderValue = metricOrderValue(order, metric);
+    const netOrderValue = Math.max(0, orderValue - (order.refundTotal || 0));
+
+    updateAccumulator(overall, order, orderValue, netOrderValue);
+
+    if (order.aiSource) {
+      updateAccumulator(ai, order, orderValue, netOrderValue);
+      updateAccumulator(channels[order.aiSource], order, orderValue, netOrderValue);
+    }
+  });
+
+  return { overall, ai, channels };
+};
+
+const computeRepeatRate = (customers: Map<string, number>) => {
+  if (!customers.size) return 0;
+  const repeats = Array.from(customers.values()).filter((count) => count > 1).length;
+  return repeats / customers.size;
+};
 
 /**
  * 构建顶级客户列表
@@ -76,28 +143,22 @@ export const buildOverview = (
   metric: MetricKey,
   currency: string
 ) => {
-  const aiOrders = ordersInRange.filter((order) => Boolean(order.aiSource));
-  const aiGMV = sumGMV(aiOrders, metric);
-  const totalGMV = sumGMV(ordersInRange, metric);
-  const netAiGMV = sumNetGMV(aiOrders, metric);
-  const netGMV = sumNetGMV(ordersInRange, metric);
-  const aiNewCustomers = aiOrders.filter((order) => order.isNewCustomer).length;
-  const totalNewCustomers = ordersInRange.filter((order) => order.isNewCustomer).length;
-  const aiOrdersCount = aiOrders.length;
-  const totalOrdersCount = ordersInRange.length;
+  const { overall, ai } = aggregateOrders(ordersInRange, metric);
+  const aiOrdersCount = ai.orders;
+  const totalOrdersCount = overall.orders;
 
   return {
-    totalGMV,
-    netGMV,
-    aiGMV,
-    netAiGMV,
-    aiShare: totalGMV ? aiGMV / totalGMV : 0,
+    totalGMV: overall.gmv,
+    netGMV: overall.netGmv,
+    aiGMV: ai.gmv,
+    netAiGMV: ai.netGmv,
+    aiShare: overall.gmv ? ai.gmv / overall.gmv : 0,
     aiOrders: aiOrdersCount,
     aiOrderShare: totalOrdersCount ? aiOrdersCount / totalOrdersCount : 0,
     totalOrders: totalOrdersCount,
-    aiNewCustomers,
-    aiNewCustomerRate: aiOrdersCount ? aiNewCustomers / aiOrdersCount : 0,
-    totalNewCustomers,
+    aiNewCustomers: ai.newCustomers,
+    aiNewCustomerRate: aiOrdersCount ? ai.newCustomers / aiOrdersCount : 0,
+    totalNewCustomers: overall.newCustomers,
     lastSyncedAt: new Date().toISOString(),
     currency,
   };
@@ -119,16 +180,14 @@ export const buildChannelBreakdown = (
   ordersInRange: OrderRecord[],
   metric: MetricKey
 ): ChannelStat[] => {
-  return AI_CHANNELS.map((channel) => {
-    const scopedOrders = ordersInRange.filter((order) => order.aiSource === channel);
-    return {
-      channel,
-      gmv: sumGMV(scopedOrders, metric),
-      orders: scopedOrders.length,
-      newCustomers: scopedOrders.filter((order) => order.isNewCustomer).length,
-      color: CHANNEL_COLORS[channel],
-    };
-  });
+  const { channels } = aggregateOrders(ordersInRange, metric);
+  return AI_CHANNELS.map((channel) => ({
+    channel,
+    gmv: channels[channel].gmv,
+    orders: channels[channel].orders,
+    newCustomers: channels[channel].newCustomers,
+    color: CHANNEL_COLORS[channel],
+  }));
 };
 
 /**
@@ -138,36 +197,24 @@ export const buildComparison = (
   ordersInRange: OrderRecord[],
   metric: MetricKey
 ): ComparisonRow[] => {
-  const scopes: { label: string; filter: (order: OrderRecord) => boolean }[] = [
-    { label: "整体", filter: () => true },
+  const { overall, channels } = aggregateOrders(ordersInRange, metric);
+
+  const scopes: { label: string; data: ChannelAccumulator }[] = [
+    { label: "整体", data: overall },
     ...AI_CHANNELS.map((channel) => ({
       label: channel,
-      filter: (order: OrderRecord) => order.aiSource === channel,
+      data: channels[channel],
     })),
   ];
 
-  return scopes.map(({ label, filter }) => {
-    const scopedOrders = ordersInRange.filter(filter);
-    const gmv = sumGMV(scopedOrders, metric);
-    const ordersCount = scopedOrders.length;
-    const customers = scopedOrders.reduce<Record<string, number>>((acc, order) => {
-      if (!order.customerId) return acc;
-      acc[order.customerId] = (acc[order.customerId] || 0) + 1;
-      return acc;
-    }, {});
-    const repeats = Object.values(customers).filter((count) => count > 1).length;
-
-    return {
-      channel: label,
-      aov: ordersCount ? gmv / ordersCount : 0,
-      newCustomerRate: ordersCount
-        ? scopedOrders.filter((order) => order.isNewCustomer).length / ordersCount
-        : 0,
-      repeatRate: Object.keys(customers).length ? repeats / Object.keys(customers).length : 0,
-      sampleSize: ordersCount,
-      isLowSample: ordersCount < 5,
-    };
-  });
+  return scopes.map(({ label, data }) => ({
+    channel: label,
+    aov: data.orders ? data.gmv / data.orders : 0,
+    newCustomerRate: data.orders ? data.newCustomers / data.orders : 0,
+    repeatRate: computeRepeatRate(data.customers),
+    sampleSize: data.orders,
+    isLowSample: data.orders < 5,
+  }));
 };
 
 /** 趋势桶类型 */

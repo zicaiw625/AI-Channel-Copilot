@@ -2,17 +2,19 @@ import type { HeadersFunction, LoaderFunctionArgs, ActionFunctionArgs } from "re
 import { useFetcher, useLoaderData } from "react-router";
 import { useUILanguage } from "../lib/useUILanguage";
 import { boundary } from "@shopify/shopify-app-react-router/server";
-import { authenticate, BILLING_PLAN } from "../shopify.server";
-import { requireEnv } from "../lib/env.server";
+import { authenticate } from "../shopify.server";
 import { getSettings, syncShopPreferences } from "../lib/settings.server";
-import { 
-    detectAndPersistDevShop, 
-    computeIsTestMode, 
-    getEffectivePlan, 
-    requestSubscription, 
-    calculateRemainingTrialDays,
-    upsertBillingState
+import {
+  detectAndPersistDevShop,
+  computeIsTestMode,
+  requestSubscription,
+  calculateRemainingTrialDays,
+  activateFreePlan,
+  getActiveSubscriptionDetails,
+  cancelSubscription,
 } from "../lib/billing.server";
+import { getEffectivePlan, type PlanTier } from "../lib/access.server";
+import { BILLING_PLANS, PRIMARY_BILLABLE_PLAN_ID, type PlanId } from "../lib/billing/plans";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const demo = process.env.DEMO_MODE === "true";
@@ -35,34 +37,45 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       await detectAndPersistDevShop(admin, shopDomain);
   }
   
-  const plan = await getEffectivePlan(shopDomain);
-  const trialDays = await calculateRemainingTrialDays(shopDomain);
-  const price = Number(process.env.BILLING_PRICE || "29");
-  const currencyCode = process.env.BILLING_CURRENCY || "USD";
+  const planTier = await getEffectivePlan(shopDomain);
+  const trialEntries = await Promise.all(
+    (Object.keys(BILLING_PLANS) as PlanId[]).map(async (planId) => {
+      const plan = BILLING_PLANS[planId];
+      const remaining = plan.trialSupported ? await calculateRemainingTrialDays(shopDomain, planId) : 0;
+      return [planId, remaining] as const;
+    }),
+  );
+  const trialMap = Object.fromEntries(trialEntries) as Record<PlanId, number>;
   const language = settings.languages[0] || "中文";
   
   return { 
       language, 
-      plan, 
-      price, 
-      currencyCode, 
-      trialDays, 
+      currentPlan: planTier, 
+      plans: Object.values(BILLING_PLANS).map((plan) => ({
+        ...plan,
+        remainingTrialDays: trialMap[plan.id] || 0,
+      })), 
       shopDomain, 
       demo,
-      appUrl: requireEnv("SHOPIFY_APP_URL"),
       apiKey: process.env.SHOPIFY_API_KEY
   };
 };
 
 export default function Billing() {
-  const { language, plan, price, currencyCode, trialDays, shopDomain, demo, appUrl, apiKey } = useLoaderData<typeof loader>();
+  const { language, currentPlan, plans, shopDomain, demo, apiKey } = useLoaderData<typeof loader>();
   const fetcher = useFetcher<{ ok: boolean; message?: string }>();
   const uiLanguage = useUILanguage(language);
   const en = uiLanguage === "English";
+  const normalizePlanId = (plan: PlanTier): PlanId =>
+    plan === "pro" || plan === "growth" || plan === "free" ? plan : "free";
+  const activePlanId = normalizePlanId(currentPlan);
+  const activePlan = plans.find((plan) => plan.id === activePlanId) ?? plans[0];
+  const priceLabel = activePlan.priceUsd === 0 ? "$0" : `$${activePlan.priceUsd}`;
+  const showTrialBanner = activePlan.trialSupported && activePlan.remainingTrialDays > 0;
   
-  const handleUpgrade = () => {
+  const handleUpgrade = (planId: PlanId) => {
     fetcher.submit(
-      { intent: "upgrade", shop: shopDomain },
+      { intent: "upgrade", shop: shopDomain, planId },
       { method: "post" }
     );
   };
@@ -93,23 +106,33 @@ export default function Billing() {
                       {en ? "Current Plan" : "当前计划"}
                   </div>
                   <div style={{ fontSize: 24, fontWeight: "bold", marginTop: 4 }}>
-                      {plan === "pro" ? "Pro" : (plan === "growth" ? "Growth" : "Free")}
+                      {activePlan.name}
                   </div>
               </div>
               <div style={{ textAlign: "right" }}>
                   <div style={{ fontSize: 24, fontWeight: "bold" }}>
-                      {plan === "free" ? "$0" : `$${price}`}
-                      <span style={{ fontSize: 14, fontWeight: "normal", color: "#666" }}> / {en ? "mo" : "月"}</span>
+                      {priceLabel}
+                      {activePlan.priceUsd > 0 && (
+                        <span style={{ fontSize: 14, fontWeight: "normal", color: "#666" }}> / {en ? "mo" : "月"}</span>
+                      )}
                   </div>
               </div>
           </div>
+
+          {showTrialBanner && (
+            <div style={{ marginBottom: 16, padding: 10, background: "#e6f7ff", borderRadius: 4, color: "#0050b3" }}>
+              {en
+                ? `Trial: ${activePlan.remainingTrialDays} days remaining.`
+                : `试用剩余 ${activePlan.remainingTrialDays} 天。`}
+            </div>
+          )}
           
           <hr style={{ border: "none", borderTop: "1px solid #eee", margin: "20px 0" }} />
           
           <div style={{ display: "flex", gap: 12 }}>
-              {plan === "free" ? (
+              {activePlanId === "free" ? (
                   <button 
-                    onClick={handleUpgrade}
+                    onClick={() => handleUpgrade(PRIMARY_BILLABLE_PLAN_ID)}
                     disabled={fetcher.state !== "idle" || demo}
                     style={{ 
                         background: "#008060", 
@@ -121,7 +144,11 @@ export default function Billing() {
                         fontSize: 16
                     }}
                   >
-                      {fetcher.state !== "idle" ? "..." : (en ? `Upgrade to Pro (${trialDays} days trial)` : `升级到 Pro（${trialDays} 天试用）`)}
+                      {fetcher.state !== "idle"
+                        ? "..."
+                        : (en
+                            ? `Upgrade to ${BILLING_PLANS[PRIMARY_BILLABLE_PLAN_ID].name}`
+                            : `升级到 ${BILLING_PLANS[PRIMARY_BILLABLE_PLAN_ID].name}`)}
                   </button>
               ) : (
                  <>
@@ -160,6 +187,72 @@ export default function Billing() {
               )}
           </div>
       </div>
+
+      <div style={{ marginTop: 32 }}>
+        <h3 style={{ marginBottom: 16 }}>{en ? "Available Plans" : "可用方案"}</h3>
+        <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+          {plans.map((plan) => {
+            const isActive = plan.id === activePlanId;
+            const disabled = fetcher.state !== "idle" || demo || plan.status !== "live" || isActive;
+            return (
+              <div
+                key={plan.id}
+                style={{
+                  flex: 1,
+                  minWidth: 260,
+                  border: isActive ? "2px solid #008060" : "1px solid #e1e3e5",
+                  borderRadius: 8,
+                  padding: 16,
+                  background: "white",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <h4 style={{ margin: 0 }}>{plan.name}</h4>
+                  <span style={{ fontWeight: "bold" }}>
+                    {plan.priceUsd === 0 ? "$0" : `$${plan.priceUsd}`}
+                    {plan.priceUsd > 0 && (
+                      <span style={{ color: "#666", fontWeight: "normal" }}> / {en ? "mo" : "月"}</span>
+                    )}
+                  </span>
+                </div>
+                <p style={{ color: "#666", fontSize: 14, margin: "8px 0" }}>
+                  {plan.trialSupported
+                    ? (en ? "Includes free trial" : "包含免费试用")
+                    : (en ? "No trial" : "无试用")}
+                </p>
+                <ul style={{ paddingLeft: 18, margin: "8px 0", color: "#555", fontSize: 14 }}>
+                  {plan.includes.slice(0, 3).map((feature) => (
+                    <li key={feature}>{feature}</li>
+                  ))}
+                </ul>
+                <button
+                  type="button"
+                  onClick={() => (plan.id === "free" ? handleDowngrade() : handleUpgrade(plan.id))}
+                  disabled={disabled}
+                  style={{
+                    width: "100%",
+                    padding: "10px",
+                    marginTop: 8,
+                    background: disabled ? "#f5f5f5" : plan.id === "free" ? "white" : "#008060",
+                    color: disabled ? "#999" : plan.id === "free" ? "#333" : "white",
+                    border: plan.id === "free" ? "1px solid #babfc3" : "none",
+                    borderRadius: 4,
+                    cursor: disabled ? "not-allowed" : "pointer",
+                  }}
+                >
+                  {isActive
+                    ? (en ? "Current Plan" : "当前方案")
+                    : plan.status === "coming_soon"
+                      ? (en ? "Coming soon" : "敬请期待")
+                      : plan.id === "free"
+                        ? (en ? "Switch to Free" : "切换到免费版")
+                        : (en ? `Switch to ${plan.name}` : `切换到 ${plan.name}`)}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
       
       {demo && (
         <div style={{ marginTop: 20, padding: 10, background: "#e6f7ff", color: "#0050b3", borderRadius: 4 }}>
@@ -185,35 +278,49 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const intent = formData.get("intent");
     
     if (intent === "upgrade") {
-        const isTest = await computeIsTestMode(shopDomain);
-        const trialDays = await calculateRemainingTrialDays(shopDomain);
-        const confirmationUrl = await requestSubscription(admin, shopDomain, BILLING_PLAN, isTest, trialDays);
-        if (confirmationUrl) {
-             throw new Response(null, { status: 302, headers: { Location: confirmationUrl } });
-        } else {
-             return Response.json({
-               ok: false,
-               message: "Failed to create subscription. confirmationUrl is missing."
-             });
+        const planId = (formData.get("planId") as PlanId) || PRIMARY_BILLABLE_PLAN_ID;
+        const plan = BILLING_PLANS[planId];
+        if (!plan) {
+          return Response.json({ ok: false, message: "Unknown plan" }, { status: 400 });
         }
+        if (plan.status !== "live") {
+          return Response.json({ ok: false, message: "Plan unavailable" }, { status: 400 });
+        }
+        if (plan.priceUsd === 0) {
+          await activateFreePlan(shopDomain);
+          return Response.json({ ok: true });
+        }
+        const isTest = await computeIsTestMode(shopDomain);
+        const trialDays = await calculateRemainingTrialDays(shopDomain, planId);
+        const confirmationUrl = await requestSubscription(admin, shopDomain, planId, isTest, trialDays);
+        if (confirmationUrl) {
+          throw new Response(null, { status: 302, headers: { Location: confirmationUrl } });
+        }
+        return Response.json({
+          ok: false,
+          message: "Failed to create subscription. confirmationUrl is missing.",
+        });
     }
     
     if (intent === "downgrade") {
-        // Just switch state to FREE_ACTIVE.
-        // Important: In a real app, we should also CANCEL the Shopify subscription via API.
-        // For now, setting state locally handles access control. 
-        // We'll leave the actual cancellation to the merchant via "Manage in Shopify" or implement API cancel here.
-        // Spec says: "Create Free internal plan & Cancel Shopify subscription".
-        
-        // TODO: Cancel subscription via GraphQL if needed. 
-        // For MVP, user can cancel in Shopify. Or we can just overwrite state and let Shopify expire it.
-        // Ideally we call appSubscriptionCancel.
-        
-        await upsertBillingState(shopDomain, {
-            billingPlan: "free",
-            billingState: "FREE_ACTIVE"
-        });
-        
+        const paidPlans = Object.values(BILLING_PLANS).filter((plan) => plan.priceUsd > 0);
+        let activeDetails: { id: string; planId: PlanId } | null = null;
+        for (const plan of paidPlans) {
+          const details = await getActiveSubscriptionDetails(admin, plan.shopifyName);
+          if (details?.id) {
+            activeDetails = { id: details.id, planId: plan.id };
+            break;
+          }
+        }
+        if (activeDetails) {
+          try {
+            await cancelSubscription(admin, activeDetails.id, true);
+          } catch (error) {
+            console.error(error);
+            return Response.json({ ok: false, message: "Failed to cancel subscription in Shopify." }, { status: 500 });
+          }
+        }
+        await activateFreePlan(shopDomain);
         return Response.json({ ok: true });
     }
     
@@ -226,3 +333,4 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     });
   }
 };
+

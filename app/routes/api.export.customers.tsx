@@ -4,6 +4,7 @@ import { getSettings } from "../lib/settings.server";
 import { resolveDateRange, type TimeRangeKey } from "../lib/aiData";
 import { loadOrdersFromDb } from "../lib/orderService.server";
 import { computeLTV } from "../lib/metrics";
+import { requireFeature, FEATURES } from "../lib/access.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   let session;
@@ -15,6 +16,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   }
 
   const shopDomain = session?.shop || "";
+  await requireFeature(shopDomain, FEATURES.EXPORTS);
   const url = new URL(request.url);
   const rangeKey = (url.searchParams.get("range") as TimeRangeKey) || "90d";
   const from = url.searchParams.get("from");

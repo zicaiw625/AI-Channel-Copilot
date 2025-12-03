@@ -1,18 +1,18 @@
 import type { HeadersFunction, LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
 import { useFetcher, useLoaderData, useSearchParams } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
-import { authenticate, BILLING_PLAN } from "../shopify.server";
+import { authenticate } from "../shopify.server";
 import { requireEnv } from "../lib/env.server";
 import { 
   computeIsTestMode, 
   detectAndPersistDevShop, 
   calculateRemainingTrialDays,
-  upsertBillingState,
-  getBillingState,
-  requestSubscription
+  requestSubscription,
+  activateFreePlan,
 } from "../lib/billing.server";
 import { getSettings, syncShopPreferences } from "../lib/settings.server";
 import { useUILanguage } from "../lib/useUILanguage";
+import { BILLING_PLANS, PRIMARY_BILLABLE_PLAN_ID, type PlanId } from "../lib/billing/plans";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   type AuthShape = Awaited<ReturnType<typeof authenticate.admin>>;
@@ -30,46 +30,36 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   const shopDomain = session.shop;
   let settings = await getSettings(shopDomain);
-  if (admin) settings = await syncShopPreferences(admin, shopDomain, settings);
-  
-  // Ensure we have a billing state record
-  const isDevShop = admin ? await detectAndPersistDevShop(admin, shopDomain) : false;
-  const trialDays = await calculateRemainingTrialDays(shopDomain);
-  const billingState = await getBillingState(shopDomain);
-  
-  // If already has a plan, redirect to dashboard? 
-  // Maybe not here, user might want to see onboarding if explicitly requested or "subscription_inactive"
-  
-  const price = Number(process.env.BILLING_PRICE || "29");
-  const enabled = process.env.ENABLE_BILLING === "true";
-  const demo = process.env.DEMO_MODE === "true";
+  if (admin) {
+    settings = await syncShopPreferences(admin, shopDomain, settings);
+    await detectAndPersistDevShop(admin, shopDomain);
+  }
+  const trialDaysEntries = await Promise.all(
+    (Object.keys(BILLING_PLANS) as PlanId[]).map(async (planId) => {
+      const plan = BILLING_PLANS[planId];
+      const remaining = plan.trialSupported ? await calculateRemainingTrialDays(shopDomain, planId) : 0;
+      return [planId, remaining] as const;
+    }),
+  );
+  const trialDays = Object.fromEntries(trialDaysEntries) as Record<PlanId, number>;
   
   return { 
     language: settings.languages[0] || "中文", 
-    planName: BILLING_PLAN, 
-    trialDays, 
-    price, 
-    isDevShop, 
-    enabled, 
     shopDomain, 
-    demo,
-    billingStateStr: billingState?.billingState || "NO_PLAN",
-    authorized: true
+    authorized: true,
+    plans: Object.values(BILLING_PLANS).map((plan) => ({
+      ...plan,
+      remainingTrialDays: trialDays[plan.id] || 0,
+    })),
   };
 };
 
 export default function Onboarding() {
   const { 
     language, 
-    planName, 
-    trialDays, 
-    price, 
-    isDevShop, 
-    enabled, 
     shopDomain, 
-    demo, 
     authorized,
-    billingStateStr
+    plans
   } = useLoaderData<typeof loader>();
   
   const [searchParams, setSearchParams] = useSearchParams();
@@ -83,16 +73,9 @@ export default function Onboarding() {
     return <div style={{padding: 20}}>Unauthorized. Please access via Shopify Admin.</div>;
   }
 
-  const handleSelectFree = () => {
+  const handleSelectPlan = (planId: PlanId) => {
     fetcher.submit(
-      { intent: "select_free", shop: shopDomain },
-      { method: "post" }
-    );
-  };
-
-  const handleSelectPro = () => {
-    fetcher.submit(
-      { intent: "select_pro", shop: shopDomain },
+      { intent: "select_plan", planId, shop: shopDomain },
       { method: "post" }
     );
   };
@@ -145,111 +128,124 @@ export default function Onboarding() {
       )}
 
       <div style={{ display: "flex", gap: 20, justifyContent: "center", flexWrap: "wrap" }}>
-        
-        {/* FREE PLAN */}
-        <div style={{ 
-          flex: 1, 
-          minWidth: 280, 
-          maxWidth: 350, 
-          border: "1px solid #e1e3e5", 
-          borderRadius: 8, 
-          padding: 24, 
-          display: "flex", 
-          flexDirection: "column" 
-        }}>
-          <h3 style={{ margin: 0, fontSize: 18, color: "#333" }}>Free</h3>
-          <div style={{ fontSize: 32, fontWeight: "bold", margin: "12px 0" }}>$0 <span style={{ fontSize: 14, fontWeight: "normal", color: "#666" }}>/mo</span></div>
-          <p style={{ color: "#666", minHeight: 40 }}>{en ? "Essential AI attribution for small stores." : "适合小型店铺的基础 AI 归因。"}</p>
-          
-          <ul style={{ listStyle: "none", padding: 0, margin: "20px 0", flex: 1, lineHeight: "1.6" }}>
-            <li>✓ {en ? "AI Channel Detection" : "AI 渠道识别"}</li>
-            <li>✓ {en ? "Basic Stats (Last 7 days)" : "基础统计（最近 7 天）"}</li>
-            <li>✓ {en ? "Single User" : "单用户"}</li>
-            <li style={{ color: "#999" }}>✗ {en ? "No LTV/Retention metrics" : "无 LTV/留存指标"}</li>
-            <li style={{ color: "#999" }}>✗ {en ? "No Historical Data" : "无历史全量数据"}</li>
-          </ul>
+        {plans.map((plan) => {
+          const isFree = plan.id === 'free';
+          const recommended = plan.id === PRIMARY_BILLABLE_PLAN_ID;
+          const disabled = plan.status !== 'live' || fetcher.state !== 'idle';
+          const priceLabel = plan.priceUsd === 0 ? "$0" : `$${plan.priceUsd}`;
+          const trialLabel = plan.trialSupported
+            ? plan.remainingTrialDays > 0
+              ? en
+                ? `${plan.remainingTrialDays} days free`
+                : `剩余 ${plan.remainingTrialDays} 天试用`
+              : en
+                ? "Trial exhausted"
+                : "试用次数已用完"
+            : en
+              ? "No trial"
+              : "无试用";
+          const buttonLabel =
+            plan.status === 'coming_soon'
+              ? (en ? "Coming soon" : "敬请期待")
+              : fetcher.state !== 'idle'
+                ? "..."
+                : en
+                  ? `Choose ${plan.name}`
+                  : `选择 ${plan.name}`;
 
-          <button 
-            type="button"
-            onClick={handleSelectFree}
-            disabled={fetcher.state !== "idle"}
-            style={{ 
-              width: "100%", 
-              padding: "12px", 
-              background: "white", 
-              border: "1px solid #babfc3", 
-              borderRadius: 4, 
-              cursor: "pointer",
-              fontWeight: 600
-            }}
-          >
-            {fetcher.state !== "idle" ? "..." : (en ? "Select Free" : "选择免费版")}
-          </button>
-        </div>
+          return (
+            <div
+              key={plan.id}
+              style={{
+                flex: 1,
+                minWidth: 280,
+                maxWidth: 340,
+                border: recommended ? "2px solid #008060" : "1px solid #e1e3e5",
+                borderRadius: 8,
+                padding: 24,
+                display: "flex",
+                flexDirection: "column",
+                position: "relative",
+                background: recommended ? "#fbfcfd" : "white",
+                opacity: plan.status === "live" ? 1 : 0.8,
+              }}
+            >
+              {recommended && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: -12,
+                    left: "50%",
+                    transform: "translateX(-50%)",
+                    background: "#008060",
+                    color: "white",
+                    padding: "2px 10px",
+                    borderRadius: 12,
+                    fontSize: 12,
+                    fontWeight: "bold",
+                  }}
+                >
+                  {en ? "RECOMMENDED" : "推荐"}
+                </div>
+              )}
+              {plan.status === "coming_soon" && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: 8,
+                    right: 8,
+                    background: "#faad14",
+                    color: "white",
+                    padding: "2px 8px",
+                    borderRadius: 999,
+                    fontSize: 12,
+                  }}
+                >
+                  {en ? "Coming Soon" : "即将上线"}
+                </div>
+              )}
+              <h3 style={{ margin: 0, fontSize: 18, color: "#333" }}>{plan.name}</h3>
+              <div style={{ fontSize: 32, fontWeight: "bold", margin: "12px 0" }}>
+                {priceLabel}
+                {plan.priceUsd > 0 && (
+                  <span style={{ fontSize: 14, fontWeight: "normal", color: "#666" }}>
+                    &nbsp;/ {en ? "mo" : "月"}
+                  </span>
+                )}
+              </div>
+              <p style={{ color: "#666", minHeight: 40 }}>{plan.includes[0]}</p>
+              <ul style={{ listStyle: "none", padding: 0, margin: "20px 0", flex: 1, lineHeight: "1.6" }}>
+                {plan.includes.map((feature) => (
+                  <li key={feature}>✓ {feature}</li>
+                ))}
+              </ul>
+              <button
+                type="button"
+                onClick={() => handleSelectPlan(plan.id)}
+                disabled={disabled}
+                style={{
+                  width: "100%",
+                  padding: "12px",
+                  background: isFree ? "white" : "#008060",
+                  color: isFree ? "#333" : "white",
+                  border: isFree ? "1px solid #babfc3" : "none",
+                  borderRadius: 4,
+                  cursor: disabled ? "not-allowed" : "pointer",
+                  fontWeight: 600,
+                  boxShadow: isFree ? "none" : "0 2px 5px rgba(0,0,0,0.1)",
+                }}
+              >
+                {buttonLabel}
+              </button>
+              {plan.trialSupported && (
+                <div style={{ textAlign: "center", fontSize: 12, color: "#666", marginTop: 8 }}>
+                  {trialLabel}
+                </div>
+              )}
+            </div>
+          );
+        })}
 
-        {/* PRO PLAN */}
-        <div style={{ 
-          flex: 1, 
-          minWidth: 280, 
-          maxWidth: 350, 
-          border: "2px solid #008060", 
-          borderRadius: 8, 
-          padding: 24, 
-          display: "flex", 
-          flexDirection: "column",
-          position: "relative",
-          background: "#fbfcfd"
-        }}>
-          <div style={{ 
-            position: "absolute", 
-            top: -12, 
-            left: "50%", 
-            transform: "translateX(-50%)", 
-            background: "#008060", 
-            color: "white", 
-            padding: "2px 10px", 
-            borderRadius: 12, 
-            fontSize: 12, 
-            fontWeight: "bold"
-          }}>
-            {en ? "RECOMMENDED" : "推荐"}
-          </div>
-          <h3 style={{ margin: 0, fontSize: 18, color: "#333" }}>Pro</h3>
-          <div style={{ fontSize: 32, fontWeight: "bold", margin: "12px 0" }}>
-            ${price} <span style={{ fontSize: 14, fontWeight: "normal", color: "#666" }}>/mo</span>
-          </div>
-          <p style={{ color: "#666", minHeight: 40 }}>{en ? "Full power of AI analytics & Copilot." : "完整的 AI 分析与 Copilot 助手。"}</p>
-          
-          <ul style={{ listStyle: "none", padding: 0, margin: "20px 0", flex: 1, lineHeight: "1.6" }}>
-             <li>✓ {en ? "Full Historical Analysis" : "全量历史分析"}</li>
-             <li>✓ {en ? "LTV / AOV / Retention" : "LTV / AOV / 复购率"}</li>
-             <li>✓ {en ? "AI Copilot Q&A" : "Copilot 智能问答"}</li>
-             <li>✓ {en ? "llms.txt Generator" : "llms.txt 生成器"}</li>
-             <li>✓ <b>{en ? `${trialDays}-Day Free Trial` : `${trialDays} 天免费试用`}</b></li>
-          </ul>
-
-          <button 
-            type="button"
-            onClick={handleSelectPro}
-            disabled={fetcher.state !== "idle"}
-            style={{ 
-              width: "100%", 
-              padding: "12px", 
-              background: "#008060", 
-              color: "white", 
-              border: "none", 
-              borderRadius: 4, 
-              cursor: "pointer",
-              fontWeight: 600,
-              boxShadow: "0 2px 5px rgba(0,0,0,0.1)"
-            }}
-          >
-            {fetcher.state !== "idle" ? "..." : (en ? `Start ${trialDays}-Day Free Trial` : `开始 ${trialDays} 天免费试用`)}
-          </button>
-          <div style={{ textAlign: "center", fontSize: 12, color: "#666", marginTop: 8 }}>
-            {en ? "Cancel anytime during trial." : "试用期内随时取消。"}
-          </div>
-        </div>
       </div>
     </section>
   );
@@ -275,39 +271,44 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const formData = await request.formData();
     const intent = formData.get("intent");
     
-    if (intent === "select_free") {
-        // Activate Free Plan
-        await upsertBillingState(shopDomain, {
-            billingPlan: "free",
-            billingState: "FREE_ACTIVE",
-            // If they are downgrading from paid, we might need to cancel subscription, 
-            // but for onboarding flow (NO_PLAN), we just set state.
-        });
-        
-        // Redirect to dashboard
-        const appUrl = requireEnv("SHOPIFY_APP_URL");
-        throw new Response(null, { status: 302, headers: { Location: `${appUrl}/app` } });
-    }
-    
-    if (intent === "select_pro") {
+    if (intent === "select_plan") {
+        const planId = (formData.get("planId") as PlanId) || "free";
+        const plan = BILLING_PLANS[planId];
+        if (!plan) {
+          return Response.json({ ok: false, message: "Unknown plan" }, { status: 400 });
+        }
+
+        if (plan.id === "free") {
+          await activateFreePlan(shopDomain);
+          const appUrl = requireEnv("SHOPIFY_APP_URL");
+          throw new Response(null, { status: 302, headers: { Location: `${appUrl}/app` } });
+        }
+
+        if (plan.status !== "live") {
+          return Response.json({
+            ok: false,
+            message: plan.status === "coming_soon" ? "Plan is coming soon" : "Plan unavailable",
+          }, { status: 400 });
+        }
+
         const isTest = await computeIsTestMode(shopDomain);
-        const trialDays = await calculateRemainingTrialDays(shopDomain);
-        
+        const trialDays = await calculateRemainingTrialDays(shopDomain, planId);
+
         const confirmationUrl = await requestSubscription(
-            admin,
-            shopDomain,
-            BILLING_PLAN,
-            isTest,
-            trialDays
+          admin,
+          shopDomain,
+          planId,
+          isTest,
+          trialDays,
         );
-        
+
         if (confirmationUrl) {
-           throw new Response(null, { status: 302, headers: { Location: confirmationUrl } }); 
+          throw new Response(null, { status: 302, headers: { Location: confirmationUrl } });
         } else {
-           return Response.json({
-             ok: false,
-             message: "Failed to create subscription. confirmationUrl is missing."
-           });
+          return Response.json({
+            ok: false,
+            message: "Failed to create subscription. confirmationUrl is missing.",
+          });
         }
     }
 

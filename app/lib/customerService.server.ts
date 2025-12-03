@@ -4,7 +4,7 @@
  */
 
 import prisma from "../db.server";
-import type { DateRange, OrderRecord } from "./aiData";
+import type { DateRange } from "./aiData";
 import { DatabaseError, NotFoundError } from "./errors";
 import { logger } from "./logger.server";
 

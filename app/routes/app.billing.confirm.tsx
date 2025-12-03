@@ -1,7 +1,13 @@
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate, BILLING_PLAN, MONTHLY_PLAN } from "../shopify.server";
-import { computeIsTestMode, upsertBillingState, getActiveSubscriptionDetails } from "../lib/billing.server";
+import {
+  computeIsTestMode,
+  getActiveSubscriptionDetails,
+  setSubscriptionActiveState,
+  setSubscriptionTrialState,
+} from "../lib/billing.server";
+import { resolvePlanByShopifyName, PRIMARY_BILLABLE_PLAN_ID, getPlanConfig } from "../lib/billing/plans";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, billing, session } = await authenticate.admin(request);
@@ -14,23 +20,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   
   if (check.hasActivePayment) {
     const details = await getActiveSubscriptionDetails(admin, MONTHLY_PLAN);
-    const trialEnd = details?.trialEnd || null;
+    const plan =
+      resolvePlanByShopifyName(details?.name || MONTHLY_PLAN) ||
+      getPlanConfig(PRIMARY_BILLABLE_PLAN_ID);
     const now = new Date();
-    
-    // Determine state
-    let billingState = "PRO_ACTIVE";
-    if (trialEnd && trialEnd > now) {
-        billingState = "PRO_TRIALING";
+    if (details?.trialEnd && details.trialEnd > now && plan.trialSupported) {
+      await setSubscriptionTrialState(shopDomain, plan.id, details.trialEnd, details.status ?? "ACTIVE");
+    } else {
+      await setSubscriptionActiveState(shopDomain, plan.id, details?.status ?? "ACTIVE");
     }
-    
-    await upsertBillingState(shopDomain, {
-        billingPlan: "pro",
-        billingState: billingState,
-        lastSubscriptionStatus: details?.status || "ACTIVE",
-        lastTrialEndAt: trialEnd,
-        hasEverSubscribed: true,
-        lastCheckedAt: new Date()
-    });
 
     const url = new URL(request.url);
     const next = new URL("/app", url.origin);

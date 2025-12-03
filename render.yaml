@@ -22,13 +22,13 @@ services:
       - key: ENABLE_LOGIN_FORM
         value: true
       - key: BILLING_PLAN_NAME
-        value: AI Channel Copilot Basic
+        value: AI Copilot Pro
       - key: BILLING_PRICE
-        value: 5
+        value: 29
       - key: BILLING_CURRENCY
         value: USD
       - key: BILLING_TRIAL_DAYS
-        value: 7
+        value: 14
       - key: BILLING_INTERVAL
         value: EVERY_30_DAYS
       - key: ENABLE_BILLING

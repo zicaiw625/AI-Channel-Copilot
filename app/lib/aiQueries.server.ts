@@ -165,23 +165,23 @@ async function buildDashboardFromDb(
     trendOrders.forEach(o => {
        const date = new Date(o.createdAt);
        let key = "";
-       let sortKey = 0;
+      let _sortKey = 0;
        
        if (bucket === "day") {
          key = formatDateOnly(date, timezone);
-         sortKey = startOfDay(date, timezone).getTime();
+        _sortKey = startOfDay(date, timezone).getTime();
        } else if (bucket === "week") {
          const start = startOfDay(date, timezone);
          const day = start.getUTCDay();
          const diff = (day + 6) % 7;
          start.setUTCDate(start.getUTCDate() - diff);
          key = `${formatDateOnly(start, timezone)} · 周`;
-         sortKey = start.getTime();
+        _sortKey = start.getTime();
        } else {
          key = new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit" }).format(date);
          const start = new Date(date);
          start.setUTCDate(1); 
-         sortKey = start.getTime();
+        _sortKey = start.getTime();
        }
 
        if (!bucketMap.has(key)) {

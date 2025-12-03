@@ -15,6 +15,10 @@ export async function getEffectivePlan(shopDomain: string): Promise<PlanTier> {
   if (!state) return "none";
 
   const { billingState, billingPlan } = state;
+
+  if (state.isDevShop) {
+    return "pro";
+  }
   
   // If explicitly cancelled or expired
   if (billingState === "CANCELLED" || billingState === "EXPIRED_NO_SUBSCRIPTION") {

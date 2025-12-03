@@ -1,7 +1,7 @@
 import prisma from "../db.server";
 import { defaultSettings, type AiDomainRule, type PipelineStatus, type SettingsDefaults, type UtmSourceRule } from "./aiData";
 import { getPlatform, isDemoMode } from "./runtime.server";
-import { isSchemaMissing, isNotFound, isIgnorableMigrationError } from "./prismaErrors";
+import { isSchemaMissing, isIgnorableMigrationError } from "./prismaErrors";
 import { logger } from "./logger.server";
 import { createGraphqlSdk, type AdminGraphqlClient } from "./graphqlSdk.server";
 import type { ShopSettings } from "@prisma/client";

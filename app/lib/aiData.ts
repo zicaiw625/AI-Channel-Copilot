@@ -54,7 +54,6 @@ import type {
   TimeRangeKey,
   DateRange,
   OrderRecord,
-  ProductRow,
   RawOrderRow,
   AiDomainRule,
   UtmSourceRule,

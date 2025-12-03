@@ -143,7 +143,7 @@
 - 门禁逻辑：
   - `ENABLE_BILLING=true` 启用计费检查；`false` 则完全跳过，应用可自由使用。
   - 启用后，应用会调用 `billing.check` 检查订阅状态，未订阅用户会进入只读模式或被引导至订阅页面。
-  - 试用期由 `BILLING_TRIAL_DAYS`（默认 7 天）控制。
+  - 试用期由 `BILLING_TRIAL_DAYS`（默认 14 天）控制。
 - 相关环境变量示例：
   - `ENABLE_BILLING=true`
-  - `BILLING_TRIAL_DAYS=7`
+  - `BILLING_TRIAL_DAYS=14`

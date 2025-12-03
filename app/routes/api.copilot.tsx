@@ -2,8 +2,14 @@ import type { ActionFunctionArgs } from "react-router";
 import type { TimeRangeKey } from "../lib/aiData";
 import type { CopilotIntent } from "../lib/copilot.intent";
 import { copilotAnswer } from "../lib/copilot.server";
+import { authenticate } from "../shopify.server";
+import { requireFeature, FEATURES } from "../lib/access.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
+  const { session } = await authenticate.admin(request);
+  const shopDomain = session?.shop || "";
+  await requireFeature(shopDomain, FEATURES.COPILOT);
+
   if (request.method !== "POST") {
     return Response.json({ ok: false, message: "Method not allowed" }, { status: 405 });
   }

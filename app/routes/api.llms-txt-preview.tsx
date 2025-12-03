@@ -2,10 +2,12 @@ import type { LoaderFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import { getSettings } from "../lib/settings.server";
 import { buildLlmsTxt } from "../lib/llms.server";
+import { requireFeature, FEATURES } from "../lib/access.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
   const shopDomain = session?.shop || "";
+  await requireFeature(shopDomain, FEATURES.DASHBOARD_FULL);
   const settings = await getSettings(shopDomain);
   const text = await buildLlmsTxt(shopDomain, settings, { range: "30d", topN: 20 });
 

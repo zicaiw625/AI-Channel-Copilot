@@ -9,6 +9,7 @@ import { PrismaSessionStorage } from "@shopify/shopify-app-session-storage-prism
 import prisma from "./db.server";
 import { requireEnv, isProduction } from "./lib/env.server";
 import { runStartupSelfCheck } from "./lib/selfcheck.server";
+import { BILLING_PLANS, PRIMARY_BILLABLE_PLAN_ID } from "./lib/billing/plans";
 
 const apiKey = requireEnv("SHOPIFY_API_KEY");
 const apiSecretKey = requireEnv("SHOPIFY_API_SECRET");
@@ -18,7 +19,8 @@ const scopes = requireEnv("SCOPES")
   .map((item) => item.trim())
   .filter(Boolean);
 
-const planName = (process.env.BILLING_PLAN_NAME || "AI Channel Copilot Basic").trim();
+const primaryPlan = BILLING_PLANS[PRIMARY_BILLABLE_PLAN_ID];
+const planName = (process.env.BILLING_PLAN_NAME || primaryPlan.shopifyName).trim();
 export const MONTHLY_PLAN = planName;
 export type BillingPlanKey = keyof ShopifyAppConfig["billing"];
 export const BILLING_PLAN: BillingPlanKey = MONTHLY_PLAN as BillingPlanKey;
@@ -32,10 +34,10 @@ const getBillingInterval = (value: string): BillingInterval.Annual | BillingInte
   }
 };
 const readBillingConfig = () => {
-  const amount = Number(process.env.BILLING_PRICE || "5");
+  const amount = Number(process.env.BILLING_PRICE || primaryPlan.priceUsd);
   const currencyCode = (process.env.BILLING_CURRENCY || "USD").toUpperCase();
-  const trialDays = Number(process.env.BILLING_TRIAL_DAYS || "7");
-  const intervalEnv = (process.env.BILLING_INTERVAL || "EVERY_30_DAYS").toUpperCase();
+  const trialDays = Number(process.env.BILLING_TRIAL_DAYS || primaryPlan.defaultTrialDays);
+  const intervalEnv = (process.env.BILLING_INTERVAL || primaryPlan.interval).toUpperCase();
   const interval = getBillingInterval(intervalEnv);
   const validCurrency = /^[A-Z]{3}$/.test(currencyCode);
   const validAmount = amount > 0 && Number.isFinite(amount);

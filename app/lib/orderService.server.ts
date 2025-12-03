@@ -118,7 +118,7 @@ export const loadOrdersFromDb = async (
 export const getOrderStats = async (
   shopDomain: string,
   dateRange: DateRange,
-  settings: SettingsDefaults
+  _settings: SettingsDefaults
 ) => {
   try {
     const stats = await prisma.order.groupBy({

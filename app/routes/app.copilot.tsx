@@ -3,20 +3,17 @@ import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { Link, useFetcher, useLoaderData } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
-import { detectAndPersistDevShop, computeIsTestMode } from "../lib/billing.server";
 import { getSettings } from "../lib/settings.server";
 import { resolveDateRange, type TimeRangeKey } from "../lib/aiData";
 import { useUILanguage } from "../lib/useUILanguage";
 import styles from "../styles/app.copilot.module.css";
-import { getEffectivePlan, hasFeature, FEATURES } from "../lib/access.server";
+import { hasFeature, FEATURES } from "../lib/access.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  let admin, session, billing;
+  let session;
   try {
     const auth = await authenticate.admin(request);
-    admin = auth.admin;
     session = auth.session;
-    billing = auth.billing;
   } catch (error) {
     if (process.env.DEMO_MODE !== "true") throw error;
   }
@@ -28,18 +25,16 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const dateRange = resolveDateRange(range, new Date(), undefined, undefined, timezone);
   
   const canUseCopilot = await hasFeature(shopDomain, FEATURES.COPILOT);
-  const plan = await getEffectivePlan(shopDomain);
-  
   const demo = process.env.DEMO_MODE === "true";
   
   // If demo, allow
   const readOnly = !canUseCopilot && !demo;
 
-  return { shopDomain, settings, timezone, dateRange, range, readOnly, demo, plan };
+  return { shopDomain, settings, timezone, dateRange, range, readOnly, demo };
 };
 
 export default function Copilot() {
-  const { settings, dateRange, range, readOnly, demo, plan } = useLoaderData<typeof loader>();
+  const { settings, dateRange, range, readOnly, demo } = useLoaderData<typeof loader>();
   const fetcher = useFetcher();
   const [question, setQuestion] = useState("");
   // 使用 useUILanguage 保持语言设置的客户端一致性

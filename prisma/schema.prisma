@@ -211,6 +211,8 @@ model ShopBillingState {
   hasEverSubscribed      Boolean   @default(false)
   lastSubscriptionStatus String?   // Raw Shopify status
   lastCheckedAt          DateTime?
+  lastUninstalledAt      DateTime?
+  lastReinstalledAt      DateTime?
   
   createdAt              DateTime  @default(now())
   updatedAt              DateTime  @updatedAt

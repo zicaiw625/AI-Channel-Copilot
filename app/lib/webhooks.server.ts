@@ -2,8 +2,6 @@ import { registerWebhooks } from "../shopify.server";
 import { logger } from "./logger.server";
 import type { Session } from "@shopify/shopify-app-session-storage-prisma";
 
-type RegisterWebhooksArgs = { session: Session };
-
 /**
  * 确保Shopify webhooks已正确注册
  * @param session Shopify会话对象

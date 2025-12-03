@@ -5,6 +5,16 @@ import { requireEnv } from "../lib/env.server";
 import { computeIsTestMode } from "../lib/billing.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
+  const demo = process.env.DEMO_MODE === "true";
+  
+  // Demo 模式下，订阅功能不可用
+  if (demo) {
+    return Response.json({
+      ok: false,
+      message: "Demo mode: billing is disabled. Install the app in a real Shopify store to subscribe.",
+    });
+  }
+  
   try {
     const { billing, session } = await authenticate.admin(request);
     const shopDomain = session?.shop || "";
@@ -14,7 +24,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return null;
   } catch (error) {
     if (error instanceof Response) throw error;
-    throw error;
+    // 返回错误消息给 UI，而不是静默失败
+    return Response.json({
+      ok: false,
+      message: "Failed to start subscription. Please try again.",
+    });
   }
 };
 

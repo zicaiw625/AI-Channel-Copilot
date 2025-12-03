@@ -30,23 +30,32 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   let isTest = false;
   let check = { hasActivePayment: true };
 
-  if (admin && session) {
+  const billingEnabled = process.env.ENABLE_BILLING === "true";
+  const demo = process.env.DEMO_MODE === "true";
+
+  // 只有在 billing 启用时才检查订阅状态
+  if (billingEnabled && admin && session) {
     isDev = await detectAndPersistDevShop(admin, shopDomain);
     isTest = await computeIsTestMode(shopDomain);
     check = isDev ? { hasActivePayment: true } : await billing!.check({ plans: [BILLING_PLAN], isTest });
   }
 
-  return { shopDomain, settings, timezone, dateRange, range, readOnly: !check.hasActivePayment };
+  // 如果 billing 未启用或 demo 模式，不设为只读
+  const readOnly = billingEnabled && !demo ? !check.hasActivePayment : false;
+  return { shopDomain, settings, timezone, dateRange, range, readOnly, demo };
 };
 
 export default function Copilot() {
-  const { settings, dateRange, range, readOnly } = useLoaderData<typeof loader>();
+  const { settings, dateRange, range, readOnly, demo } = useLoaderData<typeof loader>();
   const fetcher = useFetcher();
   const [question, setQuestion] = useState("");
   // 使用 useUILanguage 保持语言设置的客户端一致性
   const language = useUILanguage(settings.languages[0] || "中文");
+  
+  const isLoading = fetcher.state !== "idle";
 
   const ask = (intent?: string) => {
+    if (readOnly) return;
     const payload: Record<string, string> = intent ? { intent } : { question };
     fetcher.submit(
       { ...payload, range, from: dateRange.fromParam || "", to: dateRange.toParam || "" },
@@ -63,6 +72,7 @@ export default function Copilot() {
           <div className={styles.inlineNote}>
             <span>{language === "English" ? "GMV Metric: " : "GMV 口径："}{settings.gmvMetric}</span>
             <span>{language === "English" ? "Time Range: " : "时间范围："}{dateRange.label}</span>
+            {demo && <span style={{ color: "#0050b3" }}>{language === "English" ? "(Demo Mode)" : "（Demo 模式）"}</span>}
           </div>
         </div>
 
@@ -72,13 +82,25 @@ export default function Copilot() {
           </div>
         )}
         <div className={styles.quickButtons}>
-          <button className={styles.primaryButton} onClick={() => ask("ai_performance")}>
-            {language === "English" ? "AI channel performance in last 30 days?" : "过去 30 天 AI 渠道表现如何？"}
+          <button 
+            className={styles.primaryButton} 
+            onClick={() => ask("ai_performance")}
+            disabled={readOnly || isLoading}
+          >
+            {isLoading ? (language === "English" ? "Loading..." : "加载中...") : (language === "English" ? "AI channel performance in last 30 days?" : "过去 30 天 AI 渠道表现如何？")}
           </button>
-          <button className={styles.secondaryButton} onClick={() => ask("ai_vs_all_aov")}>
+          <button 
+            className={styles.secondaryButton} 
+            onClick={() => ask("ai_vs_all_aov")}
+            disabled={readOnly || isLoading}
+          >
             {language === "English" ? "AI channel vs all channels AOV?" : "AI 渠道 vs 全部渠道 AOV？"}
           </button>
-          <button className={styles.secondaryButton} onClick={() => ask("ai_top_products")}>
+          <button 
+            className={styles.secondaryButton} 
+            onClick={() => ask("ai_top_products")}
+            disabled={readOnly || isLoading}
+          >
             {language === "English" ? "Top-selling products from AI channels recently?" : "最近 AI 渠道销量最高的产品？"}
           </button>
         </div>
@@ -89,9 +111,10 @@ export default function Copilot() {
             placeholder={language === "English" ? "Type your question (limited intents: performance/overview/trend, compare/vs, top/bestsellers)" : "输入你的问题（目前仅支持有限类型：表现/概览/趋势、对比/VS、Top/热销）"}
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
+            disabled={readOnly}
           />
-          <button className={styles.primaryButton} onClick={() => ask()} disabled={readOnly}>
-            {language === "English" ? "Ask" : "提问"}
+          <button className={styles.primaryButton} onClick={() => ask()} disabled={readOnly || isLoading}>
+            {isLoading ? (language === "English" ? "Loading..." : "加载中...") : (language === "English" ? "Ask" : "提问")}
           </button>
         </div>
 

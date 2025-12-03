@@ -20,18 +20,28 @@ import { t } from "../lib/i18n";
 type Lang = "English" | "中文";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { admin, session } = await authenticate.admin(request);
+  let admin, session;
+  try {
+    const auth = await authenticate.admin(request);
+    admin = auth.admin;
+    session = auth.session;
+  } catch (error) {
+    if (process.env.DEMO_MODE !== "true") throw error;
+  }
+
   const shopDomain = session?.shop || "";
   const url = new URL(request.url);
 
   let settings = await getSettings(shopDomain);
-  settings = await syncShopPreferences(admin, shopDomain, settings);
+  if (admin && shopDomain) {
+    settings = await syncShopPreferences(admin, shopDomain, settings);
+  }
 
   await ensureRetentionOncePerDay(shopDomain, settings);
 
   const context = await loadDashboardContext({
     shopDomain,
-    admin,
+    admin, // admin can be null in demo mode
     settings,
     url,
     defaultRangeKey: DEFAULT_RANGE_KEY,

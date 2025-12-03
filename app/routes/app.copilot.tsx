@@ -10,15 +10,32 @@ import { useUILanguage } from "../lib/useUILanguage";
 import styles from "../styles/app.copilot.module.css";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session, admin, billing } = await authenticate.admin(request);
+  let admin, session, billing;
+  try {
+    const auth = await authenticate.admin(request);
+    admin = auth.admin;
+    session = auth.session;
+    billing = auth.billing;
+  } catch (error) {
+    if (process.env.DEMO_MODE !== "true") throw error;
+  }
+
   const shopDomain = session?.shop || "";
   const settings = await getSettings(shopDomain);
   const timezone = settings.timezones[0] || "UTC";
   const range = "30d" as TimeRangeKey;
   const dateRange = resolveDateRange(range, new Date(), undefined, undefined, timezone);
-  const isDev = await detectAndPersistDevShop(admin, shopDomain);
-  const isTest = await computeIsTestMode(shopDomain);
-  const check = isDev ? { hasActivePayment: true } : await billing.check({ plans: [BILLING_PLAN], isTest });
+  
+  let isDev = false;
+  let isTest = false;
+  let check = { hasActivePayment: true };
+
+  if (admin && session) {
+    isDev = await detectAndPersistDevShop(admin, shopDomain);
+    isTest = await computeIsTestMode(shopDomain);
+    check = isDev ? { hasActivePayment: true } : await billing!.check({ plans: [BILLING_PLAN], isTest });
+  }
+
   return { shopDomain, settings, timezone, dateRange, range, readOnly: !check.hasActivePayment };
 };
 

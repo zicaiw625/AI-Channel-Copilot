@@ -67,12 +67,19 @@ export const copilotAnswer = async (request: Request, payload: CopilotRequest) =
       throw new ValidationError("Either question or intent must be provided");
     }
 
-    const { session } = await authenticate.admin(request);
-    if (!session?.shop) {
+    let session;
+    try {
+      const auth = await authenticate.admin(request);
+      session = auth.session;
+    } catch (error) {
+      if (process.env.DEMO_MODE !== "true") throw error;
+    }
+
+    if (!session?.shop && process.env.DEMO_MODE !== "true") {
       throw new ValidationError("Invalid session: missing shop domain");
     }
 
-    const shopDomain = session.shop;
+    const shopDomain = session?.shop || "";
     const settings = await getSettings(shopDomain);
 
     // 验证和解析时间范围
@@ -84,9 +91,12 @@ export const copilotAnswer = async (request: Request, payload: CopilotRequest) =
     const timezone = settings.timezones?.[0] || "UTC";
     const dateRange = resolveDateRange(rangeKey, new Date(), payload.from, payload.to, timezone);
 
+    // 如果是 Demo 模式且无 shop，允许使用 demo 数据
+    const allowDemo = process.env.DEMO_MODE === "true" && !shopDomain;
+
     const { data } = await getAiDashboardData(shopDomain, dateRange, settings, {
       timezone,
-      allowDemo: false,
+      allowDemo,
     });
 
     const intent = payload.intent || parseIntent(payload.question);

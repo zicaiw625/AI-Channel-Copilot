@@ -11,8 +11,26 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   if (request.method !== "POST")
     return Response.json({ ok: false, message: "Method not allowed" }, { status: 405 });
 
-  const { admin, session } = await authenticate.admin(request);
+  let admin = null;
+  let session = null;
+  try {
+    const auth = await authenticate.admin(request);
+    admin = auth.admin;
+    session = auth.session;
+  } catch (error) {
+    if (process.env.DEMO_MODE !== "true") throw error;
+  }
+
   const shopDomain = session?.shop || "";
+  // In demo mode, if no shop domain, we can't trigger backfill
+  if (!shopDomain && process.env.DEMO_MODE === "true") {
+    return Response.json({
+      ok: false,
+      queued: false,
+      reason: "Demo mode: cannot trigger backfill without shop session",
+    });
+  }
+
   const formData = await request.formData();
   const formRange = formData.get("range");
   const rangeKey: TimeRangeKey =

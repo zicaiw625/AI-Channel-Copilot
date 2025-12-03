@@ -27,16 +27,26 @@ import { loadDashboardContext } from "../lib/dashboardContext.server";
 import { logger } from "../lib/logger.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { admin, session } = await authenticate.admin(request);
+  let admin, session;
+  try {
+    const auth = await authenticate.admin(request);
+    admin = auth.admin;
+    session = auth.session;
+  } catch (error) {
+    if (process.env.DEMO_MODE !== "true") throw error;
+  }
+
   const url = new URL(request.url);
   const shopDomain = session?.shop || "";
   let settings = await getSettings(shopDomain);
-  settings = await syncShopPreferences(admin, shopDomain, settings);
+  if (admin && shopDomain) {
+    settings = await syncShopPreferences(admin, shopDomain, settings);
+  }
   const exportRange = (url.searchParams.get("range") as TimeRangeKey) || "90d";
 
   const { orders, clamped, displayTimezone } = await loadDashboardContext({
     shopDomain,
-    admin,
+    admin, // admin can be null
     settings,
     url,
     defaultRangeKey: (exportRange as TimeRangeKey) || DEFAULT_RANGE_KEY,
@@ -55,9 +65,20 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   let shopDomain = "";
+  let admin = null;
+  let session = null;
+  
   try {
-    const { session, admin } = await authenticate.admin(request);
+    const auth = await authenticate.admin(request);
+    admin = auth.admin;
+    session = auth.session;
     shopDomain = session?.shop || "";
+  } catch (error) {
+    if (process.env.DEMO_MODE !== "true") throw error;
+    // Demo mode: shopDomain remains empty
+  }
+
+  try {
     const platform = getPlatform();
     const formData = await request.formData();
     const intent = formData.get("intent") || "save";

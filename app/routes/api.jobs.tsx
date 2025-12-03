@@ -29,8 +29,25 @@ const toCounts = (rows: { status: JobStatus; _count: { status: number } }[]) => 
 };
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  let session;
+  try {
+    const auth = await authenticate.admin(request);
+    session = auth.session;
+  } catch (error) {
+    if (process.env.DEMO_MODE !== "true") throw error;
+  }
+
   const shopDomain = session?.shop || "";
+  // In demo mode, if we can't determine shop domain, return empty or mock data instead of 401
+  if (!shopDomain && process.env.DEMO_MODE === "true") {
+    // Return empty snapshot for demo
+    return Response.json({
+      ok: true,
+      backfills: { recent: [], counts: {} },
+      webhooks: { recent: [], counts: {} },
+    });
+  }
+
   if (!shopDomain) {
     return Response.json({ ok: false, message: "unauthorized" }, { status: 401 });
   }

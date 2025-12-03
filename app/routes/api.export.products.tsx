@@ -5,7 +5,14 @@ import { resolveDateRange, type TimeRangeKey } from "../lib/aiData";
 import { getAiDashboardData } from "../lib/aiQueries.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  let session;
+  try {
+    const auth = await authenticate.admin(request);
+    session = auth.session;
+  } catch (error) {
+    if (process.env.DEMO_MODE !== "true") throw error;
+  }
+
   const shopDomain = session?.shop || "";
   const url = new URL(request.url);
   const rangeKey = (url.searchParams.get("range") as TimeRangeKey) || "90d";

@@ -111,6 +111,9 @@ export const graphqlRequest = async (
       await sleep(delay);
   } catch (error) {
     clearTimeout(timeout);
+    if (error instanceof Response && error.status === 302) {
+      throw error;
+    }
     const isAbortError = (error as Error).name === "AbortError";
     const message = (() => {
       if (isAbortError) return `graphql request timed out after ${timeoutMs}ms`;

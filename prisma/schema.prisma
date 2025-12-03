@@ -91,6 +91,7 @@ model Order {
 
   customer        Customer? @relation(fields: [customerId], references: [id])
 
+  @@index([customerId])
   @@index([shopDomain, createdAt])
   @@index([shopDomain, platform, createdAt])
   @@index([shopDomain, aiSource])

@@ -2,7 +2,7 @@ import type { LoaderFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import { getSettings } from "../lib/settings.server";
 import { resolveDateRange, type TimeRangeKey } from "../lib/aiData";
-import { getAiDashboardData } from "../lib/aiQueries.server";
+import { loadOrdersFromDb } from "../lib/orderService.server";
 import { metricOrderValue } from "../lib/metrics";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -23,7 +23,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const timezone = settings.timezones[0] || "UTC";
   const dateRange = resolveDateRange(rangeKey, new Date(), from, to, timezone);
 
-  const { orders } = await getAiDashboardData(shopDomain, dateRange, settings, { timezone });
+  // Increase limit for exports
+  const { orders } = await loadOrdersFromDb(shopDomain, dateRange, { limit: 100000 });
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({

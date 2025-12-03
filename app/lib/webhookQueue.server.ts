@@ -21,6 +21,30 @@ const MAX_DELAY_MS = Number(process.env.WEBHOOK_MAX_DELAY_MS || 30000);
 const PENDING_COOLDOWN_MS = Number(process.env.WEBHOOK_PENDING_COOLDOWN_MS || 250);
 const MAX_BATCH = Number(process.env.WEBHOOK_MAX_BATCH || 50);
 const PENDING_MAX_COOLDOWN_MS = Number(process.env.WEBHOOK_PENDING_MAX_COOLDOWN_MS || 2000);
+const STUCK_JOB_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+
+const recoverStuckJobs = async (shopDomain: string) => {
+  try {
+    const threshold = new Date(Date.now() - STUCK_JOB_TIMEOUT_MS);
+    const result = await prisma.webhookJob.updateMany({
+      where: {
+        shopDomain,
+        status: "processing",
+        startedAt: { lt: threshold },
+      },
+      data: {
+        status: "queued",
+        startedAt: null,
+        error: "Recovered from stuck state",
+      },
+    });
+    if (result.count > 0) {
+      logger.warn("[webhook] recovered stuck jobs", { shopDomain, count: result.count });
+    }
+  } catch (error) {
+    logger.error("[webhook] failed to recover stuck jobs", { shopDomain, error });
+  }
+};
 
 const dequeue = async (extraWhere?: Prisma.WebhookJobWhereInput) => {
   return prisma.$transaction(async (tx) => {
@@ -165,6 +189,10 @@ export const processWebhookQueueForShop = async (
   const key = `shop:${shopDomain}`;
   if (processingKeys.has(key)) return;
   processingKeys.add(key);
+  
+  // Try to recover stuck jobs before processing
+  await recoverStuckJobs(shopDomain);
+
   try {
     await withAdvisoryLock(hashKey(key), async () => {
       let processed = 0;

@@ -72,7 +72,11 @@ export const copilotAnswer = async (request: Request, payload: CopilotRequest) =
       const auth = await authenticate.admin(request);
       session = auth.session;
     } catch (error) {
-      if (process.env.DEMO_MODE !== "true") throw error;
+      if (process.env.DEMO_MODE === "true") {
+        // Allow demo mode to proceed without session
+      } else {
+        throw error;
+      }
     }
 
     if (!session?.shop && process.env.DEMO_MODE !== "true") {

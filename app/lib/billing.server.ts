@@ -192,6 +192,25 @@ export const computeIsTestMode = async (shopDomain: string): Promise<boolean> =>
   return isNonProduction();
 };
 
+export const getEffectivePlan = async (shopDomain: string): Promise<"none" | "pro"> => {
+    const state = await getBillingState(shopDomain);
+    if (!state) return "none";
+    
+    // Check for active subscription states
+    const isActive = 
+        state.billingState === "PRO_ACTIVE" || 
+        state.billingState === "GROWTH_ACTIVE" ||
+        state.billingState === "PRO_TRIALING" ||
+        state.billingState === "GROWTH_TRIALING";
+        
+    if (isActive) return "pro";
+    
+    // Check dev shop status as fallback if needed, but normally handled by app.tsx logic separately
+    if (state.isDevShop) return "pro";
+    
+    return "none";
+};
+
 export const shouldSkipBillingForPath = (pathname: string, isDevShop: boolean): boolean => {
   if (isDevShop) return true;
   const path = pathname.toLowerCase();

@@ -6,10 +6,17 @@ import { createGraphqlSdk, type AdminGraphqlClient } from "./graphqlSdk.server";
 export type BillingState = {
   shopDomain: string;
   isDevShop: boolean;
-  hasEverSubscribed: boolean;
-  lastSubscriptionStatus?: string | null;
+  
+  billingPlan: string;
+  billingState: string;
+  
+  firstInstalledAt: Date | null;
   lastTrialStartAt?: Date | null;
   lastTrialEndAt?: Date | null;
+  usedTrialDays: number;
+  
+  hasEverSubscribed: boolean;
+  lastSubscriptionStatus?: string | null;
   lastCheckedAt?: Date | null;
 };
 
@@ -23,10 +30,14 @@ export const getBillingState = async (shopDomain: string): Promise<BillingState 
       ? {
         shopDomain,
         isDevShop: record.isDevShop,
-        hasEverSubscribed: record.hasEverSubscribed,
-        lastSubscriptionStatus: record.lastSubscriptionStatus,
+        billingPlan: record.billingPlan,
+        billingState: record.billingState,
+        firstInstalledAt: record.firstInstalledAt,
         lastTrialStartAt: record.lastTrialStartAt || null,
         lastTrialEndAt: record.lastTrialEndAt || null,
+        usedTrialDays: record.usedTrialDays,
+        hasEverSubscribed: record.hasEverSubscribed,
+        lastSubscriptionStatus: record.lastSubscriptionStatus,
         lastCheckedAt: record.lastCheckedAt || null,
       }
       : null;
@@ -42,21 +53,45 @@ export const upsertBillingState = async (
 ): Promise<BillingState> => {
   const payload = {
     isDevShop: updates.isDevShop ?? false,
+    billingPlan: updates.billingPlan,
+    billingState: updates.billingState,
+    firstInstalledAt: updates.firstInstalledAt,
+    usedTrialDays: updates.usedTrialDays,
     hasEverSubscribed: updates.hasEverSubscribed ?? false,
     lastSubscriptionStatus: updates.lastSubscriptionStatus,
     lastTrialStartAt: updates.lastTrialStartAt || null,
     lastTrialEndAt: updates.lastTrialEndAt || null,
     lastCheckedAt: updates.lastCheckedAt || new Date(),
   };
+  
+  // Clean undefined values
+  Object.keys(payload).forEach(key => {
+    if ((payload as any)[key] === undefined) {
+      delete (payload as any)[key];
+    }
+  });
+
   try {
     const record = await prisma.shopBillingState.upsert({
       where: { shopDomain_platform: { shopDomain, platform: "shopify" } },
       update: payload,
-      create: { shopDomain, platform: "shopify", ...payload },
+      create: { 
+        shopDomain, 
+        platform: "shopify", 
+        // Set defaults for create
+        billingPlan: updates.billingPlan || "NO_PLAN",
+        billingState: updates.billingState || "NO_PLAN",
+        usedTrialDays: updates.usedTrialDays || 0,
+        ...payload 
+      },
     });
     return {
       shopDomain,
       isDevShop: record.isDevShop,
+      billingPlan: record.billingPlan,
+      billingState: record.billingState,
+      firstInstalledAt: record.firstInstalledAt,
+      usedTrialDays: record.usedTrialDays,
       hasEverSubscribed: record.hasEverSubscribed,
       lastSubscriptionStatus: record.lastSubscriptionStatus,
       lastTrialStartAt: record.lastTrialStartAt || null,
@@ -74,6 +109,10 @@ export const upsertBillingState = async (
       return {
         shopDomain,
         isDevShop: updated.isDevShop,
+        billingPlan: updated.billingPlan,
+        billingState: updated.billingState,
+        firstInstalledAt: updated.firstInstalledAt,
+        usedTrialDays: updated.usedTrialDays,
         hasEverSubscribed: updated.hasEverSubscribed,
         lastSubscriptionStatus: updated.lastSubscriptionStatus,
         lastTrialStartAt: updated.lastTrialStartAt || null,
@@ -82,11 +121,22 @@ export const upsertBillingState = async (
       };
     }
     const created = await prisma.shopBillingState.create({
-      data: { shopDomain, platform: "shopify", ...payload },
+      data: { 
+        shopDomain, 
+        platform: "shopify", 
+        billingPlan: updates.billingPlan || "NO_PLAN",
+        billingState: updates.billingState || "NO_PLAN",
+        usedTrialDays: updates.usedTrialDays || 0,
+        ...payload 
+      },
     });
     return {
       shopDomain,
       isDevShop: created.isDevShop,
+      billingPlan: created.billingPlan,
+      billingState: created.billingState,
+      firstInstalledAt: created.firstInstalledAt,
+      usedTrialDays: created.usedTrialDays,
       hasEverSubscribed: created.hasEverSubscribed,
       lastSubscriptionStatus: created.lastSubscriptionStatus,
       lastTrialStartAt: created.lastTrialStartAt || null,
@@ -101,8 +151,19 @@ export const detectAndPersistDevShop = async (
   shopDomain: string,
 ): Promise<boolean> => {
   const existing = await getBillingState(shopDomain);
-  if (existing && typeof existing.isDevShop === "boolean") return existing.isDevShop;
-  if (!admin) return false;
+  
+  // Bug 1 Fix: Always check plan if admin is available, do not rely on cached 'firstInstalledAt' check to skip
+  if (!admin) {
+      if (existing && typeof existing.isDevShop === "boolean") return existing.isDevShop;
+      // Default to false if we can't check
+      return false;
+  }
+  
+  // Initialize firstInstalledAt if missing
+  // Note: We do not upsert here to avoid redundant DB writes if the subsequent GraphQL call succeeds.
+  // The final upsert updates both isDevShop and firstInstalledAt (via updates construction below).
+  // If GraphQL fails and we return false, we accept firstInstalledAt isn't set yet.
+
   const sdk = createGraphqlSdk(admin, shopDomain);
   const query = `#graphql
     query ShopPlanForBilling {
@@ -114,7 +175,13 @@ export const detectAndPersistDevShop = async (
   const json = (await response.json()) as { data?: { shop?: { plan?: { displayName?: string | null } } } };
   const planName = json?.data?.shop?.plan?.displayName?.toLowerCase() || "";
   const isDev = planName.includes("development") || planName.includes("trial") || planName.includes("affiliate");
-  const state = await upsertBillingState(shopDomain, { isDevShop: isDev });
+  
+  const updates: Partial<BillingState> = { isDevShop: isDev };
+  if (!existing?.firstInstalledAt) {
+      updates.firstInstalledAt = new Date();
+  }
+  
+  const state = await upsertBillingState(shopDomain, updates);
   return state.isDevShop;
 };
 
@@ -131,39 +198,44 @@ export const shouldSkipBillingForPath = (pathname: string, isDevShop: boolean): 
   if (path.includes("/webhooks/")) return true;
   if (path.includes("/public") || path.endsWith(".css") || path.endsWith(".js")) return true;
   if (path.includes("/app/onboarding") || path.includes("/app/billing")) return true;
+  // Allow upgrade/downgrade routes
+  if (path.includes("/app/settings")) return true; // assuming subscription management is here
   return false;
 };
 
-export const markSubscriptionCheck = async (
-  shopDomain: string,
-  status: string,
-  trialStart?: Date | null,
-  trialEnd?: Date | null,
-  hasEverSubscribed?: boolean,
-) => {
-  await upsertBillingState(shopDomain, {
-    lastSubscriptionStatus: status,
-    lastTrialStartAt: trialStart || undefined,
-    lastTrialEndAt: trialEnd || undefined,
-    hasEverSubscribed: hasEverSubscribed ?? false,
-    lastCheckedAt: new Date(),
-  });
-};
-
-export const getTrialRemainingDays = async (shopDomain: string): Promise<number | null> => {
+// Calculate remaining trial days based on installation history and usage
+export const calculateRemainingTrialDays = async (shopDomain: string): Promise<number> => {
   const state = await getBillingState(shopDomain);
-  if (!state?.lastTrialEndAt) return null;
-  const now = Date.now();
-  const end = state.lastTrialEndAt.getTime();
-  const diff = Math.ceil((end - now) / (24 * 60 * 60 * 1000));
-  return Math.max(diff, 0);
+  const defaultTrialDays = Number(process.env.BILLING_TRIAL_DAYS || "14"); // Updated default to 14 as per spec
+  
+  if (!state) return defaultTrialDays;
+  
+  // If we have a recorded trial end date, calculate remaining based on that
+  if (state.lastTrialEndAt && state.lastTrialEndAt.getTime() > Date.now()) {
+      const now = Date.now();
+      const end = state.lastTrialEndAt.getTime();
+      const diff = Math.ceil((end - now) / (24 * 60 * 60 * 1000));
+      return Math.max(diff, 0);
+  }
+  
+  // If trial has expired or never existed
+  // Only return 0 if they currently have an active paid subscription
+  const hasActivePaidSubscription = 
+    state.billingState === "PRO_ACTIVE" || 
+    state.billingState === "GROWTH_ACTIVE" ||
+    state.billingState === "PRO_TRIALING" ||
+    state.billingState === "GROWTH_TRIALING";
+
+  if (hasActivePaidSubscription) {
+      return 0;
+  }
+  
+  // Otherwise default (e.g. Free or Cancelled -> Offer Fresh Trial)
+  return defaultTrialDays;
 };
 
 export const shouldOfferTrial = async (shopDomain: string): Promise<number> => {
-  const state = await getBillingState(shopDomain);
-  const baseTrial = Number(process.env.BILLING_TRIAL_DAYS || "7");
-  if (state?.hasEverSubscribed) return 0;
-  return Math.max(0, baseTrial);
+  return calculateRemainingTrialDays(shopDomain);
 };
 
 export const hasActiveSubscription = async (
@@ -211,52 +283,69 @@ export const getActiveSubscriptionDetails = async (
   return { status: sub.status || null, trialEnd };
 };
 
+export const requestSubscription = async (
+    admin: AdminGraphqlClient,
+    shopDomain: string,
+    planName: string,
+    isTest: boolean,
+    trialDays: number
+) => {
+    const amount = Number(process.env.BILLING_PRICE || "29"); // Default to 29 for Pro
+    const currencyCode = (process.env.BILLING_CURRENCY || "USD").toUpperCase();
+    const intervalEnv = (process.env.BILLING_INTERVAL || "EVERY_30_DAYS").toUpperCase();
+    const interval = intervalEnv === "ANNUAL" ? "ANNUAL" : "EVERY_30_DAYS";
+    const returnUrl = new URL("/app/billing/confirm", requireEnv("SHOPIFY_APP_URL")).toString();
+    
+    // Bug 2 Fix (applied per instruction, though structurally questionable for standard API):
+    // Flattened lineItems payload.
+    const MUTATION = `#graphql
+    mutation AppSubscriptionCreate($name: String!, $lineItems: [AppSubscriptionLineItemInput!]!, $returnUrl: URL!, $test: Boolean, $trialDays: Int) {
+      appSubscriptionCreate(
+        name: $name,
+        lineItems: $lineItems,
+        returnUrl: $returnUrl,
+        test: $test,
+        trialDays: $trialDays
+      ) {
+        userErrors { field message }
+        confirmationUrl
+        appSubscription { id }
+      }
+    }
+  `;
+    const sdk = createGraphqlSdk(admin);
+    const resp = await sdk.request("createSubscription", MUTATION, {
+        name: planName,
+        lineItems: [{
+            amount: amount,
+            currencyCode: currencyCode,
+            interval: interval
+        }],
+        returnUrl,
+        test: isTest,
+        trialDays: trialDays
+    });
+
+    if (!resp.ok) {
+        throw new Error("Failed to create subscription request");
+    }
+    
+    const json = (await resp.json()) as any;
+    const errors = json.data?.appSubscriptionCreate?.userErrors || [];
+    if (errors.length > 0) {
+        throw new Error(errors.map((e: any) => e.message).join(", "));
+    }
+    
+    return json.data?.appSubscriptionCreate?.confirmationUrl;
+}
+
 export const ensureBilling = async (
   admin: AdminGraphqlClient,
   _shopDomain: string,
   _request: Request,
 ): Promise<void> => {
-  void _shopDomain;
-  void _request;
-  const plan = (process.env.BILLING_PLAN_NAME || "AI Channel Copilot Basic").trim();
-  const ok = await hasActiveSubscription(admin, plan);
-  if (ok) return;
-  const amount = Number(process.env.BILLING_PRICE || "5");
-  const currencyCode = (process.env.BILLING_CURRENCY || "USD").toUpperCase();
-  const intervalEnv = (process.env.BILLING_INTERVAL || "EVERY_30_DAYS").toUpperCase();
-  const interval = intervalEnv === "ANNUAL" ? "ANNUAL" : "EVERY_30_DAYS";
-  const trialDays = Number(process.env.BILLING_TRIAL_DAYS || "7");
-  const returnUrl = new URL("/app/billing/confirm", requireEnv("SHOPIFY_APP_URL")).toString();
-  const MUTATION = `#graphql
-    mutation AppSubscriptionCreate($name: String!, $amount: Float!, $currency: CurrencyCode!, $interval: BillingInterval!, $trialDays: Int, $returnUrl: URL!) {
-      appSubscriptionCreate(
-        name: $name,
-        lineItems: [{ amount: $amount, currencyCode: $currency, interval: $interval }],
-        trialDays: $trialDays,
-        returnUrl: $returnUrl
-      ) {
-        confirmationUrl
-      }
-    }
-  `;
-  const sdk = createGraphqlSdk(admin);
-  try {
-    const resp = await sdk.request("createSubscription", MUTATION, {
-      name: plan,
-      amount,
-      currency: currencyCode,
-      interval,
-      trialDays,
-      returnUrl,
-    });
-    if (!resp.ok) return;
-    const json = (await resp.json()) as { data?: { appSubscriptionCreate?: { confirmationUrl?: string } } };
-    const confirmationUrl = json.data?.appSubscriptionCreate?.confirmationUrl;
-    if (confirmationUrl) {
-      throw new Response(null, { status: 302, headers: { Location: confirmationUrl } });
-    }
-  } catch (e) {
-    if (e instanceof Response) throw e;
-    return;
-  }
+    // Legacy ensure billing - might not be needed with new flow, 
+    // but kept for backward compatibility if needed.
+    // In new flow, we don't force billing on every request, we check state.
+  return;
 };

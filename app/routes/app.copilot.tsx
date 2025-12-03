@@ -1,13 +1,14 @@
 import { useState } from "react";
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
-import { useFetcher, useLoaderData } from "react-router";
+import { Link, useFetcher, useLoaderData } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
-import { authenticate, BILLING_PLAN } from "../shopify.server";
+import { authenticate } from "../shopify.server";
 import { detectAndPersistDevShop, computeIsTestMode } from "../lib/billing.server";
 import { getSettings } from "../lib/settings.server";
 import { resolveDateRange, type TimeRangeKey } from "../lib/aiData";
 import { useUILanguage } from "../lib/useUILanguage";
 import styles from "../styles/app.copilot.module.css";
+import { getEffectivePlan, hasFeature, FEATURES } from "../lib/access.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   let admin, session, billing;
@@ -26,27 +27,19 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const range = "30d" as TimeRangeKey;
   const dateRange = resolveDateRange(range, new Date(), undefined, undefined, timezone);
   
-  let isDev = false;
-  let isTest = false;
-  let check = { hasActivePayment: true };
-
-  const billingEnabled = process.env.ENABLE_BILLING === "true";
+  const canUseCopilot = await hasFeature(shopDomain, FEATURES.COPILOT);
+  const plan = await getEffectivePlan(shopDomain);
+  
   const demo = process.env.DEMO_MODE === "true";
+  
+  // If demo, allow
+  const readOnly = !canUseCopilot && !demo;
 
-  // 只有在 billing 启用时才检查订阅状态
-  if (billingEnabled && admin && session) {
-    isDev = await detectAndPersistDevShop(admin, shopDomain);
-    isTest = await computeIsTestMode(shopDomain);
-    check = isDev ? { hasActivePayment: true } : await billing!.check({ plans: [BILLING_PLAN], isTest });
-  }
-
-  // 如果 billing 未启用或 demo 模式，不设为只读
-  const readOnly = billingEnabled && !demo ? !check.hasActivePayment : false;
-  return { shopDomain, settings, timezone, dateRange, range, readOnly, demo };
+  return { shopDomain, settings, timezone, dateRange, range, readOnly, demo, plan };
 };
 
 export default function Copilot() {
-  const { settings, dateRange, range, readOnly, demo } = useLoaderData<typeof loader>();
+  const { settings, dateRange, range, readOnly, demo, plan } = useLoaderData<typeof loader>();
   const fetcher = useFetcher();
   const [question, setQuestion] = useState("");
   // 使用 useUILanguage 保持语言设置的客户端一致性
@@ -62,6 +55,33 @@ export default function Copilot() {
       { method: "post", action: "/api/copilot" },
     );
   };
+  
+  const UpgradeBanner = () => (
+      <div style={{
+          background: "#fff2e8",
+          border: "1px solid #ffbb96",
+          padding: "16px",
+          marginBottom: "20px",
+          borderRadius: "8px",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center"
+      }}>
+          <div>
+            <h3 style={{ margin: "0 0 8px 0", color: "#d4380d" }}>
+                {language === "English" ? "Pro Feature" : "Pro 功能"}
+            </h3>
+            <p style={{ margin: 0 }}>
+                {language === "English" 
+                  ? "AI Copilot requires a Pro plan. Upgrade to unlock instant answers." 
+                  : "AI Copilot 需要 Pro 计划。升级以解锁智能问答。"}
+            </p>
+          </div>
+          <Link to="/app/onboarding?step=plan_selection" className={styles.primaryButton}>
+              {language === "English" ? "Upgrade to Pro" : "升级到 Pro"}
+          </Link>
+      </div>
+  );
 
   return (
     <s-page heading={language === "English" ? "Copilot Q&A (v0.2 Experimental)" : "Copilot 分析问答（v0.2 实验）"}>
@@ -76,12 +96,9 @@ export default function Copilot() {
           </div>
         </div>
 
-        {readOnly && (
-          <div className={styles.callout}>
-            {language === "English" ? "Subscription inactive: Copilot is disabled in read-only mode." : "订阅未激活：只读模式下 Copilot 问答已禁用。"}
-          </div>
-        )}
-        <div className={styles.quickButtons}>
+        {readOnly && <UpgradeBanner />}
+        
+        <div className={styles.quickButtons} style={readOnly ? { opacity: 0.5, pointerEvents: "none" } : {}}>
           <button 
             className={styles.primaryButton} 
             onClick={() => ask("ai_performance")}
@@ -105,7 +122,7 @@ export default function Copilot() {
           </button>
         </div>
 
-        <div className={styles.askBlock}>
+        <div className={styles.askBlock} style={readOnly ? { opacity: 0.5, pointerEvents: "none" } : {}}>
           <input
             className={styles.input}
             placeholder={language === "English" ? "Type your question (limited intents: performance/overview/trend, compare/vs, top/bestsellers)" : "输入你的问题（目前仅支持有限类型：表现/概览/趋势、对比/VS、Top/热销）"}

@@ -195,11 +195,22 @@ model ShopBillingState {
   shopDomain             String
   platform               String    @default("shopify")
   isDevShop              Boolean   @default(false)
-  hasEverSubscribed      Boolean   @default(false)
-  lastSubscriptionStatus String?
+  
+  // Billing State Machine Fields
+  billingPlan            String    @default("NO_PLAN") // free, pro, growth, NO_PLAN
+  billingState           String    @default("NO_PLAN") // NO_PLAN, FREE_ACTIVE, PRO_TRIALING, PRO_ACTIVE, etc.
+  
+  // Trial Tracking
+  firstInstalledAt       DateTime? // For calculating total trial eligibility
   lastTrialStartAt       DateTime?
   lastTrialEndAt         DateTime?
+  usedTrialDays          Int       @default(0)
+  
+  // Subscription History
+  hasEverSubscribed      Boolean   @default(false)
+  lastSubscriptionStatus String?   // Raw Shopify status
   lastCheckedAt          DateTime?
+  
   createdAt              DateTime  @default(now())
   updatedAt              DateTime  @updatedAt
 

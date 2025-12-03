@@ -17,6 +17,8 @@ import {
 } from "../lib/constants";
 import { loadDashboardContext } from "../lib/dashboardContext.server";
 import { t } from "../lib/i18n";
+import { getEffectivePlan, hasFeature, FEATURES } from "../lib/access.server";
+
 type Lang = "English" | "中文";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -37,6 +39,16 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     settings = await syncShopPreferences(admin, shopDomain, settings);
   }
 
+  const plan = await getEffectivePlan(shopDomain);
+  const isFreePlan = plan === "free";
+  const canViewFull = await hasFeature(shopDomain, FEATURES.DASHBOARD_FULL);
+
+  // Enforce 7d limit for Free plan
+  let defaultRangeKey = DEFAULT_RANGE_KEY;
+  if (isFreePlan) {
+      defaultRangeKey = "7d";
+  }
+
   await ensureRetentionOncePerDay(shopDomain, settings);
 
   const context = await loadDashboardContext({
@@ -44,7 +56,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     admin, // admin can be null in demo mode
     settings,
     url,
-    defaultRangeKey: DEFAULT_RANGE_KEY,
+    defaultRangeKey,
     includeBackfillState: true,
   });
 
@@ -83,6 +95,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           : defaultSettings.pipelineStatuses,
     },
     clamped: context.clamped,
+    isFreePlan,
+    canViewFull
   };
 };
 
@@ -142,8 +156,10 @@ export default function Index() {
     backfillSuppressed,
     backfillAvailable,
     dataLastUpdated,
+    isFreePlan,
+    canViewFull
   } = useLoaderData<typeof loader>();
-  // 使用 useUILanguage 保持语言设置的客户端一致性
+  
   const uiLanguage = useUILanguage(language);
   const lang = uiLanguage as Lang;
   const navigate = useNavigate();
@@ -299,6 +315,11 @@ export default function Index() {
   );
 
   const setRange = (value: TimeRangeKey) => {
+    if (isFreePlan && value !== "7d") {
+        // Show upgrade alert or just ignore
+        alert(uiLanguage === "English" ? "Upgrade to Pro to view more history." : "升级到 Pro 版以查看更多历史数据。");
+        return;
+    }
     const params = new URLSearchParams(location.search);
     params.set("range", value);
     if (value === "custom") {
@@ -322,6 +343,10 @@ export default function Index() {
   };
 
   const applyCustomRange = () => {
+    if (isFreePlan) {
+        alert(uiLanguage === "English" ? "Upgrade to Pro to use custom ranges." : "升级到 Pro 版以使用自定义时间范围。");
+        return;
+    }
     if (!customFrom) return;
     const params = new URLSearchParams(location.search);
     params.set("range", "custom");
@@ -329,10 +354,52 @@ export default function Index() {
     params.set("to", customTo || customFrom);
     navigate({ search: `?${params.toString()}` });
   };
+  
+  const UpgradeOverlay = () => (
+     <div style={{
+         position: "absolute",
+         top: 0, left: 0, right: 0, bottom: 0,
+         background: "rgba(255,255,255,0.7)",
+         backdropFilter: "blur(2px)",
+         display: "flex",
+         alignItems: "center",
+         justifyContent: "center",
+         zIndex: 10
+     }}>
+         <div style={{ background: "white", padding: 20, borderRadius: 8, boxShadow: "0 2px 10px rgba(0,0,0,0.1)", textAlign: "center" }}>
+             <h3>{uiLanguage === "English" ? "Pro Feature" : "Pro 功能"}</h3>
+             <p>{uiLanguage === "English" ? "Upgrade to see detailed LTV and product analysis." : "升级以查看 LTV 与产品详情。"}</p>
+             <Link to="/app/onboarding?step=plan_selection" className={styles.primaryButton}>
+                 {uiLanguage === "English" ? "Upgrade" : "去升级"}
+             </Link>
+         </div>
+     </div>
+  );
 
   return (
     <s-page heading={uiLanguage === "English" ? "AI Discovery & Attribution" : "AI 渠道基础仪表盘"}>
       <div className={styles.page}>
+        
+        {isFreePlan && (
+            <div style={{ 
+                background: "#e6f7ff", 
+                border: "1px solid #91d5ff", 
+                padding: "10px 16px", 
+                marginBottom: 16, 
+                borderRadius: 4,
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center"
+            }}>
+                <span style={{ color: "#0050b3" }}>
+                    {uiLanguage === "English" ? "You are on the Free plan (Limited to 7 days history)." : "当前为免费版（仅限查看最近 7 天数据）。"}
+                </span>
+                <Link to="/app/onboarding?step=plan_selection" style={{ color: "#0050b3", fontWeight: "bold", textDecoration: "underline" }}>
+                    {uiLanguage === "English" ? "Upgrade to Pro" : "升级到 Pro 版"}
+                </Link>
+            </div>
+        )}
+      
         <div className={styles.pageHeader}>
           <div className={styles.titleBlock}>
             <div className={styles.badgeRow}>
@@ -445,11 +512,13 @@ export default function Index() {
                 {(Object.keys(timeRanges) as TimeRangeKey[]).map((key) => (
                   <button
                     key={key}
-                    className={`${styles.pill} ${range === key ? styles.pillActive : ""}`}
+                    className={`${styles.pill} ${range === key ? styles.pillActive : ""} ${isFreePlan && key !== "7d" ? styles.pillDisabled : ""}`}
                     onClick={() => setRange(key)}
                     type="button"
+                    disabled={isFreePlan && key !== "7d"}
+                    style={isFreePlan && key !== "7d" ? { opacity: 0.5, cursor: "not-allowed" } : {}}
                   >
-                    {getRangeLabel(key)}
+                    {getRangeLabel(key)}{isFreePlan && key !== "7d" ? " 🔒" : ""}
                   </button>
                 ))}
               </div>
@@ -459,6 +528,7 @@ export default function Index() {
                   className={styles.input}
                   value={customFrom}
                   onChange={(event) => setCustomFrom(event.target.value)}
+                  disabled={isFreePlan}
                 />
                 <span className={styles.rangeDivider}>{uiLanguage === "English" ? "to" : "至"}</span>
                 <input
@@ -466,11 +536,13 @@ export default function Index() {
                   className={styles.input}
                   value={customTo}
                   onChange={(event) => setCustomTo(event.target.value)}
+                  disabled={isFreePlan}
                 />
                 <button
                   type="button"
                   className={styles.secondaryButton}
                   onClick={applyCustomRange}
+                  disabled={isFreePlan}
                 >
                   {uiLanguage === "English" ? "Apply Custom" : "应用自定义"}
                 </button>
@@ -484,7 +556,13 @@ export default function Index() {
                 </Link>
                 <a
                   className={styles.secondaryButton}
-                  href={`/api/export/orders?range=${range}&from=${encodeURIComponent(dateRange.fromParam || "")}&to=${encodeURIComponent(dateRange.toParam || "")}`}
+                  href={canViewFull ? `/api/export/orders?range=${range}&from=${encodeURIComponent(dateRange.fromParam || "")}&to=${encodeURIComponent(dateRange.toParam || "")}` : "#"}
+                  onClick={(e) => {
+                      if (!canViewFull) {
+                          e.preventDefault();
+                          alert(uiLanguage === "English" ? "Upgrade to Pro to export data." : "升级到 Pro 版以导出数据。");
+                      }
+                  }}
                 >
                   {t(lang, "export_orders_csv")}
                 </a>
@@ -600,7 +678,9 @@ export default function Index() {
             </p>
           </div>
 
-          <div className={styles.card}>
+          <div className={styles.card} style={{ position: "relative" }}>
+             {!canViewFull && <UpgradeOverlay />}
+             <div style={!canViewFull ? { filter: "blur(4px)", pointerEvents: "none" } : {}}>
             <div className={styles.sectionHeader}>
               <div>
                 <p className={styles.sectionLabel}>{t(lang, "comparison_section_label")}</p>
@@ -642,11 +722,14 @@ export default function Index() {
               </table>
             </div>
             {sampleNote && <p className={styles.warning}>{sampleNote}</p>}
+             </div>
           </div>
         </div>
 
         <div className={styles.twoCol}>
-          <div className={styles.card}>
+          <div className={styles.card} style={{ position: "relative" }}>
+             {!canViewFull && <UpgradeOverlay />}
+             <div style={!canViewFull ? { filter: "blur(4px)", pointerEvents: "none" } : {}}>
             <div className={styles.sectionHeader}>
               <div>
                 <p className={styles.sectionLabel}>{uiLanguage === "English" ? "Customers" : "客户维度"}</p>
@@ -687,6 +770,7 @@ export default function Index() {
               </table>
             </div>
             <p className={styles.helpText}>{uiLanguage === "English" ? "LTV aggregated by GMV within window; good for spotting high-value customers." : "窗口内按 GMV 汇总的 LTV，适合观察高价值客户分布。"}</p>
+            </div>
           </div>
         </div>
 
@@ -769,7 +853,9 @@ export default function Index() {
             </p>
         </div>
 
-        <div className={styles.card}>
+        <div className={styles.card} style={{ position: "relative" }}>
+             {!canViewFull && <UpgradeOverlay />}
+             <div style={!canViewFull ? { filter: "blur(4px)", pointerEvents: "none" } : {}}>
             <div className={styles.sectionHeader}>
               <div>
                 <p className={styles.sectionLabel}>{uiLanguage === "English" ? "Products" : "产品维度"}</p>
@@ -816,6 +902,7 @@ export default function Index() {
             <p className={styles.helpText}>
               {uiLanguage === "English" ? "Scope: products appearing in AI-channel orders; Share = AI-channel orders / total orders of product." : "统计口径：含 AI 渠道订单中出现过的产品；占比=AI 渠道订单数 / 产品总订单数。"}
             </p>
+          </div>
           </div>
         </div>
 

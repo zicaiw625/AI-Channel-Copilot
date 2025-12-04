@@ -205,7 +205,7 @@ export default function Billing() {
                     {en
                       ? `Trial: ${activePlan.remainingTrialDays} day${activePlan.remainingTrialDays === 1 ? '' : 's'} remaining`
                       : `试用剩余 ${activePlan.remainingTrialDays} 天`}
-                    {isTrialExpiringSoon && (en ? " - Subscribe now to keep your access!" : " - 立即订阅以保持访问权限！")}
+                    {isTrialExpiringSoon && (en ? " - Billing starts after trial ends" : " - 试用结束后将自动扣费")}
                   </div>
                   {formattedTrialEndDate && (
                     <div style={{ fontSize: 12, marginTop: 4, opacity: 0.8 }}>

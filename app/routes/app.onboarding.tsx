@@ -1,5 +1,5 @@
 import type { HeadersFunction, LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
-import { useLoaderData, useSearchParams, useActionData, Form } from "react-router";
+import { useLoaderData, useSearchParams, useActionData, Form, Link } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import { requireEnv } from "../lib/env.server";
@@ -94,7 +94,7 @@ export default function Onboarding() {
     wasSubscribed,
   } = useLoaderData<typeof loader>();
   
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const step = searchParams.get("step") || "value_snapshot";
   const reason = searchParams.get("reason");
   
@@ -126,13 +126,12 @@ export default function Onboarding() {
              {en ? "Live AI Revenue Snapshot (Generating...)" : "实时 AI 收入快照 (生成中...)"}
            </div>
         </div>
-        <button 
-          type="button"
-          onClick={() => {
-            const newParams = new URLSearchParams(searchParams);
-            newParams.set("step", "plan_selection");
-            setSearchParams(newParams);
-          }}
+        <Link 
+          to={`?${(() => {
+            const p = new URLSearchParams(searchParams);
+            p.set("step", "plan_selection");
+            return p.toString();
+          })()}`}
           data-action="onboarding-next-plan"
           aria-label={en ? "Next: Choose a Plan" : "下一步：选择方案"}
           style={{ 
@@ -142,11 +141,13 @@ export default function Onboarding() {
             padding: "12px 24px", 
             borderRadius: 4, 
             fontSize: 16, 
-            cursor: "pointer" 
+            cursor: "pointer",
+            textDecoration: "none",
+            display: "inline-block"
           }}
         >
           {en ? "Next: Choose a Plan" : "下一步：选择方案"}
-        </button>
+        </Link>
       </section>
     );
   }

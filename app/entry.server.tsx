@@ -39,6 +39,7 @@ export default async function handleRequest(
         />
       </NonceProvider>,
       {
+        nonce,
         [callbackName]: () => {
           const body = new PassThrough();
           const stream = createReadableStreamFromReadable(body);

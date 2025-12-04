@@ -6,6 +6,7 @@ import { authenticate } from "../shopify.server";
 import { getSettings } from "../lib/settings.server";
 import { requireEnv } from "../lib/env.server";
 import { useUILanguage } from "../lib/useUILanguage";
+import { useNonce } from "../lib/nonce";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   let language = "中文";
@@ -76,9 +77,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 export default function Intro() {
   const { language, apiKey } = useLoaderData<typeof loader>();
   const uiLanguage = useUILanguage(language);
+  const nonce = useNonce();
   const en = uiLanguage === "English";
   return (
-    <AppProvider embedded apiKey={apiKey}>
+    <AppProvider embedded apiKey={apiKey} nonce={nonce}>
       <section style={{ padding: 16 }}>
         <h2>{en ? "AI Channel Copilot Introduction" : "AI Channel Copilot 简介"}</h2>
         <p>{en ? "Detect AI-attributed orders and analyze AOV/LTV." : "识别 AI 渠道订单，分析 AOV/LTV。"}</p>

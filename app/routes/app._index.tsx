@@ -506,20 +506,35 @@ export default function Index() {
                 <span>{uiLanguage === "English" ? "Backfill:" : "补拉："}{fmtTime(pipeline.lastBackfillAt)}</span>
                 <span>{uiLanguage === "English" ? "Tagging:" : "标签："}{fmtTime(pipeline.lastTaggingAt)}</span>
                 <div className={styles.statusChips}>
-                  {(pipeline.statuses || []).map((item) => (
-                    <span
-                      key={item.title}
-                      className={`${styles.statusChip} ${
-                        item.status === "healthy"
-                          ? styles.statusHealthy
-                          : item.status === "warning"
-                            ? styles.statusWarning
-                            : styles.statusInfo
-                      }`}
-                    >
-                      {item.title}: {item.status}
-                    </span>
-                  ))}
+                  {(pipeline.statuses || []).map((item) => {
+                    // 状态标签的国际化翻译
+                    const titleTranslations: Record<string, string> = {
+                      "orders/create webhook": uiLanguage === "English" ? "orders/create webhook" : "订单创建 Webhook",
+                      "Hourly backfill (last 90 days)": uiLanguage === "English" ? "Hourly backfill (last 90 days)" : "每小时补拉（最近 90 天）",
+                      "AI tagging write-back": uiLanguage === "English" ? "AI tagging write-back" : "AI 标签回写",
+                    };
+                    const statusTranslations: Record<string, string> = {
+                      "healthy": uiLanguage === "English" ? "healthy" : "正常",
+                      "warning": uiLanguage === "English" ? "warning" : "警告",
+                      "info": uiLanguage === "English" ? "info" : "信息",
+                    };
+                    const displayTitle = titleTranslations[item.title] || item.title;
+                    const displayStatus = statusTranslations[item.status] || item.status;
+                    return (
+                      <span
+                        key={item.title}
+                        className={`${styles.statusChip} ${
+                          item.status === "healthy"
+                            ? styles.statusHealthy
+                            : item.status === "warning"
+                              ? styles.statusWarning
+                              : styles.statusInfo
+                        }`}
+                      >
+                        {displayTitle}: {displayStatus}
+                      </span>
+                    );
+                  })}
                 </div>
                 {backfillAvailable && (
                   <div className={styles.backfillRow}>
@@ -528,7 +543,7 @@ export default function Index() {
                       onClick={triggerBackfill}
                       disabled={backfillFetcher.state !== "idle"}
                     >
-                      {backfillFetcher.state === "idle" ? (uiLanguage === "English" ? "Backfill in background" : "后台补拉") : (uiLanguage === "English" ? "后台补拉中..." : "后台补拉中...")}
+                      {backfillFetcher.state === "idle" ? (uiLanguage === "English" ? "Backfill in background" : "后台补拉") : (uiLanguage === "English" ? "Backfilling..." : "后台补拉中...")}
                     </button>
                     {backfillFetcher.data && (
                       <span className={styles.backfillStatus}>

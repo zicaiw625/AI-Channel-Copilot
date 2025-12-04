@@ -76,6 +76,13 @@ export default function Copilot() {
   // 检查特定按钮是否正在加载
   const isButtonLoading = (intent: string) => isLoading && activeIntent === intent;
   
+  // 检查特定按钮是否被选中（最后点击的意图）
+  const isButtonSelected = (intent: string) => !isLoading && activeIntent === intent;
+  
+  // 获取按钮样式：选中或加载中显示为 primary，否则为 secondary
+  const getButtonStyle = (intent: string) => 
+    isButtonLoading(intent) || isButtonSelected(intent) ? styles.primaryButton : styles.secondaryButton;
+  
   const UpgradeBanner = () => (
       <div style={{
           background: "#fff2e8",
@@ -121,7 +128,7 @@ export default function Copilot() {
         <div className={styles.quickButtons} style={readOnly ? { opacity: 0.5, pointerEvents: "none" } : {}}>
           <button 
             type="button"
-            className={styles.primaryButton} 
+            className={getButtonStyle("ai_performance")} 
             onClick={() => ask("ai_performance")}
             disabled={readOnly || isLoading}
             data-action="copilot-ai_performance"
@@ -132,7 +139,7 @@ export default function Copilot() {
           </button>
           <button 
             type="button"
-            className={styles.secondaryButton} 
+            className={getButtonStyle("ai_vs_all_aov")} 
             onClick={() => ask("ai_vs_all_aov")}
             disabled={readOnly || isLoading}
             data-action="copilot-ai_vs_all_aov"
@@ -143,7 +150,7 @@ export default function Copilot() {
           </button>
           <button 
             type="button"
-            className={styles.secondaryButton} 
+            className={getButtonStyle("ai_top_products")} 
             onClick={() => ask("ai_top_products")}
             disabled={readOnly || isLoading}
             data-action="copilot-ai_top_products"

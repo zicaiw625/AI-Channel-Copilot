@@ -1124,7 +1124,9 @@ export default function SettingsAndExport() {
               : `补拉限制：天数=${MAX_BACKFILL_DAYS}，订单数=${MAX_BACKFILL_ORDERS}，时长=${MAX_BACKFILL_DURATION_MS}ms。`}
           </p>
           <p className={styles.helpText}>
-            {language === "English" ? "Enable both webhook and scheduled backfill to avoid gaps from short outages; tag write-back only works when enabled here." : "建议同时开启 webhook + 定时补拉，避免短时异常导致的漏数；写回标签需在此处开启后才会生效。"}
+            {language === "English" 
+              ? "Webhook and scheduled backfill are enabled by default to avoid data gaps; tag write-back requires enabling in the \"Tag Write-back\" section above." 
+              : "Webhook 和定时补拉已默认开启，确保数据完整；标签回写功能需要在上方「标签写回」中手动开启。"}
           </p>
         </div>
       </div>

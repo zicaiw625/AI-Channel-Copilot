@@ -232,19 +232,19 @@ export default function SettingsAndExport() {
     settings.exposurePreferences,
   );
   const [timezone, setTimezone] = useState(settings.timezones[0] || "UTC");
-  // 优先从 localStorage 读取语言，保持客户端一致性
-  const [language, setLanguage] = useState<Lang>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const stored = window.localStorage.getItem(LANGUAGE_STORAGE_KEY);
-        if (stored === "English" || stored === "中文") {
-          return stored as Lang;
-        }
-      } catch { /* ignore */ }
-    }
-    return settings.languages[0] as Lang;
-  });
+  // 先使用服务端的语言设置，避免 hydration 不匹配
+  const [language, setLanguage] = useState<Lang>(settings.languages[0] as Lang);
   const [gmvMetric, setGmvMetric] = useState(settings.gmvMetric || "current_total_price");
+
+  // 客户端挂载后从 localStorage 读取语言偏好
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(LANGUAGE_STORAGE_KEY);
+      if (stored === "English" || stored === "中文") {
+        setLanguage(stored as Lang);
+      }
+    } catch { /* ignore */ }
+  }, []);
   const [exportWindow, setExportWindow] = useState<TimeRangeKey>(exportRange as TimeRangeKey);
 
   // Modal state for confirming removal of default domain

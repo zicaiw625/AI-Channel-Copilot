@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { HeadersFunction, LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
-import { useLoaderData, useActionData, Form, useFetcher } from "react-router";
+import { useLoaderData, useActionData, Form, useFetcher, Link } from "react-router";
 import { useUILanguage } from "../lib/useUILanguage";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate, login } from "../shopify.server";
@@ -153,8 +153,8 @@ export default function Billing() {
                     ? "Choose a plan below to start using AI Channel Copilot" 
                     : "请从下方选择一个计划以开始使用 AI Channel Copilot"}
                 </div>
-                <a 
-                  href="/app/onboarding?step=plan_selection"
+                <Link 
+                  to="/app/onboarding?step=plan_selection"
                   style={{
                     display: "inline-block",
                     background: "#008060",
@@ -167,7 +167,7 @@ export default function Billing() {
                   }}
                 >
                   {en ? "Choose a Plan" : "选择计划"}
-                </a>
+                </Link>
               </div>
             </>
           ) : (

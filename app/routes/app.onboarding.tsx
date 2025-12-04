@@ -128,7 +128,11 @@ export default function Onboarding() {
         </div>
         <button 
           type="button"
-          onClick={() => setSearchParams({ step: "plan_selection" })}
+          onClick={() => {
+            const newParams = new URLSearchParams(searchParams);
+            newParams.set("step", "plan_selection");
+            setSearchParams(newParams);
+          }}
           data-action="onboarding-next-plan"
           aria-label={en ? "Next: Choose a Plan" : "下一步：选择方案"}
           style={{ 

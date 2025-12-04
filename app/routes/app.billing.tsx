@@ -289,7 +289,8 @@ export default function Billing() {
           {plans
             .filter((plan) => plan.status === "live") // 只显示已上线的计划
             .map((plan) => {
-            const isActive = plan.id === activePlanId;
+            // 只有在用户真正选择了计划时才标记为 active
+            const isActive = !hasNoPlan && plan.id === activePlanId;
             const disabled = demo || isActive;
             return (
               <div
@@ -323,28 +324,55 @@ export default function Billing() {
                   ))}
                 </ul>
                 {plan.id === "free" ? (
-                  <button
-                    type="button"
-                    onClick={handleDowngradeClick}
-                    disabled={disabled}
-                    data-action="billing-select-plan"
-                    data-plan-id={plan.id}
-                    aria-label={
-                      isActive ? (en ? "Current Plan" : "当前方案") : (en ? "Switch to Free" : "切换到免费版")
-                    }
-                    style={{
-                      width: "100%",
-                      padding: "10px",
-                      marginTop: 8,
-                      background: disabled ? "#f5f5f5" : "white",
-                      color: disabled ? "#999" : "#333",
-                      border: "1px solid #babfc3",
-                      borderRadius: 4,
-                      cursor: disabled ? "not-allowed" : "pointer",
-                    }}
-                  >
-                    {isActive ? (en ? "Current Plan" : "当前方案") : (en ? "Switch to Free" : "切换到免费版")}
-                  </button>
+                  // 如果用户还没选择计划，显示"选择 Free"按钮；否则显示"降级"按钮
+                  hasNoPlan ? (
+                    <Form method="post" replace>
+                      <input type="hidden" name="intent" value="select_free" />
+                      <input type="hidden" name="shop" value={shopDomain} />
+                      <button
+                        type="submit"
+                        disabled={demo}
+                        data-action="billing-select-plan"
+                        data-plan-id={plan.id}
+                        aria-label={en ? "Choose Free" : "选择 Free"}
+                        style={{
+                          width: "100%",
+                          padding: "10px",
+                          marginTop: 8,
+                          background: "white",
+                          color: "#333",
+                          border: "1px solid #babfc3",
+                          borderRadius: 4,
+                          cursor: demo ? "not-allowed" : "pointer",
+                        }}
+                      >
+                        {en ? "Choose Free" : "选择 Free"}
+                      </button>
+                    </Form>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleDowngradeClick}
+                      disabled={disabled}
+                      data-action="billing-select-plan"
+                      data-plan-id={plan.id}
+                      aria-label={
+                        isActive ? (en ? "Current Plan" : "当前方案") : (en ? "Switch to Free" : "切换到免费版")
+                      }
+                      style={{
+                        width: "100%",
+                        padding: "10px",
+                        marginTop: 8,
+                        background: disabled ? "#f5f5f5" : "white",
+                        color: disabled ? "#999" : "#333",
+                        border: "1px solid #babfc3",
+                        borderRadius: 4,
+                        cursor: disabled ? "not-allowed" : "pointer",
+                      }}
+                    >
+                      {isActive ? (en ? "Current Plan" : "当前方案") : (en ? "Switch to Free" : "切换到免费版")}
+                    </button>
+                  )
                 ) : (
                   <Form method="post" replace>
                     <input type="hidden" name="intent" value="upgrade" />
@@ -497,6 +525,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   try {
     const formData = await request.formData();
     const intent = formData.get("intent");
+
+    // 处理首次选择 Free 计划（用户还没选择任何计划时）
+    if (intent === "select_free") {
+      await activateFreePlan(shopDomain);
+      return Response.json({ ok: true });
+    }
 
     if (intent === "upgrade") {
       const planId = (formData.get("planId") as PlanId) || PRIMARY_BILLABLE_PLAN_ID;

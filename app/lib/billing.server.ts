@@ -440,25 +440,25 @@ export const hasActiveSubscription = async (
 export const getActiveSubscriptionDetails = async (
   admin: AdminGraphqlClient,
   planName: string,
-): Promise<{ id: string; name: string; status: string | null; trialEnd: Date | null } | null> => {
+): Promise<{ id: string; name: string; status: string | null; trialDays: number | null; currentPeriodEnd: Date | null } | null> => {
   const sdk = createGraphqlSdk(admin);
   const QUERY = `#graphql
     query ActiveSubscriptionDetails {
       currentAppInstallation {
-        activeSubscriptions { id name status trialEnd }
+        activeSubscriptions { id name status trialDays currentPeriodEnd }
       }
     }
   `;
   const resp = await sdk.request("activeSubscriptionDetails", QUERY, {});
   if (!resp.ok) return null;
   const json = (await resp.json()) as {
-    data?: { currentAppInstallation?: { activeSubscriptions?: { id: string; name: string; status: string; trialEnd?: string | null }[] } };
+    data?: { currentAppInstallation?: { activeSubscriptions?: { id: string; name: string; status: string; trialDays?: number | null; currentPeriodEnd?: string | null }[] } };
   };
   const subs = json.data?.currentAppInstallation?.activeSubscriptions || [];
   const sub = subs.find((s) => s.name === planName) || null;
   if (!sub) return null;
-  const trialEnd = sub.trialEnd ? new Date(sub.trialEnd) : null;
-  return { id: sub.id, name: sub.name, status: sub.status || null, trialEnd };
+  const currentPeriodEnd = sub.currentPeriodEnd ? new Date(sub.currentPeriodEnd) : null;
+  return { id: sub.id, name: sub.name, status: sub.status || null, trialDays: sub.trialDays ?? null, currentPeriodEnd };
 };
 
 export const cancelSubscription = async (

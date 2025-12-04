@@ -23,9 +23,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const plan =
       resolvePlanByShopifyName(details?.name || MONTHLY_PLAN) ||
       getPlanConfig(PRIMARY_BILLABLE_PLAN_ID);
-    const now = new Date();
-    if (details?.trialEnd && details.trialEnd > now && plan.trialSupported) {
-      await setSubscriptionTrialState(shopDomain, plan.id, details.trialEnd, details.status ?? "ACTIVE");
+    // Check if currently in trial by checking trialDays > 0
+    const isInTrial = (details?.trialDays ?? 0) > 0;
+    if (isInTrial && plan.trialSupported) {
+      // Calculate trial end based on trialDays from currentPeriodEnd
+      const trialEnd = details?.currentPeriodEnd ?? null;
+      await setSubscriptionTrialState(shopDomain, plan.id, trialEnd, details?.status ?? "ACTIVE");
     } else {
       await setSubscriptionActiveState(shopDomain, plan.id, details?.status ?? "ACTIVE");
     }

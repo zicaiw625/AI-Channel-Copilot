@@ -73,17 +73,22 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       })), 
       shopDomain, 
       demo,
-      apiKey: process.env.SHOPIFY_API_KEY,
       trialEndDate,
       isTrialing,
   };
 };
 
 export default function Billing() {
-  const { language, currentPlan, plans, shopDomain, demo, apiKey, trialEndDate, isTrialing } = useLoaderData<typeof loader>();
+  const { language, currentPlan, plans, shopDomain, demo, trialEndDate, isTrialing } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>() as { ok?: boolean; message?: string } | undefined;
   const uiLanguage = useUILanguage(language);
   const en = uiLanguage === "English";
+  
+  // 打开 Shopify 计费管理页面
+  const openShopifyBilling = () => {
+    // 导航到商店的计费设置页面
+    window.open(`https://${shopDomain}/admin/settings/billing`, "_top");
+  };
   const normalizePlanId = (plan: PlanTier): PlanId =>
     plan === "pro" || plan === "growth" || plan === "free" ? plan : "free";
   const activePlanId = normalizePlanId(currentPlan);
@@ -201,12 +206,11 @@ export default function Billing() {
                 </Form>
               ) : (
                  <>
-                    {/* For paid plans, usually we send them to Shopify billing */}
-                     <a 
-                        href={`https://${shopDomain}/admin/apps/${apiKey}/settings`} 
-                        target="_top"
+                    {/* For paid plans, send them to Shopify billing settings */}
+                     <button 
+                        type="button"
+                        onClick={openShopifyBilling}
                         style={{ 
-                            textDecoration: "none",
                             background: "white", 
                             color: "#333", 
                             border: "1px solid #ccc", 
@@ -217,7 +221,7 @@ export default function Billing() {
                         }}
                      >
                          {en ? "Manage in Shopify" : "在 Shopify 中管理"}
-                     </a>
+                     </button>
                      
                     <button
                        type="button"

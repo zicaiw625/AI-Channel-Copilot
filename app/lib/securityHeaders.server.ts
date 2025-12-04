@@ -9,11 +9,17 @@ export const applySecurityHeaders = (request: Request, responseHeaders: Headers)
   const isProd = process.env.NODE_ENV === "production";
   const nonce = generateNonce();
   responseHeaders.set("X-CSP-Nonce", nonce);
-  const scriptSrc = ["script-src", "'self'", "https:", `'nonce-${nonce}'`];
-  if (!isProd) {
-    scriptSrc.push("'unsafe-inline'");
-    scriptSrc.push("'unsafe-eval'");
-  }
+  
+  // Shopify App Bridge requires 'unsafe-inline' and 'unsafe-eval' for proper operation
+  // in embedded apps. The nonce is still provided for scripts that can use it.
+  const scriptSrc = [
+    "script-src",
+    "'self'",
+    "https:",
+    `'nonce-${nonce}'`,
+    "'unsafe-inline'",
+    "'unsafe-eval'"
+  ];
 
   const csp = [
     "default-src 'self'",

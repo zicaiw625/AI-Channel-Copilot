@@ -266,6 +266,12 @@ export default function SettingsAndExport() {
   // Modal state for confirming removal of default domain
   const [confirmModal, setConfirmModal] = useState<{ open: boolean; rule: AiDomainRule | null }>({ open: false, rule: null });
 
+  // Modal state for confirming removal of default UTM rule
+  const [confirmUtmModal, setConfirmUtmModal] = useState<{ open: boolean; value: string | null }>({ open: false, value: null });
+
+  // Default UTM source values (to detect if removing a default rule)
+  const defaultUtmValues = ["chatgpt", "perplexity", "gemini", "copilot", "deepseek", "claude"];
+
   const locale = language === "English" ? "en-US" : "zh-CN";
 
   const utmMediumKeywords = useMemo(
@@ -348,7 +354,19 @@ export default function SettingsAndExport() {
   };
 
   const removeUtmMapping = (value: string) => {
+    // Show confirmation for default UTM rules
+    if (defaultUtmValues.includes(value.toLowerCase())) {
+      setConfirmUtmModal({ open: true, value });
+      return;
+    }
     setUtmMappings((prev) => prev.filter((rule) => rule.value !== value));
+  };
+
+  const confirmRemoveUtm = () => {
+    if (confirmUtmModal.value) {
+      setUtmMappings((prev) => prev.filter((rule) => rule.value !== confirmUtmModal.value));
+    }
+    setConfirmUtmModal({ open: false, value: null });
   };
 
   const handleDownload = async (e: React.MouseEvent<HTMLAnchorElement | HTMLButtonElement>, url: string, fallbackFilename: string) => {
@@ -1184,6 +1202,71 @@ export default function SettingsAndExport() {
               <button
                 type="button"
                 onClick={confirmRemoveDomain}
+                style={{
+                  padding: "8px 16px",
+                  borderRadius: 6,
+                  border: "none",
+                  background: "#d72c0d",
+                  color: "white",
+                  cursor: "pointer",
+                  fontSize: 14
+                }}
+              >
+                {language === "English" ? "Remove" : "删除"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Modal for removing default UTM rule */}
+      {confirmUtmModal.open && (
+        <div style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: "rgba(0, 0, 0, 0.5)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 1000
+        }}>
+          <div style={{
+            background: "white",
+            borderRadius: 12,
+            padding: 24,
+            maxWidth: 400,
+            width: "90%",
+            boxShadow: "0 4px 24px rgba(0, 0, 0, 0.15)"
+          }}>
+            <h3 style={{ margin: "0 0 12px", fontSize: 16, fontWeight: 600 }}>
+              {language === "English" ? "Confirm Removal" : "确认删除"}
+            </h3>
+            <p style={{ margin: "0 0 20px", color: "#555", lineHeight: 1.5 }}>
+              {language === "English"
+                ? `Removing the default UTM rule "${confirmUtmModal.value}" may reduce attribution accuracy. Are you sure?`
+                : `删除默认 UTM 规则「${confirmUtmModal.value}」可能导致漏标，确定要移除吗？`}
+            </p>
+            <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                onClick={() => setConfirmUtmModal({ open: false, value: null })}
+                style={{
+                  padding: "8px 16px",
+                  borderRadius: 6,
+                  border: "1px solid #ccc",
+                  background: "white",
+                  cursor: "pointer",
+                  fontSize: 14
+                }}
+              >
+                {language === "English" ? "Cancel" : "取消"}
+              </button>
+              <button
+                type="button"
+                onClick={confirmRemoveUtm}
                 style={{
                   padding: "8px 16px",
                   borderRadius: 6,

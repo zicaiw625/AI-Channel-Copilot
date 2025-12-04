@@ -247,7 +247,9 @@ export default function Billing() {
       <div style={{ marginTop: 32 }}>
         <h3 style={{ marginBottom: 16 }}>{en ? "Available Plans" : "可用方案"}</h3>
         <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-          {plans.filter((plan) => plan.status === "live").map((plan) => {
+          {plans
+            .filter((plan) => plan.status === "live") // 只显示已上线的计划
+            .map((plan) => {
             const isActive = plan.id === activePlanId;
             const disabled = demo || isActive;
             return (
@@ -317,9 +319,7 @@ export default function Billing() {
                       aria-label={
                         isActive
                           ? (en ? "Current Plan" : "当前方案")
-                          : plan.status === "coming_soon"
-                            ? (en ? "Coming soon" : "敬请期待")
-                            : (en ? `Switch to ${plan.name}` : `切换到 ${plan.name}`)
+                          : (en ? `Switch to ${plan.name}` : `切换到 ${plan.name}`)
                       }
                       style={{
                         width: "100%",
@@ -334,9 +334,7 @@ export default function Billing() {
                     >
                       {isActive
                         ? (en ? "Current Plan" : "当前方案")
-                        : plan.status === "coming_soon"
-                          ? (en ? "Coming soon" : "敬请期待")
-                          : (en ? `Switch to ${plan.name}` : `切换到 ${plan.name}`)}
+                        : (en ? `Switch to ${plan.name}` : `切换到 ${plan.name}`)}
                     </button>
                   </Form>
                 )}

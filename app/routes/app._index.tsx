@@ -79,7 +79,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   });
 
   const { showDebugPanels } = readAppFlags();
-  
+
   return {
     range: context.dateRange.key,
     dateRange: {
@@ -521,18 +521,18 @@ export default function Index() {
                     const displayTitle = titleTranslations[item.title] || item.title;
                     const displayStatus = statusTranslations[item.status] || item.status;
                     return (
-                      <span
-                        key={item.title}
-                        className={`${styles.statusChip} ${
-                          item.status === "healthy"
-                            ? styles.statusHealthy
-                            : item.status === "warning"
-                              ? styles.statusWarning
-                              : styles.statusInfo
-                        }`}
-                      >
+                    <span
+                      key={item.title}
+                      className={`${styles.statusChip} ${
+                        item.status === "healthy"
+                          ? styles.statusHealthy
+                          : item.status === "warning"
+                            ? styles.statusWarning
+                            : styles.statusInfo
+                      }`}
+                    >
                         {displayTitle}: {displayStatus}
-                      </span>
+                    </span>
                     );
                   })}
                 </div>

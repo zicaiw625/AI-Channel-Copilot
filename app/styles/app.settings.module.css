@@ -101,7 +101,41 @@
   display: grid;
   grid-template-columns: 2fr 1fr auto;
   gap: 0.5rem;
-  align-items: center;
+  align-items: end;
+}
+
+.addFormSection {
+  margin-top: 0.5rem;
+  padding: 0.8rem;
+  background: #f8fafc;
+  border-radius: 10px;
+  border: 1px dashed #cbd5e1;
+}
+
+.addFormLabel {
+  margin: 0 0 0.6rem 0;
+  font-weight: 600;
+  color: #334155;
+  font-size: 0.95rem;
+}
+
+.formField {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.fieldLabelSmall {
+  font-size: 0.8rem;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.helpTextSmall {
+  margin: 0.5rem 0 0 0;
+  color: #94a3b8;
+  font-size: 0.8rem;
+  line-height: 1.4;
 }
 
 .input,

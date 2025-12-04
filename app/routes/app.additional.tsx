@@ -514,29 +514,45 @@ export default function SettingsAndExport() {
                 </div>
               ))}
             </div>
-            <div className={styles.inlineForm}>
-              <input
-                className={styles.input}
-                placeholder={t(language as Lang, "placeholder_add_domain")}
-                value={newDomain}
-                onChange={(event) => setNewDomain(event.target.value)}
-              />
-              <select
-                className={styles.select}
-                value={newDomainChannel}
-                onChange={(event) =>
-                  setNewDomainChannel(event.target.value as AIChannel | "Other-AI")
-                }
-              >
-                {channelList.map((channel) => (
-                  <option key={channel} value={channel}>
-                    {channel}
-                  </option>
-                ))}
-              </select>
-              <button type="button" className={styles.primaryButton} onClick={addDomain} data-action="settings-add-domain">
-                {t(language as Lang, "btn_add_domain")}
-              </button>
+            <div className={styles.addFormSection}>
+              <p className={styles.addFormLabel}>
+                {language === "English" ? "➕ Add Custom Domain" : "➕ 添加自定义域名"}
+              </p>
+              <div className={styles.inlineForm}>
+                <div className={styles.formField}>
+                  <label className={styles.fieldLabelSmall}>{language === "English" ? "Domain" : "域名"}</label>
+                  <input
+                    className={styles.input}
+                    placeholder={language === "English" ? "e.g. chat.example.com" : "例如 chat.example.com"}
+                    value={newDomain}
+                    onChange={(event) => setNewDomain(event.target.value)}
+                  />
+                </div>
+                <div className={styles.formField}>
+                  <label className={styles.fieldLabelSmall}>{language === "English" ? "Channel" : "渠道"}</label>
+                  <select
+                    className={styles.select}
+                    value={newDomainChannel}
+                    onChange={(event) =>
+                      setNewDomainChannel(event.target.value as AIChannel | "Other-AI")
+                    }
+                  >
+                    {channelList.map((channel) => (
+                      <option key={channel} value={channel}>
+                        {channel}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <button type="button" className={styles.primaryButton} onClick={addDomain} data-action="settings-add-domain">
+                  {t(language as Lang, "btn_add_domain")}
+                </button>
+              </div>
+              <p className={styles.helpTextSmall}>
+                {language === "English" 
+                  ? "Enter a referrer domain to match AI traffic. The domain will be mapped to the selected channel."
+                  : "输入来源域名以匹配 AI 流量，该域名将映射到所选渠道。"}
+              </p>
             </div>
             <p className={styles.helpText}>{t(language as Lang, "referrer_help")}</p>
           </div>
@@ -567,29 +583,45 @@ export default function SettingsAndExport() {
                 </div>
               ))}
             </div>
-            <div className={styles.inlineForm}>
-              <input
-                className={styles.input}
-                placeholder={language === "English" ? "Add utm_source, e.g. ai-referral" : "新增 utm_source，例如 ai-referral"}
-                value={newSource}
-                onChange={(event) => setNewSource(event.target.value)}
-              />
-              <select
-                className={styles.select}
-                value={newSourceChannel}
-                onChange={(event) =>
-                  setNewSourceChannel(event.target.value as AIChannel | "Other-AI")
-                }
-              >
-                {channelList.map((channel) => (
-                  <option key={channel} value={channel}>
-                    {channel}
-                  </option>
-                ))}
-              </select>
-              <button type="button" className={styles.primaryButton} onClick={addUtmMapping} data-action="settings-add-utm">
-                {t(language as Lang, "btn_add_utm")}
-              </button>
+            <div className={styles.addFormSection}>
+              <p className={styles.addFormLabel}>
+                {language === "English" ? "➕ Add UTM Source Rule" : "➕ 添加 UTM 来源规则"}
+              </p>
+              <div className={styles.inlineForm}>
+                <div className={styles.formField}>
+                  <label className={styles.fieldLabelSmall}>{language === "English" ? "utm_source value" : "utm_source 值"}</label>
+                  <input
+                    className={styles.input}
+                    placeholder={language === "English" ? "e.g. chatgpt, perplexity" : "例如 chatgpt, perplexity"}
+                    value={newSource}
+                    onChange={(event) => setNewSource(event.target.value)}
+                  />
+                </div>
+                <div className={styles.formField}>
+                  <label className={styles.fieldLabelSmall}>{language === "English" ? "Channel" : "渠道"}</label>
+                  <select
+                    className={styles.select}
+                    value={newSourceChannel}
+                    onChange={(event) =>
+                      setNewSourceChannel(event.target.value as AIChannel | "Other-AI")
+                    }
+                  >
+                    {channelList.map((channel) => (
+                      <option key={channel} value={channel}>
+                        {channel}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <button type="button" className={styles.primaryButton} onClick={addUtmMapping} data-action="settings-add-utm">
+                  {t(language as Lang, "btn_add_utm")}
+                </button>
+              </div>
+              <p className={styles.helpTextSmall}>
+                {language === "English" 
+                  ? "Match orders by utm_source parameter. E.g., if utm_source=chatgpt, map to ChatGPT channel."
+                  : "通过 utm_source 参数匹配订单。例如，当 utm_source=chatgpt 时，映射到 ChatGPT 渠道。"}
+              </p>
             </div>
             <label className={styles.stackField}>
               <span className={styles.fieldLabel}>{language === "English" ? "utm_medium keywords (comma separated)" : "utm_medium 关键词（逗号分隔）"}</span>

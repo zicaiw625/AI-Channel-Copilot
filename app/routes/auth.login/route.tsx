@@ -40,22 +40,41 @@ export default function Auth() {
 
   return (
     <AppProvider embedded apiKey={apiKey}>
-      <s-page>
+      <div style={{ maxWidth: 400, margin: "40px auto", padding: 20, fontFamily: "system-ui, sans-serif", border: "1px solid #e1e3e5", borderRadius: 8, boxShadow: "0 4px 6px rgba(0,0,0,0.05)" }}>
         <Form method="post" replace>
-        <s-section heading={language === "English" ? "Log in" : "登录"}>
-          <s-text-field
-            name="shop"
-            label={language === "English" ? "Shop domain" : "店铺域名"}
-            details={language === "English" ? "example.myshopify.com" : "example.myshopify.com"}
-            value={shop}
-            onChange={(e) => setShop(e.currentTarget.value)}
-            autocomplete="on"
-            error={errors.shop}
-          ></s-text-field>
-          <s-button type="submit">{language === "English" ? "Log in" : "登录"}</s-button>
-        </s-section>
+        <h1 style={{ fontSize: 24, marginBottom: 20 }}>{language === "English" ? "Log in" : "登录"}</h1>
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ display: "block", marginBottom: 8, fontWeight: 600 }}>
+              {language === "English" ? "Shop domain" : "店铺域名"}
+            </label>
+            <input
+              name="shop"
+              placeholder="example.myshopify.com"
+              value={shop}
+              onChange={(e) => setShop(e.currentTarget.value)}
+              autoComplete="on"
+              style={{ width: "100%", padding: "10px", fontSize: 16, border: "1px solid #ccc", borderRadius: 4 }}
+            />
+            {errors.shop && <div style={{ color: "#d4380d", marginTop: 4, fontSize: 14 }}>{errors.shop}</div>}
+          </div>
+          <button 
+            type="submit"
+            style={{ 
+              width: "100%", 
+              background: "#008060", 
+              color: "white", 
+              padding: "12px", 
+              border: "none", 
+              borderRadius: 4, 
+              fontSize: 16, 
+              fontWeight: 600, 
+              cursor: "pointer" 
+            }}
+          >
+            {language === "English" ? "Log in" : "登录"}
+          </button>
         </Form>
-      </s-page>
+      </div>
     </AppProvider>
   );
 }

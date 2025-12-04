@@ -1,8 +1,9 @@
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
-import { Outlet, useLoaderData, useRouteError } from "react-router";
+import { Link, Outlet, useLoaderData, useRouteError } from "react-router";
 import { useUILanguage } from "../lib/useUILanguage";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { AppProvider } from "@shopify/shopify-app-react-router/react";
+import { NavMenu } from "@shopify/app-bridge-react";
 
 import { authenticate } from "../shopify.server";
 import { readAppFlags, requireEnv } from "../lib/env.server";
@@ -108,24 +109,27 @@ export default function App() {
 
   return (
     <AppProvider embedded apiKey={apiKey}>
-      <s-app-nav>
-        <s-link href="/app">{uiLanguage === "English" ? "AI Dashboard" : "AI 仪表盘"}</s-link>
-        <s-link href="/app/additional">{uiLanguage === "English" ? "Settings / Rules & Export" : "设置 / 规则 & 导出"}</s-link>
-        
-        {/* Only show Subscription link if not Free or if we want them to upgrade from Free */}
-        <s-link href="/app/billing">{uiLanguage === "English" ? "Subscription" : "订阅管理"}</s-link>
-        
+      <NavMenu>
+        <a href="/app" rel="home">{uiLanguage === "English" ? "AI Dashboard" : "AI 仪表盘"}</a>
+        <a href="/app/additional">{uiLanguage === "English" ? "Settings / Rules & Export" : "设置 / 规则 & 导出"}</a>
+        <a href="/app/billing">{uiLanguage === "English" ? "Subscription" : "订阅管理"}</a>
+      </NavMenu>
+
+      <div style={{ padding: '10px 16px', background: '#f1f2f3', borderBottom: '1px solid #dfe3e8', display: 'flex', alignItems: 'center', gap: '12px', fontSize: '13px' }}>
         {plan === "free" && (
-          <span style={{ marginLeft: 12, color: "#666" }}>
+          <span style={{ color: "#666", background: '#e4e5e7', padding: '2px 8px', borderRadius: '4px' }}>
              {uiLanguage === "English" ? "Free Plan" : "免费版"}
           </span>
         )}
         
         {(plan === "pro" || plan === "growth") && trialDaysLeft !== null && trialDaysLeft > 0 && (
           <span style={{ 
-            marginLeft: 12, 
             color: trialDaysLeft <= 3 ? "#d4380d" : "#008060",
-            fontWeight: trialDaysLeft <= 3 ? "bold" : "normal"
+            fontWeight: trialDaysLeft <= 3 ? "bold" : "normal",
+            background: trialDaysLeft <= 3 ? '#fff1f0' : '#f6ffed',
+            padding: '2px 8px',
+            borderRadius: '4px',
+            border: `1px solid ${trialDaysLeft <= 3 ? '#ffa39e' : '#b7eb8f'}`
           }}>
             {trialDaysLeft <= 3 
               ? (uiLanguage === "English" 
@@ -138,11 +142,11 @@ export default function App() {
         )}
         
         {isDevShop && (
-          <span style={{ marginLeft: 12, color: "#555" }}>
+          <span style={{ color: "#555" }}>
             {uiLanguage === "English" ? "Development store" : "开发店环境"}
           </span>
         )}
-      </s-app-nav>
+      </div>
       <Outlet />
     </AppProvider>
   );

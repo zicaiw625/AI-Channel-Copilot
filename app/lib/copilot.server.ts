@@ -119,11 +119,8 @@ export const copilotAnswer = async (request: Request, payload: CopilotRequest) =
       }
     });
 
-    // 返回用户友好的错误信息
-    const language = "中文"; // 默认中文，可以根据请求头或其他方式确定
-    const userMessage = language === "English"
-      ? "Sorry, I encountered an error processing your request. Please try again."
-      : "抱歉，处理您的请求时出现错误，请稍后重试。";
+    // 返回用户友好的错误信息 (默认中文)
+    const userMessage = "抱歉，处理您的请求时出现错误，请稍后重试。";
 
     return {
       ok: false,

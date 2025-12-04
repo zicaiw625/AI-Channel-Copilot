@@ -119,7 +119,7 @@ export default function Billing() {
   const confirmDowngrade = () => {
       downgradeFetcher.submit(
           { intent: "downgrade", shop: shopDomain },
-          { method: "post", replace: true }
+          { method: "post" }
       );
       setShowDowngradeModal(false);
   };

@@ -75,8 +75,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   let shopDomain = "";
-  let admin = null;
-  let session = null;
+  let admin: Awaited<ReturnType<typeof authenticate.admin>>["admin"] | null = null;
+  let session: Awaited<ReturnType<typeof authenticate.admin>>["session"] | null = null;
   
   try {
     const auth = await authenticate.admin(request);
@@ -146,6 +146,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           { status: 429 },
         );
       }
+      if (!admin) {
+        return Response.json(
+          { ok: false, message: currentLanguage === "English" ? "Authentication required for backfill" : "补拉操作需要认证" },
+          { status: 401 },
+        );
+      }
       const { orders } = await fetchOrdersForRange(admin, range, merged, {
         shopDomain,
         intent: "settings-backfill",
@@ -165,6 +171,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
 
     if (intent === "tag") {
+      if (!admin) {
+        return Response.json(
+          { ok: false, message: currentLanguage === "English" ? "Authentication required for tagging" : "标签写入需要认证" },
+          { status: 401 },
+        );
+      }
       const { orders } = await fetchOrdersForRange(admin, range, merged, {
         shopDomain,
         intent: "settings-tagging",

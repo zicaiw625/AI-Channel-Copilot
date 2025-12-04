@@ -16,7 +16,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   
   // Note: billing.check checks if ANY of the plans are active. 
   // Since we only have one Paid plan (BILLING_PLAN), this works.
-  const check = await billing.check({ plans: [BILLING_PLAN], isTest });
+  const check = await billing.check({ plans: [BILLING_PLAN] as any, isTest });
   
   if (check.hasActivePayment) {
     const details = await getActiveSubscriptionDetails(admin, MONTHLY_PLAN);

@@ -37,10 +37,9 @@ export default function Auth() {
   const actionData = useActionData<typeof action>();
   const [shop, setShop] = useState("");
   const { errors, language, apiKey } = actionData || loaderData;
-  const nonce = useNonce();
 
   return (
-    <AppProvider embedded apiKey={apiKey} nonce={nonce}>
+    <AppProvider embedded apiKey={apiKey}>
       <div style={{ maxWidth: 400, margin: "40px auto", padding: 20, fontFamily: "system-ui, sans-serif", border: "1px solid #e1e3e5", borderRadius: 8, boxShadow: "0 4px 6px rgba(0,0,0,0.05)" }}>
         <Form method="post" replace>
         <h1 style={{ fontSize: 24, marginBottom: 20 }}>{language === "English" ? "Log in" : "登录"}</h1>

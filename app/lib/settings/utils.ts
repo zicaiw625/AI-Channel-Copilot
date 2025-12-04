@@ -79,7 +79,7 @@ export const mapRecordToSettings = (record?: Partial<ShopSettings> | null): Sett
           ? record.taggingDryRun
           : defaultSettings.tagging.dryRun,
     },
-    exposurePreferences: sanitizeExposurePreferences(record.aiExposurePreferences),
+    exposurePreferences: sanitizeExposurePreferences(record.aiExposurePreferences ?? null),
     retentionMonths: normalizeRetentionMonths(
       record.retentionMonths,
       defaultSettings.retentionMonths ?? MIN_RETENTION_MONTHS,

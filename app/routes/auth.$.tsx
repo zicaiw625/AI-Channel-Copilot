@@ -14,7 +14,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   try {
     if (session?.shop) {
-      await ensureWebhooks(session);
+      await ensureWebhooks(session as any);
 
       const shopDomain = session.shop;
       const settings = await getSettings(shopDomain);

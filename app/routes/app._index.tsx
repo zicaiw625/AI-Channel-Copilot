@@ -56,10 +56,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const canViewFull = await hasFeature(shopDomain, FEATURES.DASHBOARD_FULL);
 
   // Enforce 7d limit for Free plan
-  let defaultRangeKey = DEFAULT_RANGE_KEY;
-  if (isFreePlan) {
-      defaultRangeKey = "7d";
-  }
+  const defaultRangeKey: TimeRangeKey = isFreePlan ? "7d" : DEFAULT_RANGE_KEY;
 
   await ensureRetentionOncePerDay(shopDomain, settings);
 

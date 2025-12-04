@@ -21,7 +21,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const shopDomain = session?.shop || "";
     const isTest = await computeIsTestMode(shopDomain);
     const appUrl = requireEnv("SHOPIFY_APP_URL");
-    await billing.request({ plan: BILLING_PLAN, isTest, returnUrl: `${appUrl}/app/billing/confirm` });
+    await billing.request({ plan: BILLING_PLAN as any, isTest, returnUrl: `${appUrl}/app/billing/confirm` });
     return null;
   } catch (error) {
     if (error instanceof Response) throw error;

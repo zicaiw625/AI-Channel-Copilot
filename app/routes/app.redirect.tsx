@@ -3,11 +3,36 @@ import { useLoaderData } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { useNonce } from "../lib/nonce";
 
+// Allowed domains for redirect (Shopify-related only)
+const ALLOWED_REDIRECT_DOMAINS = [
+  "admin.shopify.com",
+  "myshopify.com",
+  "shopify.com",
+];
+
+const isAllowedRedirectUrl = (urlString: string): boolean => {
+  try {
+    const parsedUrl = new URL(urlString);
+    // Only allow HTTPS
+    if (parsedUrl.protocol !== "https:") return false;
+    // Check if domain is in allowed list
+    return ALLOWED_REDIRECT_DOMAINS.some((domain) =>
+      parsedUrl.hostname === domain || parsedUrl.hostname.endsWith(`.${domain}`)
+    );
+  } catch {
+    return false;
+  }
+};
+
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const url = new URL(request.url);
   const to = url.searchParams.get("to") || "";
   if (!to) {
     return new Response("Missing 'to' parameter", { status: 400 });
+  }
+  // Validate redirect URL to prevent open redirect attacks
+  if (!isAllowedRedirectUrl(to)) {
+    return new Response("Invalid redirect target", { status: 400 });
   }
   return { to };
 };

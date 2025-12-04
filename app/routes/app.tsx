@@ -107,10 +107,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 export default function App() {
   const { apiKey, language, plan, trialDaysLeft, isDevShop } = useLoaderData<typeof loader>();
   const uiLanguage = useUILanguage(language);
-  const nonce = useNonce();
 
   return (
-    <AppProvider embedded apiKey={apiKey} nonce={nonce}>
+    <AppProvider embedded apiKey={apiKey}>
       <NavMenu>
         <a href="/app" rel="home">{uiLanguage === "English" ? "AI Dashboard" : "AI 仪表盘"}</a>
         <a href="/app/additional">{uiLanguage === "English" ? "Settings / Rules & Export" : "设置 / 规则 & 导出"}</a>

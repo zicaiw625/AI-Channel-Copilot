@@ -52,42 +52,43 @@ export const loadOrdersFromDb = async (
       orderBy: {
         createdAt: 'desc' as const,
       },
-      include: includeProducts ? {
-        products: true,
-      } : undefined,
+      ...(includeProducts && { include: { products: true } }),
     });
 
     // 转换数据格式，包括 AI 来源枚举转换
-    const orderRecords: OrderRecord[] = orders.map((order) => ({
-      id: order.id,
-      name: order.name,
-      createdAt: order.createdAt.toISOString(),
-      totalPrice: order.totalPrice,
-      currency: order.currency,
-      subtotalPrice: order.subtotalPrice ?? order.totalPrice,
-      refundTotal: order.refundTotal,
-      aiSource: fromPrismaAiSource(order.aiSource),
-      detection: order.detection || "",
-      signals: Array.isArray(order.detectionSignals) ? (order.detectionSignals as string[]) : [],
-      referrer: order.referrer || "",
-      landingPage: order.landingPage || "",
-      utmSource: order.utmSource || undefined,
-      utmMedium: order.utmMedium || undefined,
-      sourceName: order.sourceName || undefined,
-      customerId: order.customerId,
-      isNewCustomer: order.isNewCustomer,
-      products: includeProducts
-        ? order.products.map((p) => ({
-            id: p.productId,
-            title: p.title,
-            handle: p.handle || "",
-            url: p.url || "",
-            price: p.price,
-            currency: p.currency,
-            quantity: p.quantity,
-          }))
-        : [],
-    }));
+    const orderRecords: OrderRecord[] = orders.map((order) => {
+      const orderWithProducts = order as typeof order & { products?: Array<{ productId: string; title: string; handle: string | null; url: string | null; price: number; currency: string; quantity: number }> };
+      return {
+        id: order.id,
+        name: order.name,
+        createdAt: order.createdAt.toISOString(),
+        totalPrice: order.totalPrice,
+        currency: order.currency,
+        subtotalPrice: order.subtotalPrice ?? order.totalPrice,
+        refundTotal: order.refundTotal,
+        aiSource: fromPrismaAiSource(order.aiSource),
+        detection: order.detection || "",
+        signals: Array.isArray(order.detectionSignals) ? (order.detectionSignals as string[]) : [],
+        referrer: order.referrer || "",
+        landingPage: order.landingPage || "",
+        utmSource: order.utmSource || undefined,
+        utmMedium: order.utmMedium || undefined,
+        sourceName: order.sourceName || undefined,
+        customerId: order.customerId,
+        isNewCustomer: order.isNewCustomer,
+        products: includeProducts && orderWithProducts.products
+          ? orderWithProducts.products.map((p) => ({
+              id: p.productId,
+              title: p.title,
+              handle: p.handle || "",
+              url: p.url || "",
+              price: p.price,
+              currency: p.currency,
+              quantity: p.quantity,
+            }))
+          : [],
+      };
+    });
 
     logger.info("[orderService] Loaded orders from database", {
       shopDomain,

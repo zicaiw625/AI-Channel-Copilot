@@ -13,7 +13,7 @@ import type {
   AIChannel,
 } from "./aiData";
 import { buildDashboardData, buildDashboardFromOrders, AI_CHANNELS } from "./aiData";
-import { loadOrdersFromDb, loadCustomersByIds } from "./persistence.server";
+import { loadOrdersFromDb, loadCustomersByIdsLegacy as loadCustomersByIds } from "./persistence.server";
 import { allowDemoData } from "./runtime.server";
 import prisma from "../db.server";
 import { Prisma } from "@prisma/client";
@@ -422,11 +422,21 @@ async function buildDashboardFromDb(
   });
 
   const recentOrders: RawOrderRow[] = recentOrdersRaw.map(o => ({
-     ...o,
+     id: o.id,
+     name: o.name,
      createdAt: o.createdAt.toISOString(),
      totalPrice: metric === "subtotal_price" ? (o.subtotalPrice || 0) : o.totalPrice,
+     currency: o.currency,
      aiSource: fromPrismaAiSource(o.aiSource),
-     signals: o.detectionSignals as any,
+     referrer: o.referrer || "",
+     landingPage: o.landingPage || "",
+     utmSource: o.utmSource || undefined,
+     utmMedium: o.utmMedium || undefined,
+     customerId: o.customerId,
+     sourceName: o.sourceName || undefined,
+     isNewCustomer: o.isNewCustomer,
+     detection: o.detection || "",
+     signals: Array.isArray(o.detectionSignals) ? (o.detectionSignals as string[]) : [],
   }));
 
   return {

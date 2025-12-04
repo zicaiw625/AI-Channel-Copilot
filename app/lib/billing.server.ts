@@ -199,18 +199,18 @@ export const upsertBillingState = async (
   });
 
   try {
+    const createData = {
+      shopDomain, 
+      platform: "shopify", 
+      ...payload,
+      billingPlan: payload.billingPlan || updates.billingPlan || "NO_PLAN",
+      billingState: payload.billingState || updates.billingState || "NO_PLAN",
+      usedTrialDays: payload.usedTrialDays ?? updates.usedTrialDays ?? 0,
+    };
     const record = await prisma.shopBillingState.upsert({
       where: { shopDomain_platform: { shopDomain, platform: "shopify" } },
       update: payload,
-      create: { 
-        shopDomain, 
-        platform: "shopify", 
-        // Set defaults for create
-        billingPlan: updates.billingPlan || "NO_PLAN",
-        billingState: updates.billingState || "NO_PLAN",
-        usedTrialDays: updates.usedTrialDays || 0,
-        ...payload 
-      },
+      create: createData,
     });
     return {
       shopDomain,
@@ -271,15 +271,16 @@ export const upsertBillingState = async (
       lastReinstalledAt: updated.lastReinstalledAt || null,
       };
     }
+    const createPayload = {
+      shopDomain, 
+      platform: "shopify", 
+      ...payload,
+      billingPlan: payload.billingPlan || updates.billingPlan || "NO_PLAN",
+      billingState: payload.billingState || updates.billingState || "NO_PLAN",
+      usedTrialDays: payload.usedTrialDays ?? updates.usedTrialDays ?? 0,
+    };
     const created = await prisma.shopBillingState.create({
-      data: { 
-        shopDomain, 
-        platform: "shopify", 
-        billingPlan: updates.billingPlan || "NO_PLAN",
-        billingState: updates.billingState || "NO_PLAN",
-        usedTrialDays: updates.usedTrialDays || 0,
-        ...payload 
-      },
+      data: createPayload,
     });
     return {
       shopDomain,

@@ -6,7 +6,7 @@ import { getPlatform, isDemoMode } from "./runtime.server";
 import { MAX_DASHBOARD_ORDERS, MAX_DETECTION_LENGTH } from "./constants";
 import { getSettings } from "./settings.server";
 import { toPrismaAiSource } from "./aiSourceMapper";
-import { loadCustomersByIds } from "./customerService.server";
+import { loadCustomersByIds as loadCustomersFromService } from "./customerService.server";
 import { validateOrderData } from "./orderService.server";
 import { DatabaseError, ValidationError } from "./errors";
 import { logger } from "./logger.server";
@@ -67,7 +67,7 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
         async (tx) => {
           const existingOrders = await tx.order.findMany({ where: { id: { in: orderIds } } });
           const existingCustomers = customerIds.length
-            ? await loadCustomersByIds(shopDomain, customerIds)
+            ? await loadCustomersFromService(shopDomain, customerIds)
             : [];
 
           const orderMap = new Map(existingOrders.map((o) => [o.id, o]));
@@ -313,15 +313,14 @@ export const loadOrdersFromDb = async (
   }
 };
 
-export const loadCustomersByIds = async (
+export const loadCustomersByIdsLegacy = async (
   shopDomain: string,
   ids: string[],
 ): Promise<{ id: string; acquiredViaAi: boolean }[]> => {
   if (!shopDomain || !ids.length || isDemoMode()) return [];
 
   try {
-    const { loadCustomersByIds: loadCustomers } = await import("./customerService.server");
-    const customers = await loadCustomers(shopDomain, ids);
+    const customers = await loadCustomersFromService(shopDomain, ids);
     return customers.map(c => ({ id: c.id, acquiredViaAi: c.acquiredViaAi }));
   } catch (error) {
     if (tableMissing(error)) {
@@ -345,10 +344,9 @@ export const loadCustomersByIds = async (
 export const aggregateAiShare = async (shopDomain: string) => {
   if (!shopDomain) return { aiOrders: 0, totalOrders: 0 };
   try {
-    const { orderModel } = models;
     const [totalOrders, aiOrders] = await Promise.all([
-      orderModel.count({ where: { shopDomain, platform } }),
-      orderModel.count({ where: { shopDomain, platform, aiSource: { not: null } } }),
+      prisma.order.count({ where: { shopDomain, platform } }),
+      prisma.order.count({ where: { shopDomain, platform, aiSource: { not: null } } }),
     ]);
     return { aiOrders, totalOrders };
   } catch (error) {
@@ -360,7 +358,7 @@ export const aggregateAiShare = async (shopDomain: string) => {
 };
 
 export const hasAnyTables = () => {
-  return Boolean(models);
+  return true;
 };
 const toZonedDate = (date: Date, timeZone?: string) => {
   if (!timeZone) return new Date(date);

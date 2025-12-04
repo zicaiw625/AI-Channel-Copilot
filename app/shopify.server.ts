@@ -62,7 +62,7 @@ const appConfig = {
       ],
       trialDays: appCfg.billing.trialDays,
     },
-  },
+  } as any,
   ...(customShopDomains.length ? { customShopDomains } : {}),
 };
 

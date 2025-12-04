@@ -45,9 +45,9 @@ export type {
   DashboardData,
   AiDomainRule,
   UtmSourceRule,
-  DetectionConfig,
   TopCustomerRow,
 } from "./aiTypes";
+export type { DetectionConfig } from "./aiTypes";
 
 import type {
   AIChannel,
@@ -60,6 +60,7 @@ import type {
   SettingsDefaults,
   DashboardData,
   PipelineStatus,
+  OverviewMetrics,
 } from "./aiTypes";
 import { AI_CHANNELS } from "./aiTypes";
 
@@ -204,12 +205,7 @@ export const defaultSettings: SettingsDefaults = {
   pipelineStatuses: defaultPipelineStatuses,
 };
 
-export type DetectionConfig = {
-  aiDomains: AiDomainRule[];
-  utmSources: UtmSourceRule[];
-  utmMediumKeywords: string[];
-  tagPrefix?: string;
-};
+// DetectionConfig 类型已从 aiTypes 导出，这里不再重复定义
 
 export const LOW_SAMPLE_THRESHOLD = 5;
 

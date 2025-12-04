@@ -8,7 +8,7 @@ import { defaultSettings, type SettingsDefaults } from './aiData';
 import { cache, CacheKeys, CacheTTL } from './cache.enhanced';
 import { metrics, MetricNames } from './metrics/collector';
 import { logger } from './logger.server';
-import { buildSettingsUpdatePayload, mapRecordToSettings } from './settings/utils';
+import { buildSettingsUpdatePayload, mapRecordToSettings as mapRecordToSettingsUtil } from './settings/utils';
 import { SettingsUpdateSchema } from './validation/schemas';
 import type { SettingsUpdate } from './validation/schemas';
 
@@ -50,7 +50,7 @@ export async function getSettings(
       },
     });
 
-    const settings = mapRecordToSettings(record) || defaultSettings;
+    const settings = mapRecordToSettingsUtil(record) || defaultSettings;
     
     // 写入缓存
     if (useCache) {
@@ -103,7 +103,7 @@ export async function updateSettings(
       },
     });
 
-    const settings = mapRecordToSettings(record);
+    const settings = mapRecordToSettingsUtil(record);
 
     // 清除缓存
     const cacheKey = CacheKeys.settings(shopDomain);
@@ -145,7 +145,7 @@ export async function initializeSettings(
 
     if (existing) {
       metrics.endTimer(timer);
-      return mapRecordToSettings(existing);
+      return mapRecordToSettingsUtil(existing);
     }
 
     // 创建默认设置
@@ -174,7 +174,7 @@ export async function initializeSettings(
     metrics.endTimer(timer);
     logger.info('[Settings] Initialized with defaults', { shopDomain });
 
-    return mapRecordToSettings(record);
+    return mapRecordToSettingsUtil(record);
   } catch (error) {
     metrics.endTimer(timer);
     metrics.increment('settings.initialize.error', 1);
@@ -232,7 +232,7 @@ export async function batchGetSettings(
       });
 
       const recordMap = new Map(
-        records.map(r => [r.shopDomain, mapRecordToSettings(r)])
+        records.map(r => [r.shopDomain, mapRecordToSettingsUtil(r)])
       );
 
       for (const shopDomain of uncached) {
@@ -264,40 +264,7 @@ export async function batchGetSettings(
   }
 }
 
-/**
- * 将数据库记录映射到设置对象
- */
-function mapRecordToSettings(record: any): SettingsDefaults {
-  return {
-    primaryCurrency: record.primaryCurrency || defaultSettings.primaryCurrency,
-    aiDomains: Array.isArray(record.aiDomains) 
-      ? record.aiDomains 
-      : defaultSettings.aiDomains,
-    utmSources: Array.isArray(record.utmSources)
-      ? record.utmSources
-      : defaultSettings.utmSources,
-    utmMediumKeywords: Array.isArray(record.utmMediumKeywords)
-      ? record.utmMediumKeywords
-      : defaultSettings.utmMediumKeywords,
-    gmvMetric: record.gmvMetric || defaultSettings.gmvMetric,
-    tagging: {
-      orderTagPrefix: record.orderTagPrefix || defaultSettings.tagging.orderTagPrefix,
-      customerTag: record.customerTag || defaultSettings.tagging.customerTag,
-      writeOrderTags: record.writeOrderTags ?? defaultSettings.tagging.writeOrderTags,
-      writeCustomerTags: record.writeCustomerTags ?? defaultSettings.tagging.writeCustomerTags,
-      dryRun: record.taggingDryRun ?? defaultSettings.tagging.dryRun,
-    },
-    exposurePreferences: typeof record.aiExposurePreferences === 'object'
-      ? record.aiExposurePreferences
-      : defaultSettings.exposurePreferences,
-    retentionMonths: record.retentionMonths ?? defaultSettings.retentionMonths,
-    languages: [record.language || defaultSettings.languages[0], ...defaultSettings.languages.slice(1)],
-    timezones: [record.timezone || defaultSettings.timezones[0], ...defaultSettings.timezones.slice(1)],
-    pipelineStatuses: Array.isArray(record.pipelineStatuses)
-      ? record.pipelineStatuses
-      : defaultSettings.pipelineStatuses,
-  };
-}
+// mapRecordToSettings 已从 settings/utils 导入为 mapRecordToSettingsUtil
 
 /**
  * 验证设置完整性
@@ -311,7 +278,7 @@ export async function validateSettings(
     const settings = await getSettings(shopDomain, false);
 
     // 验证货币代码
-    if (!/^[A-Z]{3}$/.test(settings.primaryCurrency)) {
+    if (settings.primaryCurrency && !/^[A-Z]{3}$/.test(settings.primaryCurrency)) {
       errors.push(`Invalid currency code: ${settings.primaryCurrency}`);
     }
 
@@ -326,7 +293,8 @@ export async function validateSettings(
     }
 
     // 验证保留期限
-    if (settings.retentionMonths < 1 || settings.retentionMonths > 24) {
+    const retentionMonths = settings.retentionMonths ?? 6;
+    if (retentionMonths < 1 || retentionMonths > 24) {
       errors.push('Retention months must be between 1 and 24');
     }
 

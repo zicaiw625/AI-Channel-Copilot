@@ -231,7 +231,7 @@ export default function Onboarding() {
       )}
 
       <div style={{ display: "flex", gap: 20, justifyContent: "center", flexWrap: "wrap" }}>
-        {plans.map((plan) => {
+        {(plans ?? []).map((plan) => {
           const isFree = plan.id === 'free';
           const recommended = plan.id === PRIMARY_BILLABLE_PLAN_ID;
           const disabled = plan.status !== 'live';

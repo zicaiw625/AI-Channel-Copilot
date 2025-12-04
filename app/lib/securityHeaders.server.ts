@@ -1,6 +1,11 @@
 export const applySecurityHeaders = (request: Request, responseHeaders: Headers) => {
   responseHeaders.set("X-Content-Type-Options", "nosniff");
   responseHeaders.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  responseHeaders.set("X-XSS-Protection", "1; mode=block");
+  // X-Frame-Options for legacy browser support (CSP frame-ancestors is the modern approach)
+  // Note: ALLOW-FROM is deprecated, but we set SAMEORIGIN as fallback
+  // The primary protection comes from CSP frame-ancestors directive
+  responseHeaders.set("X-Frame-Options", "SAMEORIGIN");
 
   const isProd = process.env.NODE_ENV === "production";
   

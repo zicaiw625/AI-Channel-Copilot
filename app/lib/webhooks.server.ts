@@ -1,13 +1,12 @@
 import { registerWebhooks } from "../shopify.server";
 import { logger } from "./logger.server";
-import type { Session } from "@shopify/shopify-app-session-storage-prisma";
 
 /**
  * 确保Shopify webhooks已正确注册
- * @param session Shopify会话对象
+ * @param session Shopify会话对象 (需要有 shop 属性)
  * @throws {Error} 当webhook注册失败时抛出错误
  */
-export const ensureWebhooks = async (session: Session): Promise<void> => {
+export const ensureWebhooks = async (session: Parameters<typeof registerWebhooks>[0]["session"]): Promise<void> => {
   if (!session?.shop) {
     const error = new Error("Invalid session: missing shop domain");
     logger.error("[webhook] Invalid session provided", undefined, {

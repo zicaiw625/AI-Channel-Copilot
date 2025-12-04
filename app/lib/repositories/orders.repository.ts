@@ -6,7 +6,7 @@
 import prisma from '../../db.server';
 import { Prisma } from '@prisma/client';
 import type { DateRange, OrderRecord } from '../aiTypes';
-import { fromPrismaAiSource } from '../aiSourceMapper';
+import { fromPrismaAiSource, toPrismaAiSource } from '../aiSourceMapper';
 import { logger } from '../logger.server';
 import { metrics, recordDbMetrics } from '../metrics/collector';
 
@@ -78,7 +78,7 @@ export class OrdersRepository {
       const where: Prisma.OrderWhereInput = {
         shopDomain,
         createdAt: { gte: range.start, lte: range.end },
-        aiSource: aiSource ? aiSource : { not: null },
+        aiSource: aiSource ? (aiSource as any) : { not: null },
         sourceName: { notIn: ['pos', 'draft'] },
       };
 
@@ -210,6 +210,7 @@ export class OrdersRepository {
 
     try {
       // 先 upsert Order
+      const prismaAiSource = toPrismaAiSource(order.aiSource);
       await prisma.order.upsert({
         where: { id: order.id },
         update: {
@@ -218,7 +219,7 @@ export class OrdersRepository {
           currency: order.currency,
           subtotalPrice: order.subtotalPrice,
           refundTotal: order.refundTotal,
-          aiSource: order.aiSource,
+          aiSource: prismaAiSource,
           detection: order.detection,
           detectionSignals: order.signals as any,
           referrer: order.referrer,
@@ -232,14 +233,14 @@ export class OrdersRepository {
         },
         create: {
           id: order.id,
-          shopDomain: order.shopDomain || '',
+          shopDomain: '',
           name: order.name,
           createdAt: new Date(order.createdAt),
           totalPrice: order.totalPrice,
           currency: order.currency,
           subtotalPrice: order.subtotalPrice,
           refundTotal: order.refundTotal,
-          aiSource: order.aiSource,
+          aiSource: prismaAiSource,
           detection: order.detection,
           detectionSignals: order.signals as any,
           referrer: order.referrer,
@@ -317,7 +318,6 @@ export class OrdersRepository {
   private mapToOrderRecord(order: any): OrderRecord {
     return {
       id: order.id,
-      shopDomain: order.shopDomain,
       name: order.name,
       createdAt: order.createdAt.toISOString(),
       totalPrice: order.totalPrice,
@@ -325,10 +325,10 @@ export class OrdersRepository {
       subtotalPrice: order.subtotalPrice,
       refundTotal: order.refundTotal,
       aiSource: fromPrismaAiSource(order.aiSource),
-      detection: order.detection || undefined,
-      signals: order.detectionSignals as any,
-      referrer: order.referrer || undefined,
-      landingPage: order.landingPage || undefined,
+      detection: order.detection || "",
+      signals: Array.isArray(order.detectionSignals) ? (order.detectionSignals as string[]) : [],
+      referrer: order.referrer || "",
+      landingPage: order.landingPage || "",
       utmSource: order.utmSource || undefined,
       utmMedium: order.utmMedium || undefined,
       sourceName: order.sourceName || undefined,
@@ -338,8 +338,8 @@ export class OrdersRepository {
       products: order.products?.map((p: any) => ({
         id: p.productId,
         title: p.title,
-        handle: p.handle || undefined,
-        url: p.url || undefined,
+        handle: p.handle || "",
+        url: p.url || "",
         price: p.price,
         currency: p.currency,
         quantity: p.quantity,

@@ -22,6 +22,7 @@ import { authenticate } from "../shopify.server";
 import styles from "../styles/app.settings.module.css";
 import { t } from "../lib/i18n";
 import { getPlatform, isDemoMode } from "../lib/runtime.server";
+import { readAppFlags } from "../lib/env.server";
 import { LANGUAGE_EVENT, LANGUAGE_STORAGE_KEY, BACKFILL_COOLDOWN_MINUTES, DEFAULT_RANGE_KEY, MAX_BACKFILL_DURATION_MS, MAX_BACKFILL_ORDERS, MAX_BACKFILL_DAYS } from "../lib/constants";
 import { loadDashboardContext } from "../lib/dashboardContext.server";
 import { logger } from "../lib/logger.server";
@@ -70,7 +71,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     getDeadLetterJobs(10),
     hasFeature(shopDomain, FEATURES.EXPORTS),
   ]);
-  return { settings, exportRange, clamped, displayTimezone, ordersSample, webhookQueueSize, deadLetters, canExport };
+  const { showDebugPanels } = readAppFlags();
+  return { settings, exportRange, clamped, displayTimezone, ordersSample, webhookQueueSize, deadLetters, canExport, showDebugPanels };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -219,7 +221,7 @@ const isValidDomain = (value: string) => /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(value.
 const isValidUtmSource = (value: string) => /^[a-z0-9_-]+$/i.test(value.trim());
 
 export default function SettingsAndExport() {
-  const { settings, exportRange, clamped, ordersSample, webhookQueueSize, deadLetters, canExport } = useLoaderData<typeof loader>();
+  const { settings, exportRange, clamped, ordersSample, webhookQueueSize, deadLetters, canExport, showDebugPanels } = useLoaderData<typeof loader>();
   const shopify = useAppBridge();
   const fetcher = useFetcher<typeof action>();
   const navigate = useNavigate();
@@ -833,6 +835,8 @@ export default function SettingsAndExport() {
             <p className={styles.helpText}>{t(language as Lang, "llms_preview_help")}</p>
           </div>
 
+          {/* 调试面板 - 仅在 SHOW_DEBUG_PANELS=true 时显示 */}
+          {showDebugPanels && (
           <div className={styles.card}>
             <div className={styles.sectionHeader}>
               <div>
@@ -871,6 +875,7 @@ export default function SettingsAndExport() {
             </div>
             <p className={styles.helpText}>{language === "English" ? "Only shows a small sample for debugging attribution signals; referrer has priority over UTM." : "用于调试 AI 渠道识别，仅展示少量样本；referrer 识别优先于 UTM。"}</p>
           </div>
+          )}
 
           <div className={styles.card}>
             <div className={styles.sectionHeader}>

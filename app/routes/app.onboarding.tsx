@@ -15,6 +15,8 @@ import { getSettings, syncShopPreferences } from "../lib/settings.server";
 import { useUILanguage } from "../lib/useUILanguage";
 import { BILLING_PLANS, PRIMARY_BILLABLE_PLAN_ID, type PlanId } from "../lib/billing/plans";
 import { isDemoMode } from "../lib/runtime.server";
+import { OrdersRepository } from "../lib/repositories/orders.repository";
+import { resolveDateRange } from "../lib/aiData";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   type AuthShape = Awaited<ReturnType<typeof authenticate.admin>>;
@@ -67,6 +69,35 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const isSubscriptionExpired = billingState?.billingState === "EXPIRED_NO_SUBSCRIPTION";
   const wasSubscribed = billingState?.hasEverSubscribed || false;
   
+  // 获取 AI 订单数据预览（最近 30 天）
+  let aiSnapshot = {
+    totalOrders: 0,
+    totalGMV: 0,
+    aiOrders: 0,
+    aiGMV: 0,
+    aiShare: 0,
+    currency: settings.primaryCurrency || "USD",
+    hasData: false,
+  };
+  
+  try {
+    const ordersRepo = new OrdersRepository();
+    const range = resolveDateRange("30d");
+    const stats = await ordersRepo.getAggregateStats(shopDomain, range);
+    
+    aiSnapshot = {
+      totalOrders: stats.total.orders,
+      totalGMV: stats.total.gmv,
+      aiOrders: stats.ai.orders,
+      aiGMV: stats.ai.gmv,
+      aiShare: stats.total.gmv > 0 ? (stats.ai.gmv / stats.total.gmv) * 100 : 0,
+      currency: settings.primaryCurrency || "USD",
+      hasData: stats.total.orders > 0,
+    };
+  } catch (e) {
+    console.warn("Failed to load AI snapshot for onboarding:", (e as Error).message);
+  }
+  
   return { 
     language: settings.languages[0] || "中文", 
     shopDomain, 
@@ -81,6 +112,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     remainingTrialDays: trialDays[PRIMARY_BILLABLE_PLAN_ID] || 0,
     isSubscriptionExpired,
     wasSubscribed,
+    aiSnapshot,
   };
 };
 
@@ -94,6 +126,7 @@ export default function Onboarding() {
     remainingTrialDays,
     isSubscriptionExpired,
     wasSubscribed,
+    aiSnapshot,
   } = useLoaderData<typeof loader>();
   
   const [searchParams] = useSearchParams();
@@ -110,23 +143,99 @@ export default function Onboarding() {
 
   const handleSelectPlan = undefined as never;
   
+  // 格式化货币
+  const formatCurrency = (amount: number, currency: string) => {
+    return new Intl.NumberFormat(en ? "en-US" : "zh-CN", {
+      style: "currency",
+      currency: currency,
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(amount);
+  };
+  
   // Render Step 2: Value Snapshot
   if (step === "value_snapshot") {
+    const snapshot = aiSnapshot || { totalOrders: 0, totalGMV: 0, aiOrders: 0, aiGMV: 0, aiShare: 0, currency: "USD", hasData: false };
+    
     return (
       <section style={{ maxWidth: 600, margin: "40px auto", padding: 20, textAlign: "center", fontFamily: "system-ui, sans-serif" }}>
         <h1 style={{ fontSize: 24, marginBottom: 16 }}>
           {en ? "Uncover Your Hidden AI Revenue" : "发现被隐藏的 AI 渠道收入"}
         </h1>
         <div style={{ background: "#f1f2f4", padding: 40, borderRadius: 8, marginBottom: 24 }}>
-           <p style={{ fontSize: 16, color: "#555" }}>
+           <p style={{ fontSize: 16, color: "#555", marginBottom: 20 }}>
              {en 
                ? "We analyze your orders to tell you exactly how much GMV comes from ChatGPT, Perplexity, and others." 
                : "我们通过分析订单来源，告诉您究竟有多少销售额来自 ChatGPT、Perplexity 等 AI 渠道。"}
            </p>
-           {/* Placeholder for chart */}
-           <div style={{ marginTop: 20, height: 100, background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", color: "#ccc", border: "1px dashed #ccc" }}>
-             {en ? "Live AI Revenue Snapshot (Generating...)" : "实时 AI 收入快照 (生成中...)"}
-           </div>
+           
+           {/* AI 数据快照 */}
+           {snapshot.hasData ? (
+             <div style={{ background: "#fff", borderRadius: 8, padding: 24, boxShadow: "0 2px 8px rgba(0,0,0,0.08)" }}>
+               <div style={{ fontSize: 12, color: "#888", marginBottom: 16 }}>
+                 {en ? "Last 30 Days" : "最近 30 天"}
+               </div>
+               
+               <div style={{ display: "flex", justifyContent: "space-around", gap: 16 }}>
+                 {/* AI GMV */}
+                 <div>
+                   <div style={{ fontSize: 28, fontWeight: "bold", color: "#008060" }}>
+                     {formatCurrency(snapshot.aiGMV, snapshot.currency)}
+                   </div>
+                   <div style={{ fontSize: 13, color: "#666", marginTop: 4 }}>
+                     {en ? "AI Revenue" : "AI 渠道收入"}
+                   </div>
+                 </div>
+                 
+                 {/* AI Orders */}
+                 <div>
+                   <div style={{ fontSize: 28, fontWeight: "bold", color: "#635bff" }}>
+                     {snapshot.aiOrders}
+                   </div>
+                   <div style={{ fontSize: 13, color: "#666", marginTop: 4 }}>
+                     {en ? "AI Orders" : "AI 订单数"}
+                   </div>
+                 </div>
+                 
+                 {/* AI Share */}
+                 <div>
+                   <div style={{ fontSize: 28, fontWeight: "bold", color: "#00a2ff" }}>
+                     {snapshot.aiShare.toFixed(1)}%
+                   </div>
+                   <div style={{ fontSize: 13, color: "#666", marginTop: 4 }}>
+                     {en ? "AI Share" : "AI 占比"}
+                   </div>
+                 </div>
+               </div>
+               
+               {/* 进度条 */}
+               <div style={{ marginTop: 20, background: "#e1e3e5", borderRadius: 4, height: 8, overflow: "hidden" }}>
+                 <div 
+                   style={{ 
+                     width: `${Math.min(snapshot.aiShare, 100)}%`, 
+                     height: "100%", 
+                     background: "linear-gradient(90deg, #008060, #00a2ff)",
+                     borderRadius: 4,
+                     transition: "width 0.5s ease"
+                   }} 
+                 />
+               </div>
+               <div style={{ fontSize: 12, color: "#888", marginTop: 8 }}>
+                 {en 
+                   ? `${snapshot.aiShare.toFixed(1)}% of total ${formatCurrency(snapshot.totalGMV, snapshot.currency)} GMV`
+                   : `占总 GMV ${formatCurrency(snapshot.totalGMV, snapshot.currency)} 的 ${snapshot.aiShare.toFixed(1)}%`}
+               </div>
+             </div>
+           ) : (
+             <div style={{ background: "#fff", borderRadius: 8, padding: 24, border: "1px dashed #ccc" }}>
+               <div style={{ fontSize: 48, marginBottom: 12 }}>🔍</div>
+               <div style={{ color: "#666" }}>
+                 {en 
+                   ? "No order data yet. Complete setup to start tracking AI revenue."
+                   : "暂无订单数据。完成设置后即可开始追踪 AI 渠道收入。"}
+               </div>
+             </div>
+           )}
         </div>
         <Link 
           to={`?${(() => {

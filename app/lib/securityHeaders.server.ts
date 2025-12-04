@@ -1,29 +1,16 @@
-import crypto from "node:crypto";
-
-const generateNonce = () => crypto.randomBytes(16).toString("base64");
-
 export const applySecurityHeaders = (request: Request, responseHeaders: Headers) => {
   responseHeaders.set("X-Content-Type-Options", "nosniff");
   responseHeaders.set("Referrer-Policy", "strict-origin-when-cross-origin");
 
   const isProd = process.env.NODE_ENV === "production";
-  const nonce = generateNonce();
-  responseHeaders.set("X-CSP-Nonce", nonce);
   
   // Shopify App Bridge requires 'unsafe-inline' and 'unsafe-eval' for proper operation
-  // in embedded apps. The nonce is still provided for scripts that can use it.
-  const scriptSrc = [
-    "script-src",
-    "'self'",
-    "https:",
-    `'nonce-${nonce}'`,
-    "'unsafe-inline'",
-    "'unsafe-eval'"
-  ];
-
+  // in embedded apps. We cannot use nonce because:
+  // 1. CSP Level 2 ignores 'unsafe-inline' when nonce is present
+  // 2. Shopify App Bridge dynamically injects scripts without nonce
   const csp = [
     "default-src 'self'",
-    scriptSrc.join(" "),
+    "script-src 'self' https: 'unsafe-inline' 'unsafe-eval'",
     "style-src 'self' 'unsafe-inline' https:",
     "img-src 'self' data: https:",
     "font-src 'self' https:",

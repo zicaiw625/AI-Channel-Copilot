@@ -100,7 +100,6 @@ export default function Billing() {
   const activePlan = plans.find((plan) => plan.id === activePlanId) ?? plans[0];
   const priceLabel = activePlan.priceUsd === 0 ? "$0" : `$${activePlan.priceUsd}`;
   const showTrialBanner = isTrialing && activePlan.remainingTrialDays > 0 && !hasNoPlan;
-  const isTrialExpiringSoon = showTrialBanner && activePlan.remainingTrialDays <= 3;
   
   // Modal state for downgrade confirmation
   const [showDowngradeModal, setShowDowngradeModal] = useState(false);
@@ -195,21 +194,19 @@ export default function Billing() {
                 <div style={{ 
                   marginBottom: 16, 
                   padding: 12, 
-                  background: isTrialExpiringSoon ? "#fff2e8" : "#e6f7ff", 
-                  border: isTrialExpiringSoon ? "1px solid #ffbb96" : "1px solid #91d5ff",
-                  borderRadius: 4, 
-                  color: isTrialExpiringSoon ? "#d4380d" : "#0050b3" 
+                  background: "#f4f5fa", 
+                  border: "1px solid #e1e3e5",
+                  borderRadius: 8, 
+                  color: "#5c6ac4" 
                 }}>
-                  <div style={{ fontWeight: isTrialExpiringSoon ? "bold" : "normal" }}>
-                    {isTrialExpiringSoon ? "⚠️ " : ""}
-                    {en
-                      ? `Trial: ${activePlan.remainingTrialDays} day${activePlan.remainingTrialDays === 1 ? '' : 's'} remaining`
-                      : `试用剩余 ${activePlan.remainingTrialDays} 天`}
-                    {isTrialExpiringSoon && (en ? " - Billing starts after trial ends" : " - 试用结束后将自动扣费")}
+                  <div style={{ fontWeight: 500 }}>
+                    ✨ {en
+                      ? `Enjoying your Pro trial · ${activePlan.remainingTrialDays} day${activePlan.remainingTrialDays === 1 ? '' : 's'} remaining`
+                      : `正在体验 Pro 全部功能 · 剩余 ${activePlan.remainingTrialDays} 天`}
                   </div>
                   {formattedTrialEndDate && (
-                    <div style={{ fontSize: 12, marginTop: 4, opacity: 0.8 }}>
-                      {en ? `Trial ends: ${formattedTrialEndDate}` : `试用结束时间：${formattedTrialEndDate}`}
+                    <div style={{ fontSize: 12, marginTop: 4, color: "#637381" }}>
+                      {en ? `Your subscription continues on ${formattedTrialEndDate}` : `订阅将于 ${formattedTrialEndDate} 正式生效`}
                     </div>
                   )}
                 </div>

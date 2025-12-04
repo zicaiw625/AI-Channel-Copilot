@@ -125,20 +125,16 @@ export default function App() {
         
         {(plan === "pro" || plan === "growth") && trialDaysLeft !== null && trialDaysLeft > 0 && (
           <span style={{ 
-            color: trialDaysLeft <= 3 ? "#d4380d" : "#008060",
-            fontWeight: trialDaysLeft <= 3 ? "bold" : "normal",
-            background: trialDaysLeft <= 3 ? '#fff1f0' : '#f6ffed',
+            color: "#5c6ac4",
+            fontWeight: 500,
+            background: '#f4f5fa',
             padding: '2px 8px',
             borderRadius: '4px',
-            border: `1px solid ${trialDaysLeft <= 3 ? '#ffa39e' : '#b7eb8f'}`
+            border: '1px solid #e1e3e5'
           }}>
-            {trialDaysLeft <= 3 
-              ? (uiLanguage === "English" 
-                  ? `⚠️ Trial ending soon: ${trialDaysLeft} day${trialDaysLeft === 1 ? '' : 's'} left!` 
-                  : `⚠️ 试用即将结束：剩余 ${trialDaysLeft} 天！`)
-              : (uiLanguage === "English" 
-                  ? `Pro Trial: ${trialDaysLeft} days left` 
-                  : `Pro 试用：剩余 ${trialDaysLeft} 天`)}
+            {uiLanguage === "English" 
+              ? `✨ Enjoying Pro · ${trialDaysLeft} day${trialDaysLeft === 1 ? '' : 's'} trial left` 
+              : `✨ 正在体验 Pro · 试用剩余 ${trialDaysLeft} 天`}
           </span>
         )}
         

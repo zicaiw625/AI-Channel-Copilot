@@ -84,10 +84,10 @@ export default function Billing() {
   const uiLanguage = useUILanguage(language);
   const en = uiLanguage === "English";
   
-  // 打开 Shopify 计费管理页面
-  const openShopifyBilling = () => {
-    // 导航到商店的计费设置页面
-    window.open(`https://${shopDomain}/admin/settings/billing`, "_top");
+  // 打开 Shopify 应用管理页面
+  const openShopifyAppSettings = () => {
+    // 导航到商店的应用和销售渠道设置页面，用户可以在那里管理应用订阅
+    window.open(`https://${shopDomain}/admin/settings/apps`, "_top");
   };
   const normalizePlanId = (plan: PlanTier): PlanId =>
     plan === "pro" || plan === "growth" || plan === "free" ? plan : "free";
@@ -206,10 +206,10 @@ export default function Billing() {
                 </Form>
               ) : (
                  <>
-                    {/* For paid plans, send them to Shopify billing settings */}
+                    {/* For paid plans, send them to Shopify app settings */}
                      <button 
                         type="button"
-                        onClick={openShopifyBilling}
+                        onClick={openShopifyAppSettings}
                         style={{ 
                             background: "white", 
                             color: "#333", 

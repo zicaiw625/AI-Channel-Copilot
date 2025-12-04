@@ -367,8 +367,8 @@ export default function Index() {
 
   const setRange = (value: TimeRangeKey) => {
     if (isFreePlan && value !== "7d") {
-        // Show upgrade alert or just ignore
-        alert(uiLanguage === "English" ? "Upgrade to Pro to view more history." : "升级到 Pro 版以查看更多历史数据。");
+        // Show upgrade toast instead of alert
+        shopify.toast.show?.(uiLanguage === "English" ? "Upgrade to Pro to view more history." : "升级到 Pro 版以查看更多历史数据。");
         return;
     }
     const params = new URLSearchParams(location.search);
@@ -395,7 +395,7 @@ export default function Index() {
 
   const applyCustomRange = () => {
     if (isFreePlan) {
-        alert(uiLanguage === "English" ? "Upgrade to Pro to use custom ranges." : "升级到 Pro 版以使用自定义时间范围。");
+        shopify.toast.show?.(uiLanguage === "English" ? "Upgrade to Pro to use custom ranges." : "升级到 Pro 版以使用自定义时间范围。");
         return;
     }
     if (!customFrom) return;
@@ -611,7 +611,7 @@ export default function Index() {
                   onClick={(e) => {
                       if (!canViewFull) {
                           e.preventDefault();
-                          alert(uiLanguage === "English" ? "Upgrade to Pro to export data." : "升级到 Pro 版以导出数据。");
+                          shopify.toast.show?.(uiLanguage === "English" ? "Upgrade to Pro to export data." : "升级到 Pro 版以导出数据。");
                           return;
                       }
                       handleDownload(e, `/api/export/orders?range=${range}&from=${encodeURIComponent(dateRange.fromParam || "")}&to=${encodeURIComponent(dateRange.toParam || "")}`, `ai-orders-${range}.csv`);

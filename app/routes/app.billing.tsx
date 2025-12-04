@@ -247,9 +247,9 @@ export default function Billing() {
       <div style={{ marginTop: 32 }}>
         <h3 style={{ marginBottom: 16 }}>{en ? "Available Plans" : "可用方案"}</h3>
         <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-          {plans.map((plan) => {
+          {plans.filter((plan) => plan.status === "live").map((plan) => {
             const isActive = plan.id === activePlanId;
-            const disabled = demo || plan.status !== "live" || isActive;
+            const disabled = demo || isActive;
             return (
               <div
                 key={plan.id}

@@ -247,6 +247,9 @@ export default function SettingsAndExport() {
   const [gmvMetric, setGmvMetric] = useState(settings.gmvMetric || "current_total_price");
   const [exportWindow, setExportWindow] = useState<TimeRangeKey>(exportRange as TimeRangeKey);
 
+  // Modal state for confirming removal of default domain
+  const [confirmModal, setConfirmModal] = useState<{ open: boolean; rule: AiDomainRule | null }>({ open: false, rule: null });
+
   const locale = language === "English" ? "en-US" : "zh-CN";
 
   const utmMediumKeywords = useMemo(
@@ -293,10 +296,9 @@ export default function SettingsAndExport() {
   };
 
   const removeDomain = (rule: AiDomainRule) => {
-    if (
-      rule.source === "default" &&
-      !window.confirm(language === "English" ? "Removing a default domain may reduce attribution accuracy. Are you sure?" : "删除默认域名可能导致漏标，确定要移除这一项吗？")
-    ) {
+    if (rule.source === "default") {
+      // Show confirmation modal for default domains
+      setConfirmModal({ open: true, rule });
       return;
     }
     setDomains((prev) =>
@@ -304,6 +306,17 @@ export default function SettingsAndExport() {
         (item) => !(item.domain === rule.domain && item.channel === rule.channel),
       ),
     );
+  };
+
+  const confirmRemoveDomain = () => {
+    if (confirmModal.rule) {
+      setDomains((prev) =>
+        prev.filter(
+          (item) => !(item.domain === confirmModal.rule!.domain && item.channel === confirmModal.rule!.channel),
+        ),
+      );
+    }
+    setConfirmModal({ open: false, rule: null });
   };
 
   const addUtmMapping = () => {
@@ -1011,6 +1024,71 @@ export default function SettingsAndExport() {
           </p>
         </div>
       </div>
+
+      {/* Confirmation Modal for removing default domain */}
+      {confirmModal.open && (
+        <div style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: "rgba(0, 0, 0, 0.5)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 1000
+        }}>
+          <div style={{
+            background: "white",
+            borderRadius: 12,
+            padding: 24,
+            maxWidth: 400,
+            width: "90%",
+            boxShadow: "0 4px 24px rgba(0, 0, 0, 0.15)"
+          }}>
+            <h3 style={{ margin: "0 0 12px", fontSize: 16, fontWeight: 600 }}>
+              {language === "English" ? "Confirm Removal" : "确认删除"}
+            </h3>
+            <p style={{ margin: "0 0 20px", color: "#555", lineHeight: 1.5 }}>
+              {language === "English"
+                ? "Removing a default domain may reduce attribution accuracy. Are you sure?"
+                : "删除默认域名可能导致漏标，确定要移除这一项吗？"}
+            </p>
+            <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                onClick={() => setConfirmModal({ open: false, rule: null })}
+                style={{
+                  padding: "8px 16px",
+                  borderRadius: 6,
+                  border: "1px solid #ccc",
+                  background: "white",
+                  cursor: "pointer",
+                  fontSize: 14
+                }}
+              >
+                {language === "English" ? "Cancel" : "取消"}
+              </button>
+              <button
+                type="button"
+                onClick={confirmRemoveDomain}
+                style={{
+                  padding: "8px 16px",
+                  borderRadius: 6,
+                  border: "none",
+                  background: "#d72c0d",
+                  color: "white",
+                  cursor: "pointer",
+                  fontSize: 14
+                }}
+              >
+                {language === "English" ? "Remove" : "删除"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </s-page>
   );
 }

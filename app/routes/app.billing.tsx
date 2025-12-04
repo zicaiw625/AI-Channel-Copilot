@@ -1,5 +1,6 @@
+import { useState } from "react";
 import type { HeadersFunction, LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
-import { useLoaderData, useActionData, Form } from "react-router";
+import { useLoaderData, useActionData, Form, useFetcher } from "react-router";
 import { useUILanguage } from "../lib/useUILanguage";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate, login } from "../shopify.server";
@@ -91,6 +92,10 @@ export default function Billing() {
   const showTrialBanner = isTrialing && activePlan.remainingTrialDays > 0;
   const isTrialExpiringSoon = showTrialBanner && activePlan.remainingTrialDays <= 3;
   
+  // Modal state for downgrade confirmation
+  const [showDowngradeModal, setShowDowngradeModal] = useState(false);
+  const downgradeFetcher = useFetcher();
+  
   // Format trial end date
   const formattedTrialEndDate = trialEndDate
     ? new Intl.DateTimeFormat(en ? "en-US" : "zh-CN", {
@@ -102,8 +107,16 @@ export default function Billing() {
       }).format(new Date(trialEndDate))
     : null;
   
-  const handleDowngradeConfirm = () => {
-      return confirm(en ? "Are you sure you want to downgrade to Free? You will lose access to detailed history and Copilot." : "确定要降级到免费版吗？您将失去历史数据详情和 Copilot 功能。");
+  const handleDowngradeClick = () => {
+      setShowDowngradeModal(true);
+  };
+  
+  const confirmDowngrade = () => {
+      downgradeFetcher.submit(
+          { intent: "downgrade", shop: shopDomain },
+          { method: "post", replace: true }
+      );
+      setShowDowngradeModal(false);
   };
   
   return (
@@ -206,25 +219,22 @@ export default function Billing() {
                          {en ? "Manage in Shopify" : "在 Shopify 中管理"}
                      </a>
                      
-                    <Form method="post" replace onSubmit={(e) => { if (!handleDowngradeConfirm()) e.preventDefault(); }}>
-                      <input type="hidden" name="intent" value="downgrade" />
-                      <input type="hidden" name="shop" value={shopDomain} />
-                      <button
-                         type="submit"
-                         disabled={demo}
-                         data-action="billing-downgrade"
-                         aria-label={en ? "Downgrade to Free" : "降级到免费版"}
-                         style={{
-                             background: "none",
-                             border: "none",
-                             color: "#d4380d",
-                             cursor: "pointer",
-                             textDecoration: "underline"
-                         }}
-                       >
-                           {en ? "Downgrade to Free" : "降级到免费版"}
-                       </button>
-                    </Form>
+                    <button
+                       type="button"
+                       onClick={handleDowngradeClick}
+                       disabled={demo}
+                       data-action="billing-downgrade"
+                       aria-label={en ? "Downgrade to Free" : "降级到免费版"}
+                       style={{
+                           background: "none",
+                           border: "none",
+                           color: "#d4380d",
+                           cursor: "pointer",
+                           textDecoration: "underline"
+                       }}
+                     >
+                         {en ? "Downgrade to Free" : "降级到免费版"}
+                     </button>
                  </>
               )}
           </div>
@@ -268,31 +278,28 @@ export default function Billing() {
                   ))}
                 </ul>
                 {plan.id === "free" ? (
-                  <Form method="post" replace onSubmit={(e) => { if (!handleDowngradeConfirm()) e.preventDefault(); }}>
-                    <input type="hidden" name="intent" value="downgrade" />
-                    <input type="hidden" name="shop" value={shopDomain} />
-                    <button
-                      type="submit"
-                      disabled={disabled}
-                      data-action="billing-select-plan"
-                      data-plan-id={plan.id}
-                      aria-label={
-                        isActive ? (en ? "Current Plan" : "当前方案") : (en ? "Switch to Free" : "切换到免费版")
-                      }
-                      style={{
-                        width: "100%",
-                        padding: "10px",
-                        marginTop: 8,
-                        background: disabled ? "#f5f5f5" : "white",
-                        color: disabled ? "#999" : "#333",
-                        border: "1px solid #babfc3",
-                        borderRadius: 4,
-                        cursor: disabled ? "not-allowed" : "pointer",
-                      }}
-                    >
-                      {isActive ? (en ? "Current Plan" : "当前方案") : (en ? "Switch to Free" : "切换到免费版")}
-                    </button>
-                  </Form>
+                  <button
+                    type="button"
+                    onClick={handleDowngradeClick}
+                    disabled={disabled}
+                    data-action="billing-select-plan"
+                    data-plan-id={plan.id}
+                    aria-label={
+                      isActive ? (en ? "Current Plan" : "当前方案") : (en ? "Switch to Free" : "切换到免费版")
+                    }
+                    style={{
+                      width: "100%",
+                      padding: "10px",
+                      marginTop: 8,
+                      background: disabled ? "#f5f5f5" : "white",
+                      color: disabled ? "#999" : "#333",
+                      border: "1px solid #babfc3",
+                      borderRadius: 4,
+                      cursor: disabled ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    {isActive ? (en ? "Current Plan" : "当前方案") : (en ? "Switch to Free" : "切换到免费版")}
+                  </button>
                 ) : (
                   <Form method="post" replace>
                     <input type="hidden" name="intent" value="upgrade" />
@@ -338,6 +345,71 @@ export default function Billing() {
       {demo && (
         <div style={{ marginTop: 20, padding: 10, background: "#e6f7ff", color: "#0050b3", borderRadius: 4 }}>
           {en ? "Demo mode: Billing actions disabled." : "Demo 模式：计费操作已禁用。"}
+        </div>
+      )}
+
+      {/* Downgrade Confirmation Modal */}
+      {showDowngradeModal && (
+        <div style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: "rgba(0, 0, 0, 0.5)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 1000
+        }}>
+          <div style={{
+            background: "white",
+            borderRadius: 12,
+            padding: 24,
+            maxWidth: 420,
+            width: "90%",
+            boxShadow: "0 4px 24px rgba(0, 0, 0, 0.15)"
+          }}>
+            <h3 style={{ margin: "0 0 12px", fontSize: 16, fontWeight: 600 }}>
+              {en ? "Confirm Downgrade" : "确认降级"}
+            </h3>
+            <p style={{ margin: "0 0 20px", color: "#555", lineHeight: 1.5 }}>
+              {en
+                ? "Are you sure you want to downgrade to Free? You will lose access to detailed history and Copilot."
+                : "确定要降级到免费版吗？您将失去历史数据详情和 Copilot 功能。"}
+            </p>
+            <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                onClick={() => setShowDowngradeModal(false)}
+                style={{
+                  padding: "8px 16px",
+                  borderRadius: 6,
+                  border: "1px solid #ccc",
+                  background: "white",
+                  cursor: "pointer",
+                  fontSize: 14
+                }}
+              >
+                {en ? "Cancel" : "取消"}
+              </button>
+              <button
+                type="button"
+                onClick={confirmDowngrade}
+                style={{
+                  padding: "8px 16px",
+                  borderRadius: 6,
+                  border: "none",
+                  background: "#d72c0d",
+                  color: "white",
+                  cursor: "pointer",
+                  fontSize: 14
+                }}
+              >
+                {en ? "Downgrade" : "确认降级"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </section>

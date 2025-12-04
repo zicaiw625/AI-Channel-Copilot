@@ -319,8 +319,8 @@ export default function Billing() {
                     : (en ? "No trial" : "无试用")}
                 </p>
                 <ul style={{ paddingLeft: 18, margin: "8px 0", color: "#555", fontSize: 14 }}>
-                  {plan.includes.slice(0, 3).map((feature) => (
-                    <li key={feature}>{feature}</li>
+                  {plan.includes.slice(0, 3).map((feature, idx) => (
+                    <li key={idx}>{en ? feature.en : feature.zh}</li>
                   ))}
                 </ul>
                 {plan.id === "free" ? (

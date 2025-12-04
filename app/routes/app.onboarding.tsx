@@ -425,10 +425,10 @@ export default function Onboarding() {
                   </span>
                 )}
               </div>
-              <p style={{ color: "#666", minHeight: 40 }}>{plan.includes[0]}</p>
+              <p style={{ color: "#666", minHeight: 40 }}>{en ? plan.includes[0].en : plan.includes[0].zh}</p>
               <ul style={{ listStyle: "none", padding: 0, margin: "20px 0", flex: 1, lineHeight: "1.6" }}>
-                {plan.includes.map((feature) => (
-                  <li key={feature}>✓ {feature}</li>
+                {plan.includes.map((feature, idx) => (
+                  <li key={idx}>✓ {en ? feature.en : feature.zh}</li>
                 ))}
               </ul>
               <Form method="post" replace>

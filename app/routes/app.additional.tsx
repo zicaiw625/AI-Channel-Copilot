@@ -25,6 +25,7 @@ import { getPlatform, isDemoMode } from "../lib/runtime.server";
 import { LANGUAGE_EVENT, LANGUAGE_STORAGE_KEY, BACKFILL_COOLDOWN_MINUTES, DEFAULT_RANGE_KEY, MAX_BACKFILL_DURATION_MS, MAX_BACKFILL_ORDERS, MAX_BACKFILL_DAYS } from "../lib/constants";
 import { loadDashboardContext } from "../lib/dashboardContext.server";
 import { logger } from "../lib/logger.server";
+import { hasFeature, FEATURES } from "../lib/access.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const demo = isDemoMode();
@@ -64,11 +65,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   
 
   const ordersSample = orders.slice(0, 20);
-  const [webhookQueueSize, deadLetters] = await Promise.all([
+  const [webhookQueueSize, deadLetters, canExport] = await Promise.all([
     getWebhookQueueSize(),
     getDeadLetterJobs(10),
+    hasFeature(shopDomain, FEATURES.EXPORTS),
   ]);
-  return { settings, exportRange, clamped, displayTimezone, ordersSample, webhookQueueSize, deadLetters };
+  return { settings, exportRange, clamped, displayTimezone, ordersSample, webhookQueueSize, deadLetters, canExport };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -205,7 +207,7 @@ const isValidDomain = (value: string) => /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(value.
 const isValidUtmSource = (value: string) => /^[a-z0-9_-]+$/i.test(value.trim());
 
 export default function SettingsAndExport() {
-  const { settings, exportRange, clamped, ordersSample, webhookQueueSize, deadLetters } = useLoaderData<typeof loader>();
+  const { settings, exportRange, clamped, ordersSample, webhookQueueSize, deadLetters, canExport } = useLoaderData<typeof loader>();
   const shopify = useAppBridge();
   const fetcher = useFetcher<typeof action>();
   const navigate = useNavigate();
@@ -337,6 +339,11 @@ export default function SettingsAndExport() {
 
   const handleDownload = async (e: React.MouseEvent<HTMLAnchorElement | HTMLButtonElement>, url: string, fallbackFilename: string) => {
     e.preventDefault();
+    // Check export permission
+    if (!canExport) {
+      shopify.toast.show?.(language === "English" ? "Upgrade to Pro to export data." : "升级到 Pro 版以导出数据。");
+      return;
+    }
     try {
       const token = await shopify.idToken();
       const response = await fetch(url, {
@@ -810,7 +817,7 @@ export default function SettingsAndExport() {
               </div>
               <span className={styles.badge}>{t(language as Lang, "badge_experiment")}</span>
             </div>
-            <LlmsPreview language={language} />
+            <LlmsPreview language={language} canExport={canExport} />
             <p className={styles.helpText}>{t(language as Lang, "llms_preview_help")}</p>
           </div>
 
@@ -948,6 +955,13 @@ export default function SettingsAndExport() {
             </select>
             <span className={styles.helpText}>{language === "English" ? "Switch the range to regenerate exports." : "切换后将重新加载并生成对应区间的导出。"}</span>
           </div>
+          {!canExport && (
+            <div className={styles.alert} style={{ marginBottom: 12 }}>
+              {language === "English" 
+                ? "⚡ Export features require a Pro subscription. Upgrade to download CSV files."
+                : "⚡ 导出功能需要 Pro 订阅。升级后可下载 CSV 文件。"}
+            </div>
+          )}
           <div className={styles.exportGrid}>
           <div className={styles.exportCard}>
             <h4>{language === "English" ? "AI Orders Details" : "AI 渠道订单明细"}</h4>
@@ -958,8 +972,9 @@ export default function SettingsAndExport() {
             </p>
             <a
               className={styles.primaryButton}
-              href={`/api/export/orders?range=${exportWindow}`}
+              href={canExport ? `/api/export/orders?range=${exportWindow}` : "#"}
               onClick={(e) => handleDownload(e, `/api/export/orders?range=${exportWindow}`, `ai-orders-${exportWindow}.csv`)}
+              style={!canExport ? { opacity: 0.6, cursor: "not-allowed" } : {}}
             >
               {language === "English" ? "Download CSV" : "下载 CSV"}
             </a>
@@ -969,8 +984,9 @@ export default function SettingsAndExport() {
             <p>{language === "English" ? "Fields: product title, AI orders, AI GMV, AI share, top channel, URL (with product ID/handle for analysis)." : "字段：产品名、AI 订单数、AI GMV、AI 占比、Top 渠道、URL（附产品 ID / handle 便于二次分析）。"}</p>
             <a
               className={styles.secondaryButton}
-              href={`/api/export/products?range=${exportWindow}`}
+              href={canExport ? `/api/export/products?range=${exportWindow}` : "#"}
               onClick={(e) => handleDownload(e, `/api/export/products?range=${exportWindow}`, `ai-products-${exportWindow}.csv`)}
+              style={!canExport ? { opacity: 0.6, cursor: "not-allowed" } : {}}
             >
               {language === "English" ? "Download CSV" : "下载 CSV"}
             </a>
@@ -980,8 +996,9 @@ export default function SettingsAndExport() {
             <p>{t(language as Lang, "customers_ltv_desc")}</p>
             <a
               className={styles.secondaryButton}
-              href={`/api/export/customers?range=${exportWindow}`}
+              href={canExport ? `/api/export/customers?range=${exportWindow}` : "#"}
               onClick={(e) => handleDownload(e, `/api/export/customers?range=${exportWindow}`, `customers-ltv-${exportWindow}.csv`)}
+              style={!canExport ? { opacity: 0.6, cursor: "not-allowed" } : {}}
             >
               {language === "English" ? "Download CSV" : "下载 CSV"}
             </a>
@@ -1129,13 +1146,17 @@ export const headers: HeadersFunction = (headersArgs) => {
   return boundary.headers(headersArgs);
 };
 
-function LlmsPreview({ language }: { language: string }) {
+function LlmsPreview({ language, canExport }: { language: string; canExport: boolean }) {
   const shopify = useAppBridge();
   const fetcher = useFetcher<{ ok: boolean; text: string }>();
   const [copied, setCopied] = useState(false);
 
   const handleDownload = async (e: React.MouseEvent<HTMLAnchorElement>, url: string, fallbackFilename: string) => {
     e.preventDefault();
+    if (!canExport) {
+      shopify.toast.show?.(language === "English" ? "Upgrade to Pro to download." : "升级到 Pro 版以下载。");
+      return;
+    }
     try {
       const token = await shopify.idToken();
       const response = await fetch(url, {
@@ -1173,13 +1194,26 @@ function LlmsPreview({ language }: { language: string }) {
   };
 
   useEffect(() => {
-    fetcher.load(`/api/llms-txt-preview?ts=${Date.now()}`);
+    // Only load if user has export permission to avoid 403 errors
+    if (canExport) {
+      fetcher.load(`/api/llms-txt-preview?ts=${Date.now()}`);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [language]);
+  }, [language, canExport]);
 
-  const text = fetcher.data?.text || (language === "English" ? "# Generating..." : "# 生成中...");
+  const upgradeMessage = language === "English" 
+    ? "# Upgrade to Pro to preview llms.txt\n\nThis feature requires a Pro subscription."
+    : "# 升级到 Pro 版以预览 llms.txt\n\n此功能需要 Pro 订阅。";
+  
+  const text = !canExport 
+    ? upgradeMessage 
+    : (fetcher.data?.text || (language === "English" ? "# Generating..." : "# 生成中..."));
 
   const copy = async () => {
+    if (!canExport) {
+      shopify.toast.show?.(language === "English" ? "Upgrade to Pro to copy." : "升级到 Pro 版以复制。");
+      return;
+    }
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
@@ -1189,15 +1223,16 @@ function LlmsPreview({ language }: { language: string }) {
 
   return (
     <div>
-      <textarea readOnly className={styles.textarea} value={text} rows={10} />
+      <textarea readOnly className={styles.textarea} value={text} rows={10} style={!canExport ? { opacity: 0.6 } : {}} />
       <div className={styles.inlineActions}>
         <button type="button" className={styles.secondaryButton} onClick={copy} data-action="llms-copy">
           {copied ? (language === "English" ? "Copied" : "已复制") : (language === "English" ? "Copy" : "复制")}
         </button>
         <a 
-          href="/api/llms-txt-preview?download=1" 
+          href={canExport ? "/api/llms-txt-preview?download=1" : "#"}
           className={styles.primaryButton}
           onClick={(e) => handleDownload(e, "/api/llms-txt-preview?download=1", "llms.txt")}
+          style={!canExport ? { opacity: 0.6 } : {}}
         >
           {language === "English" ? "Download llms.txt" : "下载 llms.txt"}
         </a>

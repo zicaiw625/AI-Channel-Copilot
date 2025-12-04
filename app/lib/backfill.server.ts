@@ -1,12 +1,35 @@
 import type { Prisma } from "@prisma/client";
 import type { SettingsDefaults, DateRange } from "./aiData";
 import { fetchOrdersForRange } from "./shopifyOrders.server";
-import { markActivity } from "./settings.server";
+import { markActivity, updatePipelineStatuses } from "./settings.server";
 import { persistOrders } from "./persistence.server";
 import prisma from "../db.server";
 import { withAdvisoryLock } from "./locks.server";
 import { logger } from "./logger.server";
 import { MAX_BACKFILL_DURATION_MS, MAX_BACKFILL_ORDERS } from "./constants";
+
+const BACKFILL_STATUS_TITLE = "Hourly backfill (last 90 days)";
+
+const setBackfillStatus = async (
+  shopDomain: string,
+  status: "healthy" | "warning" | "info",
+  detail: string,
+) => {
+  if (!shopDomain) return;
+  await updatePipelineStatuses(shopDomain, (statuses) => {
+    const nextStatuses = [...statuses];
+    const index = nextStatuses.findIndex((item) =>
+      item.title.toLowerCase().includes("backfill"),
+    );
+
+    if (index >= 0) {
+      nextStatuses[index] = { ...nextStatuses[index], status, detail };
+      return nextStatuses;
+    }
+
+    return [...nextStatuses.slice(0, 1), { title: BACKFILL_STATUS_TITLE, status, detail }, ...nextStatuses.slice(1)];
+  });
+};
 
 type BackfillDependencies = {
   settings: SettingsDefaults | null;
@@ -108,6 +131,11 @@ const processQueue = async (
         }
 
         await updateJobStatus(job.id, "completed", { ordersFetched: fetched.orders.length });
+        await setBackfillStatus(
+          job.shopDomain,
+          "healthy",
+          `Last completed at ${new Date().toISOString()} · ${fetched.orders.length} orders`,
+        );
         logger.info("[backfill] job completed", {
           jobType: "backfill",
           jobId: job.id,
@@ -123,6 +151,11 @@ const processQueue = async (
           message,
         });
         await updateJobStatus(job.id, "failed", { error: message });
+        await setBackfillStatus(
+          job.shopDomain,
+          "warning",
+          `Failed at ${new Date().toISOString()}: ${message.slice(0, 50)}`,
+        );
       }
     }
     });

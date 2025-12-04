@@ -7,6 +7,8 @@ import { getPlatform, isDemoMode } from "./runtime.server";
 import { enqueueWebhookJob, getWebhookQueueSize, registerWebhookHandler } from "./webhookQueue.server";
 import { logger } from "./logger.server";
 
+const WEBHOOK_STATUS_TITLE = "orders/create webhook";
+
 const setWebhookStatus = async (
   shopDomain: string,
   status: "healthy" | "warning" | "info",
@@ -18,14 +20,38 @@ const setWebhookStatus = async (
     const index = nextStatuses.findIndex((item) =>
       item.title.toLowerCase().includes("webhook"),
     );
-    const nextEntry = { title: "orders webhook", status, detail };
 
     if (index >= 0) {
-      nextStatuses[index] = { ...nextStatuses[index], ...nextEntry };
+      // 保持原有 title，只更新 status 和 detail
+      nextStatuses[index] = { ...nextStatuses[index], status, detail };
       return nextStatuses;
     }
 
-    return [nextEntry, ...nextStatuses];
+    // 如果不存在，使用标准 title 创建新条目
+    return [{ title: WEBHOOK_STATUS_TITLE, status, detail }, ...nextStatuses];
+  });
+};
+
+const TAGGING_STATUS_TITLE = "AI tagging write-back";
+
+const setTaggingStatus = async (
+  shopDomain: string,
+  status: "healthy" | "warning" | "info",
+  detail: string,
+) => {
+  if (!shopDomain) return;
+  await updatePipelineStatuses(shopDomain, (statuses) => {
+    const nextStatuses = [...statuses];
+    const index = nextStatuses.findIndex((item) =>
+      item.title.toLowerCase().includes("tagging") || item.title.toLowerCase().includes("tag"),
+    );
+
+    if (index >= 0) {
+      nextStatuses[index] = { ...nextStatuses[index], status, detail };
+      return nextStatuses;
+    }
+
+    return [...nextStatuses, { title: TAGGING_STATUS_TITLE, status, detail }];
   });
 };
 
@@ -126,17 +152,17 @@ export const handleOrderWebhook = async (request: Request, expectedTopic: string
         try {
           await applyAiTags(admin, [record], settings, { shopDomain: jobShopDomain, intent: expectedTopic });
           await markActivity(jobShopDomain, { lastTaggingAt: new Date() });
-          await setWebhookStatus(jobShopDomain, "healthy", "Latest order tagged successfully.");
+          await setTaggingStatus(jobShopDomain, "healthy", `Last run at ${new Date().toISOString()}`);
         } catch (error) {
           logger.error("applyAiTags failed", {
             shop: jobShopDomain,
             topic,
             message: (error as Error).message,
           });
-          await setWebhookStatus(
+          await setTaggingStatus(
             jobShopDomain,
             "warning",
-            "Tagging failed for latest order; check server logs and retry later.",
+            "Tagging failed; check server logs and retry later.",
           );
         } finally {
           const elapsed = Date.now() - taggingStart;
@@ -247,10 +273,12 @@ export const registerDefaultOrderWebhookHandlers = () => {
         try {
           await applyAiTags(admin, [record], settings, { shopDomain: jobShopDomain, intent });
           await markActivity(jobShopDomain, { lastTaggingAt: new Date() });
+          await setTaggingStatus(jobShopDomain, "healthy", `Last run at ${new Date().toISOString()}`);
         } catch (error) {
           logger.error("applyAiTags failed", { shop: jobShopDomain, topic: intent }, {
             message: (error as Error).message,
           });
+          await setTaggingStatus(jobShopDomain, "warning", "Tagging failed; check logs.");
         }
       }
     });

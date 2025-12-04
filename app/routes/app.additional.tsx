@@ -1032,15 +1032,58 @@ export default function SettingsAndExport() {
             <span className={styles.badge}>{language === "English" ? "Monitor" : "监控"}</span>
           </div>
           <div className={styles.statusList}>
-            {settings.pipelineStatuses.map((item) => (
-              <div key={item.title} className={styles.statusRow}>
-                <div>
-                  <div className={styles.ruleTitle}>{item.title}</div>
-                  <div className={styles.ruleMeta}>{item.detail}</div>
+            {settings.pipelineStatuses.map((item) => {
+              // 国际化翻译映射
+              const titleMap: Record<string, string> = {
+                "orders/create webhook": language === "English" ? "orders/create webhook" : "订单创建 Webhook",
+                "Hourly backfill (last 90 days)": language === "English" ? "Hourly backfill (last 90 days)" : "每小时补拉（最近 90 天）",
+                "AI tagging write-back": language === "English" ? "AI tagging write-back" : "AI 标签回写",
+              };
+              const statusMap: Record<string, string> = {
+                healthy: language === "English" ? "HEALTHY" : "正常",
+                warning: language === "English" ? "WARNING" : "警告",
+                info: language === "English" ? "INFO" : "信息",
+              };
+              // 翻译 detail 中的常见英文片段
+              const translateDetail = (detail: string): string => {
+                if (language === "English") return detail;
+                return detail
+                  .replace(/Delivered (\d+) minutes? ago/g, "$1 分钟前送达")
+                  .replace(/Delivered (\d+) hours? ago/g, "$1 小时前送达")
+                  .replace(/Delivered (\d+) days? ago/g, "$1 天前送达")
+                  .replace(/auto-retries enabled/g, "已启用自动重试")
+                  .replace(/Catching up 90d orders to avoid webhook gaps/g, "补拉 90 天订单以避免 Webhook 漏单")
+                  .replace(/Catching up 90d orders/g, "补拉 90 天订单")
+                  .replace(/Order \+ customer tags ready/g, "订单和客户标签已就绪")
+                  .replace(/off by default/g, "默认关闭")
+                  .replace(/Waiting for first webhook/g, "等待首次 Webhook")
+                  .replace(/Waiting for first backfill/g, "等待首次补拉")
+                  .replace(/Last completed at/g, "上次完成于")
+                  .replace(/Last completed/g, "上次完成")
+                  .replace(/Last run at/g, "上次运行于")
+                  .replace(/Last run/g, "上次运行")
+                  .replace(/Processed/g, "已处理")
+                  .replace(/in-flight/g, "处理中")
+                  .replace(/Queued/g, "已入队")
+                  .replace(/(\d+) orders/g, "$1 条订单")
+                  .replace(/Failed at/g, "失败于")
+                  .replace(/Tagging failed/g, "标签写入失败")
+                  .replace(/check server logs and retry later/g, "请检查日志后重试")
+                  .replace(/check logs/g, "请检查日志");
+              };
+              const displayTitle = titleMap[item.title] || item.title;
+              const displayStatus = statusMap[item.status] || item.status;
+              const displayDetail = translateDetail(item.detail);
+              return (
+                <div key={item.title} className={styles.statusRow}>
+                  <div>
+                    <div className={styles.ruleTitle}>{displayTitle}</div>
+                    <div className={styles.ruleMeta}>{displayDetail}</div>
+                  </div>
+                  <span className={`${styles.statusBadge} ${item.status === "healthy" ? styles.statusHealthy : item.status === "warning" ? styles.statusWarning : styles.statusInfo}`}>{displayStatus}</span>
                 </div>
-                <span className={`${styles.statusBadge} ${item.status === "healthy" ? styles.statusHealthy : item.status === "warning" ? styles.statusWarning : styles.statusInfo}`}>{item.status}</span>
-              </div>
-            ))}
+              );
+            })}
             <div className={styles.statusRow}>
               <div>
                 <div className={styles.ruleTitle}>{language === "English" ? "Webhook Queue Size" : "Webhook 队列长度"}</div>

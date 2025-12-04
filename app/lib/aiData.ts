@@ -166,17 +166,17 @@ const defaultUtmMediums = [
 const defaultPipelineStatuses: PipelineStatus[] = [
   {
     title: "orders/create webhook",
-    status: "healthy",
-    detail: "Delivered 12 minutes ago · auto-retries enabled",
+    status: "info",
+    detail: "Waiting for first webhook · auto-retries enabled",
   },
   {
     title: "Hourly backfill (last 90 days)",
     status: "info",
-    detail: "Catching up 90d orders to avoid webhook gaps",
+    detail: "Waiting for first backfill · Catching up 90d orders",
   },
   {
     title: "AI tagging write-back",
-    status: "healthy",
+    status: "info",
     detail: "Order + customer tags ready · off by default",
   },
 ];

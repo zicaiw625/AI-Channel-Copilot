@@ -71,10 +71,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     language: settings.languages[0] || "中文", 
     shopDomain, 
     authorized: true,
-    plans: Object.values(BILLING_PLANS).map((plan) => ({
-      ...plan,
-      remainingTrialDays: trialDays[plan.id] || 0,
-    })),
+    plans: Object.values(BILLING_PLANS)
+      .filter((plan) => plan.status === "live") // 只显示已上线的计划，隐藏 "coming_soon"
+      .map((plan) => ({
+        ...plan,
+        remainingTrialDays: trialDays[plan.id] || 0,
+      })),
     showReinstallTrialBanner,
     remainingTrialDays: trialDays[PRIMARY_BILLABLE_PLAN_ID] || 0,
     isSubscriptionExpired,

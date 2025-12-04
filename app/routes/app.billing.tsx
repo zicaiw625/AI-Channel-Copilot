@@ -67,10 +67,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   return { 
       language, 
       currentPlan: planTier, 
-      plans: Object.values(BILLING_PLANS).map((plan) => ({
-        ...plan,
-        remainingTrialDays: trialMap[plan.id] || 0,
-      })), 
+      plans: Object.values(BILLING_PLANS)
+        .filter((plan) => plan.status === "live") // 只显示已上线的计划
+        .map((plan) => ({
+          ...plan,
+          remainingTrialDays: trialMap[plan.id] || 0,
+        })), 
       shopDomain, 
       demo,
       trialEndDate,

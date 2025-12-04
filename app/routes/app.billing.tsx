@@ -91,12 +91,15 @@ export default function Billing() {
     // 导航到商店的应用和销售渠道设置页面，用户可以在那里管理应用订阅
     window.open(`https://${shopDomain}/admin/settings/apps`, "_top");
   };
+  // 检查用户是否还没选择任何计划
+  const hasNoPlan = currentPlan === "none";
+  
   const normalizePlanId = (plan: PlanTier): PlanId =>
     plan === "pro" || plan === "growth" || plan === "free" ? plan : "free";
   const activePlanId = normalizePlanId(currentPlan);
   const activePlan = plans.find((plan) => plan.id === activePlanId) ?? plans[0];
   const priceLabel = activePlan.priceUsd === 0 ? "$0" : `$${activePlan.priceUsd}`;
-  const showTrialBanner = isTrialing && activePlan.remainingTrialDays > 0;
+  const showTrialBanner = isTrialing && activePlan.remainingTrialDays > 0 && !hasNoPlan;
   const isTrialExpiringSoon = showTrialBanner && activePlan.remainingTrialDays <= 3;
   
   // Modal state for downgrade confirmation
@@ -137,53 +140,85 @@ export default function Billing() {
       )}
       
       <div style={{ border: "1px solid #e1e3e5", borderRadius: 8, padding: 20, background: "white" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-              <div>
-                  <div style={{ fontSize: 14, color: "#666", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                      {en ? "Current Plan" : "当前计划"}
+          {/* 尚未选择计划的提示 */}
+          {hasNoPlan ? (
+            <>
+              <div style={{ textAlign: "center", padding: "20px 0" }}>
+                <div style={{ fontSize: 48, marginBottom: 16 }}>🎯</div>
+                <div style={{ fontSize: 18, fontWeight: "bold", marginBottom: 8 }}>
+                  {en ? "No plan selected yet" : "尚未选择订阅计划"}
+                </div>
+                <div style={{ color: "#666", marginBottom: 20 }}>
+                  {en 
+                    ? "Choose a plan below to start using AI Channel Copilot" 
+                    : "请从下方选择一个计划以开始使用 AI Channel Copilot"}
+                </div>
+                <a 
+                  href="/app/onboarding?step=plan_selection"
+                  style={{
+                    display: "inline-block",
+                    background: "#008060",
+                    color: "white",
+                    padding: "12px 24px",
+                    borderRadius: 4,
+                    textDecoration: "none",
+                    fontSize: 16,
+                    fontWeight: 600,
+                  }}
+                >
+                  {en ? "Choose a Plan" : "选择计划"}
+                </a>
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+                  <div>
+                      <div style={{ fontSize: 14, color: "#666", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                          {en ? "Current Plan" : "当前计划"}
+                      </div>
+                      <div style={{ fontSize: 24, fontWeight: "bold", marginTop: 4 }}>
+                          {activePlan.name}
+                      </div>
                   </div>
-                  <div style={{ fontSize: 24, fontWeight: "bold", marginTop: 4 }}>
-                      {activePlan.name}
+                  <div style={{ textAlign: "right" }}>
+                      <div style={{ fontSize: 24, fontWeight: "bold" }}>
+                          {priceLabel}
+                          {activePlan.priceUsd > 0 && (
+                            <span style={{ fontSize: 14, fontWeight: "normal", color: "#666" }}> / {en ? "mo" : "月"}</span>
+                          )}
+                      </div>
                   </div>
               </div>
-              <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: 24, fontWeight: "bold" }}>
-                      {priceLabel}
-                      {activePlan.priceUsd > 0 && (
-                        <span style={{ fontSize: 14, fontWeight: "normal", color: "#666" }}> / {en ? "mo" : "月"}</span>
-                      )}
-                  </div>
-              </div>
-          </div>
 
-          {showTrialBanner && (
-            <div style={{ 
-              marginBottom: 16, 
-              padding: 12, 
-              background: isTrialExpiringSoon ? "#fff2e8" : "#e6f7ff", 
-              border: isTrialExpiringSoon ? "1px solid #ffbb96" : "1px solid #91d5ff",
-              borderRadius: 4, 
-              color: isTrialExpiringSoon ? "#d4380d" : "#0050b3" 
-            }}>
-              <div style={{ fontWeight: isTrialExpiringSoon ? "bold" : "normal" }}>
-                {isTrialExpiringSoon ? "⚠️ " : ""}
-                {en
-                  ? `Trial: ${activePlan.remainingTrialDays} day${activePlan.remainingTrialDays === 1 ? '' : 's'} remaining`
-                  : `试用剩余 ${activePlan.remainingTrialDays} 天`}
-                {isTrialExpiringSoon && (en ? " - Subscribe now to keep your access!" : " - 立即订阅以保持访问权限！")}
-              </div>
-              {formattedTrialEndDate && (
-                <div style={{ fontSize: 12, marginTop: 4, opacity: 0.8 }}>
-                  {en ? `Trial ends: ${formattedTrialEndDate}` : `试用结束时间：${formattedTrialEndDate}`}
+              {showTrialBanner && (
+                <div style={{ 
+                  marginBottom: 16, 
+                  padding: 12, 
+                  background: isTrialExpiringSoon ? "#fff2e8" : "#e6f7ff", 
+                  border: isTrialExpiringSoon ? "1px solid #ffbb96" : "1px solid #91d5ff",
+                  borderRadius: 4, 
+                  color: isTrialExpiringSoon ? "#d4380d" : "#0050b3" 
+                }}>
+                  <div style={{ fontWeight: isTrialExpiringSoon ? "bold" : "normal" }}>
+                    {isTrialExpiringSoon ? "⚠️ " : ""}
+                    {en
+                      ? `Trial: ${activePlan.remainingTrialDays} day${activePlan.remainingTrialDays === 1 ? '' : 's'} remaining`
+                      : `试用剩余 ${activePlan.remainingTrialDays} 天`}
+                    {isTrialExpiringSoon && (en ? " - Subscribe now to keep your access!" : " - 立即订阅以保持访问权限！")}
+                  </div>
+                  {formattedTrialEndDate && (
+                    <div style={{ fontSize: 12, marginTop: 4, opacity: 0.8 }}>
+                      {en ? `Trial ends: ${formattedTrialEndDate}` : `试用结束时间：${formattedTrialEndDate}`}
+                    </div>
+                  )}
                 </div>
               )}
-            </div>
-          )}
-          
-          <hr style={{ border: "none", borderTop: "1px solid #eee", margin: "20px 0" }} />
-          
-          <div style={{ display: "flex", gap: 12 }}>
-              {activePlanId === "free" ? (
+              
+              <hr style={{ border: "none", borderTop: "1px solid #eee", margin: "20px 0" }} />
+              
+              <div style={{ display: "flex", gap: 12 }}>
+                  {activePlanId === "free" ? (
                 <Form method="post" replace>
                   <input type="hidden" name="intent" value="upgrade" />
                   <input type="hidden" name="planId" value={PRIMARY_BILLABLE_PLAN_ID} />
@@ -243,7 +278,9 @@ export default function Billing() {
                      </button>
                  </>
               )}
-          </div>
+              </div>
+            </>
+          )}
       </div>
 
       <div style={{ marginTop: 32 }}>

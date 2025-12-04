@@ -38,7 +38,10 @@ export default function App() {
       </head>
       <body>
         <Outlet />
-        <ScrollRestoration />
+        {(() => {
+          const ScrollRestorationWithNonce = ScrollRestoration as unknown as (props: { nonce?: string }) => JSX.Element;
+          return <ScrollRestorationWithNonce nonce={nonce} />;
+        })()}
         {(() => {
           const ScriptsWithNonce = Scripts as unknown as (props: { nonce?: string }) => JSX.Element;
           return <ScriptsWithNonce nonce={nonce} />;

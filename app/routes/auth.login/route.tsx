@@ -38,7 +38,6 @@ export default function Auth() {
   const [shop, setShop] = useState("");
   const { errors, language, apiKey } = actionData || loaderData;
   const nonce = useNonce();
-  useAppBridge();
 
   return (
     <AppProvider embedded apiKey={apiKey} nonce={nonce}>

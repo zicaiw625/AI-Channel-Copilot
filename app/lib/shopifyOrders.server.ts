@@ -39,7 +39,11 @@ const ORDERS_QUERY = `#graphql
           }
         }
         landingPageUrl
-        referringSite
+        customerJourneySummary {
+          firstVisit {
+            referrerUrl
+          }
+        }
         sourceName
         tags
         noteAttributes {
@@ -105,7 +109,11 @@ const ORDER_QUERY = `#graphql
         }
       }
       landingPageUrl
-      referringSite
+      customerJourneySummary {
+        firstVisit {
+          referrerUrl
+        }
+      }
       sourceName
       tags
       noteAttributes {

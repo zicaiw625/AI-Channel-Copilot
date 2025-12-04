@@ -63,7 +63,7 @@ describe("Order mapping and aggregation", () => {
       createdAt: "2024-01-10T12:00:00Z",
       currentTotalPriceSet: { shopMoney: { amount: "120.50", currencyCode: "USD" } },
       currentSubtotalPriceSet: { shopMoney: { amount: "100.00", currencyCode: "USD" } },
-      referringSite: "https://chat.openai.com/",
+      customerJourneySummary: { firstVisit: { referrerUrl: "https://chat.openai.com/" } },
       landingPageUrl: "https://store.example.com/landing?utm_source=chatgpt",
       sourceName: "web",
       tags: [],

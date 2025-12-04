@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { Link, useFetcher, useLoaderData, useLocation, useNavigate } from "react-router";
+import { useAppBridge } from "@shopify/app-bridge-react";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 
 import { channelList, defaultSettings, timeRanges, type AIChannel, type TimeRangeKey, LOW_SAMPLE_THRESHOLD } from "../lib/aiData";
@@ -174,6 +175,46 @@ export default function Index() {
   const lang = uiLanguage as Lang;
   const navigate = useNavigate();
   const location = useLocation();
+  const shopify = useAppBridge();
+
+  const handleDownload = async (e: React.MouseEvent<HTMLAnchorElement | HTMLButtonElement>, url: string, fallbackFilename: string) => {
+    e.preventDefault();
+    try {
+      const token = await shopify.idToken();
+      const response = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error("Download failed");
+      }
+
+      const blob = await response.blob();
+      let filename = fallbackFilename;
+      const disposition = response.headers.get("content-disposition");
+      if (disposition && disposition.includes("filename=")) {
+        const match = disposition.match(/filename="?([^";]+)"?/);
+        if (match && match[1]) {
+          filename = match[1];
+        }
+      }
+
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = downloadUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(downloadUrl);
+    } catch (error) {
+      console.error("Download error:", error);
+      shopify.toast.show?.(uiLanguage === "English" ? "Download failed. Please try again." : "下载失败，请重试。");
+    }
+  };
+
   const [metricView, setMetricView] = useState<"gmv" | "orders" | "newCustomers">("gmv");
   const [trendMetric, setTrendMetric] = useState<"gmv" | "orders">("gmv");
   const [trendScope, setTrendScope] = useState<TrendScope>("ai");
@@ -571,7 +612,9 @@ export default function Index() {
                       if (!canViewFull) {
                           e.preventDefault();
                           alert(uiLanguage === "English" ? "Upgrade to Pro to export data." : "升级到 Pro 版以导出数据。");
+                          return;
                       }
+                      handleDownload(e, `/api/export/orders?range=${range}&from=${encodeURIComponent(dateRange.fromParam || "")}&to=${encodeURIComponent(dateRange.toParam || "")}`, `ai-orders-${range}.csv`);
                   }}
                 >
                   {t(lang, "export_orders_csv")}

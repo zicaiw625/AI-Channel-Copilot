@@ -322,6 +322,44 @@ export default function SettingsAndExport() {
     setUtmMappings((prev) => prev.filter((rule) => rule.value !== value));
   };
 
+  const handleDownload = async (e: React.MouseEvent<HTMLAnchorElement | HTMLButtonElement>, url: string, fallbackFilename: string) => {
+    e.preventDefault();
+    try {
+      const token = await shopify.idToken();
+      const response = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error("Download failed");
+      }
+
+      const blob = await response.blob();
+      let filename = fallbackFilename;
+      const disposition = response.headers.get("content-disposition");
+      if (disposition && disposition.includes("filename=")) {
+        const match = disposition.match(/filename="?([^";]+)"?/);
+        if (match && match[1]) {
+          filename = match[1];
+        }
+      }
+
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = downloadUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(downloadUrl);
+    } catch (error) {
+      console.error("Download error:", error);
+      shopify.toast.show?.(language === "English" ? "Download failed. Please try again." : "下载失败，请重试。");
+    }
+  };
+
   const submitSettings = () => {
     const payload = {
       aiDomains: sanitizedDomains,
@@ -876,6 +914,7 @@ export default function SettingsAndExport() {
             <a
               className={styles.primaryButton}
               href={`/api/export/orders?range=${exportWindow}`}
+              onClick={(e) => handleDownload(e, `/api/export/orders?range=${exportWindow}`, `ai-orders-${exportWindow}.csv`)}
             >
               {language === "English" ? "Download CSV" : "下载 CSV"}
             </a>
@@ -886,6 +925,7 @@ export default function SettingsAndExport() {
             <a
               className={styles.secondaryButton}
               href={`/api/export/products?range=${exportWindow}`}
+              onClick={(e) => handleDownload(e, `/api/export/products?range=${exportWindow}`, `ai-products-${exportWindow}.csv`)}
             >
               {language === "English" ? "Download CSV" : "下载 CSV"}
             </a>
@@ -896,6 +936,7 @@ export default function SettingsAndExport() {
             <a
               className={styles.secondaryButton}
               href={`/api/export/customers?range=${exportWindow}`}
+              onClick={(e) => handleDownload(e, `/api/export/customers?range=${exportWindow}`, `customers-ltv-${exportWindow}.csv`)}
             >
               {language === "English" ? "Download CSV" : "下载 CSV"}
             </a>
@@ -979,8 +1020,48 @@ export const headers: HeadersFunction = (headersArgs) => {
 };
 
 function LlmsPreview({ language }: { language: string }) {
+  const shopify = useAppBridge();
   const fetcher = useFetcher<{ ok: boolean; text: string }>();
   const [copied, setCopied] = useState(false);
+
+  const handleDownload = async (e: React.MouseEvent<HTMLAnchorElement>, url: string, fallbackFilename: string) => {
+    e.preventDefault();
+    try {
+      const token = await shopify.idToken();
+      const response = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error("Download failed");
+      }
+
+      const blob = await response.blob();
+      let filename = fallbackFilename;
+      const disposition = response.headers.get("content-disposition");
+      if (disposition && disposition.includes("filename=")) {
+        const match = disposition.match(/filename="?([^";]+)"?/);
+        if (match && match[1]) {
+          filename = match[1];
+        }
+      }
+
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = downloadUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(downloadUrl);
+    } catch (error) {
+      console.error("Download error:", error);
+      shopify.toast.show?.(language === "English" ? "Download failed" : "下载失败");
+    }
+  };
+
   useEffect(() => {
     fetcher.load(`/api/llms-txt-preview?ts=${Date.now()}`);
   }, [language, fetcher]);
@@ -1002,7 +1083,11 @@ function LlmsPreview({ language }: { language: string }) {
         <button type="button" className={styles.secondaryButton} onClick={copy} data-action="llms-copy">
           {copied ? (language === "English" ? "Copied" : "已复制") : (language === "English" ? "Copy" : "复制")}
         </button>
-        <a href="/api/llms-txt-preview?download=1" className={styles.primaryButton}>
+        <a 
+          href="/api/llms-txt-preview?download=1" 
+          className={styles.primaryButton}
+          onClick={(e) => handleDownload(e, "/api/llms-txt-preview?download=1", "llms.txt")}
+        >
           {language === "English" ? "Download llms.txt" : "下载 llms.txt"}
         </a>
       </div>

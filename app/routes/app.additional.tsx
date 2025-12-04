@@ -1064,7 +1064,8 @@ function LlmsPreview({ language }: { language: string }) {
 
   useEffect(() => {
     fetcher.load(`/api/llms-txt-preview?ts=${Date.now()}`);
-  }, [language, fetcher]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [language]);
 
   const text = fetcher.data?.text || (language === "English" ? "# Generating..." : "# 生成中...");
 

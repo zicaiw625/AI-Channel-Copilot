@@ -84,6 +84,7 @@ export const copilotAnswer = async (request: Request, payload: CopilotRequest) =
       rangeLabel: dateRange.label,
       metric: settings.gmvMetric,
       overview: overviewShape,
+      language,
     });
 
     const footnote = language === "English"

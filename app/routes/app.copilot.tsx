@@ -57,6 +57,7 @@ export default function Copilot() {
   const { settings, dateRange, range, readOnly, demo } = useLoaderData<typeof loader>();
   const fetcher = useFetcher();
   const [question, setQuestion] = useState("");
+  const [activeIntent, setActiveIntent] = useState<string | null>(null);
   // 使用 useUILanguage 保持语言设置的客户端一致性
   const language = useUILanguage(settings.languages[0] || "中文");
   
@@ -64,12 +65,16 @@ export default function Copilot() {
 
   const ask = (intent?: string) => {
     if (readOnly) return;
+    setActiveIntent(intent || "custom");
     const payload: Record<string, string> = intent ? { intent } : { question };
     fetcher.submit(
       { ...payload, range, from: dateRange.fromParam || "", to: dateRange.toParam || "" },
       { method: "post", action: "/api/copilot" },
     );
   };
+  
+  // 检查特定按钮是否正在加载
+  const isButtonLoading = (intent: string) => isLoading && activeIntent === intent;
   
   const UpgradeBanner = () => (
       <div style={{
@@ -121,7 +126,9 @@ export default function Copilot() {
             disabled={readOnly || isLoading}
             data-action="copilot-ai_performance"
           >
-            {isLoading ? (language === "English" ? "Loading..." : "加载中...") : (language === "English" ? "AI channel performance in last 30 days?" : "过去 30 天 AI 渠道表现如何？")}
+            {isButtonLoading("ai_performance") 
+              ? (language === "English" ? "Loading..." : "加载中...") 
+              : (language === "English" ? "AI channel performance in last 30 days?" : "过去 30 天 AI 渠道表现如何？")}
           </button>
           <button 
             type="button"
@@ -130,7 +137,9 @@ export default function Copilot() {
             disabled={readOnly || isLoading}
             data-action="copilot-ai_vs_all_aov"
           >
-            {language === "English" ? "AI channel vs all channels AOV?" : "AI 渠道 vs 全部渠道 AOV？"}
+            {isButtonLoading("ai_vs_all_aov")
+              ? (language === "English" ? "Loading..." : "加载中...")
+              : (language === "English" ? "AI channel vs all channels AOV?" : "AI 渠道 vs 全部渠道 AOV？")}
           </button>
           <button 
             type="button"
@@ -139,7 +148,9 @@ export default function Copilot() {
             disabled={readOnly || isLoading}
             data-action="copilot-ai_top_products"
           >
-            {language === "English" ? "Top-selling products from AI channels recently?" : "最近 AI 渠道销量最高的产品？"}
+            {isButtonLoading("ai_top_products")
+              ? (language === "English" ? "Loading..." : "加载中...")
+              : (language === "English" ? "Top-selling products from AI channels recently?" : "最近 AI 渠道销量最高的产品？")}
           </button>
         </div>
 
@@ -152,7 +163,7 @@ export default function Copilot() {
             disabled={readOnly}
           />
           <button type="button" className={styles.primaryButton} onClick={() => ask()} disabled={readOnly || isLoading} data-action="copilot-ask">
-            {isLoading ? (language === "English" ? "Loading..." : "加载中...") : (language === "English" ? "Ask" : "提问")}
+            {isButtonLoading("custom") ? (language === "English" ? "Loading..." : "加载中...") : (language === "English" ? "Ask" : "提问")}
           </button>
         </div>
 

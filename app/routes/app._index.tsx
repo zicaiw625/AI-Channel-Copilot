@@ -20,6 +20,7 @@ import { loadDashboardContext } from "../lib/dashboardContext.server";
 import { t } from "../lib/i18n";
 import { getEffectivePlan, hasFeature, FEATURES } from "../lib/access.server";
 import { isDemoMode } from "../lib/runtime.server";
+import { readAppFlags } from "../lib/env.server";
 
 type Lang = "English" | "中文";
 
@@ -77,6 +78,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     orders: context.orders,
   });
 
+  const { showDebugPanels } = readAppFlags();
+  
   return {
     range: context.dateRange.key,
     dateRange: {
@@ -107,7 +110,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     },
     clamped: context.clamped,
     isFreePlan,
-    canViewFull
+    canViewFull,
+    showDebugPanels, // 控制是否显示调试面板
   };
 };
 
@@ -168,7 +172,8 @@ export default function Index() {
     backfillAvailable,
     dataLastUpdated,
     isFreePlan,
-    canViewFull
+    canViewFull,
+    showDebugPanels
   } = useLoaderData<typeof loader>();
   
   const uiLanguage = useUILanguage(language);
@@ -965,6 +970,8 @@ export default function Index() {
           </div>
         </div>
 
+        {/* 任务状态面板 - 仅在 SHOW_DEBUG_PANELS=true 时显示 */}
+        {showDebugPanels && (
           <div className={styles.card}>
             <div className={styles.sectionHeader}>
               <div>
@@ -1060,7 +1067,10 @@ export default function Index() {
             {uiLanguage === "English" ? "Data from /api/jobs; useful for diagnosing queue backlogs and retries across instances." : "数据来源于 /api/jobs，可用于多实例场景下排查队列堆积、失败重试等问题。"}
           </p>
         </div>
+        )}
 
+        {/* 调试视图面板 - 仅在 SHOW_DEBUG_PANELS=true 时显示 */}
+        {showDebugPanels && (
         <div className={styles.card}>
           <div className={styles.sectionHeader}>
             <div>
@@ -1138,6 +1148,7 @@ export default function Index() {
             {uiLanguage === "English" ? "If attribution looks off, adjust AI domains and UTM mapping in Settings / Rules & Export. All results are conservative estimates." : "若识别结果与预期不符，可在「设置 / 规则 & 导出」中调整 AI 域名与 UTM 映射；所有结果均为保守估计。"}
           </p>
         </div>
+        )}
       </div>
     </s-page>
   );

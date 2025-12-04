@@ -42,6 +42,7 @@ type AppFlags = {
   enableBackfillSweep: boolean;
   enableRetentionSweep: boolean;
   billingForceTest: boolean;
+  showDebugPanels: boolean; // 是否显示任务队列等调试面板
 };
 
 let cachedFlags: AppFlags | null = null;
@@ -56,6 +57,7 @@ export const readAppFlags = (): AppFlags => {
     enableBackfillSweep: readBooleanEnv("ENABLE_BACKFILL_SWEEP", true),
     enableRetentionSweep: readBooleanEnv("ENABLE_RETENTION_SWEEP", true),
     billingForceTest: readBooleanEnv("BILLING_FORCE_TEST", false),
+    showDebugPanels: readBooleanEnv("SHOW_DEBUG_PANELS", false), // 默认隐藏调试面板
   };
 
   return cachedFlags;

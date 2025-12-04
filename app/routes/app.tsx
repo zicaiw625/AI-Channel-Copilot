@@ -1,6 +1,7 @@
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { Link, Outlet, useLoaderData, useRouteError } from "react-router";
 import { useUILanguage } from "../lib/useUILanguage";
+import { useNonce } from "../lib/nonce";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { AppProvider } from "@shopify/shopify-app-react-router/react";
 import { NavMenu } from "@shopify/app-bridge-react";
@@ -106,9 +107,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 export default function App() {
   const { apiKey, language, plan, trialDaysLeft, isDevShop } = useLoaderData<typeof loader>();
   const uiLanguage = useUILanguage(language);
+  const nonce = useNonce();
 
   return (
-    <AppProvider embedded apiKey={apiKey}>
+    <AppProvider embedded apiKey={apiKey} nonce={nonce}>
       <NavMenu>
         <a href="/app" rel="home">{uiLanguage === "English" ? "AI Dashboard" : "AI 仪表盘"}</a>
         <a href="/app/additional">{uiLanguage === "English" ? "Settings / Rules & Export" : "设置 / 规则 & 导出"}</a>

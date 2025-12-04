@@ -8,15 +8,8 @@ import {
 } from "./constants";
 import { logger } from "./logger.server";
 
-const ORDERS_QUERY = `#graphql
-  query OrdersForAiDashboard($first: Int!, $after: String, $query: String!) {
-    orders(first: $first, after: $after, query: $query, reverse: true, sortKey: CREATED_AT) {
-      pageInfo {
-        hasNextPage
-        endCursor
-      }
-      edges {
-      node {
+// 订单查询的核心字段片段（不含 noteAttributes）
+const ORDER_CORE_FIELDS = `
         id
         name
         createdAt
@@ -46,10 +39,6 @@ const ORDERS_QUERY = `#graphql
         }
         sourceName
         tags
-        noteAttributes {
-          name
-          value
-        }
         customer {
           id
           numberOfOrders
@@ -78,6 +67,40 @@ const ORDERS_QUERY = `#graphql
               }
             }
           }
+`;
+
+// 完整查询（包含 noteAttributes）
+const ORDERS_QUERY = `#graphql
+  query OrdersForAiDashboard($first: Int!, $after: String, $query: String!) {
+    orders(first: $first, after: $after, query: $query, reverse: true, sortKey: CREATED_AT) {
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+      edges {
+      node {
+        ${ORDER_CORE_FIELDS}
+        noteAttributes {
+          name
+          value
+        }
+        }
+      }
+    }
+  }
+`;
+
+// 备用查询（不含 noteAttributes，用于某些 API 版本或商店类型）
+const ORDERS_QUERY_FALLBACK = `#graphql
+  query OrdersForAiDashboard($first: Int!, $after: String, $query: String!) {
+    orders(first: $first, after: $after, query: $query, reverse: true, sortKey: CREATED_AT) {
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+      edges {
+      node {
+        ${ORDER_CORE_FIELDS}
         }
       }
     }
@@ -87,70 +110,27 @@ const ORDERS_QUERY = `#graphql
 const ORDER_QUERY = `#graphql
   query OrderForAiDashboard($id: ID!) {
     order(id: $id) {
-      id
-      name
-      createdAt
-      currentTotalPriceSet {
-        shopMoney {
-          amount
-          currencyCode
-        }
-      }
-      currentSubtotalPriceSet {
-        shopMoney {
-          amount
-          currencyCode
-        }
-      }
-      totalRefundedSet {
-        shopMoney {
-          amount
-          currencyCode
-        }
-      }
-      landingPageUrl
-      customerJourneySummary {
-        firstVisit {
-          referrerUrl
-        }
-      }
-      sourceName
-      tags
+      ${ORDER_CORE_FIELDS}
       noteAttributes {
         name
         value
       }
-      customer {
-        id
-        numberOfOrders
-      }
-      lineItems(first: 50) {
-        edges {
-          node {
-            id
-            quantity
-            name
-            originalUnitPriceSet {
-              shopMoney {
-                amount
-                currencyCode
-              }
-            }
-            variant {
-              product {
-                id
-                legacyResourceId
-                title
-                handle
-                onlineStoreUrl
-              }
-            }
-          }
-        }
-      }
     }
   }
 `;
+
+// 备用单订单查询（不含 noteAttributes）
+const ORDER_QUERY_FALLBACK = `#graphql
+  query OrderForAiDashboard($id: ID!) {
+    order(id: $id) {
+      ${ORDER_CORE_FIELDS}
+    }
+  }
+`;
+
+// 跟踪是否需要使用备用查询（一旦发现 noteAttributes 不可用，后续请求都使用备用查询）
+let useOrdersFallbackQuery = false;
+let useSingleOrderFallbackQuery = false;
 
 
 const MAX_BACKFILL_PAGES = 20;
@@ -158,7 +138,12 @@ const DEFAULT_GRAPHQL_TIMEOUT_MS = 4500;
 
 const platform = getPlatform();
 
-// no local sleep needed after SDK adoption
+// 检查 GraphQL 错误是否与 noteAttributes 字段相关
+const isNoteAttributesError = (errors: unknown): boolean => {
+  if (!errors) return false;
+  const errStr = JSON.stringify(errors);
+  return errStr.includes("noteAttributes") && errStr.includes("doesn't exist");
+};
 
 const fetchOrdersPage = async (
   admin: AdminGraphqlClient,
@@ -167,7 +152,11 @@ const fetchOrdersPage = async (
   context: FetchContext,
 ) => {
   const sdk = createGraphqlSdk(admin, context.shopDomain);
-  const response = await sdk.request("orders query", ORDERS_QUERY, { first: 50, after, query }, { timeoutMs: DEFAULT_GRAPHQL_TIMEOUT_MS });
+  
+  // 选择使用的查询（完整版或备用版）
+  const ordersQuery = useOrdersFallbackQuery ? ORDERS_QUERY_FALLBACK : ORDERS_QUERY;
+  
+  const response = await sdk.request("orders query", ordersQuery, { first: 50, after, query }, { timeoutMs: DEFAULT_GRAPHQL_TIMEOUT_MS });
   if (!response.ok) {
     const text = await response.text();
     logger.error("[backfill] orders page fetch failed", {
@@ -188,7 +177,21 @@ const fetchOrdersPage = async (
     };
     errors?: unknown;
   };
+  
   if (json.errors) {
+    // 检查是否是 noteAttributes 字段不存在的错误
+    if (!useOrdersFallbackQuery && isNoteAttributesError(json.errors)) {
+      logger.warn("[backfill] noteAttributes field not available, switching to fallback query", {
+        platform,
+        shopDomain: context?.shopDomain,
+        jobType: "backfill",
+        intent: context?.intent,
+      });
+      useOrdersFallbackQuery = true;
+      // 使用备用查询重试
+      return fetchOrdersPage(admin, query, after, context);
+    }
+    
     logger.error("[backfill] orders page GraphQL errors", {
       platform,
       shopDomain: context?.shopDomain,
@@ -369,7 +372,11 @@ export const fetchOrderById = async (
   }
 
   const sdk = createGraphqlSdk(admin, context?.shopDomain);
-  const response = await sdk.request("order query", ORDER_QUERY, { id }, { timeoutMs: DEFAULT_GRAPHQL_TIMEOUT_MS });
+  
+  // 选择使用的查询（完整版或备用版）
+  const orderQuery = useSingleOrderFallbackQuery ? ORDER_QUERY_FALLBACK : ORDER_QUERY;
+  
+  const response = await sdk.request("order query", orderQuery, { id }, { timeoutMs: DEFAULT_GRAPHQL_TIMEOUT_MS });
   if (!response.ok) {
     const text = await response.text();
     logger.error("[webhook] order fetch failed", { platform, id, jobType: "webhook", shopDomain: context?.shopDomain }, { status: response.status, body: text });
@@ -377,7 +384,21 @@ export const fetchOrderById = async (
   }
 
   const json = (await response.json()) as { data?: { order?: ShopifyOrderNode | null }; errors?: unknown };
+  
   if (json.errors) {
+    // 检查是否是 noteAttributes 字段不存在的错误
+    if (!useSingleOrderFallbackQuery && isNoteAttributesError(json.errors)) {
+      logger.warn("[webhook] noteAttributes field not available, switching to fallback query", {
+        platform,
+        id,
+        jobType: "webhook",
+        shopDomain: context?.shopDomain,
+      });
+      useSingleOrderFallbackQuery = true;
+      // 使用备用查询重试
+      return fetchOrderById(admin, id, settings, context);
+    }
+    
     logger.error("[webhook] order GraphQL errors", { platform, id, jobType: "webhook", shopDomain: context?.shopDomain }, { errors: json.errors });
     return null;
   }

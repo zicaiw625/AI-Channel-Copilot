@@ -759,10 +759,15 @@ export default function Index() {
                   </tr>
                 </thead>
                 <tbody>
-                  {comparison.map((row) => (
+                  {comparison.map((row) => {
+                    // 翻译渠道名称
+                    const channelName = row.channel === "整体" 
+                      ? (uiLanguage === "English" ? "Overall" : "整体")
+                      : row.channel;
+                    return (
                     <tr key={row.channel}>
                       <td className={styles.cellLabel}>
-                        {row.channel}
+                        {channelName}
                         {row.isLowSample && <span className={styles.chip}>{uiLanguage === "English" ? "Low sample" : "样本少"}</span>}
                       </td>
                       <td>{fmtCurrency(row.aov)}</td>
@@ -770,7 +775,8 @@ export default function Index() {
                       <td>{fmtPercent(row.repeatRate)}</td>
                       <td>{fmtNumber(row.sampleSize)}</td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

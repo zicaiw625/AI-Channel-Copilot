@@ -27,6 +27,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const report = await generateAIOptimizationReport(shopDomain, admin, {
     range: "30d",
     language,
+    exposurePreferences: settings.exposurePreferences,
   });
 
   return {
@@ -300,11 +301,30 @@ export default function AIOptimization() {
             />
           </div>
           
-          <p className={styles.helpText}>
-            {isEnglish 
-              ? "Scores are based on your top AI-performing products. Higher scores indicate better AI discoverability."
-              : "评分基于您 AI 渠道表现最好的产品。分数越高表示 AI 可发现性越好。"}
-          </p>
+          {report.topProducts.length === 0 ? (
+            <div
+              style={{
+                background: "#fff8e5",
+                border: "1px solid #f4a623",
+                borderRadius: 8,
+                padding: 16,
+                marginBottom: 12,
+              }}
+            >
+              <p style={{ margin: 0, fontSize: 14, color: "#8a6116" }}>
+                <strong>{isEnglish ? "No AI order data yet." : "暂无 AI 订单数据。"}</strong>{" "}
+                {isEnglish
+                  ? "Scores will be calculated once you receive orders from AI channels. Follow the suggestions below to improve your AI visibility."
+                  : "当您收到来自 AI 渠道的订单后，评分将会自动计算。请参考下方建议来提升您的 AI 可见性。"}
+              </p>
+            </div>
+          ) : (
+            <p className={styles.helpText}>
+              {isEnglish 
+                ? "Scores are based on your top AI-performing products. Higher scores indicate better AI discoverability."
+                : "评分基于您 AI 渠道表现最好的产品。分数越高表示 AI 可发现性越好。"}
+            </p>
+          )}
         </div>
 
         {/* 高优先级建议 */}
@@ -369,64 +389,87 @@ export default function AIOptimization() {
             </div>
           </div>
           
-          <div className={styles.tableWrap}>
-            <table className={styles.table}>
-              <thead>
-                <tr>
-                  <th>{isEnglish ? "Product" : "产品"}</th>
-                  <th>{isEnglish ? "AI GMV" : "AI GMV"}</th>
-                  <th>{isEnglish ? "AI Orders" : "AI 订单"}</th>
-                  <th>{isEnglish ? "Top Channel" : "主要渠道"}</th>
-                  <th>{isEnglish ? "Schema Status" : "Schema 状态"}</th>
-                  <th>{isEnglish ? "Improvements" : "改进项"}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {report.topProducts.map(product => (
-                  <tr key={product.productId}>
-                    <td className={styles.cellLabel}>
-                      <a href={product.url} target="_blank" rel="noreferrer" className={styles.link}>
-                        {product.title}
-                      </a>
-                    </td>
-                    <td>${product.aiGMV.toFixed(2)}</td>
-                    <td>{product.aiOrders}</td>
-                    <td>{product.topChannel || "-"}</td>
-                    <td>
-                      <span
-                        style={{
-                          padding: "2px 8px",
-                          borderRadius: 4,
-                          fontSize: 12,
-                          background: product.schemaMarkupStatus === "complete" 
-                            ? "#e6f7ed" 
-                            : product.schemaMarkupStatus === "partial"
-                              ? "#fff8e5"
-                              : "#fef3f3",
-                          color: product.schemaMarkupStatus === "complete"
-                            ? "#2e7d32"
-                            : product.schemaMarkupStatus === "partial"
-                              ? "#8a6116"
-                              : "#de3618",
-                        }}
-                      >
-                        {product.schemaMarkupStatus === "complete"
-                          ? (isEnglish ? "Complete" : "完整")
-                          : product.schemaMarkupStatus === "partial"
-                            ? (isEnglish ? "Partial" : "部分")
-                            : (isEnglish ? "Missing" : "缺失")}
-                      </span>
-                    </td>
-                    <td>
-                      {product.suggestedImprovements.length > 0 
-                        ? product.suggestedImprovements.length
-                        : "-"}
-                    </td>
+          {report.topProducts.length > 0 ? (
+            <div className={styles.tableWrap}>
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    <th>{isEnglish ? "Product" : "产品"}</th>
+                    <th>{isEnglish ? "AI GMV" : "AI GMV"}</th>
+                    <th>{isEnglish ? "AI Orders" : "AI 订单"}</th>
+                    <th>{isEnglish ? "Top Channel" : "主要渠道"}</th>
+                    <th>{isEnglish ? "Schema Status" : "Schema 状态"}</th>
+                    <th>{isEnglish ? "Improvements" : "改进项"}</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {report.topProducts.map(product => (
+                    <tr key={product.productId}>
+                      <td className={styles.cellLabel}>
+                        <a href={product.url} target="_blank" rel="noreferrer" className={styles.link}>
+                          {product.title}
+                        </a>
+                      </td>
+                      <td>${product.aiGMV.toFixed(2)}</td>
+                      <td>{product.aiOrders}</td>
+                      <td>{product.topChannel || "-"}</td>
+                      <td>
+                        <span
+                          style={{
+                            padding: "2px 8px",
+                            borderRadius: 4,
+                            fontSize: 12,
+                            background: product.schemaMarkupStatus === "complete" 
+                              ? "#e6f7ed" 
+                              : product.schemaMarkupStatus === "partial"
+                                ? "#fff8e5"
+                                : "#fef3f3",
+                            color: product.schemaMarkupStatus === "complete"
+                              ? "#2e7d32"
+                              : product.schemaMarkupStatus === "partial"
+                                ? "#8a6116"
+                                : "#de3618",
+                          }}
+                        >
+                          {product.schemaMarkupStatus === "complete"
+                            ? (isEnglish ? "Complete" : "完整")
+                            : product.schemaMarkupStatus === "partial"
+                              ? (isEnglish ? "Partial" : "部分")
+                              : (isEnglish ? "Missing" : "缺失")}
+                        </span>
+                      </td>
+                      <td>
+                        {product.suggestedImprovements.length > 0 
+                          ? product.suggestedImprovements.length
+                          : "-"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div
+              style={{
+                textAlign: "center",
+                padding: "40px 20px",
+                background: "#f9fafb",
+                borderRadius: 8,
+                color: "#637381",
+              }}
+            >
+              <p style={{ margin: "0 0 8px", fontSize: 16 }}>
+                {isEnglish 
+                  ? "No AI-attributed orders yet" 
+                  : "暂无 AI 渠道订单数据"}
+              </p>
+              <p style={{ margin: 0, fontSize: 14 }}>
+                {isEnglish
+                  ? "Product analysis will appear once you receive orders from AI assistants like ChatGPT, Perplexity, etc."
+                  : "当您收到来自 ChatGPT、Perplexity 等 AI 助手的订单后，产品分析将会显示在这里。"}
+              </p>
+            </div>
+          )}
         </div>
 
         {/* FAQ 建议 */}

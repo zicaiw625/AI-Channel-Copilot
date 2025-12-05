@@ -318,6 +318,7 @@ function generateFAQSuggestions(
 function generateSuggestions(
   products: ProductAIPerformance[],
   language: string,
+  hasLlmsTxtEnabled: boolean = false,
 ): OptimizationSuggestion[] {
   const suggestions: OptimizationSuggestion[] = [];
   const isEnglish = language === "English";
@@ -403,41 +404,45 @@ function generateSuggestions(
     });
   }
   
-  // FAQ 覆盖建议
-  suggestions.push({
-    id: "faq-coverage",
-    category: "faq_coverage",
-    priority: "medium",
-    title: isEnglish ? "Add FAQ Section" : "添加 FAQ 板块",
-    description: isEnglish
-      ? "FAQ content helps AI assistants answer customer questions about your products directly."
-      : "FAQ 内容帮助 AI 助手直接回答客户关于产品的问题。",
-    impact: isEnglish
-      ? "Stores with comprehensive FAQs see 20-40% more AI-referred traffic for product queries."
-      : "拥有完善 FAQ 的店铺，产品查询的 AI 引荐流量高 20-40%。",
-    action: isEnglish
-      ? "Create FAQ pages for top-selling products covering pricing, shipping, returns, and product features."
-      : "为热销产品创建 FAQ 页面，涵盖价格、发货、退换货和产品特点。",
-    estimatedLift: "+20-40% AI traffic",
-  });
+  // FAQ 覆盖建议 - 只有当有产品数据时才显示
+  if (products.length > 0) {
+    suggestions.push({
+      id: "faq-coverage",
+      category: "faq_coverage",
+      priority: "medium",
+      title: isEnglish ? "Add FAQ Section" : "添加 FAQ 板块",
+      description: isEnglish
+        ? "FAQ content helps AI assistants answer customer questions about your products directly."
+        : "FAQ 内容帮助 AI 助手直接回答客户关于产品的问题。",
+      impact: isEnglish
+        ? "Stores with comprehensive FAQs see 20-40% more AI-referred traffic for product queries."
+        : "拥有完善 FAQ 的店铺，产品查询的 AI 引荐流量高 20-40%。",
+      action: isEnglish
+        ? "Create FAQ pages for top-selling products covering pricing, shipping, returns, and product features."
+        : "为热销产品创建 FAQ 页面，涵盖价格、发货、退换货和产品特点。",
+      estimatedLift: "+20-40% AI traffic",
+    });
+  }
   
-  // AI 可见性建议
-  suggestions.push({
-    id: "llms-txt-optimization",
-    category: "ai_visibility",
-    priority: "high",
-    title: isEnglish ? "Optimize llms.txt Configuration" : "优化 llms.txt 配置",
-    description: isEnglish
-      ? "Your llms.txt file guides AI crawlers. Ensure it highlights your best-performing AI products."
-      : "您的 llms.txt 文件指引 AI 爬虫。确保它突出展示您表现最好的 AI 产品。",
-    impact: isEnglish
-      ? "Properly configured llms.txt can increase AI crawler efficiency and product discovery."
-      : "正确配置的 llms.txt 可以提高 AI 爬虫效率和产品发现率。",
-    action: isEnglish
-      ? "Enable all content types in llms.txt settings and ensure top AI GMV products are prominently listed."
-      : "在 llms.txt 设置中启用所有内容类型，并确保 AI GMV 最高的产品被优先列出。",
-    estimatedLift: "+10-20% AI discovery",
-  });
+  // AI 可见性建议 - llms.txt 配置
+  if (!hasLlmsTxtEnabled) {
+    suggestions.push({
+      id: "llms-txt-optimization",
+      category: "ai_visibility",
+      priority: "high",
+      title: isEnglish ? "Optimize llms.txt Configuration" : "优化 llms.txt 配置",
+      description: isEnglish
+        ? "Your llms.txt file guides AI crawlers. Ensure it highlights your best-performing AI products."
+        : "您的 llms.txt 文件指引 AI 爬虫。确保它突出展示您表现最好的 AI 产品。",
+      impact: isEnglish
+        ? "Properly configured llms.txt can increase AI crawler efficiency and product discovery."
+        : "正确配置的 llms.txt 可以提高 AI 爬虫效率和产品发现率。",
+      action: isEnglish
+        ? "Enable all content types in llms.txt settings and ensure top AI GMV products are prominently listed."
+        : "在 llms.txt 设置中启用所有内容类型，并确保 AI GMV 最高的产品被优先列出。",
+      estimatedLift: "+10-20% AI discovery",
+    });
+  }
   
   return suggestions;
 }
@@ -510,11 +515,17 @@ export async function generateAIOptimizationReport(
   options: {
     range?: TimeRangeKey;
     language?: string;
+    exposurePreferences?: {
+      exposeProducts: boolean;
+      exposeCollections: boolean;
+      exposeBlogs: boolean;
+    };
   } = {},
 ): Promise<AIOptimizationReport> {
   const rangeKey = options.range || "30d";
   const language = options.language || "中文";
   const range = resolveDateRange(rangeKey, new Date());
+  const exposurePrefs = options.exposurePreferences;
   
   // 获取 AI 渠道的产品数据
   const orderProducts = await prisma.orderProduct.findMany({
@@ -630,8 +641,15 @@ export async function generateAIOptimizationReport(
   // 计算分数
   const scores = calculateScores(products);
   
+  // 检查 llms.txt 是否已启用（至少有一个暴露选项开启）
+  const hasLlmsTxtEnabled = Boolean(
+    exposurePrefs?.exposeProducts || 
+    exposurePrefs?.exposeCollections || 
+    exposurePrefs?.exposeBlogs
+  );
+  
   // 生成建议
-  const suggestions = generateSuggestions(products, language);
+  const suggestions = generateSuggestions(products, language, hasLlmsTxtEnabled);
   
   // 生成 FAQ 建议
   const topProductNodes = products
@@ -642,17 +660,36 @@ export async function generateAIOptimizationReport(
   
   // llms.txt 增强建议
   const isEnglish = language === "English";
+  
+  // 计算 llms.txt 覆盖率（基于启用的内容类型）
+  let llmsCoverage = 0;
+  const categoryRecommendations: string[] = [];
+  
+  if (exposurePrefs?.exposeProducts) {
+    llmsCoverage += 40;
+  } else {
+    categoryRecommendations.push(isEnglish ? "Enable product pages exposure" : "开启产品页暴露");
+  }
+  
+  if (exposurePrefs?.exposeBlogs) {
+    llmsCoverage += 30;
+  } else {
+    categoryRecommendations.push(isEnglish ? "Enable blog content for AI discovery" : "开启博客内容供 AI 发现");
+  }
+  
+  if (exposurePrefs?.exposeCollections) {
+    llmsCoverage += 30;
+  } else {
+    categoryRecommendations.push(isEnglish ? "Add collection pages to llms.txt" : "将合集页面添加到 llms.txt");
+  }
+  
   const llmsEnhancements = {
-    currentCoverage: Math.min(100, products.length * 10),
+    currentCoverage: llmsCoverage,
     suggestedAdditions: products
       .filter(p => p.schemaMarkupStatus === "complete")
       .slice(0, 5)
       .map(p => p.url),
-    categoryRecommendations: [
-      isEnglish ? "Enable product pages exposure" : "开启产品页暴露",
-      isEnglish ? "Enable blog content for AI discovery" : "开启博客内容供 AI 发现",
-      isEnglish ? "Add collection pages to llms.txt" : "将合集页面添加到 llms.txt",
-    ],
+    categoryRecommendations,
   };
   
   return {

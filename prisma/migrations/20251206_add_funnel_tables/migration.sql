@@ -1,8 +1,8 @@
--- 漏斗归因扩展：添加 Session 和 Checkout 表
+-- 漏斗归因扩展：添加 VisitorSession 和 Checkout 表
 -- 支持更细粒度的漏斗分析：访问 → 加购 → 结账 → 成交
 
 -- 访问/会话表：记录用户访问
-CREATE TABLE "Session" (
+CREATE TABLE IF NOT EXISTS "VisitorSession" (
     "id" TEXT NOT NULL,
     "shopDomain" TEXT NOT NULL,
     "platform" TEXT NOT NULL DEFAULT 'shopify',

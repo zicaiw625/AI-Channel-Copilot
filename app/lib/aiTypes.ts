@@ -34,6 +34,7 @@ export type AiDomainRule = {
 export type UtmSourceRule = {
   value: string;
   channel: AIChannel;
+  source: "default" | "custom";
 };
 
 /**

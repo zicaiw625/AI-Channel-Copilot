@@ -167,6 +167,7 @@ export const AiDomainRuleSchema = z.object({
 export const UtmSourceRuleSchema = z.object({
   value: z.string().min(1).max(100),
   channel: AISourceSchema,
+  source: z.enum(['default', 'custom']).default('custom'),
 });
 
 export const TaggingSettingsSchema = z.object({

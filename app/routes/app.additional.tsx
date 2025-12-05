@@ -267,10 +267,7 @@ export default function SettingsAndExport() {
   const [confirmModal, setConfirmModal] = useState<{ open: boolean; rule: AiDomainRule | null }>({ open: false, rule: null });
 
   // Modal state for confirming removal of default UTM rule
-  const [confirmUtmModal, setConfirmUtmModal] = useState<{ open: boolean; value: string | null }>({ open: false, value: null });
-
-  // Default UTM source values (to detect if removing a default rule)
-  const defaultUtmValues = ["chatgpt", "perplexity", "gemini", "copilot", "deepseek", "claude"];
+  const [confirmUtmModal, setConfirmUtmModal] = useState<{ open: boolean; rule: UtmSourceRule | null }>({ open: false, rule: null });
 
   const locale = language === "English" ? "en-US" : "zh-CN";
 
@@ -307,6 +304,13 @@ export default function SettingsAndExport() {
     if (!newDomain.trim()) return;
     if (!isValidDomain(newDomain)) {
       shopify.toast.show?.(language === "English" ? "Invalid domain format, e.g. chat.openai.com" : "域名格式不合法，请输入如 chat.openai.com");
+      return;
+    }
+    const trimmed = newDomain.trim().toLowerCase();
+    // Check for duplicate domain
+    const exists = domains.some((rule) => rule.domain.toLowerCase() === trimmed);
+    if (exists) {
+      shopify.toast.show?.(language === "English" ? "This domain already exists in the list." : "该域名已存在于列表中。");
       return;
     }
     setDomains((prev) => [
@@ -348,25 +352,31 @@ export default function SettingsAndExport() {
       shopify.toast.show?.(language === "English" ? "utm_source supports letters/numbers/dash/underscore only" : "utm_source 仅支持字母/数字/中划线/下划线");
       return;
     }
-    setUtmMappings((prev) => [...prev, { value, channel: newSourceChannel }]);
+    // Check for duplicate utm_source
+    const exists = utmMappings.some((rule) => rule.value.toLowerCase() === value);
+    if (exists) {
+      shopify.toast.show?.(language === "English" ? "This utm_source value already exists in the list." : "该 utm_source 值已存在于列表中。");
+      return;
+    }
+    setUtmMappings((prev) => [...prev, { value, channel: newSourceChannel, source: "custom" }]);
     setNewSource("");
     shopify.toast.show?.(language === "English" ? "utm_source rule added. Save to apply to detection." : "新增 utm_source 规则，保存后应用到识别逻辑");
   };
 
-  const removeUtmMapping = (value: string) => {
+  const removeUtmMapping = (rule: UtmSourceRule) => {
     // Show confirmation for default UTM rules
-    if (defaultUtmValues.includes(value.toLowerCase())) {
-      setConfirmUtmModal({ open: true, value });
+    if (rule.source === "default") {
+      setConfirmUtmModal({ open: true, rule });
       return;
     }
-    setUtmMappings((prev) => prev.filter((rule) => rule.value !== value));
+    setUtmMappings((prev) => prev.filter((r) => r.value !== rule.value));
   };
 
   const confirmRemoveUtm = () => {
-    if (confirmUtmModal.value) {
-      setUtmMappings((prev) => prev.filter((rule) => rule.value !== confirmUtmModal.value));
+    if (confirmUtmModal.rule) {
+      setUtmMappings((prev) => prev.filter((rule) => rule.value !== confirmUtmModal.rule!.value));
     }
-    setConfirmUtmModal({ open: false, value: null });
+    setConfirmUtmModal({ open: false, rule: null });
   };
 
   const handleDownload = async (e: React.MouseEvent<HTMLAnchorElement | HTMLButtonElement>, url: string, fallbackFilename: string) => {
@@ -609,12 +619,15 @@ export default function SettingsAndExport() {
                 <div key={`${rule.value}-${rule.channel}`} className={styles.ruleRow}>
                   <div>
                     <div className={styles.ruleTitle}>{rule.value}</div>
-                    <div className={styles.ruleMeta}>{language === "English" ? "Channel: " : "渠道："}{rule.channel}</div>
+                    <div className={styles.ruleMeta}>
+                      {language === "English" ? "Channel: " : "渠道："}
+                      {rule.channel} · {rule.source === "default" ? (language === "English" ? "Default" : "默认") : (language === "English" ? "Custom" : "自定义")}
+                    </div>
                   </div>
                   <button
                     type="button"
                     className={styles.linkButton}
-                    onClick={() => removeUtmMapping(rule.value)}
+                    onClick={() => removeUtmMapping(rule)}
                     data-action="settings-remove-utm"
                   >
                     {t(language as Lang, "btn_delete")}
@@ -1246,13 +1259,13 @@ export default function SettingsAndExport() {
             </h3>
             <p style={{ margin: "0 0 20px", color: "#555", lineHeight: 1.5 }}>
               {language === "English"
-                ? `Removing the default UTM rule "${confirmUtmModal.value}" may reduce attribution accuracy. Are you sure?`
-                : `删除默认 UTM 规则「${confirmUtmModal.value}」可能导致漏标，确定要移除吗？`}
+                ? `Removing the default UTM rule "${confirmUtmModal.rule?.value}" may reduce attribution accuracy. Are you sure?`
+                : `删除默认 UTM 规则「${confirmUtmModal.rule?.value}」可能导致漏标，确定要移除吗？`}
             </p>
             <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
               <button
                 type="button"
-                onClick={() => setConfirmUtmModal({ open: false, value: null })}
+                onClick={() => setConfirmUtmModal({ open: false, rule: null })}
                 style={{
                   padding: "8px 16px",
                   borderRadius: 6,

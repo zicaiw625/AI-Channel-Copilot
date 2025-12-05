@@ -146,12 +146,12 @@ const defaultAiDomains: AiDomainRule[] = [
 ];
 
 const defaultUtmSources: UtmSourceRule[] = [
-  { value: "chatgpt", channel: "ChatGPT" },
-  { value: "perplexity", channel: "Perplexity" },
-  { value: "gemini", channel: "Gemini" },
-  { value: "copilot", channel: "Copilot" },
-  { value: "deepseek", channel: "Other-AI" },
-  { value: "claude", channel: "Other-AI" },
+  { value: "chatgpt", channel: "ChatGPT", source: "default" },
+  { value: "perplexity", channel: "Perplexity", source: "default" },
+  { value: "gemini", channel: "Gemini", source: "default" },
+  { value: "copilot", channel: "Copilot", source: "default" },
+  { value: "deepseek", channel: "Other-AI", source: "default" },
+  { value: "claude", channel: "Other-AI", source: "default" },
 ];
 
 const defaultUtmMediums = [

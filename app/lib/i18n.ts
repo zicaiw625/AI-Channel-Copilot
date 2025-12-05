@@ -64,7 +64,7 @@ const dict: Record<string, { zh: string; en: string }> = {
   kpi_ai_orders: { zh: "AI 渠道订单", en: "AI Orders" },
   kpi_ai_order_share: { zh: "总订单", en: "Total Orders" },
   kpi_ai_new_customers: { zh: "AI 新客", en: "AI New Customers" },
-  kpi_ai_new_customer_rate: { zh: "AI 新客占比", en: "AI New Customer Rate" },
+  kpi_ai_new_customer_rate: { zh: "AI 渠道新客率", en: "AI New Customer Rate" },
   channels_section_label: { zh: "AI 渠道拆分", en: "AI Channels" },
   comparison_section_label: { zh: "关键指标对比", en: "Key Comparison" },
   table_channel: { zh: "渠道", en: "Channel" },

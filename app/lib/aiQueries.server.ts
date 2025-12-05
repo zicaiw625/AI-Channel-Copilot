@@ -155,7 +155,7 @@ async function buildDashboardFromDb(
   const buildTrendLocal = () => {
     // 复用 aiAggregation 的 bucket 逻辑? 
     // 简单实现：
-    const bucketMap = new Map<string, TrendPoint>();
+    const bucketMap = new Map<string, TrendPoint & { sortKey: number }>();
     
     // Determine bucket
     let bucket: "day" | "week" | "month" = "day";
@@ -165,30 +165,31 @@ async function buildDashboardFromDb(
     trendOrders.forEach(o => {
        const date = new Date(o.createdAt);
        let key = "";
-      let _sortKey = 0;
+       let sortKey = 0;
        
        if (bucket === "day") {
          key = formatDateOnly(date, timezone);
-        _sortKey = startOfDay(date, timezone).getTime();
+         sortKey = startOfDay(date, timezone).getTime();
        } else if (bucket === "week") {
          const start = startOfDay(date, timezone);
          const day = start.getUTCDay();
          const diff = (day + 6) % 7;
          start.setUTCDate(start.getUTCDate() - diff);
          key = `${formatDateOnly(start, timezone)} · 周`;
-        _sortKey = start.getTime();
+         sortKey = start.getTime();
        } else {
          key = new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit" }).format(date);
          const start = new Date(date);
          start.setUTCDate(1); 
-        _sortKey = start.getTime();
+         sortKey = start.getTime();
        }
 
        if (!bucketMap.has(key)) {
          bucketMap.set(key, {
            label: key,
            aiGMV: 0, aiOrders: 0, overallGMV: 0, overallOrders: 0,
-           byChannel: {}
+           byChannel: {},
+           sortKey: sortKey
          });
        }
        
@@ -197,6 +198,8 @@ async function buildDashboardFromDb(
        
        entry.overallGMV += val;
        entry.overallOrders += 1;
+       // 更新 sortKey 为最小值（最早时间）
+       entry.sortKey = Math.min(entry.sortKey, sortKey);
        
        if (o.aiSource) {
          const channel = fromPrismaAiSource(o.aiSource);
@@ -210,10 +213,10 @@ async function buildDashboardFromDb(
        }
     });
     
-    // Sort? trendOrders is ordered by time, but Map iteration order is insertion order (mostly).
-    // Better strictly sort by key?
-    // Let's rely on insertion order since input is sorted by createdAt.
-    return Array.from(bucketMap.values());
+    // 按时间排序
+    return Array.from(bucketMap.values())
+      .sort((a, b) => a.sortKey - b.sortKey)
+      .map(({ sortKey, ...rest }) => rest);
   };
   
   const trend = buildTrendLocal();
@@ -234,7 +237,7 @@ async function buildDashboardFromDb(
     }
   });
 
-  const productMap = new Map<string, ProductRow>();
+  const productMap = new Map<string, ProductRow & { _seenOrders: Set<string> }>();
   
   aiProductLines.forEach(line => {
     const pid = line.productId;
@@ -248,6 +251,7 @@ async function buildDashboardFromDb(
         aiGMV: 0,
         aiShare: 0, // 稍后计算
         topChannel: null, // 稍后计算
+        _seenOrders: new Set(), // 用于去重
       });
     }
     const p = productMap.get(pid)!;
@@ -262,7 +266,14 @@ async function buildDashboardFromDb(
     const share = orderTotal > 0 ? lineTotal / orderTotal : 0;
     const allocatedGmv = orderVal * share;
     
-    p.aiOrders += 1;
+    // 使用订单 ID 去重，避免同一订单中同一产品多次计数
+    // 注意：aiProductLines 没有直接的 orderId，需要通过其他方式识别
+    // 这里用 order 对象的引用作为 key（同一订单的 line 共享同一个 order 引用）
+    const orderKey = `${order.totalPrice}-${order.subtotalPrice}-${order.aiSource}`;
+    if (!p._seenOrders.has(orderKey)) {
+      p.aiOrders += 1;
+      p._seenOrders.add(orderKey);
+    }
     p.aiGMV += allocatedGmv;
     
     // Track channel for topChannel
@@ -289,10 +300,14 @@ async function buildDashboardFromDb(
       // 仪表盘上显示的是 "AI 占比"，如果是针对全站销量，那确实需要 Total。
       // 鉴于性能权衡，我们再发一个聚合查询查 Top Products 的 Total Orders。
       return {
-        ...p,
+        id: p.id,
+        title: p.title,
+        handle: p.handle,
+        url: p.url,
+        aiOrders: p.aiOrders,
+        aiGMV: p.aiGMV,
+        aiShare: p.aiShare,
         topChannel,
-        // @ts-ignore
-        _channels: undefined
       };
     })
     .sort((a, b) => b.aiGMV - a.aiGMV)

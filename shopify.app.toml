@@ -7,7 +7,6 @@ embedded = true
 
 [build]
 automatically_update_urls_on_dev = true
-include_config_on_deploy = true
 
 [webhooks]
 api_version = "2025-10"
@@ -41,7 +40,7 @@ api_version = "2025-10"
   uri = "/webhooks/shop/redact"
 
   [[webhooks.subscriptions]]
-  topics = [ "app/subscriptions/update" ]
+  topics = [ "app_subscriptions/update" ]
   uri = "/webhooks/app/subscriptions_update"
 
 [access_scopes]

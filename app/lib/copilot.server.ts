@@ -44,7 +44,7 @@ export const copilotAnswer = async (request: Request, payload: CopilotRequest) =
 
     // 验证和解析时间范围
     const rangeKey: TimeRangeKey = (payload.range as TimeRangeKey) || "30d";
-    if (!["7d", "30d", "90d", "1y"].includes(rangeKey)) {
+    if (!["7d", "30d", "90d", "custom"].includes(rangeKey)) {
       throw new ValidationError(`Invalid time range: ${rangeKey}`);
     }
 

@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS "VisitorSession" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "Session_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "VisitorSession_pkey" PRIMARY KEY ("id")
 );
 
 -- 结账表：记录结账流程
@@ -108,11 +108,11 @@ CREATE TABLE "FunnelEvent" (
 );
 
 -- 添加索引
-CREATE INDEX "Session_shopDomain_idx" ON "Session"("shopDomain");
-CREATE INDEX "Session_shopDomain_platform_idx" ON "Session"("shopDomain", "platform");
-CREATE INDEX "Session_shopDomain_startedAt_idx" ON "Session"("shopDomain", "startedAt");
-CREATE INDEX "Session_aiSource_idx" ON "Session"("aiSource");
-CREATE INDEX "Session_customerId_idx" ON "Session"("customerId");
+CREATE INDEX "VisitorSession_shopDomain_idx" ON "VisitorSession"("shopDomain");
+CREATE INDEX "VisitorSession_shopDomain_platform_idx" ON "VisitorSession"("shopDomain", "platform");
+CREATE INDEX "VisitorSession_shopDomain_startedAt_idx" ON "VisitorSession"("shopDomain", "startedAt");
+CREATE INDEX "VisitorSession_aiSource_idx" ON "VisitorSession"("aiSource");
+CREATE INDEX "VisitorSession_customerId_idx" ON "VisitorSession"("customerId");
 
 CREATE INDEX "Checkout_shopDomain_idx" ON "Checkout"("shopDomain");
 CREATE INDEX "Checkout_shopDomain_platform_idx" ON "Checkout"("shopDomain", "platform");

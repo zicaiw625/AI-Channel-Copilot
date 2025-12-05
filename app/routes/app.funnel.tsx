@@ -11,16 +11,9 @@ import styles from "../styles/app.dashboard.module.css";
 import { channelList, timeRanges, type TimeRangeKey } from "../lib/aiData";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  let session;
-  
-  try {
-    const auth = await authenticate.admin(request);
-    session = auth.session;
-  } catch {
-    // Handle auth failure
-  }
+  const { session } = await authenticate.admin(request);
 
-  const shopDomain = session?.shop || "";
+  const shopDomain = session.shop;
   const settings = await getSettings(shopDomain);
   const language = settings.languages?.[0] || "中文";
   

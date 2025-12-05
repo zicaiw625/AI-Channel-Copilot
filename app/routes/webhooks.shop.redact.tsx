@@ -26,6 +26,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     await wipeShopData(shopDomain);
   } catch (error) {
+    // Re-throw Response objects (e.g., 401 from HMAC validation failure)
+    if (error instanceof Response) {
+      throw error;
+    }
     const shopFromError = (() => {
       const obj = error && typeof error === "object" && !Array.isArray(error)
         ? (error as Record<string, unknown>)

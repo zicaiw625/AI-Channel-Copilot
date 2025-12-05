@@ -207,6 +207,10 @@ export const handleOrderWebhook = async (request: Request, expectedTopic: string
 
     return new Response();
   } catch (error) {
+    // Re-throw Response objects (e.g., 401 from HMAC validation failure)
+    if (error instanceof Response) {
+      throw error;
+    }
     logger.error("Order webhook handler failed", {
       topic: expectedTopic,
       shop: shopDomain,

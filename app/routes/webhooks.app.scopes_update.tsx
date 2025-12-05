@@ -31,6 +31,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     return new Response();
   } catch (error) {
+    // Re-throw Response objects (e.g., 401 from HMAC validation failure)
+    if (error instanceof Response) {
+      throw error;
+    }
     logger.error("app/scopes_update webhook failed", { shopDomain, topic }, {
       message: (error as Error).message,
     });

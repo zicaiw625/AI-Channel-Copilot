@@ -40,6 +40,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     return new Response();
   } catch (error) {
+    // Re-throw Response objects (e.g., 401 from HMAC validation failure)
+    if (error instanceof Response) {
+      throw error;
+    }
     logger.error("app/uninstalled webhook failed", { shopDomain: shop, topic }, {
       message: (error as Error).message,
     });

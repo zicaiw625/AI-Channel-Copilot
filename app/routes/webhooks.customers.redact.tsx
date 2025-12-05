@@ -47,6 +47,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
     await redactCustomerRecords(shop, customerIds, mergedOrderIds);
   } catch (error) {
+    // Re-throw Response objects (e.g., 401 from HMAC validation failure)
+    if (error instanceof Response) {
+      throw error;
+    }
     logger.error("customers/redact failed", { shopDomain: shop, topic }, {
       message: (error as Error).message,
     });

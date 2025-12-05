@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
-import { Link, useLoaderData, useRevalidator } from "react-router";
+import { Link, useLoaderData, useNavigate, useSearchParams } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 
 import { authenticate } from "../shopify.server";
@@ -23,16 +23,19 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const shopDomain = session?.shop || "";
   const settings = await getSettings(shopDomain);
   
-  // 尝试从 cookie 读取用户选择的 UI 语言
-  // 这与 localStorage 中的 LANGUAGE_STORAGE_KEY 保持一致
+  // 优先从 URL 参数读取语言（最可靠的方式，避免 cookie 在 iframe 中的问题）
+  const url = new URL(request.url);
+  const urlLanguage = url.searchParams.get("lang");
+  
+  // 其次尝试从 cookie 读取
   const cookieHeader = request.headers.get("Cookie") || "";
   const cookieLanguageMatch = cookieHeader.match(/aicc_language=([^;]+)/);
   const cookieLanguage = cookieLanguageMatch 
     ? decodeURIComponent(cookieLanguageMatch[1]) 
     : null;
   
-  // 优先使用 cookie 中的语言，否则使用数据库设置
-  const language = cookieLanguage || settings.languages?.[0] || "中文";
+  // 优先级：URL 参数 > cookie > 数据库设置
+  const language = urlLanguage || cookieLanguage || settings.languages?.[0] || "中文";
 
   const report = await generateAIOptimizationReport(shopDomain, admin, {
     range: "30d",
@@ -238,18 +241,23 @@ const SuggestionCard = ({
 
 export default function AIOptimization() {
   const { report, language, shopDomain } = useLoaderData<typeof loader>();
-  const revalidator = useRevalidator();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   
   // 监听语言变化事件，当用户在其他页面切换语言时触发重新加载
   const uiLanguage = useUILanguage(language);
   
-  // 当 localStorage 中的语言与后端返回的语言不一致时，重新加载数据
-  // 这确保了 UI 文本和报告内容使用相同的语言
+  // 当 localStorage 中的语言与后端返回的语言不一致时，通过 URL 参数重新加载
+  // 使用 URL 参数而非 cookie，避免 Shopify iframe 中的第三方 cookie 限制
   useEffect(() => {
-    if (uiLanguage !== language && revalidator.state === "idle") {
-      revalidator.revalidate();
+    if (uiLanguage !== language) {
+      // 只有当 URL 中没有 lang 参数或参数值与 uiLanguage 不同时才导航
+      const currentLangParam = searchParams.get("lang");
+      if (currentLangParam !== uiLanguage) {
+        navigate(`/app/optimization?lang=${encodeURIComponent(uiLanguage)}`, { replace: true });
+      }
     }
-  }, [uiLanguage, language, revalidator]);
+  }, [uiLanguage, language, navigate, searchParams]);
   
   // 使用后端返回的语言来保证 UI 和数据内容一致
   const isEnglish = language === "English";

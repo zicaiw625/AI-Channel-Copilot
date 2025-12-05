@@ -4,12 +4,10 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import { requireEnv } from "../lib/env.server";
 import { 
-  computeIsTestMode, 
   detectAndPersistDevShop, 
-  calculateRemainingTrialDays,
-  requestSubscription,
   activateFreePlan,
   getBillingState,
+  syncSubscriptionFromShopify,
 } from "../lib/billing.server";
 import { getSettings, syncShopPreferences } from "../lib/settings.server";
 import { useUILanguage } from "../lib/useUILanguage";
@@ -44,30 +42,25 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     try {
       settings = await syncShopPreferences(admin, shopDomain, settings);
       await detectAndPersistDevShop(admin, shopDomain);
+      // 托管定价模式：从 Shopify 同步订阅状态
+      await syncSubscriptionFromShopify(admin, shopDomain);
     } catch (e) {
       // If these fail, continue with cached data
       console.warn("Admin operations failed in onboarding:", (e as Error).message);
     }
   }
-  const trialDaysEntries = await Promise.all(
-    (Object.keys(BILLING_PLANS) as PlanId[]).map(async (planId) => {
-      const plan = BILLING_PLANS[planId];
-      const remaining = plan.trialSupported ? await calculateRemainingTrialDays(shopDomain, planId) : 0;
-      return [planId, remaining] as const;
-    }),
-  );
-  const trialDays = Object.fromEntries(trialDaysEntries) as Record<PlanId, number>;
   
-  // Check if this is a reinstall with remaining trial
+  // 获取同步后的计费状态
   const billingState = await getBillingState(shopDomain);
   const isReinstall = billingState?.lastUninstalledAt != null && billingState?.lastReinstalledAt != null;
-  const proTrial = trialDays[PRIMARY_BILLABLE_PLAN_ID] ?? 0;
-  const hasRemainingTrial = proTrial > 0 && proTrial < BILLING_PLANS[PRIMARY_BILLABLE_PLAN_ID].defaultTrialDays;
-  const showReinstallTrialBanner = isReinstall && hasRemainingTrial;
   
   // Check if subscription was cancelled/expired (user needs to choose a plan)
   const isSubscriptionExpired = billingState?.billingState === "EXPIRED_NO_SUBSCRIPTION";
   const wasSubscribed = billingState?.hasEverSubscribed || false;
+  
+  // 检查是否已有活跃订阅（托管定价模式下，用户可能已经在安装时选择了计划）
+  const hasActiveSubscription = billingState?.billingState?.includes("ACTIVE") || 
+                                 billingState?.billingState?.includes("TRIALING");
   
   // 获取 AI 订单数据预览（最近 30 天）
   let aiSnapshot = {
@@ -103,15 +96,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     shopDomain, 
     authorized: true,
     plans: Object.values(BILLING_PLANS)
-      .filter((plan) => plan.status === "live") // 只显示已上线的计划，隐藏 "coming_soon"
+      .filter((plan) => plan.status === "live") // 只显示已上线的计划
       .map((plan) => ({
         ...plan,
-        remainingTrialDays: trialDays[plan.id] || 0,
       })),
-    showReinstallTrialBanner,
-    remainingTrialDays: trialDays[PRIMARY_BILLABLE_PLAN_ID] || 0,
+    isReinstall,
     isSubscriptionExpired,
     wasSubscribed,
+    hasActiveSubscription,
+    currentPlan: billingState?.billingPlan || null,
     aiSnapshot,
   };
 };
@@ -122,10 +115,11 @@ export default function Onboarding() {
     shopDomain, 
     authorized,
     plans,
-    showReinstallTrialBanner,
-    remainingTrialDays,
+    isReinstall,
     isSubscriptionExpired,
     wasSubscribed,
+    hasActiveSubscription,
+    currentPlan,
     aiSnapshot,
   } = useLoaderData<typeof loader>();
   
@@ -140,8 +134,14 @@ export default function Onboarding() {
   if (!authorized) {
     return <div style={{padding: 20}}>Unauthorized. Please access via Shopify Admin.</div>;
   }
-
-  const handleSelectPlan = undefined as never;
+  
+  // 托管定价模式：如果已有活跃订阅，直接进入应用
+  // （Shopify 在安装时已处理订阅选择）
+  
+  // 打开 Shopify 应用订阅管理页面
+  const openSubscriptionPage = () => {
+    window.open(`https://${shopDomain}/admin/settings/apps`, "_top");
+  };
   
   // 格式化货币
   const formatCurrency = (amount: number, currency: string) => {
@@ -264,9 +264,26 @@ export default function Onboarding() {
   }
 
   // Render Step 3: Plan Selection
+  // 托管定价模式：显示计划信息，但订阅通过 Shopify 处理
   return (
     <section style={{ maxWidth: 900, margin: "40px auto", padding: 20, fontFamily: "system-ui, sans-serif" }}>
       <h2 style={{ textAlign: "center", marginBottom: 30 }}>{en ? "Choose Your Plan" : "选择适合您的计划"}</h2>
+      
+      {/* 托管定价说明 */}
+      <div style={{ 
+        marginBottom: 24, 
+        padding: 16, 
+        background: "#f0f9ff", 
+        border: "1px solid #bae6fd",
+        borderRadius: 8, 
+        textAlign: "center" 
+      }}>
+        <div style={{ color: "#0369a1" }}>
+          {en 
+            ? "Subscription is managed through Shopify. Click 'Start Free' to begin with the free plan, or manage your subscription in Shopify settings."
+            : "订阅通过 Shopify 管理。点击「开始使用免费版」开始使用，或在 Shopify 设置中管理订阅。"}
+        </div>
+      </div>
       
       {/* Subscription expired/cancelled banner */}
       {isSubscriptionExpired && (
@@ -284,38 +301,17 @@ export default function Onboarding() {
           <div style={{ color: "#d4380d" }}>
             {wasSubscribed 
               ? (en 
-                  ? "Your paid subscription has been cancelled. Choose a plan below to continue."
-                  : "您的付费订阅已取消。请选择一个计划以继续使用。")
+                  ? "Your paid subscription has been cancelled. Start with the free plan or upgrade in Shopify settings."
+                  : "您的付费订阅已取消。可以先使用免费版，或在 Shopify 设置中升级。")
               : (en 
-                  ? "Your trial has ended. Choose a plan below to continue."
-                  : "您的试用期已结束。请选择一个计划以继续使用。")}
+                  ? "Your trial has ended. Start with the free plan or upgrade in Shopify settings."
+                  : "您的试用期已结束。可以先使用免费版，或在 Shopify 设置中升级。")}
           </div>
         </div>
       )}
       
-      {/* Subscription declined banner */}
-      {reason === "subscription_declined" && (
-        <div style={{ 
-          marginBottom: 20, 
-          padding: 16, 
-          background: "#fff2e8", 
-          border: "1px solid #ffbb96",
-          borderRadius: 8, 
-          textAlign: "center" 
-        }}>
-          <div style={{ fontSize: 18, fontWeight: "bold", color: "#d4380d", marginBottom: 8 }}>
-            {en ? "Subscription not completed" : "订阅未完成"}
-          </div>
-          <div style={{ color: "#d4380d" }}>
-            {en 
-              ? "The subscription was not confirmed. Please try again or choose a different plan."
-              : "订阅确认未完成。请重试或选择其他计划。"}
-          </div>
-        </div>
-      )}
-      
-      {/* Reinstall trial banner */}
-      {showReinstallTrialBanner && !isSubscriptionExpired && (
+      {/* Reinstall banner */}
+      {isReinstall && !isSubscriptionExpired && (
         <div style={{ 
           marginBottom: 20, 
           padding: 16, 
@@ -326,11 +322,6 @@ export default function Onboarding() {
         }}>
           <div style={{ fontSize: 18, fontWeight: "bold", color: "#0050b3", marginBottom: 8 }}>
             🎉 {en ? "Welcome back!" : "欢迎回来！"}
-          </div>
-          <div style={{ color: "#0050b3" }}>
-            {en 
-              ? `You still have ${remainingTrialDays} days of Pro trial remaining. Pick up where you left off!`
-              : `您还有 ${remainingTrialDays} 天的 Pro 试用期。继续您的体验吧！`}
           </div>
         </div>
       )}
@@ -345,25 +336,21 @@ export default function Onboarding() {
         {(plans ?? []).map((plan) => {
           const isFree = plan.id === 'free';
           const recommended = plan.id === PRIMARY_BILLABLE_PLAN_ID;
+          const isCurrentPlan = currentPlan === plan.id;
           const disabled = plan.status !== 'live';
           const priceLabel = plan.priceUsd === 0 ? "$0" : `$${plan.priceUsd}`;
-          const trialLabel = plan.trialSupported
-            ? plan.remainingTrialDays > 0
-              ? en
-                ? `${plan.remainingTrialDays} days free`
-                : `剩余 ${plan.remainingTrialDays} 天试用`
-              : en
-                ? "Trial exhausted"
-                : "试用次数已用完"
-            : en
-              ? "No trial"
-              : "无试用";
-          const buttonLabel =
-            plan.status === 'coming_soon'
-              ? (en ? "Coming soon" : "敬请期待")
-              : en
-                  ? `Choose ${plan.name}`
-                  : `选择 ${plan.name}`;
+          
+          // 按钮标签
+          let buttonLabel: string;
+          if (isCurrentPlan) {
+            buttonLabel = en ? "Current Plan" : "当前计划";
+          } else if (plan.status === 'coming_soon') {
+            buttonLabel = en ? "Coming soon" : "敬请期待";
+          } else if (isFree) {
+            buttonLabel = en ? "Start Free" : "开始使用免费版";
+          } else {
+            buttonLabel = en ? "Upgrade in Shopify" : "在 Shopify 中升级";
+          }
 
           return (
             <div
@@ -372,7 +359,7 @@ export default function Onboarding() {
                 flex: 1,
                 minWidth: 280,
                 maxWidth: 340,
-                border: recommended ? "2px solid #008060" : "1px solid #e1e3e5",
+                border: recommended ? "2px solid #008060" : isCurrentPlan ? "2px solid #5c6ac4" : "1px solid #e1e3e5",
                 borderRadius: 8,
                 padding: 24,
                 display: "flex",
@@ -382,7 +369,7 @@ export default function Onboarding() {
                 opacity: plan.status === "live" ? 1 : 0.8,
               }}
             >
-              {recommended && (
+              {recommended && !isCurrentPlan && (
                 <div
                   style={{
                     position: "absolute",
@@ -398,6 +385,24 @@ export default function Onboarding() {
                   }}
                 >
                   {en ? "RECOMMENDED" : "推荐"}
+                </div>
+              )}
+              {isCurrentPlan && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: -12,
+                    left: "50%",
+                    transform: "translateX(-50%)",
+                    background: "#5c6ac4",
+                    color: "white",
+                    padding: "2px 10px",
+                    borderRadius: 12,
+                    fontSize: 12,
+                    fontWeight: "bold",
+                  }}
+                >
+                  {en ? "CURRENT" : "当前"}
                 </div>
               )}
               {plan.status === "coming_soon" && (
@@ -431,36 +436,59 @@ export default function Onboarding() {
                   <li key={idx}>✓ {en ? feature.en : feature.zh}</li>
                 ))}
               </ul>
-              <Form method="post" replace>
-                <input type="hidden" name="intent" value="select_plan" />
-                <input type="hidden" name="planId" value={plan.id} />
-                <input type="hidden" name="shop" value={shopDomain} />
+              
+              {/* Free 计划使用表单提交，付费计划跳转到 Shopify */}
+              {isFree ? (
+                <Form method="post" replace>
+                  <input type="hidden" name="intent" value="select_free" />
+                  <input type="hidden" name="shop" value={shopDomain} />
+                  <button
+                    type="submit"
+                    disabled={disabled || isCurrentPlan}
+                    data-action="onboarding-select-plan"
+                    data-plan-id={plan.id}
+                    aria-label={buttonLabel}
+                    style={{
+                      width: "100%",
+                      padding: "12px",
+                      background: isCurrentPlan ? "#f5f5f5" : "white",
+                      color: isCurrentPlan ? "#999" : "#333",
+                      border: "1px solid #babfc3",
+                      borderRadius: 4,
+                      cursor: disabled || isCurrentPlan ? "not-allowed" : "pointer",
+                      fontWeight: 600,
+                    }}
+                  >
+                    {buttonLabel}
+                  </button>
+                </Form>
+              ) : (
                 <button
-                  type="submit"
-                  disabled={disabled}
+                  type="button"
+                  onClick={openSubscriptionPage}
+                  disabled={disabled || isCurrentPlan}
                   data-action="onboarding-select-plan"
                   data-plan-id={plan.id}
-                  aria-label={disabled
-                    ? (en ? "Disabled" : "不可用")
-                    : (en ? `Choose ${plan.name}` : `选择 ${plan.name}`)}
+                  aria-label={buttonLabel}
                   style={{
                     width: "100%",
                     padding: "12px",
-                    background: isFree ? "white" : "#008060",
-                    color: isFree ? "#333" : "white",
-                    border: isFree ? "1px solid #babfc3" : "none",
+                    background: isCurrentPlan ? "#f5f5f5" : "#008060",
+                    color: isCurrentPlan ? "#999" : "white",
+                    border: "none",
                     borderRadius: 4,
-                    cursor: disabled ? "not-allowed" : "pointer",
+                    cursor: disabled || isCurrentPlan ? "not-allowed" : "pointer",
                     fontWeight: 600,
-                    boxShadow: isFree ? "none" : "0 2px 5px rgba(0,0,0,0.1)",
+                    boxShadow: isCurrentPlan ? "none" : "0 2px 5px rgba(0,0,0,0.1)",
                   }}
                 >
                   {buttonLabel}
                 </button>
-              </Form>
-              {plan.trialSupported && (
+              )}
+              
+              {plan.trialSupported && !isCurrentPlan && (
                 <div style={{ textAlign: "center", fontSize: 12, color: "#666", marginTop: 8 }}>
-                  {trialLabel}
+                  {en ? "Includes free trial" : "包含免费试用期"}
                 </div>
               )}
             </div>
@@ -487,52 +515,17 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
   
   try {
-    const { admin, session } = await authenticate.admin(request);
+    const { session } = await authenticate.admin(request);
     const shopDomain = session?.shop || "";
     const formData = await request.formData();
     const intent = formData.get("intent");
     
-    if (intent === "select_plan") {
-        const planId = (formData.get("planId") as PlanId) || "free";
-        const plan = BILLING_PLANS[planId];
-        if (!plan) {
-          return Response.json({ ok: false, message: "Unknown plan" }, { status: 400 });
-        }
-
-        if (plan.id === "free") {
-          await activateFreePlan(shopDomain);
-          const appUrl = requireEnv("SHOPIFY_APP_URL");
-          throw new Response(null, { status: 302, headers: { Location: `${appUrl}/app` } });
-        }
-
-        if (plan.status !== "live") {
-          return Response.json({
-            ok: false,
-            message: plan.status === "coming_soon" ? "Plan is coming soon" : "Plan unavailable",
-          }, { status: 400 });
-        }
-
-        const isTest = await computeIsTestMode(shopDomain);
-        const trialDays = await calculateRemainingTrialDays(shopDomain, planId);
-
-        const confirmationUrl = await requestSubscription(
-          admin,
-          shopDomain,
-          planId,
-          isTest,
-          trialDays,
-        );
-
-        if (confirmationUrl) {
-          const next = new URL("/app/redirect", new URL(request.url).origin);
-          next.searchParams.set("to", confirmationUrl);
-          throw new Response(null, { status: 302, headers: { Location: next.toString() } });
-        } else {
-          return Response.json({
-            ok: false,
-            message: "Failed to create subscription. confirmationUrl is missing.",
-          });
-        }
+    // 托管定价模式：只处理 Free 计划的激活
+    // 付费计划通过 Shopify 管理，不在代码中处理
+    if (intent === "select_free") {
+      await activateFreePlan(shopDomain);
+      const appUrl = requireEnv("SHOPIFY_APP_URL");
+      throw new Response(null, { status: 302, headers: { Location: `${appUrl}/app` } });
     }
 
     return null;

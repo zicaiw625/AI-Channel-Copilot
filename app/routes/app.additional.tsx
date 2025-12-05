@@ -280,12 +280,14 @@ export default function SettingsAndExport() {
   const [language, setLanguage] = useState<Lang>(settings.languages[0] as Lang);
   const [gmvMetric, setGmvMetric] = useState(settings.gmvMetric || "current_total_price");
 
-  // 客户端挂载后从 localStorage 读取语言偏好
+  // 客户端挂载后从 localStorage 读取语言偏好并同步到 cookie
   useEffect(() => {
     try {
       const stored = window.localStorage.getItem(LANGUAGE_STORAGE_KEY);
       if (stored === "English" || stored === "中文") {
         setLanguage(stored as Lang);
+        // 同步到 cookie，确保后端可以读取
+        document.cookie = `${LANGUAGE_STORAGE_KEY}=${encodeURIComponent(stored)};path=/;max-age=31536000`;
       }
     } catch { /* ignore */ }
   }, []);
@@ -984,6 +986,8 @@ export default function SettingsAndExport() {
                   setLanguage(next);
                   // 更新本地存储和派发事件以立即更新 UI
                   try { window.localStorage.setItem(LANGUAGE_STORAGE_KEY, next); } catch { void 0; }
+                  // 同时保存到 cookie，以便后端可以读取
+                  try { document.cookie = `${LANGUAGE_STORAGE_KEY}=${encodeURIComponent(next)};path=/;max-age=31536000`; } catch { void 0; }
                   try { window.dispatchEvent(new CustomEvent(LANGUAGE_EVENT, { detail: next })); } catch { void 0; }
                   // 注意：语言变更不再自动提交到服务器，需要用户点击"保存"按钮
                 }}

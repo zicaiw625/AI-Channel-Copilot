@@ -1,6 +1,6 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
-import { Link, useLoaderData } from "react-router";
+import { Link, useLoaderData, useRevalidator } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 
 import { authenticate } from "../shopify.server";
@@ -22,7 +22,17 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   const shopDomain = session?.shop || "";
   const settings = await getSettings(shopDomain);
-  const language = settings.languages?.[0] || "中文";
+  
+  // 尝试从 cookie 读取用户选择的 UI 语言
+  // 这与 localStorage 中的 LANGUAGE_STORAGE_KEY 保持一致
+  const cookieHeader = request.headers.get("Cookie") || "";
+  const cookieLanguageMatch = cookieHeader.match(/aicc_language=([^;]+)/);
+  const cookieLanguage = cookieLanguageMatch 
+    ? decodeURIComponent(cookieLanguageMatch[1]) 
+    : null;
+  
+  // 优先使用 cookie 中的语言，否则使用数据库设置
+  const language = cookieLanguage || settings.languages?.[0] || "中文";
 
   const report = await generateAIOptimizationReport(shopDomain, admin, {
     range: "30d",
@@ -228,8 +238,21 @@ const SuggestionCard = ({
 
 export default function AIOptimization() {
   const { report, language, shopDomain } = useLoaderData<typeof loader>();
+  const revalidator = useRevalidator();
+  
+  // 监听语言变化事件，当用户在其他页面切换语言时触发重新加载
   const uiLanguage = useUILanguage(language);
-  const isEnglish = uiLanguage === "English";
+  
+  // 当 localStorage 中的语言与后端返回的语言不一致时，重新加载数据
+  // 这确保了 UI 文本和报告内容使用相同的语言
+  useEffect(() => {
+    if (uiLanguage !== language && revalidator.state === "idle") {
+      revalidator.revalidate();
+    }
+  }, [uiLanguage, language, revalidator]);
+  
+  // 使用后端返回的语言来保证 UI 和数据内容一致
+  const isEnglish = language === "English";
   
   const [expandedSuggestions, setExpandedSuggestions] = useState<Set<string>>(new Set());
   
@@ -338,7 +361,7 @@ export default function AIOptimization() {
                 </h3>
               </div>
               <span className={styles.badge} style={{ background: "#de3618", color: "white" }}>
-                {highPrioritySuggestions.length} {isEnglish ? "items" : "项"}
+                {highPrioritySuggestions.length} {isEnglish ? (highPrioritySuggestions.length === 1 ? "item" : "items") : "项"}
               </span>
             </div>
             

@@ -26,8 +26,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   }
 
   const settings = await getSettings(shopDomain);
+  
+  // Allow overriding language from query param (for preview to match UI selection)
+  const langParam = url.searchParams.get("lang");
+  const settingsWithLang = langParam 
+    ? { ...settings, languages: [langParam, ...(settings.languages || []).filter((l: string) => l !== langParam)] }
+    : settings;
+  
   // Pass admin client to enable fetching collections and blogs from Shopify API
-  const text = await buildLlmsTxt(shopDomain, settings, { 
+  const text = await buildLlmsTxt(shopDomain, settingsWithLang, { 
     range: "30d", 
     topN: 20,
     admin: admin || undefined,

@@ -294,6 +294,9 @@ export default function SettingsAndExport() {
   // Modal state for confirming removal of default domain
   const [confirmModal, setConfirmModal] = useState<{ open: boolean; rule: AiDomainRule | null }>({ open: false, rule: null });
 
+  // Track last save time to trigger llms.txt preview refresh
+  const [lastSavedAt, setLastSavedAt] = useState<number>(0);
+
   // Modal state for confirming removal of default UTM rule
   const [confirmUtmModal, setConfirmUtmModal] = useState<{ open: boolean; rule: UtmSourceRule | null }>({ open: false, rule: null });
 
@@ -490,6 +493,8 @@ export default function SettingsAndExport() {
               ? (language === "English" ? "Backfilled last 90 days (including AI detection)" : "已补拉最近 90 天订单（含 AI 识别）")
               : (language === "English" ? "Settings saved" : "设置已保存");
         shopify.toast.show?.(message);
+        // Trigger llms.txt preview refresh after successful save
+        setLastSavedAt(Date.now());
       } else {
         shopify.toast.show?.(
           data.message || (language === "English" ? "Save failed. Check configuration or retry later." : "保存失败，请检查配置或稍后重试"),
@@ -915,7 +920,7 @@ export default function SettingsAndExport() {
               </div>
               <span className={styles.badge}>{t(language as Lang, "badge_experiment")}</span>
             </div>
-            <LlmsPreview language={language} canExport={canExport} />
+            <LlmsPreview language={language} canExport={canExport} lastSavedAt={lastSavedAt} />
             <p className={styles.helpText}>{t(language as Lang, "llms_preview_help")}</p>
           </div>
 
@@ -1357,7 +1362,7 @@ export const headers: HeadersFunction = (headersArgs) => {
   return boundary.headers(headersArgs);
 };
 
-function LlmsPreview({ language, canExport }: { language: string; canExport: boolean }) {
+function LlmsPreview({ language, canExport, lastSavedAt }: { language: string; canExport: boolean; lastSavedAt?: number }) {
   const shopify = useAppBridge();
   const fetcher = useFetcher<{ ok: boolean; text: string }>();
   const [copied, setCopied] = useState(false);
@@ -1407,10 +1412,11 @@ function LlmsPreview({ language, canExport }: { language: string; canExport: boo
   useEffect(() => {
     // Only load if user has export permission to avoid 403 errors
     if (canExport) {
-      fetcher.load(`/api/llms-txt-preview?ts=${Date.now()}`);
+      // Pass current language to API to ensure preview matches UI language selection
+      fetcher.load(`/api/llms-txt-preview?ts=${Date.now()}&lang=${encodeURIComponent(language)}`);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [language, canExport]);
+  }, [language, canExport, lastSavedAt]);
 
   const upgradeMessage = language === "English" 
     ? "# Upgrade to Pro to preview llms.txt\n\nThis feature requires a Pro subscription."

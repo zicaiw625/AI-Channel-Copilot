@@ -72,7 +72,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     hasFeature(shopDomain, FEATURES.EXPORTS),
   ]);
   const { showDebugPanels } = readAppFlags();
-  return { settings, exportRange, clamped, displayTimezone, ordersSample, webhookQueueSize, deadLetters, canExport, showDebugPanels };
+  return { settings, exportRange, clamped, displayTimezone, ordersSample, webhookQueueSize, deadLetters, canExport, showDebugPanels, shopDomain };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -232,7 +232,7 @@ const isValidDomain = (value: string) => /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(value.
 const isValidUtmSource = (value: string) => /^[a-z0-9_-]+$/i.test(value.trim());
 
 export default function SettingsAndExport() {
-  const { settings, exportRange, clamped, ordersSample, webhookQueueSize, deadLetters, canExport, showDebugPanels } = useLoaderData<typeof loader>();
+  const { settings, exportRange, clamped, ordersSample, webhookQueueSize, deadLetters, canExport, showDebugPanels, shopDomain } = useLoaderData<typeof loader>();
   const shopify = useAppBridge();
   const fetcher = useFetcher<typeof action>();
   const navigate = useNavigate();
@@ -818,12 +818,28 @@ export default function SettingsAndExport() {
           <div className={styles.card}>
             <div className={styles.sectionHeader}>
               <div>
-                <p className={styles.sectionLabel}>{language === "English" ? "llms.txt Preferences (Reserved)" : "llms.txt 偏好（预留）"}</p>
-                <h3 className={styles.sectionTitle}>{language === "English" ? "Site Types to Expose" : "希望向 AI 暴露的站点类型"}</h3>
+                <p className={styles.sectionLabel}>{language === "English" ? "llms.txt Preferences" : "llms.txt 偏好"}</p>
+                <h3 className={styles.sectionTitle}>{language === "English" ? "Site Types to Expose to AI" : "希望向 AI 暴露的站点类型"}</h3>
               </div>
               <span className={styles.badge}>{t(language as Lang, "badge_experiment")}</span>
             </div>
-            <p className={styles.helpText}>{language === "English" ? "Preferences only; no changes to storefront. Future llms.txt generation will respect these. Default off to avoid unnecessary exposure." : "仅存储偏好，不会改动店铺页面。未来生成 llms.txt 时会参考此配置；默认全部关闭以避免暴露不必要的内容。"}</p>
+            {shopDomain && (
+              <div className={styles.alert} style={{ background: "#e3f1df", borderColor: "#50b83c" }}>
+                {language === "English" ? "Public URL: " : "公开访问地址："}
+                <a 
+                  href={`https://${shopDomain}/a/llms`} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  style={{ color: "#006d3a", fontWeight: 500 }}
+                >
+                  https://{shopDomain}/a/llms
+                </a>
+                <span style={{ marginLeft: 8, color: "#637381", fontSize: 12 }}>
+                  {language === "English" ? "(AI crawlers can access this URL)" : "（AI 爬虫可访问此地址）"}
+                </span>
+              </div>
+            )}
+            <p className={styles.helpText}>{language === "English" ? "Configure which content types AI crawlers (ChatGPT, Perplexity, etc.) can discover via llms.txt. Changes take effect after saving." : "配置 AI 爬虫（ChatGPT、Perplexity 等）可通过 llms.txt 发现哪些内容类型。更改保存后生效。"}</p>
             <div className={styles.checkboxRow}>
               <input
                 type="checkbox"

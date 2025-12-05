@@ -1,7 +1,7 @@
 import type { LoaderFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import { getSettings } from "../lib/settings.server";
-import { buildLlmsTxt } from "../lib/llms.server";
+import { buildLlmsTxt, updateLlmsTxtCache } from "../lib/llms.server";
 import { hasFeature, FEATURES } from "../lib/access.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -32,6 +32,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     topN: 20,
     admin: admin || undefined,
   });
+
+  // Update cache when we have admin access (includes collections/blogs)
+  if (admin && shopDomain) {
+    // Fire and forget - don't block response
+    updateLlmsTxtCache(shopDomain, text).catch(() => {});
+  }
 
   const download = url.searchParams.get("download") === "1";
   if (download) {

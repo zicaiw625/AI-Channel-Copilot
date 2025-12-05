@@ -53,3 +53,8 @@ redirect_urls = [
   "https://ai-channel-copilot.onrender.com/auth/callback",
   "https://ai-channel-copilot.onrender.com/auth/login"
 ]
+
+[app_proxy]
+url = "https://ai-channel-copilot.onrender.com/proxy"
+subpath = "llms"
+prefix = "a"

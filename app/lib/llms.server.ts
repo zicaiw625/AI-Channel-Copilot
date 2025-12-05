@@ -2,6 +2,10 @@ import prisma from "../db.server";
 import { resolveDateRange, type TimeRangeKey } from "./aiData";
 import { createGraphqlSdk, type AdminGraphqlClient } from "./graphqlSdk.server";
 import { logger } from "./logger.server";
+import { getPlatform } from "./runtime.server";
+
+// Cache TTL in milliseconds (1 hour)
+const LLMS_CACHE_TTL_MS = 60 * 60 * 1000;
 
 // GraphQL query for fetching collections
 const COLLECTIONS_QUERY = `#graphql
@@ -247,4 +251,71 @@ export const buildLlmsTxt = async (
   lines.push(language === "English" ? "# Scope: for AI platform reference only; no guarantee of search/ranking changes; watch for policy updates." : "# 使用范围说明：仅作为 AI 平台参考，不保证搜索/排名变化；请留意各平台策略更新。");
 
   return lines.join("\n");
+};
+
+/**
+ * Get cached llms.txt content for a shop
+ * Returns null if cache is expired or doesn't exist
+ */
+export const getLlmsTxtCache = async (
+  shopDomain: string,
+): Promise<{ text: string; cachedAt: Date } | null> => {
+  if (!shopDomain) return null;
+
+  const platform = getPlatform();
+
+  try {
+    const record = await prisma.shopSettings.findUnique({
+      where: { shopDomain_platform: { shopDomain, platform } },
+      select: { llmsTxtCache: true, llmsTxtCachedAt: true },
+    });
+
+    if (!record?.llmsTxtCache || !record?.llmsTxtCachedAt) {
+      return null;
+    }
+
+    // Check if cache is expired
+    const cachedAt = new Date(record.llmsTxtCachedAt);
+    const now = new Date();
+    if (now.getTime() - cachedAt.getTime() > LLMS_CACHE_TTL_MS) {
+      return null;
+    }
+
+    return {
+      text: record.llmsTxtCache,
+      cachedAt,
+    };
+  } catch (error) {
+    logger.warn("[llms] Failed to get cache", { shopDomain }, {
+      error: (error as Error).message,
+    });
+    return null;
+  }
+};
+
+/**
+ * Update llms.txt cache for a shop
+ */
+export const updateLlmsTxtCache = async (
+  shopDomain: string,
+  text: string,
+): Promise<void> => {
+  if (!shopDomain) return;
+
+  const platform = getPlatform();
+
+  try {
+    await prisma.shopSettings.update({
+      where: { shopDomain_platform: { shopDomain, platform } },
+      data: {
+        llmsTxtCache: text,
+        llmsTxtCachedAt: new Date(),
+      },
+    });
+    logger.info("[llms] Cache updated", { shopDomain });
+  } catch (error) {
+    logger.warn("[llms] Failed to update cache", { shopDomain }, {
+      error: (error as Error).message,
+    });
+  }
 };

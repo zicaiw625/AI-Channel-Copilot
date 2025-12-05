@@ -179,6 +179,17 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           { status: 401 },
         );
       }
+      // Check if dry-run mode is enabled
+      if (merged.tagging.dryRun) {
+        return Response.json({
+          ok: true,
+          intent: "tag",
+          dryRun: true,
+          message: currentLanguage === "English"
+            ? "Dry-run mode enabled. No tags were written. Uncheck 'Write to Shopify' simulation mode to actually write tags."
+            : "当前为模拟模式，未实际写入标签。请取消勾选「写入 Shopify」的模拟模式以实际写入标签。",
+        });
+      }
       const { orders } = await fetchOrdersForRange(admin, range, merged, {
         shopDomain,
         intent: "settings-tagging",
@@ -443,9 +454,18 @@ export default function SettingsAndExport() {
   };
 
   useEffect(() => {
-    const data = fetcher.data as { ok: boolean; intent?: string; message?: string } | undefined;
+    const data = fetcher.data as { ok: boolean; intent?: string; message?: string; dryRun?: boolean } | undefined;
     if (data) {
       if (data.ok) {
+        // Handle dry-run mode for tagging
+        if (data.intent === "tag" && data.dryRun) {
+          shopify.toast.show?.(
+            data.message || (language === "English"
+              ? "Dry-run mode: No tags written. Disable simulation to write."
+              : "模拟模式：未写入标签。请关闭模拟模式以实际写入。")
+          );
+          return;
+        }
         const message =
           data.intent === "tag"
             ? (language === "English" ? "Tag write-back triggered (based on last 90 days AI orders)" : "标签写回已触发（基于最近 90 天 AI 订单）")

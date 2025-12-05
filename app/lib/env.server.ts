@@ -43,7 +43,6 @@ type AppFlags = {
   enableRetentionSweep: boolean;
   billingForceTest: boolean;
   showDebugPanels: boolean; // 是否显示任务队列等调试面板
-  showExperimentalFeatures: boolean; // 是否显示实验性功能（如 llms.txt）
 };
 
 let cachedFlags: AppFlags | null = null;
@@ -59,7 +58,6 @@ export const readAppFlags = (): AppFlags => {
     enableRetentionSweep: readBooleanEnv("ENABLE_RETENTION_SWEEP", true),
     billingForceTest: readBooleanEnv("BILLING_FORCE_TEST", false),
     showDebugPanels: readBooleanEnv("SHOW_DEBUG_PANELS", false), // 默认隐藏调试面板
-    showExperimentalFeatures: readBooleanEnv("SHOW_EXPERIMENTAL_FEATURES", false), // 默认隐藏实验性功能
   };
 
   return cachedFlags;

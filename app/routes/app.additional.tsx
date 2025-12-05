@@ -71,8 +71,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     getDeadLetterJobs(10),
     hasFeature(shopDomain, FEATURES.EXPORTS),
   ]);
-  const { showDebugPanels, showExperimentalFeatures } = readAppFlags();
-  return { settings, exportRange, clamped, displayTimezone, ordersSample, webhookQueueSize, deadLetters, canExport, showDebugPanels, showExperimentalFeatures };
+  const { showDebugPanels } = readAppFlags();
+  return { settings, exportRange, clamped, displayTimezone, ordersSample, webhookQueueSize, deadLetters, canExport, showDebugPanels };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -232,7 +232,7 @@ const isValidDomain = (value: string) => /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(value.
 const isValidUtmSource = (value: string) => /^[a-z0-9_-]+$/i.test(value.trim());
 
 export default function SettingsAndExport() {
-  const { settings, exportRange, clamped, ordersSample, webhookQueueSize, deadLetters, canExport, showDebugPanels, showExperimentalFeatures } = useLoaderData<typeof loader>();
+  const { settings, exportRange, clamped, ordersSample, webhookQueueSize, deadLetters, canExport, showDebugPanels } = useLoaderData<typeof loader>();
   const shopify = useAppBridge();
   const fetcher = useFetcher<typeof action>();
   const navigate = useNavigate();
@@ -815,8 +815,6 @@ export default function SettingsAndExport() {
             <p className={styles.helpText}>{language === "English" ? "Tags are off by default; when enabled, they write to Shopify orders/customers for filtering/export." : "标签默认关闭；开启后会回写到 Shopify 订单/客户，便于在后台过滤或导出。"}</p>
           </div>
 
-          {/* llms.txt 实验性功能 - 仅在 SHOW_EXPERIMENTAL_FEATURES=true 时显示 */}
-          {showExperimentalFeatures && (
           <div className={styles.card}>
             <div className={styles.sectionHeader}>
               <div>
@@ -875,10 +873,7 @@ export default function SettingsAndExport() {
               </div>
             </div>
           </div>
-          )}
 
-          {/* llms.txt 预览 - 仅在 SHOW_EXPERIMENTAL_FEATURES=true 时显示 */}
-          {showExperimentalFeatures && (
           <div className={styles.card}>
             <div className={styles.sectionHeader}>
               <div>
@@ -890,7 +885,6 @@ export default function SettingsAndExport() {
             <LlmsPreview language={language} canExport={canExport} />
             <p className={styles.helpText}>{t(language as Lang, "llms_preview_help")}</p>
           </div>
-          )}
 
           {/* 调试面板 - 仅在 SHOW_DEBUG_PANELS=true 时显示 */}
           {showDebugPanels && (

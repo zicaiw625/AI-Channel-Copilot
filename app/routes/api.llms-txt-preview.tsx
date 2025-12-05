@@ -7,9 +7,12 @@ import { hasFeature, FEATURES } from "../lib/access.server";
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const url = new URL(request.url);
   let shopDomain = "";
+  let admin = null;
+  
   try {
-    const { session } = await authenticate.admin(request);
-    shopDomain = session?.shop || url.searchParams.get("shop") || "";
+    const auth = await authenticate.admin(request);
+    admin = auth.admin;
+    shopDomain = auth.session?.shop || url.searchParams.get("shop") || "";
   } catch (authError) {
     shopDomain = url.searchParams.get("shop") || "";
     if (!shopDomain) {
@@ -23,7 +26,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   }
 
   const settings = await getSettings(shopDomain);
-  const text = await buildLlmsTxt(shopDomain, settings, { range: "30d", topN: 20 });
+  // Pass admin client to enable fetching collections and blogs from Shopify API
+  const text = await buildLlmsTxt(shopDomain, settings, { 
+    range: "30d", 
+    topN: 20,
+    admin: admin || undefined,
+  });
 
   const download = url.searchParams.get("download") === "1";
   if (download) {

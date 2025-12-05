@@ -7,16 +7,19 @@ exports[`llms.server buildLlmsTxt > generates Chinese text with product allow li
 # 站点声明：shop=shop.example.com · primary_currency=USD
 # 时间范围：最近 30 天 · 依据最近 AI GMV/订单生成 Top 列表
 
+## 产品页（按 AI GMV 排序）
 allow:
   - https://shop.example.com/products/a
   - https://shop.example.com/products/b
+
 # 未开启集合页暴露（exposeCollections=false）
+
 # 未开启博客页暴露（exposeBlogs=false）
 
 # 使用范围说明：仅作为 AI 平台参考，不保证搜索/排名变化；请留意各平台策略更新。"
 `;
 
-exports[`llms.server buildLlmsTxt > generates English text and respects exposure toggles 1`] = `
+exports[`llms.server buildLlmsTxt > generates English text and respects exposure toggles without admin 1`] = `
 "# llms.txt · AI crawling preferences (experimental)
 # This file only guides AI platforms on crawl scope; no guarantee of compliance or immediacy.
 
@@ -24,8 +27,12 @@ exports[`llms.server buildLlmsTxt > generates English text and respects exposure
 # Time Range: Last 7 days · Top list based on recent AI GMV/orders
 
 # Product page exposure is disabled (exposeProducts=false)
-# Reserved: collections/categories list to be generated via Shopify API
-# Reserved: blog/content list to be generated via CMS/Shopify API
+
+## Collections
+# Collections require API access (preview mode)
+
+## Blog Articles
+# Blog articles require API access (preview mode)
 
 # Scope: for AI platform reference only; no guarantee of search/ranking changes; watch for policy updates."
 `;

@@ -1,5 +1,131 @@
 import prisma from "../db.server";
 import { resolveDateRange, type TimeRangeKey } from "./aiData";
+import { createGraphqlSdk, type AdminGraphqlClient } from "./graphqlSdk.server";
+import { logger } from "./logger.server";
+
+// GraphQL query for fetching collections
+const COLLECTIONS_QUERY = `#graphql
+  query CollectionsForLlms($first: Int!) {
+    collections(first: $first, sortKey: UPDATED_AT, reverse: true) {
+      edges {
+        node {
+          id
+          title
+          handle
+          onlineStoreUrl
+          productsCount {
+            count
+          }
+        }
+      }
+    }
+  }
+`;
+
+// GraphQL query for fetching blog articles
+const ARTICLES_QUERY = `#graphql
+  query ArticlesForLlms($first: Int!) {
+    articles(first: $first, sortKey: UPDATED_AT, reverse: true) {
+      edges {
+        node {
+          id
+          title
+          handle
+          onlineStoreUrl
+          blog {
+            handle
+          }
+        }
+      }
+    }
+  }
+`;
+
+type CollectionNode = {
+  id: string;
+  title: string;
+  handle: string;
+  onlineStoreUrl: string | null;
+  productsCount?: { count: number };
+};
+
+type ArticleNode = {
+  id: string;
+  title: string;
+  handle: string;
+  onlineStoreUrl: string | null;
+  blog?: { handle: string };
+};
+
+/**
+ * Fetch collections from Shopify API
+ */
+export const fetchCollections = async (
+  admin: AdminGraphqlClient,
+  shopDomain: string,
+  limit: number = 20,
+): Promise<{ url: string; title: string }[]> => {
+  try {
+    const sdk = createGraphqlSdk(admin, shopDomain);
+    const response = await sdk.request("collectionsForLlms", COLLECTIONS_QUERY, { first: limit });
+    
+    if (!response.ok) {
+      logger.warn("[llms] Failed to fetch collections", { shopDomain, status: response.status });
+      return [];
+    }
+    
+    const json = (await response.json()) as {
+      data?: { collections?: { edges: { node: CollectionNode }[] } };
+    };
+    
+    const collections = json.data?.collections?.edges || [];
+    return collections
+      .map(({ node }) => ({
+        url: node.onlineStoreUrl || `https://${shopDomain}/collections/${node.handle}`,
+        title: node.title,
+      }))
+      .filter((c) => c.url);
+  } catch (error) {
+    logger.error("[llms] Error fetching collections", { shopDomain }, { error: (error as Error).message });
+    return [];
+  }
+};
+
+/**
+ * Fetch blog articles from Shopify API
+ */
+export const fetchArticles = async (
+  admin: AdminGraphqlClient,
+  shopDomain: string,
+  limit: number = 20,
+): Promise<{ url: string; title: string }[]> => {
+  try {
+    const sdk = createGraphqlSdk(admin, shopDomain);
+    const response = await sdk.request("articlesForLlms", ARTICLES_QUERY, { first: limit });
+    
+    if (!response.ok) {
+      logger.warn("[llms] Failed to fetch articles", { shopDomain, status: response.status });
+      return [];
+    }
+    
+    const json = (await response.json()) as {
+      data?: { articles?: { edges: { node: ArticleNode }[] } };
+    };
+    
+    const articles = json.data?.articles?.edges || [];
+    return articles
+      .map(({ node }) => ({
+        url: node.onlineStoreUrl || (node.blog?.handle 
+          ? `https://${shopDomain}/blogs/${node.blog.handle}/${node.handle}`
+          : `https://${shopDomain}/blogs/news/${node.handle}`),
+        title: node.title,
+      }))
+      .filter((a) => a.url);
+  } catch (error) {
+    logger.error("[llms] Error fetching articles", { shopDomain }, { error: (error as Error).message });
+    return [];
+  }
+};
 
 export const buildLlmsTxt = async (
   shopDomain: string,
@@ -8,11 +134,16 @@ export const buildLlmsTxt = async (
     primaryCurrency?: string;
     languages?: string[];
   },
-  options?: { range?: TimeRangeKey; topN?: number },
+  options?: { 
+    range?: TimeRangeKey; 
+    topN?: number;
+    admin?: AdminGraphqlClient;
+  },
 ) => {
   const rangeKey = options?.range || "30d";
   const range = resolveDateRange(rangeKey, new Date());
   const topN = options?.topN || 10;
+  const admin = options?.admin;
   const lines: string[] = [];
   const language = (settings.languages && settings.languages[0]) || "中文";
 
@@ -34,7 +165,9 @@ export const buildLlmsTxt = async (
   }
   lines.push("");
 
+  // === Products Section ===
   if (settings.exposurePreferences.exposeProducts) {
+    lines.push(language === "English" ? "## Products (Top by AI GMV)" : "## 产品页（按 AI GMV 排序）");
     const rows = await prisma.orderProduct.findMany({
       where: { order: { shopDomain, aiSource: { not: null }, createdAt: { gte: range.start, lte: range.end } } },
       select: { url: true, price: true, quantity: true },
@@ -51,20 +184,61 @@ export const buildLlmsTxt = async (
       .sort((a, b) => b[1].gmv - a[1].gmv)
       .slice(0, topN)
       .map(([url]) => url);
-    lines.push(language === "English" ? "allow:" : "allow:");
-    top.forEach((url) => lines.push(`  - ${url}`));
+    
+    if (top.length > 0) {
+      lines.push("allow:");
+      top.forEach((url) => lines.push(`  - ${url}`));
+    } else {
+      lines.push(language === "English" 
+        ? "# No AI-driven product data found in the selected time range"
+        : "# 所选时间范围内未找到 AI 驱动的产品数据");
+    }
   } else {
     lines.push(language === "English" ? "# Product page exposure is disabled (exposeProducts=false)" : "# 未开启产品页暴露（exposeProducts=false）");
   }
+  lines.push("");
 
+  // === Collections Section ===
   if (settings.exposurePreferences.exposeCollections) {
-    lines.push(language === "English" ? "# Reserved: collections/categories list to be generated via Shopify API" : "# 预留：集合/分类页列表需通过 Shopify API 生成");
+    lines.push(language === "English" ? "## Collections" : "## 集合/分类页");
+    if (admin) {
+      const collections = await fetchCollections(admin, shopDomain, topN);
+      if (collections.length > 0) {
+        lines.push("allow:");
+        collections.forEach(({ url }) => lines.push(`  - ${url}`));
+      } else {
+        lines.push(language === "English" 
+          ? "# No collections found or API access unavailable"
+          : "# 未找到集合或 API 访问不可用");
+      }
+    } else {
+      lines.push(language === "English" 
+        ? "# Collections require API access (preview mode)"
+        : "# 集合列表需要 API 访问权限（预览模式）");
+    }
   } else {
     lines.push(language === "English" ? "# Collections exposure is disabled (exposeCollections=false)" : "# 未开启集合页暴露（exposeCollections=false）");
   }
+  lines.push("");
 
+  // === Blogs Section ===
   if (settings.exposurePreferences.exposeBlogs) {
-    lines.push(language === "English" ? "# Reserved: blog/content list to be generated via CMS/Shopify API" : "# 预留：博客/内容页列表需通过 CMS/Shopify API 生成");
+    lines.push(language === "English" ? "## Blog Articles" : "## 博客文章");
+    if (admin) {
+      const articles = await fetchArticles(admin, shopDomain, topN);
+      if (articles.length > 0) {
+        lines.push("allow:");
+        articles.forEach(({ url }) => lines.push(`  - ${url}`));
+      } else {
+        lines.push(language === "English" 
+          ? "# No blog articles found or API access unavailable"
+          : "# 未找到博客文章或 API 访问不可用");
+      }
+    } else {
+      lines.push(language === "English" 
+        ? "# Blog articles require API access (preview mode)"
+        : "# 博客列表需要 API 访问权限（预览模式）");
+    }
   } else {
     lines.push(language === "English" ? "# Blog/content exposure is disabled (exposeBlogs=false)" : "# 未开启博客页暴露（exposeBlogs=false）");
   }

@@ -37,12 +37,34 @@
 - 年 GMV 20-500 万美金、想评估 AI 助手带来 GMV/客单/新客表现的 DTC 品牌。
 - 需要验证“AI 流量是否值得持续投入”的增长负责人、数据分析师。
 
-## 功能概览（v0.1）
+## 功能概览（v0.2）
 - 数据接入：Shopify Admin API + orders/create webhook + 90 天补拉，自动更新。
 - AI 渠道识别：预置 referrer + UTM 规则，支持自定义域名/utm_source/utm_medium。
 - 仪表盘：AI GMV / 订单 / 新客、AOV、复购率，对比 Overall 与各渠道；展示数据更新时间与管道状态。
 - 调试视图：最近订单的 referrer / UTM / 解析结果，便于核验规则。
 - 写回与导出：可选的订单/客户标签写回，订单与产品榜单 CSV 导出。
+
+### 新增功能（v0.2）
+
+#### 🚀 AI 优化建议（AI Optimization）
+- **Schema.org 结构化数据检测**：分析产品页面的 Schema 标记完整度，生成优化建议
+- **内容质量评分**：评估产品描述、SEO 标题/描述的完整性
+- **FAQ 建议生成**：基于热销产品自动生成推荐的 FAQ 内容
+- **llms.txt 增强**：输出产品描述摘要、价格、分类等结构化信息
+
+#### 📊 漏斗归因分析（Funnel Analysis）
+- **完整漏斗可视化**：访问 → 加购 → 发起结账 → 完成订单
+- **转化率对比**：整体 vs AI 渠道的各阶段转化率
+- **放弃率分析**：购物车放弃率、结账放弃率追踪
+- **渠道细分**：按 ChatGPT/Perplexity/Gemini/Copilot 等渠道查看漏斗表现
+- **趋势数据**：每日漏斗指标变化
+
+#### 增强的 llms.txt
+- 产品描述摘要和价格信息
+- 产品分类和品牌信息
+- 推荐的 FAQ 问答对
+- 店铺政策页面链接
+- AI 可理解的 YAML 格式
 
 ## 默认识别规则（开箱即用）
 - **Referrer** 包含：`chat.openai.com`、`perplexity.ai`、`gemini.google.com`、`copilot.microsoft.com`。

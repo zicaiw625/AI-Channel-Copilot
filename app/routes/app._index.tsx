@@ -619,6 +619,12 @@ export default function Index() {
                 <Link to="/app/additional" className={styles.primaryButton}>
                   {uiLanguage === "English" ? "Settings / Rules & Export" : "设置 / 规则 & 导出"}
                 </Link>
+                <Link to="/app/optimization" className={styles.secondaryButton} style={{ background: "#635bff", color: "white", border: "none" }}>
+                  {uiLanguage === "English" ? "🚀 AI Optimization" : "🚀 AI 优化建议"}
+                </Link>
+                <Link to="/app/funnel" className={styles.secondaryButton}>
+                  {uiLanguage === "English" ? "📊 Funnel Analysis" : "📊 漏斗分析"}
+                </Link>
                 <Link to="/app/copilot" className={styles.secondaryButton}>
                   {uiLanguage === "English" ? "Copilot Q&A" : "Copilot 分析问答"}
                 </Link>

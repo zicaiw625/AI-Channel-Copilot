@@ -222,3 +222,124 @@ model ShopBillingState {
   @@index([shopDomain])
   @@unique([shopDomain, platform], map: "billing_shop_platform")
 }
+
+// ============================================================================
+// 漏斗归因扩展：Session, Checkout, FunnelEvent
+// ============================================================================
+
+model VisitorSession {
+  id               String    @id
+  shopDomain       String
+  platform         String    @default("shopify")
+  
+  // 访问信息
+  visitorId        String?
+  customerId       String?
+  startedAt        DateTime
+  landingPage      String?
+  referrer         String?
+  utmSource        String?
+  utmMedium        String?
+  utmCampaign      String?
+  
+  // AI 归因
+  aiSource         AiSource?
+  detectionSignals Json?
+  
+  // 漏斗状态
+  hasAddToCart       Boolean  @default(false)
+  hasCheckoutStarted Boolean  @default(false)
+  hasOrderCompleted  Boolean  @default(false)
+  
+  // 关联
+  checkoutId       String?
+  orderId          String?
+  
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([shopDomain])
+  @@index([shopDomain, platform])
+  @@index([shopDomain, startedAt])
+  @@index([aiSource])
+  @@index([customerId])
+}
+
+model Checkout {
+  id              String    @id
+  shopDomain      String
+  platform        String    @default("shopify")
+  
+  // Shopify checkout 信息
+  token           String?
+  cartToken       String?
+  email           String?
+  customerId      String?
+  
+  // 时间节点
+  createdAt       DateTime
+  updatedAt       DateTime  @updatedAt
+  completedAt     DateTime?
+  abandonedAt     DateTime?
+  
+  // 金额
+  totalPrice      Float     @default(0)
+  subtotalPrice   Float?
+  currency        String    @default("USD")
+  
+  // 归因信息
+  referrer        String?
+  landingPage     String?
+  utmSource       String?
+  utmMedium       String?
+  aiSource        AiSource?
+  detectionSignals Json?
+  
+  // 状态: open, completed, abandoned
+  status          String    @default("open")
+  
+  // 关联
+  orderId         String?
+  lineItemsCount  Int       @default(0)
+
+  @@index([shopDomain])
+  @@index([shopDomain, platform])
+  @@index([shopDomain, createdAt])
+  @@index([aiSource])
+  @@index([status])
+  @@index([customerId])
+}
+
+model FunnelEvent {
+  id            Int       @id @default(autoincrement())
+  shopDomain    String
+  platform      String    @default("shopify")
+  
+  // 事件类型: page_view, add_to_cart, checkout_started, checkout_completed, order_created
+  eventType     String
+  eventTime     DateTime
+  
+  // 关联 ID
+  sessionId     String?
+  checkoutId    String?
+  orderId       String?
+  customerId    String?
+  productId     String?
+  
+  // 归因
+  aiSource      AiSource?
+  referrer      String?
+  utmSource     String?
+  
+  // 元数据
+  metadata      Json?
+  
+  createdAt     DateTime  @default(now())
+
+  @@index([shopDomain])
+  @@index([shopDomain, eventType])
+  @@index([shopDomain, eventTime])
+  @@index([aiSource])
+  @@index([sessionId])
+  @@index([checkoutId])
+}

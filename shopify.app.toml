@@ -28,6 +28,14 @@ api_version = "2025-10"
   uri = "/webhooks/orders/updated"
 
   [[webhooks.subscriptions]]
+  topics = [ "checkouts/create" ]
+  uri = "/webhooks/checkouts/create"
+
+  [[webhooks.subscriptions]]
+  topics = [ "checkouts/update" ]
+  uri = "/webhooks/checkouts/update"
+
+  [[webhooks.subscriptions]]
   compliance_topics = [ "customers/data_request" ]
   uri = "/webhooks/customers/data_request"
 
@@ -45,7 +53,7 @@ api_version = "2025-10"
 
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-scopes = "read_orders,read_customers,read_products,write_orders,write_customers"
+scopes = "read_orders,read_customers,read_products,write_orders,write_customers,read_checkouts"
 
 [auth]
 redirect_urls = [

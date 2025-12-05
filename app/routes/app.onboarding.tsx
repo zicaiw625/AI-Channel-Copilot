@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { HeadersFunction, LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
 import { useLoaderData, useSearchParams, useActionData, Form, Link } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
@@ -138,9 +139,12 @@ export default function Onboarding() {
   // 托管定价模式：如果已有活跃订阅，直接进入应用
   // （Shopify 在安装时已处理订阅选择）
   
-  // 打开 Shopify 应用订阅管理页面
-  const openSubscriptionPage = () => {
-    window.open(`https://${shopDomain}/admin/settings/apps`, "_top");
+  // 显示升级说明模态框
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  
+  // 打开升级说明
+  const handleUpgradeClick = () => {
+    setShowUpgradeModal(true);
   };
   
   // 格式化货币
@@ -437,7 +441,7 @@ export default function Onboarding() {
                 ))}
               </ul>
               
-              {/* Free 计划使用表单提交，付费计划跳转到 Shopify */}
+              {/* Free 计划使用表单提交，付费计划显示升级说明 */}
               {isFree ? (
                 <Form method="post" replace>
                   <input type="hidden" name="intent" value="select_free" />
@@ -465,7 +469,7 @@ export default function Onboarding() {
               ) : (
                 <button
                   type="button"
-                  onClick={openSubscriptionPage}
+                  onClick={handleUpgradeClick}
                   disabled={disabled || isCurrentPlan}
                   data-action="onboarding-select-plan"
                   data-plan-id={plan.id}
@@ -496,6 +500,95 @@ export default function Onboarding() {
         })}
 
       </div>
+      
+      {/* 升级说明模态框 */}
+      {showUpgradeModal && (
+        <div style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: "rgba(0, 0, 0, 0.5)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 1000
+        }}>
+          <div style={{
+            background: "white",
+            borderRadius: 12,
+            padding: 24,
+            maxWidth: 480,
+            width: "90%",
+            boxShadow: "0 4px 24px rgba(0, 0, 0, 0.15)"
+          }}>
+            <h3 style={{ margin: "0 0 16px", fontSize: 18, fontWeight: 600 }}>
+              {en ? "How to Upgrade to Pro" : "如何升级到 Pro"}
+            </h3>
+            <div style={{ color: "#555", lineHeight: 1.6 }}>
+              <p style={{ margin: "0 0 12px" }}>
+                {en 
+                  ? "To upgrade to the Pro plan, please follow these steps:"
+                  : "要升级到 Pro 计划，请按以下步骤操作："}
+              </p>
+              <ol style={{ margin: "0 0 16px", paddingLeft: 20 }}>
+                <li style={{ marginBottom: 8 }}>
+                  {en 
+                    ? "Go to your Shopify Admin → Settings → Apps and sales channels"
+                    : "进入 Shopify 后台 → 设置 → 应用和销售渠道"}
+                </li>
+                <li style={{ marginBottom: 8 }}>
+                  {en 
+                    ? "Click on \"AI Channel Copilot\" in the app list"
+                    : "在应用列表中点击「AI Channel Copilot」"}
+                </li>
+                <li style={{ marginBottom: 8 }}>
+                  {en 
+                    ? "Click \"Manage plan\" or \"View plan\" to change your subscription"
+                    : "点击「管理计划」或「查看计划」来更改订阅"}
+                </li>
+              </ol>
+              <p style={{ margin: 0, fontSize: 13, color: "#888" }}>
+                {en 
+                  ? "Subscription is managed by Shopify for secure billing."
+                  : "订阅由 Shopify 托管管理，确保支付安全。"}
+              </p>
+            </div>
+            <div style={{ display: "flex", gap: 12, justifyContent: "flex-end", marginTop: 20 }}>
+              <button
+                type="button"
+                onClick={() => setShowUpgradeModal(false)}
+                style={{
+                  padding: "10px 20px",
+                  borderRadius: 6,
+                  border: "1px solid #ccc",
+                  background: "white",
+                  cursor: "pointer",
+                  fontSize: 14
+                }}
+              >
+                {en ? "Got it" : "知道了"}
+              </button>
+              <button
+                type="button"
+                onClick={() => window.open(`https://${shopDomain}/admin/settings/apps`, "_blank")}
+                style={{
+                  padding: "10px 20px",
+                  borderRadius: 6,
+                  border: "none",
+                  background: "#008060",
+                  color: "white",
+                  cursor: "pointer",
+                  fontSize: 14
+                }}
+              >
+                {en ? "Open Settings" : "打开设置"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

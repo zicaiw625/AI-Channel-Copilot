@@ -58,7 +58,7 @@ const FunnelChart = ({
       {stages.map((stage, index) => {
         const widthPercent = maxCount > 0 ? (stage.count / maxCount) * 100 : 0;
         const nextStage = stages[index + 1];
-        const dropoff = nextStage 
+        const dropoff = nextStage && stage.count > 0
           ? ((stage.count - nextStage.count) / stage.count * 100).toFixed(1)
           : null;
         
@@ -86,8 +86,9 @@ const FunnelChart = ({
                   left: 0,
                   top: 0,
                   height: "100%",
-                  width: `${Math.max(widthPercent, 2)}%`,
-                  background: `linear-gradient(90deg, #635bff ${widthPercent}%, #e0e0e0 ${widthPercent}%)`,
+                  width: `${widthPercent}%`,
+                  minWidth: widthPercent > 0 ? 8 : 0,
+                  background: "#635bff",
                   borderRadius: 8,
                   transition: "width 0.5s ease",
                 }}

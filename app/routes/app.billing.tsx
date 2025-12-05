@@ -75,17 +75,10 @@ export default function Billing() {
   const uiLanguage = useUILanguage(language);
   const en = uiLanguage === "English";
   
-  // 显示升级说明模态框
-  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
-  
-  // 打开升级说明
-  const handleUpgradeClick = () => {
-    setShowUpgradeModal(true);
-  };
-  
-  // 打开 Shopify 设置页面
-  const openShopifySettings = () => {
-    window.open(`https://${shopDomain}/admin/settings/apps`, "_blank");
+  // 打开 Shopify 应用管理页面
+  const openShopifyAppSettings = () => {
+    // 导航到商店的应用和销售渠道设置页面，用户可以在那里管理应用订阅
+    window.open(`https://${shopDomain}/admin/settings/apps`, "_top");
   };
   // 检查用户是否还没选择任何计划
   const hasNoPlan = currentPlan === "none";
@@ -217,10 +210,10 @@ export default function Billing() {
               
               <div style={{ display: "flex", gap: 12 }}>
                   {activePlanId === "free" ? (
-                    // 托管定价模式：显示升级说明
+                    // 托管定价模式：升级跳转到 Shopify 设置页面
                     <button 
                       type="button"
-                      onClick={handleUpgradeClick}
+                      onClick={openShopifyAppSettings}
                       disabled={demo}
                       data-action="billing-upgrade"
                       aria-label={en ? `Upgrade to ${BILLING_PLANS[PRIMARY_BILLABLE_PLAN_ID].name}` : `升级到 ${BILLING_PLANS[PRIMARY_BILLABLE_PLAN_ID].name}`}
@@ -238,10 +231,10 @@ export default function Billing() {
                     </button>
               ) : (
                  <>
-                    {/* 托管定价模式：显示管理说明 */}
+                    {/* 托管定价模式：管理订阅跳转到 Shopify 设置页面 */}
                      <button 
                         type="button"
-                        onClick={handleUpgradeClick}
+                        onClick={openShopifyAppSettings}
                         style={{ 
                             background: "white", 
                             color: "#333", 
@@ -369,10 +362,10 @@ export default function Billing() {
                     </button>
                   )
                 ) : (
-                  // 托管定价模式：付费计划显示升级说明
+                  // 托管定价模式：付费计划升级跳转到 Shopify 设置页面
                   <button
                     type="button"
-                    onClick={handleUpgradeClick}
+                    onClick={openShopifyAppSettings}
                     disabled={disabled}
                     data-action="billing-select-plan"
                     data-plan-id={plan.id}
@@ -468,95 +461,6 @@ export default function Billing() {
                 }}
               >
                 {en ? "Downgrade" : "确认降级"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      
-      {/* 升级说明模态框 */}
-      {showUpgradeModal && (
-        <div style={{
-          position: "fixed",
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: "rgba(0, 0, 0, 0.5)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          zIndex: 1000
-        }}>
-          <div style={{
-            background: "white",
-            borderRadius: 12,
-            padding: 24,
-            maxWidth: 480,
-            width: "90%",
-            boxShadow: "0 4px 24px rgba(0, 0, 0, 0.15)"
-          }}>
-            <h3 style={{ margin: "0 0 16px", fontSize: 18, fontWeight: 600 }}>
-              {en ? "How to Manage Your Subscription" : "如何管理订阅"}
-            </h3>
-            <div style={{ color: "#555", lineHeight: 1.6 }}>
-              <p style={{ margin: "0 0 12px" }}>
-                {en 
-                  ? "To upgrade or manage your subscription, please follow these steps:"
-                  : "要升级或管理订阅，请按以下步骤操作："}
-              </p>
-              <ol style={{ margin: "0 0 16px", paddingLeft: 20 }}>
-                <li style={{ marginBottom: 8 }}>
-                  {en 
-                    ? "Go to your Shopify Admin → Settings → Apps and sales channels"
-                    : "进入 Shopify 后台 → 设置 → 应用和销售渠道"}
-                </li>
-                <li style={{ marginBottom: 8 }}>
-                  {en 
-                    ? "Click on \"AI Channel Copilot\" in the app list"
-                    : "在应用列表中点击「AI Channel Copilot」"}
-                </li>
-                <li style={{ marginBottom: 8 }}>
-                  {en 
-                    ? "Click \"Manage plan\" or \"View plan\" to change your subscription"
-                    : "点击「管理计划」或「查看计划」来更改订阅"}
-                </li>
-              </ol>
-              <p style={{ margin: 0, fontSize: 13, color: "#888" }}>
-                {en 
-                  ? "Subscription is managed by Shopify for secure billing."
-                  : "订阅由 Shopify 托管管理，确保支付安全。"}
-              </p>
-            </div>
-            <div style={{ display: "flex", gap: 12, justifyContent: "flex-end", marginTop: 20 }}>
-              <button
-                type="button"
-                onClick={() => setShowUpgradeModal(false)}
-                style={{
-                  padding: "10px 20px",
-                  borderRadius: 6,
-                  border: "1px solid #ccc",
-                  background: "white",
-                  cursor: "pointer",
-                  fontSize: 14
-                }}
-              >
-                {en ? "Got it" : "知道了"}
-              </button>
-              <button
-                type="button"
-                onClick={openShopifySettings}
-                style={{
-                  padding: "10px 20px",
-                  borderRadius: 6,
-                  border: "none",
-                  background: "#008060",
-                  color: "white",
-                  cursor: "pointer",
-                  fontSize: 14
-                }}
-              >
-                {en ? "Open Settings" : "打开设置"}
               </button>
             </div>
           </div>

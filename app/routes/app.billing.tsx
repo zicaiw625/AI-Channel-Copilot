@@ -8,9 +8,13 @@ import { readAppFlags } from "../lib/env.server";
 import { getSettings, syncShopPreferences } from "../lib/settings.server";
 import {
   detectAndPersistDevShop,
+  computeIsTestMode,
+  requestSubscription,
+  calculateRemainingTrialDays,
   activateFreePlan,
+  getActiveSubscriptionDetails,
+  cancelSubscription,
   getBillingState,
-  syncSubscriptionFromShopify,
 } from "../lib/billing.server";
 import { getEffectivePlan, type PlanTier } from "../lib/access.server";
 import { BILLING_PLANS, PRIMARY_BILLABLE_PLAN_ID, type PlanId } from "../lib/billing/plans";
@@ -39,14 +43,20 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     try {
       settings = await syncShopPreferences(admin, shopDomain, settings);
       await detectAndPersistDevShop(admin, shopDomain);
-      // 托管定价模式：从 Shopify 同步订阅状态
-      await syncSubscriptionFromShopify(admin, shopDomain);
     } catch (e) {
       console.warn("Admin operations failed in billing:", (e as Error).message);
     }
   }
   
   const planTier = await getEffectivePlan(shopDomain);
+  const trialEntries = await Promise.all(
+    (Object.keys(BILLING_PLANS) as PlanId[]).map(async (planId) => {
+      const plan = BILLING_PLANS[planId];
+      const remaining = plan.trialSupported ? await calculateRemainingTrialDays(shopDomain, planId) : 0;
+      return [planId, remaining] as const;
+    }),
+  );
+  const trialMap = Object.fromEntries(trialEntries) as Record<PlanId, number>;
   const language = settings.languages[0] || "中文";
   
   // Get billing state for trial end date
@@ -61,6 +71,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         .filter((plan) => plan.status === "live") // 只显示已上线的计划
         .map((plan) => ({
           ...plan,
+          remainingTrialDays: trialMap[plan.id] || 0,
         })), 
       shopDomain, 
       demo,
@@ -87,13 +98,8 @@ export default function Billing() {
     plan === "pro" || plan === "growth" || plan === "free" ? plan : "free";
   const activePlanId = normalizePlanId(currentPlan);
   const activePlan = plans.find((plan) => plan.id === activePlanId) ?? plans[0];
-  const priceLabel = activePlan?.priceUsd === 0 ? "$0" : `$${activePlan?.priceUsd || 0}`;
-  
-  // 计算剩余试用天数
-  const remainingTrialDays = trialEndDate 
-    ? Math.max(0, Math.ceil((new Date(trialEndDate).getTime() - Date.now()) / (24 * 60 * 60 * 1000)))
-    : 0;
-  const showTrialBanner = isTrialing && remainingTrialDays > 0 && !hasNoPlan;
+  const priceLabel = activePlan.priceUsd === 0 ? "$0" : `$${activePlan.priceUsd}`;
+  const showTrialBanner = isTrialing && activePlan.remainingTrialDays > 0 && !hasNoPlan;
   
   // Modal state for downgrade confirmation
   const [showDowngradeModal, setShowDowngradeModal] = useState(false);
@@ -195,8 +201,8 @@ export default function Billing() {
                 }}>
                   <div style={{ fontWeight: 500 }}>
                     ✨ {en
-                      ? `Enjoying your Pro trial · ${remainingTrialDays} day${remainingTrialDays === 1 ? '' : 's'} remaining`
-                      : `正在体验 Pro 全部功能 · 剩余 ${remainingTrialDays} 天`}
+                      ? `Enjoying your Pro trial · ${activePlan.remainingTrialDays} day${activePlan.remainingTrialDays === 1 ? '' : 's'} remaining`
+                      : `正在体验 Pro 全部功能 · 剩余 ${activePlan.remainingTrialDays} 天`}
                   </div>
                   {formattedTrialEndDate && (
                     <div style={{ fontSize: 12, marginTop: 4, color: "#637381" }}>
@@ -210,28 +216,31 @@ export default function Billing() {
               
               <div style={{ display: "flex", gap: 12 }}>
                   {activePlanId === "free" ? (
-                    // 托管定价模式：升级跳转到 Shopify 设置页面
-                    <button 
-                      type="button"
-                      onClick={openShopifyAppSettings}
-                      disabled={demo}
-                      data-action="billing-upgrade"
-                      aria-label={en ? `Upgrade to ${BILLING_PLANS[PRIMARY_BILLABLE_PLAN_ID].name}` : `升级到 ${BILLING_PLANS[PRIMARY_BILLABLE_PLAN_ID].name}`}
-                      style={{ 
-                          background: "#008060", 
-                          color: "white", 
-                          border: "none", 
-                          padding: "10px 20px", 
-                          borderRadius: 4, 
-                          cursor: demo ? "not-allowed" : "pointer", 
-                          fontSize: 16
-                      }}
-                    >
-                      {en ? `Upgrade to ${BILLING_PLANS[PRIMARY_BILLABLE_PLAN_ID].name}` : `升级到 ${BILLING_PLANS[PRIMARY_BILLABLE_PLAN_ID].name}`}
-                    </button>
+                <Form method="post" replace>
+                  <input type="hidden" name="intent" value="upgrade" />
+                  <input type="hidden" name="planId" value={PRIMARY_BILLABLE_PLAN_ID} />
+                  <input type="hidden" name="shop" value={shopDomain} />
+                  <button 
+                    type="submit"
+                    disabled={demo}
+                    data-action="billing-upgrade"
+                    aria-label={en ? `Upgrade to ${BILLING_PLANS[PRIMARY_BILLABLE_PLAN_ID].name}` : `升级到 ${BILLING_PLANS[PRIMARY_BILLABLE_PLAN_ID].name}`}
+                    style={{ 
+                        background: "#008060", 
+                        color: "white", 
+                        border: "none", 
+                        padding: "10px 20px", 
+                        borderRadius: 4, 
+                        cursor: "pointer", 
+                        fontSize: 16
+                    }}
+                  >
+                    {en ? `Upgrade to ${BILLING_PLANS[PRIMARY_BILLABLE_PLAN_ID].name}` : `升级到 ${BILLING_PLANS[PRIMARY_BILLABLE_PLAN_ID].name}`}
+                  </button>
+                </Form>
               ) : (
                  <>
-                    {/* 托管定价模式：管理订阅跳转到 Shopify 设置页面 */}
+                    {/* For paid plans, send them to Shopify app settings */}
                      <button 
                         type="button"
                         onClick={openShopifyAppSettings}
@@ -253,16 +262,16 @@ export default function Billing() {
                        onClick={handleDowngradeClick}
                        disabled={demo}
                        data-action="billing-downgrade"
-                       aria-label={en ? "Switch to Free" : "切换到免费版"}
+                       aria-label={en ? "Downgrade to Free" : "降级到免费版"}
                        style={{
                            background: "none",
                            border: "none",
                            color: "#d4380d",
-                           cursor: demo ? "not-allowed" : "pointer",
+                           cursor: "pointer",
                            textDecoration: "underline"
                        }}
                      >
-                         {en ? "Switch to Free" : "切换到免费版"}
+                         {en ? "Downgrade to Free" : "降级到免费版"}
                      </button>
                  </>
               )}
@@ -362,33 +371,36 @@ export default function Billing() {
                     </button>
                   )
                 ) : (
-                  // 托管定价模式：付费计划升级跳转到 Shopify 设置页面
-                  <button
-                    type="button"
-                    onClick={openShopifyAppSettings}
-                    disabled={disabled}
-                    data-action="billing-select-plan"
-                    data-plan-id={plan.id}
-                    aria-label={
-                      isActive
+                  <Form method="post" replace>
+                    <input type="hidden" name="intent" value="upgrade" />
+                    <input type="hidden" name="planId" value={plan.id} />
+                    <input type="hidden" name="shop" value={shopDomain} />
+                    <button
+                      type="submit"
+                      disabled={disabled}
+                      data-action="billing-select-plan"
+                      data-plan-id={plan.id}
+                      aria-label={
+                        isActive
+                          ? (en ? "Current Plan" : "当前方案")
+                          : (en ? `Switch to ${plan.name}` : `切换到 ${plan.name}`)
+                      }
+                      style={{
+                        width: "100%",
+                        padding: "10px",
+                        marginTop: 8,
+                        background: disabled ? "#f5f5f5" : "#008060",
+                        color: disabled ? "#999" : "white",
+                        border: "none",
+                        borderRadius: 4,
+                        cursor: disabled ? "not-allowed" : "pointer",
+                      }}
+                    >
+                      {isActive
                         ? (en ? "Current Plan" : "当前方案")
-                        : (en ? `Upgrade to ${plan.name}` : `升级到 ${plan.name}`)
-                    }
-                    style={{
-                      width: "100%",
-                      padding: "10px",
-                      marginTop: 8,
-                      background: disabled ? "#f5f5f5" : "#008060",
-                      color: disabled ? "#999" : "white",
-                      border: "none",
-                      borderRadius: 4,
-                      cursor: disabled ? "not-allowed" : "pointer",
-                    }}
-                  >
-                    {isActive
-                      ? (en ? "Current Plan" : "当前方案")
-                      : (en ? `Upgrade to ${plan.name}` : `升级到 ${plan.name}`)}
-                  </button>
+                        : (en ? `Switch to ${plan.name}` : `切换到 ${plan.name}`)}
+                    </button>
+                  </Form>
                 )}
               </div>
             );
@@ -478,11 +490,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const demo = readAppFlags().demoMode;
   if (demo) return Response.json({ ok: false, message: "Demo mode" });
   
+  let admin: Awaited<ReturnType<typeof authenticate.admin>>["admin"] | null = null;
   let session: Awaited<ReturnType<typeof authenticate.admin>>["session"] | null = null;
   let shopDomain = "";
 
   try {
     const auth = await authenticate.admin(request);
+    admin = auth.admin;
     session = auth.session;
     shopDomain = session?.shop || "";
   } catch (authError) {
@@ -509,16 +523,45 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const formData = await request.formData();
     const intent = formData.get("intent");
 
-    // 托管定价模式：只处理 Free 计划的激活
-    // 付费计划的订阅和取消通过 Shopify 管理
+    // 处理首次选择 Free 计划（用户还没选择任何计划时）
     if (intent === "select_free") {
       await activateFreePlan(shopDomain);
       return Response.json({ ok: true });
     }
 
-    // 降级到 Free（用户主动切换，不通过 Shopify 取消订阅）
-    // 注意：托管定价模式下，这只是在本地标记为 Free，实际订阅需要用户在 Shopify 中取消
+    if (intent === "upgrade") {
+      const planId = (formData.get("planId") as PlanId) || PRIMARY_BILLABLE_PLAN_ID;
+      const plan = BILLING_PLANS[planId];
+      if (!plan) return Response.json({ ok: false, message: "Unknown plan" }, { status: 400 });
+      if (plan.status !== "live") return Response.json({ ok: false, message: "Plan unavailable" }, { status: 400 });
+      if (plan.priceUsd === 0) {
+        await activateFreePlan(shopDomain);
+        return Response.json({ ok: true });
+      }
+      const isTest = await computeIsTestMode(shopDomain);
+      const currentState = await getBillingState(shopDomain);
+      const isUpgradeFromPaid = currentState?.billingState?.includes("ACTIVE") && currentState?.billingPlan !== "free" && currentState?.billingPlan !== "NO_PLAN";
+      const trialDays = isUpgradeFromPaid ? 0 : await calculateRemainingTrialDays(shopDomain, planId);
+      const confirmationUrl = await requestSubscription(admin!, shopDomain, planId, isTest, trialDays);
+      if (confirmationUrl) {
+        const next = new URL("/app/redirect", new URL(request.url).origin);
+        next.searchParams.set("to", confirmationUrl);
+        throw new Response(null, { status: 302, headers: { Location: next.toString() } });
+      }
+      return Response.json({ ok: false, message: "Failed to create subscription. confirmationUrl is missing." });
+    }
+
     if (intent === "downgrade") {
+      const paidPlans = Object.values(BILLING_PLANS).filter((plan) => plan.priceUsd > 0);
+      let activeDetails: { id: string; planId: PlanId } | null = null;
+      for (const plan of paidPlans) {
+        const details = await getActiveSubscriptionDetails(admin!, plan.shopifyName);
+        if (details?.id) { activeDetails = { id: details.id, planId: plan.id }; break; }
+      }
+      if (activeDetails) {
+        try { await cancelSubscription(admin!, activeDetails.id, true); }
+        catch { return Response.json({ ok: false, message: "Failed to cancel subscription in Shopify." }, { status: 500 }); }
+      }
       await activateFreePlan(shopDomain);
       return Response.json({ ok: true });
     }

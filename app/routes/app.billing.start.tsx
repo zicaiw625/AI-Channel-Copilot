@@ -1,37 +1,34 @@
 import type { HeadersFunction, ActionFunctionArgs } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
-import { authenticate } from "../shopify.server";
+import { authenticate, BILLING_PLAN } from "../shopify.server";
+import { requireEnv } from "../lib/env.server";
+import { computeIsTestMode } from "../lib/billing.server";
 import { isDemoMode } from "../lib/runtime.server";
 
-/**
- * 托管定价模式下，此路由已弃用
- * 订阅管理通过 Shopify 设置页面进行
- */
 export const action = async ({ request }: ActionFunctionArgs) => {
   const demo = isDemoMode();
   
+  // Demo 模式下，订阅功能不可用
   if (demo) {
     return Response.json({
       ok: false,
-      message: "Demo mode: billing is disabled.",
+      message: "Demo mode: billing is disabled. Install the app in a real Shopify store to subscribe.",
     });
   }
   
   try {
-    const { session } = await authenticate.admin(request);
+    const { billing, session } = await authenticate.admin(request);
     const shopDomain = session?.shop || "";
-    
-    // 托管定价模式：引导用户去 Shopify 设置页面
-    return Response.json({
-      ok: false,
-      message: "Managed Pricing mode: Please manage your subscription in Shopify settings.",
-      redirectUrl: `https://${shopDomain}/admin/settings/apps`,
-    });
+    const isTest = await computeIsTestMode(shopDomain);
+    const appUrl = requireEnv("SHOPIFY_APP_URL");
+    await billing.request({ plan: BILLING_PLAN as any, isTest, returnUrl: `${appUrl}/app/billing/confirm` });
+    return null;
   } catch (error) {
     if (error instanceof Response) throw error;
+    // 返回错误消息给 UI，而不是静默失败
     return Response.json({
       ok: false,
-      message: "Action failed. Please try again.",
+      message: "Failed to start subscription. Please try again.",
     });
   }
 };

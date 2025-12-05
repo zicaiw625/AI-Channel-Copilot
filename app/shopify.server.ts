@@ -2,15 +2,19 @@ import "@shopify/shopify-app-react-router/adapters/node";
 import {
   ApiVersion,
   AppDistribution,
+  BillingInterval,
   shopifyApp,
 } from "@shopify/shopify-app-react-router/server";
 import { PrismaSessionStorage } from "@shopify/shopify-app-session-storage-prisma";
 import prisma from "./db.server";
 import { readCriticalEnv, getAppConfig } from "./lib/env.server";
 import { runStartupSelfCheck } from "./lib/selfcheck.server";
+import { BILLING_PLANS, PRIMARY_BILLABLE_PLAN_ID } from "./lib/billing/plans";
 
 const { SHOPIFY_API_KEY: apiKey, SHOPIFY_API_SECRET: apiSecretKey, SHOPIFY_APP_URL: appUrl, SCOPES: scopes } =
   readCriticalEnv();
+
+const primaryPlan = BILLING_PLANS[PRIMARY_BILLABLE_PLAN_ID];
 
 const resolveCustomShopDomains = () => {
   const customDomainsEnv = process.env.SHOP_CUSTOM_DOMAIN;
@@ -32,10 +36,9 @@ const resolveCustomShopDomains = () => {
 
 const appCfg = getAppConfig();
 const customShopDomains = resolveCustomShopDomains();
-
-// 使用托管定价 (Managed Pricing) - 不在代码中配置 billing
-// 定价计划在 Shopify Partner Dashboard 中配置
-// 参考: https://shopify.dev/docs/apps/billing/managed-pricing
+export const MONTHLY_PLAN = appCfg.billing.planName;
+export type BillingPlanKey = keyof ShopifyAppConfig["billing"];
+export const BILLING_PLAN: BillingPlanKey = MONTHLY_PLAN as BillingPlanKey;
 
 const appApiVersion = ApiVersion.October25;
 
@@ -48,7 +51,18 @@ const appConfig = {
   authPathPrefix: "/auth",
   sessionStorage: new PrismaSessionStorage(prisma),
   distribution: AppDistribution.AppStore,
-  // billing 配置已移除 - 使用 Shopify 托管定价
+  billing: {
+    [MONTHLY_PLAN]: {
+      lineItems: [
+        {
+          amount: appCfg.billing.amount,
+          currencyCode: appCfg.billing.currencyCode,
+          interval: appCfg.billing.interval === "ANNUAL" ? BillingInterval.Annual : BillingInterval.Every30Days,
+        },
+      ],
+      trialDays: appCfg.billing.trialDays,
+    },
+  } as any,
   ...(customShopDomains.length ? { customShopDomains } : {}),
 };
 
@@ -64,3 +78,4 @@ export const unauthenticated = shopify.unauthenticated;
 export const login = shopify.login;
 export const registerWebhooks = shopify.registerWebhooks;
 export const sessionStorage = shopify.sessionStorage;
+export type ShopifyAppConfig = typeof appConfig;

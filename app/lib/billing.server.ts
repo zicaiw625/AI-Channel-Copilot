@@ -6,7 +6,6 @@ import { logger } from "./logger.server";
 import {
   PRIMARY_BILLABLE_PLAN_ID,
   getPlanConfig,
-  resolvePlanByShopifyName,
   type PlanConfig,
   type PlanId,
 } from "./billing/plans";
@@ -436,103 +435,6 @@ export const hasActiveSubscription = async (
   };
   const subs = json.data?.currentAppInstallation?.activeSubscriptions || [];
   return subs.some((s) => s.name === planName && s.status === "ACTIVE");
-};
-
-/**
- * 从 Shopify 同步订阅状态（用于托管定价模式）
- * 查询 currentAppInstallation.activeSubscriptions 获取当前订阅
- */
-export const syncSubscriptionFromShopify = async (
-  admin: AdminGraphqlClient,
-  shopDomain: string,
-): Promise<{ synced: boolean; planId: PlanId | null; status: string | null }> => {
-  const sdk = createGraphqlSdk(admin, shopDomain);
-  const QUERY = `#graphql
-    query ActiveSubscriptionsForSync {
-      currentAppInstallation {
-        activeSubscriptions {
-          id
-          name
-          status
-          trialDays
-          currentPeriodEnd
-        }
-      }
-    }
-  `;
-  
-  try {
-    const resp = await sdk.request("activeSubscriptionsSync", QUERY, {});
-    if (!resp.ok) {
-      logger.warn("syncSubscriptionFromShopify: GraphQL request failed", { shopDomain });
-      return { synced: false, planId: null, status: null };
-    }
-    
-    const json = (await resp.json()) as {
-      data?: {
-        currentAppInstallation?: {
-          activeSubscriptions?: Array<{
-            id: string;
-            name: string;
-            status: string;
-            trialDays?: number | null;
-            currentPeriodEnd?: string | null;
-          }>;
-        };
-      };
-    };
-    
-    const subs = json.data?.currentAppInstallation?.activeSubscriptions || [];
-    
-    // 查找活跃的订阅
-    const activeSub = subs.find((s) => s.status === "ACTIVE");
-    
-    if (!activeSub) {
-      // 没有活跃订阅
-      const currentState = await getBillingState(shopDomain);
-      // 如果之前有付费订阅，标记为过期
-      if (currentState?.hasEverSubscribed && currentState.billingPlan !== "free") {
-        await setSubscriptionExpiredState(shopDomain, toPlanId(currentState.billingPlan), "EXPIRED");
-      }
-      return { synced: true, planId: null, status: null };
-    }
-    
-    // 根据订阅名称解析计划
-    const plan = resolvePlanByShopifyName(activeSub.name);
-    if (!plan) {
-      logger.warn("syncSubscriptionFromShopify: Unknown plan name", { 
-        shopDomain, 
-        planName: activeSub.name 
-      });
-      return { synced: false, planId: null, status: activeSub.status };
-    }
-    
-    const isInTrial = (activeSub.trialDays ?? 0) > 0;
-    
-    if (isInTrial && plan.trialSupported) {
-      const trialEnd = activeSub.currentPeriodEnd 
-        ? new Date(activeSub.currentPeriodEnd) 
-        : null;
-      await setSubscriptionTrialState(shopDomain, plan.id, trialEnd, activeSub.status);
-    } else {
-      await setSubscriptionActiveState(shopDomain, plan.id, activeSub.status);
-    }
-    
-    logger.info("syncSubscriptionFromShopify: Subscription synced", {
-      shopDomain,
-      planId: plan.id,
-      status: activeSub.status,
-      isInTrial,
-    });
-    
-    return { synced: true, planId: plan.id, status: activeSub.status };
-  } catch (error) {
-    logger.error("syncSubscriptionFromShopify: Error", { 
-      shopDomain, 
-      error: (error as Error).message 
-    });
-    return { synced: false, planId: null, status: null };
-  }
 };
 
 export const getActiveSubscriptionDetails = async (

@@ -8,9 +8,20 @@ import { useNonce } from "../../lib/nonce";
 
 import { login } from "../../shopify.server";
 import { loginErrorMessage } from "./error.server";
-import { requireEnv } from "../../lib/env.server";
+import { requireEnv, isProduction } from "../../lib/env.server";
+
+/**
+ * 生产环境禁止访问此页面
+ * Shopify 上架要求：应用不得在安装或配置流程中要求商家手动输入 myshopify.com 或店铺域名
+ */
+const rejectInProduction = () => {
+  if (isProduction()) {
+    throw new Response("Not Found", { status: 404 });
+  }
+};
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
+  rejectInProduction();
   const result = await login(request);
   if (result instanceof Response) throw result;
   const errors = loginErrorMessage(result);
@@ -20,6 +31,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
+  rejectInProduction();
   const result = await login(request);
   if (result instanceof Response) throw result;
   const errors = loginErrorMessage(result);

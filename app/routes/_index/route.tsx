@@ -2,7 +2,7 @@ import type { LoaderFunctionArgs } from "react-router";
 import { redirect, Form, useLoaderData } from "react-router";
 
 import styles from "../../styles/index.module.css";
-import { readAppFlags } from "../../lib/env.server";
+import { readAppFlags, isProduction } from "../../lib/env.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const url = new URL(request.url);
@@ -12,7 +12,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   }
 
   const language = url.searchParams.get("lang") === "en" ? "English" : "中文";
-  const showForm = readAppFlags().enableLoginForm;
+  // 生产环境强制隐藏表单，避免 Shopify 审核风险
+  // Shopify 要求：应用不得在安装或配置流程中要求商家手动输入 myshopify.com 或店铺域名
+  const showForm = !isProduction() && readAppFlags().enableLoginForm;
   return { showForm, language };
 };
 

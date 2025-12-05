@@ -20,7 +20,7 @@ services:
       - key: SCOPES
         value: read_orders,read_customers,read_products,write_orders,write_customers
       - key: ENABLE_LOGIN_FORM
-        value: true
+        value: false
       - key: BILLING_PLAN_NAME
         value: AI Copilot Pro
       - key: BILLING_PRICE

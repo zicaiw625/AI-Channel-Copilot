@@ -380,7 +380,7 @@ export async function getFunnelData(
         label: isEnglish ? "Visits" : "访问",
         count: visits,
         value: 0,
-        conversionRate: 1,
+        conversionRate: visits > 0 ? 1 : 0, // 当没有访问时显示 0% 而不是 100%
         dropoffRate: 0,
       },
       {

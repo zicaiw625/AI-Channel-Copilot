@@ -46,6 +46,28 @@ const FunnelChart = ({
 }) => {
   const isEnglish = language === "English";
   
+  // 检查是否有数据
+  const hasData = stages.some(s => s.count > 0);
+  
+  if (!hasData) {
+    return (
+      <div style={{ 
+        padding: "40px 20px", 
+        textAlign: "center",
+        color: "#637381",
+      }}>
+        <p style={{ margin: 0, fontSize: 14 }}>
+          {isEnglish ? "No data available for this period" : "该时间段内暂无数据"}
+        </p>
+        <p style={{ margin: "8px 0 0", fontSize: 12, color: "#919eab" }}>
+          {isEnglish 
+            ? "Data will appear once orders are received" 
+            : "收到订单后数据将自动更新"}
+        </p>
+      </div>
+    );
+  }
+  
   return (
     <div style={{ padding: "20px 0" }}>
       {stages.map((stage, index) => {
@@ -326,80 +348,92 @@ export default function FunnelAnalysis() {
               </div>
             </div>
             
-            <div style={{ padding: "20px 0" }}>
-              {/* 加购放弃 */}
-              <div style={{ marginBottom: 24 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                  <span style={{ fontWeight: 600, fontSize: 14 }}>
-                    {isEnglish ? "Cart Abandonment" : "加购放弃率"}
-                  </span>
-                  <span style={{ color: "#de3618", fontWeight: 600 }}>
-                    {(funnelData.abandonment.cartAbandonment * 100).toFixed(1)}%
-                  </span>
+            {maxCount === 0 ? (
+              <div style={{ 
+                padding: "40px 20px", 
+                textAlign: "center",
+                color: "#637381",
+              }}>
+                <p style={{ margin: 0, fontSize: 14 }}>
+                  {isEnglish ? "No data available for this period" : "该时间段内暂无数据"}
+                </p>
+              </div>
+            ) : (
+              <div style={{ padding: "20px 0" }}>
+                {/* 加购放弃 */}
+                <div style={{ marginBottom: 24 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                    <span style={{ fontWeight: 600, fontSize: 14 }}>
+                      {isEnglish ? "Cart Abandonment" : "加购放弃率"}
+                    </span>
+                    <span style={{ color: "#de3618", fontWeight: 600 }}>
+                      {(funnelData.abandonment.cartAbandonment * 100).toFixed(1)}%
+                    </span>
+                  </div>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <div style={{ flex: 1, height: 8, background: "#f4f6f8", borderRadius: 4, overflow: "hidden" }}>
+                      <div
+                        style={{
+                          width: `${funnelData.abandonment.cartAbandonment * 100}%`,
+                          height: "100%",
+                          background: "#de3618",
+                        }}
+                      />
+                    </div>
+                    <span style={{ fontSize: 12, color: "#635bff" }}>
+                      AI: {(funnelData.abandonment.aiCartAbandonment * 100).toFixed(1)}%
+                    </span>
+                  </div>
                 </div>
-                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <div style={{ flex: 1, height: 8, background: "#f4f6f8", borderRadius: 4, overflow: "hidden" }}>
+                
+                {/* 结账放弃 */}
+                <div style={{ marginBottom: 24 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                    <span style={{ fontWeight: 600, fontSize: 14 }}>
+                      {isEnglish ? "Checkout Abandonment" : "结账放弃率"}
+                    </span>
+                    <span style={{ color: "#f4a623", fontWeight: 600 }}>
+                      {(funnelData.abandonment.checkoutAbandonment * 100).toFixed(1)}%
+                    </span>
+                  </div>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <div style={{ flex: 1, height: 8, background: "#f4f6f8", borderRadius: 4, overflow: "hidden" }}>
+                      <div
+                        style={{
+                          width: `${funnelData.abandonment.checkoutAbandonment * 100}%`,
+                          height: "100%",
+                          background: "#f4a623",
+                        }}
+                      />
+                    </div>
+                    <span style={{ fontSize: 12, color: "#635bff" }}>
+                      AI: {(funnelData.abandonment.aiCheckoutAbandonment * 100).toFixed(1)}%
+                    </span>
+                  </div>
+                </div>
+                
+                {/* 总体放弃 */}
+                <div>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                    <span style={{ fontWeight: 600, fontSize: 14 }}>
+                      {isEnglish ? "Total Abandonment" : "总体流失率"}
+                    </span>
+                    <span style={{ color: "#637381", fontWeight: 600 }}>
+                      {(funnelData.abandonment.totalAbandonment * 100).toFixed(1)}%
+                    </span>
+                  </div>
+                  <div style={{ height: 8, background: "#f4f6f8", borderRadius: 4, overflow: "hidden" }}>
                     <div
                       style={{
-                        width: `${funnelData.abandonment.cartAbandonment * 100}%`,
+                        width: `${funnelData.abandonment.totalAbandonment * 100}%`,
                         height: "100%",
-                        background: "#de3618",
+                        background: "#637381",
                       }}
                     />
                   </div>
-                  <span style={{ fontSize: 12, color: "#635bff" }}>
-                    AI: {(funnelData.abandonment.aiCartAbandonment * 100).toFixed(1)}%
-                  </span>
                 </div>
               </div>
-              
-              {/* 结账放弃 */}
-              <div style={{ marginBottom: 24 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                  <span style={{ fontWeight: 600, fontSize: 14 }}>
-                    {isEnglish ? "Checkout Abandonment" : "结账放弃率"}
-                  </span>
-                  <span style={{ color: "#f4a623", fontWeight: 600 }}>
-                    {(funnelData.abandonment.checkoutAbandonment * 100).toFixed(1)}%
-                  </span>
-                </div>
-                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <div style={{ flex: 1, height: 8, background: "#f4f6f8", borderRadius: 4, overflow: "hidden" }}>
-                    <div
-                      style={{
-                        width: `${funnelData.abandonment.checkoutAbandonment * 100}%`,
-                        height: "100%",
-                        background: "#f4a623",
-                      }}
-                    />
-                  </div>
-                  <span style={{ fontSize: 12, color: "#635bff" }}>
-                    AI: {(funnelData.abandonment.aiCheckoutAbandonment * 100).toFixed(1)}%
-                  </span>
-                </div>
-              </div>
-              
-              {/* 总体放弃 */}
-              <div>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                  <span style={{ fontWeight: 600, fontSize: 14 }}>
-                    {isEnglish ? "Total Abandonment" : "总体流失率"}
-                  </span>
-                  <span style={{ color: "#637381", fontWeight: 600 }}>
-                    {(funnelData.abandonment.totalAbandonment * 100).toFixed(1)}%
-                  </span>
-                </div>
-                <div style={{ height: 8, background: "#f4f6f8", borderRadius: 4, overflow: "hidden" }}>
-                  <div
-                    style={{
-                      width: `${funnelData.abandonment.totalAbandonment * 100}%`,
-                      height: "100%",
-                      background: "#637381",
-                    }}
-                  />
-                </div>
-              </div>
-            </div>
+            )}
             
             <p className={styles.helpText}>
               {isEnglish

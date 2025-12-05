@@ -369,7 +369,7 @@ export default function AIOptimization() {
               <SuggestionCard
                 key={suggestion.id}
                 suggestion={suggestion}
-                language={uiLanguage}
+                language={language}
                 expanded={expandedSuggestions.has(suggestion.id)}
                 onToggle={() => toggleSuggestion(suggestion.id)}
               />
@@ -393,7 +393,7 @@ export default function AIOptimization() {
               <SuggestionCard
                 key={suggestion.id}
                 suggestion={suggestion}
-                language={uiLanguage}
+                language={language}
                 expanded={expandedSuggestions.has(suggestion.id)}
                 onToggle={() => toggleSuggestion(suggestion.id)}
               />

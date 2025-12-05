@@ -358,7 +358,7 @@ function generateSuggestions(
 }
 </script>`,
       affectedProducts: products.filter(p => p.schemaMarkupStatus === "missing").map(p => p.productId),
-      estimatedLift: "+15-25% AI visibility",
+      estimatedLift: isEnglish ? "+15-25% AI visibility" : "+15-25% AI 可见性",
     });
   }
   
@@ -378,7 +378,7 @@ function generateSuggestions(
         ? "Review and add missing fields like reviews, brand, SKU, and detailed specifications."
         : "检查并添加缺失字段，如评论、品牌、SKU 和详细规格。",
       affectedProducts: products.filter(p => p.schemaMarkupStatus === "partial").map(p => p.productId),
-      estimatedLift: "+10-15% AI visibility",
+      estimatedLift: isEnglish ? "+10-15% AI visibility" : "+10-15% AI 可见性",
     });
   }
   
@@ -400,7 +400,7 @@ function generateSuggestions(
         ? "Add detailed product descriptions including features, benefits, use cases, and specifications."
         : "添加详细的产品描述，包括功能、优势、使用场景和规格。",
       affectedProducts: products.filter(p => p.descriptionLength < 100).map(p => p.productId),
-      estimatedLift: "+30-50% AI recommendations",
+      estimatedLift: isEnglish ? "+30-50% AI recommendations" : "+30-50% AI 推荐率",
     });
   }
   
@@ -420,7 +420,7 @@ function generateSuggestions(
       action: isEnglish
         ? "Create FAQ pages for top-selling products covering pricing, shipping, returns, and product features."
         : "为热销产品创建 FAQ 页面，涵盖价格、发货、退换货和产品特点。",
-      estimatedLift: "+20-40% AI traffic",
+      estimatedLift: isEnglish ? "+20-40% AI traffic" : "+20-40% AI 流量",
     });
   }
   
@@ -440,7 +440,7 @@ function generateSuggestions(
       action: isEnglish
         ? "Enable all content types in llms.txt settings and ensure top AI GMV products are prominently listed."
         : "在 llms.txt 设置中启用所有内容类型，并确保 AI GMV 最高的产品被优先列出。",
-      estimatedLift: "+10-20% AI discovery",
+      estimatedLift: isEnglish ? "+10-20% AI discovery" : "+10-20% AI 发现率",
     });
   }
   

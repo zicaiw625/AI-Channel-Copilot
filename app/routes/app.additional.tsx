@@ -15,6 +15,7 @@ import {
 } from "../lib/aiData";
 import { fetchOrdersForRange } from "../lib/shopifyOrders.server";
 import { getSettings, markActivity, normalizeSettingsPayload, saveSettings, syncShopPreferences } from "../lib/settings.server";
+import { buildLlmsTxt, updateLlmsTxtCache } from "../lib/llms.server";
 import { getDeadLetterJobs, getWebhookQueueSize } from "../lib/webhookQueue.server";
 import { persistOrders } from "../lib/persistence.server";
 import { applyAiTags } from "../lib/tagging.server";
@@ -127,6 +128,22 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     };
 
     await saveSettings(shopDomain, merged);
+    
+    // Refresh llms.txt cache when exposure preferences may have changed
+    if (admin && shopDomain) {
+      try {
+        const llmsText = await buildLlmsTxt(shopDomain, merged, {
+          range: "30d",
+          topN: 20,
+          admin,
+        });
+        await updateLlmsTxtCache(shopDomain, llmsText);
+      } catch (e) {
+        // Non-blocking: log but don't fail the save operation
+        logger.warn("[settings] Failed to refresh llms.txt cache", { shopDomain }, { error: (e as Error).message });
+      }
+    }
+    
     const calculationTimezone = merged.timezones[0] || "UTC";
     const range: DateRange = resolveDateRange(
       "90d",

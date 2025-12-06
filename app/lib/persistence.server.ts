@@ -3,7 +3,12 @@ import type { Prisma } from "@prisma/client";
 import { type DateRange, type OrderRecord } from "./aiData";
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 import { getPlatform, isDemoMode } from "./runtime.server";
-import { MAX_DASHBOARD_ORDERS, MAX_DETECTION_LENGTH } from "./constants";
+import { 
+  MAX_DASHBOARD_ORDERS, 
+  MAX_DETECTION_LENGTH, 
+  PERSISTENCE_BATCH_SIZE,
+  PERSISTENCE_TRANSACTION_TIMEOUT_MS 
+} from "./constants";
 import { getSettings } from "./settings.server";
 import { toPrismaAiSource } from "./aiSourceMapper";
 import { validateOrderData } from "./orderService.server";
@@ -73,10 +78,9 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
   const timeZone = settings.timezones?.[0];
 
   const chunks: OrderRecord[][] = [];
-  const batchSize = 100;
 
-  for (let i = 0; i < orders.length; i += batchSize) {
-    chunks.push(orders.slice(i, i + batchSize));
+  for (let i = 0; i < orders.length; i += PERSISTENCE_BATCH_SIZE) {
+    chunks.push(orders.slice(i, i + PERSISTENCE_BATCH_SIZE));
   }
 
   try {
@@ -347,6 +351,12 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
 
           return { created: localCreated, updated: localUpdated };
         },
+        {
+          // 事务超时配置，避免长时间占用数据库连接
+          timeout: PERSISTENCE_TRANSACTION_TIMEOUT_MS,
+          // 使用可序列化隔离级别确保数据一致性
+          isolationLevel: "Serializable",
+        }
       );
 
       created += batchCreated;

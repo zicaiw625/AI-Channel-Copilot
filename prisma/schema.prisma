@@ -29,6 +29,8 @@ model Session {
   locale        String?
   collaborator  Boolean?  @default(false)
   emailVerified Boolean?  @default(false)
+
+  @@index([shop])
 }
 
 enum AiSource {
@@ -63,6 +65,12 @@ model Customer {
 
   @@index([shopDomain])
   @@index([shopDomain, platform])
+  // LTV 查询优化索引（Top Customer 排序）
+  @@index([shopDomain, totalSpent(sort: Desc)], map: "customer_shop_ltv_desc")
+  // AI 客户筛选索引
+  @@index([shopDomain, acquiredViaAi], map: "customer_shop_ai")
+  // 数据清理优化索引
+  @@index([shopDomain, updatedAt], map: "customer_shop_updated")
 }
 
 model Order {

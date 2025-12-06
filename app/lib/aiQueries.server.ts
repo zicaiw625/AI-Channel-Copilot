@@ -17,7 +17,7 @@ import { loadOrdersFromDb, loadCustomersByIdsLegacy as loadCustomersByIds } from
 import { allowDemoData } from "./runtime.server";
 import prisma from "../db.server";
 import { Prisma } from "@prisma/client";
-import { fromPrismaAiSource } from "./aiSourceMapper";
+import { fromPrismaAiSource, toPrismaAiSource } from "./aiSourceMapper";
 import { startOfDay, formatDateOnly } from "./dateUtils";
 import { logger } from "./logger.server";
 
@@ -238,7 +238,13 @@ async function buildDashboardFromDb(
     }
   });
 
-  const productMap = new Map<string, ProductRow & { _seenOrders: Set<string> }>();
+  // 定义带有额外跟踪字段的产品类型
+  type ProductMapEntry = ProductRow & { 
+    _seenOrders: Set<string>;
+    _channels: Record<string, number>;
+  };
+  
+  const productMap = new Map<string, ProductMapEntry>();
   
   aiProductLines.forEach(line => {
     const pid = line.productId;
@@ -253,6 +259,7 @@ async function buildDashboardFromDb(
         aiShare: 0, // 稍后计算
         topChannel: null, // 稍后计算
         _seenOrders: new Set(), // 用于去重
+        _channels: {}, // 渠道 GMV 跟踪
       });
     }
     const p = productMap.get(pid)!;
@@ -278,9 +285,6 @@ async function buildDashboardFromDb(
     // Track channel for topChannel
     const channel = fromPrismaAiSource(order.aiSource);
     if (channel) {
-       // @ts-ignore - temporary storage on object
-       if (!p._channels) p._channels = {};
-       // @ts-ignore
        p._channels[channel] = (p._channels[channel] || 0) + allocatedGmv;
     }
   });
@@ -288,8 +292,7 @@ async function buildDashboardFromDb(
   // 处理 Product Map 结果
   const topProducts = Array.from(productMap.values())
     .map(p => {
-      // @ts-ignore
-      const channels = p._channels as Record<string, number> || {};
+      const channels = p._channels;
       const topChannel = Object.entries(channels).sort(([,a], [,b]) => b - a)[0]?.[0] as AIChannel | null;
       
       // 注意：aiShare 在这里定义为 aiOrders / totalOrders。
@@ -334,26 +337,69 @@ async function buildDashboardFromDb(
   // 5. Comparison (Channel vs Overall)
   // 已经有 channelGroups (AI) 和 overview (Total)。
   // ComparisonRow 需要: aov, newCustomerRate, repeatRate, sampleSize.
-  // RepeatRate 需要 GroupBy customerId，这对 DB 压力较大。
-  // 简化版 Comparison: 
+  // RepeatRate 需要 GroupBy customerId，计算有多少客户下了多于1单
+  
+  // 计算复购率：查询每个客户的订单数
+  const repeatRateData = await prisma.order.groupBy({
+    by: ["customerId", "aiSource"],
+    where: { ...where, customerId: { not: null } },
+    _count: { _all: true },
+  });
+  
+  // 计算整体复购率
+  const customerOrderCounts = new Map<string, number>();
+  const aiCustomerOrderCounts = new Map<string, Map<string, number>>(); // aiSource -> customerId -> count
+  
+  repeatRateData.forEach(row => {
+    if (!row.customerId) return;
+    
+    // 整体统计
+    const prevTotal = customerOrderCounts.get(row.customerId) || 0;
+    customerOrderCounts.set(row.customerId, prevTotal + row._count._all);
+    
+    // AI 渠道统计
+    if (row.aiSource) {
+      const aiSourceKey = row.aiSource;
+      if (!aiCustomerOrderCounts.has(aiSourceKey)) {
+        aiCustomerOrderCounts.set(aiSourceKey, new Map());
+      }
+      const channelMap = aiCustomerOrderCounts.get(aiSourceKey)!;
+      const prevCount = channelMap.get(row.customerId) || 0;
+      channelMap.set(row.customerId, prevCount + row._count._all);
+    }
+  });
+  
+  // 计算复购率的辅助函数
+  const computeRepeatRate = (orderCountMap: Map<string, number>): number => {
+    if (orderCountMap.size === 0) return 0;
+    const repeatCustomers = Array.from(orderCountMap.values()).filter(count => count > 1).length;
+    return repeatCustomers / orderCountMap.size;
+  };
+  
+  const overallRepeatRate = computeRepeatRate(customerOrderCounts);
+  
   const buildComparisonLocal = (): ComparisonRow[] => {
      // Overall
      const overall: ComparisonRow = {
        channel: "整体",
        aov: overview.totalOrders ? overview.totalGMV / overview.totalOrders : 0,
        newCustomerRate: overview.totalOrders ? overview.totalNewCustomers / overview.totalOrders : 0,
-       repeatRate: 0, // DB 模式下暂不支持复杂的复购率计算，或者需要额外查询
+       repeatRate: overallRepeatRate,
        sampleSize: overview.totalOrders,
        isLowSample: overview.totalOrders < 5
      };
 
      const channelRows = AI_CHANNELS.map(c => {
        const stat = channelMap.get(c)!;
+       const prismaSource = toPrismaAiSource(c);
+       const channelCustomerCounts = prismaSource ? aiCustomerOrderCounts.get(prismaSource) : undefined;
+       const channelRepeatRate = channelCustomerCounts ? computeRepeatRate(channelCustomerCounts) : 0;
+       
        return {
          channel: c,
          aov: stat.orders ? stat.gmv / stat.orders : 0,
          newCustomerRate: stat.orders ? stat.newCustomers / stat.orders : 0,
-         repeatRate: 0, // Placeholder
+         repeatRate: channelRepeatRate,
          sampleSize: stat.orders,
          isLowSample: stat.orders < 5
        };

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import type { ActionFunctionArgs, HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { useFetcher, useLoaderData, useNavigate, useLocation } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
@@ -13,6 +13,7 @@ import {
   type TimeRangeKey,
   type UtmSourceRule,
 } from "../lib/aiData";
+import { downloadFromApi } from "../lib/downloadUtils";
 import { fetchOrdersForRange } from "../lib/shopifyOrders.server";
 import { getSettings, markActivity, normalizeSettingsPayload, saveSettings, syncShopPreferences } from "../lib/settings.server";
 import { buildLlmsTxt, updateLlmsTxtCache } from "../lib/llms.server";
@@ -412,48 +413,22 @@ export default function SettingsAndExport() {
     setConfirmUtmModal({ open: false, rule: null });
   };
 
-  const handleDownload = async (e: React.MouseEvent<HTMLAnchorElement | HTMLButtonElement>, url: string, fallbackFilename: string) => {
+  const handleDownload = useCallback(async (e: React.MouseEvent<HTMLAnchorElement | HTMLButtonElement>, url: string, fallbackFilename: string) => {
     e.preventDefault();
     // Check export permission
     if (!canExport) {
       shopify.toast.show?.(language === "English" ? "Upgrade to Pro to export data." : "升级到 Pro 版以导出数据。");
       return;
     }
-    try {
-      const token = await shopify.idToken();
-      const response = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error("Download failed");
-      }
-
-      const blob = await response.blob();
-      let filename = fallbackFilename;
-      const disposition = response.headers.get("content-disposition");
-      if (disposition && disposition.includes("filename=")) {
-        const match = disposition.match(/filename="?([^";]+)"?/);
-        if (match && match[1]) {
-          filename = match[1];
-        }
-      }
-
-      const downloadUrl = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = downloadUrl;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(downloadUrl);
-    } catch (error) {
-      console.error("Download error:", error);
+    const success = await downloadFromApi(
+      url,
+      fallbackFilename,
+      () => shopify.idToken()
+    );
+    if (!success) {
       shopify.toast.show?.(language === "English" ? "Download failed. Please try again." : "下载失败，请重试。");
     }
-  };
+  }, [canExport, language, shopify]);
 
   const submitSettings = () => {
     const payload = {
@@ -1371,47 +1346,21 @@ function LlmsPreview({ language, canExport, lastSavedAt }: { language: string; c
   const fetcher = useFetcher<{ ok: boolean; text: string }>();
   const [copied, setCopied] = useState(false);
 
-  const handleDownload = async (e: React.MouseEvent<HTMLAnchorElement>, url: string, fallbackFilename: string) => {
+  const handleDownload = useCallback(async (e: React.MouseEvent<HTMLAnchorElement>, url: string, fallbackFilename: string) => {
     e.preventDefault();
     if (!canExport) {
       shopify.toast.show?.(language === "English" ? "Upgrade to Pro to download." : "升级到 Pro 版以下载。");
       return;
     }
-    try {
-      const token = await shopify.idToken();
-      const response = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error("Download failed");
-      }
-
-      const blob = await response.blob();
-      let filename = fallbackFilename;
-      const disposition = response.headers.get("content-disposition");
-      if (disposition && disposition.includes("filename=")) {
-        const match = disposition.match(/filename="?([^";]+)"?/);
-        if (match && match[1]) {
-          filename = match[1];
-        }
-      }
-
-      const downloadUrl = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = downloadUrl;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(downloadUrl);
-    } catch (error) {
-      console.error("Download error:", error);
+    const success = await downloadFromApi(
+      url,
+      fallbackFilename,
+      () => shopify.idToken()
+    );
+    if (!success) {
       shopify.toast.show?.(language === "English" ? "Download failed" : "下载失败");
     }
-  };
+  }, [canExport, language, shopify]);
 
   useEffect(() => {
     // Only load if user has export permission to avoid 403 errors

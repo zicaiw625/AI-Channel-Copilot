@@ -5,7 +5,7 @@ import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 import { getPlatform, isDemoMode } from "./runtime.server";
 import { MAX_DASHBOARD_ORDERS, MAX_DETECTION_LENGTH } from "./constants";
 import { getSettings } from "./settings.server";
-import { toPrismaAiSource } from "./aiSourceMapper";
+import { toPrismaAiSource, fromPrismaAiSource } from "./aiSourceMapper";
 import { loadCustomersByIds as loadCustomersFromService } from "./customerService.server";
 import { validateOrderData } from "./orderService.server";
 import { DatabaseError, ValidationError } from "./errors";
@@ -121,8 +121,8 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
 
             // Collect items for batch operations
             const toCreate: Prisma.OrderProductCreateManyInput[] = [];
-            const toUpdateIds: number[] = [];
             const toDeleteIds: number[] = [];
+            let updatedCount = 0;
 
             for (const line of newLines) {
               const prev = existingByPid.get(line.id);
@@ -135,7 +135,7 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
                   prev.currency !== (line.currency || prev.currency) ||
                   prev.quantity !== line.quantity;
                 if (changed) {
-                  toUpdateIds.push(prev.id);
+                  updatedCount++;
                   // For updates, we still need individual calls due to different data per row
                   await tx.orderProduct.update({
                     where: { id: prev.id },
@@ -340,9 +340,6 @@ export const loadOrdersFromDb = async (
       orderBy: { createdAt: "desc" },
       include: { products: true },
     });
-
-    // Import dynamically only for type conversion to avoid circular dependency
-    const { fromPrismaAiSource } = await import("./aiSourceMapper");
 
     const orderRecords: OrderRecord[] = orders.map((order) => ({
       id: order.id,

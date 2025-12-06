@@ -1,4 +1,5 @@
-import { getBillingState } from "./billing.server";
+import { getBillingState, setSubscriptionExpiredState } from "./billing.server";
+import { logger } from "./logger.server";
 
 export type PlanTier = "free" | "pro" | "growth" | "none";
 
@@ -29,8 +30,17 @@ export async function getEffectivePlan(shopDomain: string): Promise<PlanTier> {
   if (billingState.includes("TRIALING")) {
     // If lastTrialEndAt exists and is in the past, trial has expired
     if (state.lastTrialEndAt && state.lastTrialEndAt.getTime() < Date.now()) {
-      // Trial has expired - should be treated as no subscription
-      // Note: Ideally the billing webhook should update this, but we check here as a safety net
+      // Trial has expired - update the billing state and return none
+      // This is a safety net in case the billing webhook didn't update the state
+      logger.info("[access] Trial expired, updating billing state", { 
+        shopDomain, 
+        billingPlan,
+        trialEndAt: state.lastTrialEndAt.toISOString(),
+      });
+      
+      // Update state asynchronously (don't block the current request)
+      void setSubscriptionExpiredState(shopDomain, billingPlan as "pro" | "growth" | "free", "TRIAL_EXPIRED");
+      
       return "none";
     }
     // Trial is still valid

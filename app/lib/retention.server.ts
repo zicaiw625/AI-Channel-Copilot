@@ -30,12 +30,16 @@ export const pruneHistoricalData = async (shopDomain: string, months: number) =>
 
   const cutoff = computeCutoff(months);
   try {
-    const [deletedOrders, deletedCustomers] = await Promise.all([
-      prisma.order.deleteMany({ where: { shopDomain, createdAt: { lt: cutoff } } }),
-      prisma.customer.deleteMany({
-        where: { shopDomain, updatedAt: { lt: cutoff }, orders: { none: {} } },
-      }),
-    ]);
+    // 先删除订单，然后再删除没有订单关联的客户
+    // 这样可以确保外键关系正确处理
+    const deletedOrders = await prisma.order.deleteMany({ 
+      where: { shopDomain, createdAt: { lt: cutoff } } 
+    });
+    
+    // 在删除订单后，再删除没有订单关联的过期客户
+    const deletedCustomers = await prisma.customer.deleteMany({
+      where: { shopDomain, updatedAt: { lt: cutoff }, orders: { none: {} } },
+    });
 
     await markActivity(shopDomain, { lastCleanupAt: new Date() });
 

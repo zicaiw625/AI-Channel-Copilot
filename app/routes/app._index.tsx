@@ -5,6 +5,7 @@ import { useAppBridge } from "@shopify/app-bridge-react";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 
 import { channelList, defaultSettings, timeRanges, type AIChannel, type TimeRangeKey, LOW_SAMPLE_THRESHOLD } from "../lib/aiData";
+import { downloadFromApi } from "../lib/downloadUtils";
 import { getSettings, syncShopPreferences } from "../lib/settings.server";
 import { authenticate } from "../shopify.server";
 import { useUILanguage } from "../lib/useUILanguage";
@@ -158,38 +159,12 @@ export default function Index() {
 
   const handleDownload = async (e: React.MouseEvent<HTMLAnchorElement | HTMLButtonElement>, url: string, fallbackFilename: string) => {
     e.preventDefault();
-    try {
-      const token = await shopify.idToken();
-      const response = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error("Download failed");
-      }
-
-      const blob = await response.blob();
-      let filename = fallbackFilename;
-      const disposition = response.headers.get("content-disposition");
-      if (disposition && disposition.includes("filename=")) {
-        const match = disposition.match(/filename="?([^";]+)"?/);
-        if (match && match[1]) {
-          filename = match[1];
-        }
-      }
-
-      const downloadUrl = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = downloadUrl;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(downloadUrl);
-    } catch (error) {
-      console.error("Download error:", error);
+    const success = await downloadFromApi(
+      url,
+      fallbackFilename,
+      () => shopify.idToken()
+    );
+    if (!success) {
       shopify.toast.show?.(uiLanguage === "English" ? "Download failed. Please try again." : "下载失败，请重试。");
     }
   };
@@ -251,23 +226,43 @@ export default function Index() {
     };
     
     // 延迟首次轮询，避免与页面加载同时发生
-    const initialTimer = window.setTimeout(poll, 1000);
-    let timer = window.setInterval(poll, 12000);
+    let initialTimer: ReturnType<typeof setTimeout> | null = window.setTimeout(poll, 1000);
+    let intervalTimer: ReturnType<typeof setInterval> | null = window.setInterval(poll, 12000);
+    let visibilityDelayTimer: ReturnType<typeof setTimeout> | null = null;
+    
+    const clearAllTimers = () => {
+      if (initialTimer) {
+        clearTimeout(initialTimer);
+        initialTimer = null;
+      }
+      if (intervalTimer) {
+        clearInterval(intervalTimer);
+        intervalTimer = null;
+      }
+      if (visibilityDelayTimer) {
+        clearTimeout(visibilityDelayTimer);
+        visibilityDelayTimer = null;
+      }
+    };
     
     const onVisibility = () => {
       if (document.visibilityState === "visible") {
+        // 清除所有现有的定时器，防止重复
+        clearAllTimers();
         // 延迟一下再轮询，避免快速切换标签页时触发过多请求
-        window.setTimeout(poll, 500);
-        clearInterval(timer);
-        timer = window.setInterval(poll, 12000);
+        visibilityDelayTimer = window.setTimeout(() => {
+          poll();
+          visibilityDelayTimer = null;
+        }, 500);
+        intervalTimer = window.setInterval(poll, 12000);
       } else {
-        clearInterval(timer);
+        // 页面不可见时清除所有定时器
+        clearAllTimers();
       }
     };
     document.addEventListener("visibilitychange", onVisibility);
     return () => {
-      clearTimeout(initialTimer);
-      clearInterval(timer);
+      clearAllTimers();
       document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [jobFetcher]);

@@ -279,7 +279,7 @@ export const registerDefaultOrderWebhookHandlers = () => {
           await markActivity(jobShopDomain, { lastTaggingAt: new Date() });
           await setTaggingStatus(jobShopDomain, "healthy", `Last run at ${new Date().toISOString()}`);
         } catch (error) {
-          logger.error("applyAiTags failed", { shop: jobShopDomain, topic: intent }, {
+          logger.error("applyAiTags failed", { shop: jobShopDomain, intent }, {
             message: (error as Error).message,
           });
           await setTaggingStatus(jobShopDomain, "warning", "Tagging failed; check logs.");

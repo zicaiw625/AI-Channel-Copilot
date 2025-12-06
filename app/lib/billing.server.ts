@@ -173,11 +173,27 @@ export const getBillingState = async (shopDomain: string): Promise<BillingState 
   }
 };
 
+// 定义 payload 的类型
+type BillingStatePayload = {
+  isDevShop?: boolean;
+  billingPlan?: string;
+  billingState?: string;
+  firstInstalledAt?: Date | null;
+  usedTrialDays?: number;
+  hasEverSubscribed?: boolean;
+  lastSubscriptionStatus?: string | null;
+  lastTrialStartAt?: Date | null;
+  lastTrialEndAt?: Date | null;
+  lastCheckedAt?: Date | null;
+  lastUninstalledAt?: Date | null;
+  lastReinstalledAt?: Date | null;
+};
+
 export const upsertBillingState = async (
   shopDomain: string,
   updates: Partial<BillingState>,
 ): Promise<BillingState> => {
-  const payload = {
+  const payload: BillingStatePayload = {
     isDevShop: updates.isDevShop ?? false,
     billingPlan: updates.billingPlan,
     billingState: updates.billingState,
@@ -192,25 +208,23 @@ export const upsertBillingState = async (
     lastReinstalledAt: updates.lastReinstalledAt || null,
   };
   
-  // Clean undefined values
-  Object.keys(payload).forEach(key => {
-    if ((payload as any)[key] === undefined) {
-      delete (payload as any)[key];
-    }
-  });
+  // Clean undefined values - use type-safe approach
+  const cleanedPayload = Object.fromEntries(
+    Object.entries(payload).filter(([_, value]) => value !== undefined)
+  ) as BillingStatePayload;
 
   try {
     const createData = {
       shopDomain, 
       platform: "shopify", 
-      ...payload,
-      billingPlan: payload.billingPlan || updates.billingPlan || "NO_PLAN",
-      billingState: payload.billingState || updates.billingState || "NO_PLAN",
-      usedTrialDays: payload.usedTrialDays ?? updates.usedTrialDays ?? 0,
+      ...cleanedPayload,
+      billingPlan: cleanedPayload.billingPlan || updates.billingPlan || "NO_PLAN",
+      billingState: cleanedPayload.billingState || updates.billingState || "NO_PLAN",
+      usedTrialDays: cleanedPayload.usedTrialDays ?? updates.usedTrialDays ?? 0,
     };
     const record = await prisma.shopBillingState.upsert({
       where: { shopDomain_platform: { shopDomain, platform: "shopify" } },
-      update: payload,
+      update: cleanedPayload,
       create: createData,
     });
     return {
@@ -254,7 +268,7 @@ export const upsertBillingState = async (
     if (existing) {
       const updated = await prisma.shopBillingState.update({
         where: { id: existing.id },
-        data: payload,
+        data: cleanedPayload,
       });
       return {
         shopDomain,
@@ -275,10 +289,10 @@ export const upsertBillingState = async (
     const createPayload = {
       shopDomain, 
       platform: "shopify", 
-      ...payload,
-      billingPlan: payload.billingPlan || updates.billingPlan || "NO_PLAN",
-      billingState: payload.billingState || updates.billingState || "NO_PLAN",
-      usedTrialDays: payload.usedTrialDays ?? updates.usedTrialDays ?? 0,
+      ...cleanedPayload,
+      billingPlan: cleanedPayload.billingPlan || updates.billingPlan || "NO_PLAN",
+      billingState: cleanedPayload.billingState || updates.billingState || "NO_PLAN",
+      usedTrialDays: cleanedPayload.usedTrialDays ?? updates.usedTrialDays ?? 0,
     };
     const created = await prisma.shopBillingState.create({
       data: createPayload,
@@ -579,6 +593,18 @@ export const getActiveSubscriptionDetails = async (
   return { id: sub.id, name: sub.name, status: sub.status || null, trialDays: sub.trialDays ?? null, currentPeriodEnd };
 };
 
+// GraphQL 响应类型定义
+type UserError = { field?: string | null; message: string };
+
+type CancelSubscriptionResponse = {
+  data?: {
+    appSubscriptionCancel?: {
+      userErrors?: UserError[];
+      appSubscription?: { id: string; status: string };
+    };
+  };
+};
+
 export const cancelSubscription = async (
   admin: AdminGraphqlClient,
   subscriptionId: string,
@@ -595,10 +621,10 @@ export const cancelSubscription = async (
   `;
   const resp = await sdk.request("cancelSubscription", MUTATION, { id: subscriptionId, prorate });
   if (!resp.ok) throw new Error("Failed to cancel subscription");
-  const json = (await resp.json()) as any;
+  const json = (await resp.json()) as CancelSubscriptionResponse;
   const errors = json.data?.appSubscriptionCancel?.userErrors || [];
   if (errors.length > 0) {
-    throw new Error(errors.map((e: any) => e.message).join(", "));
+    throw new Error(errors.map((e) => e.message).join(", "));
   }
   return json.data?.appSubscriptionCancel?.appSubscription?.status || null;
 };
@@ -661,10 +687,20 @@ export const requestSubscription = async (
     throw new Error("Failed to create subscription request");
   }
 
-  const json = (await resp.json()) as any;
+  type CreateSubscriptionResponse = {
+    data?: {
+      appSubscriptionCreate?: {
+        userErrors?: UserError[];
+        confirmationUrl?: string;
+        appSubscription?: { id: string };
+      };
+    };
+  };
+
+  const json = (await resp.json()) as CreateSubscriptionResponse;
   const errors = json.data?.appSubscriptionCreate?.userErrors || [];
   if (errors.length > 0) {
-    throw new Error(errors.map((e: any) => e.message).join(", "));
+    throw new Error(errors.map((e) => e.message).join(", "));
   }
 
   return json.data?.appSubscriptionCreate?.confirmationUrl;

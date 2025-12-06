@@ -16,6 +16,7 @@ type WebhookJob = {
 };
 
 const processingKeys = new Set<string>();
+const scheduledTimers = new Map<string, NodeJS.Timeout>(); // Track scheduled timers to prevent duplicates
 const queue = getQueueConfig();
 const MAX_RETRIES = queue.maxRetries;
 const BASE_DELAY_MS = queue.baseDelayMs;
@@ -24,6 +25,7 @@ const PENDING_COOLDOWN_MS = queue.pendingCooldownMs;
 const MAX_BATCH = queue.maxBatch;
 const PENDING_MAX_COOLDOWN_MS = queue.pendingMaxCooldownMs;
 const STUCK_JOB_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+const MAX_RECURSIVE_DEPTH = 100; // Maximum recursive scheduling depth per shop
 
 const recoverStuckJobs = async (shopDomain: string) => {
   try {
@@ -186,11 +188,26 @@ const hashKey = (value: string) => {
 export const processWebhookQueueForShop = async (
   shopDomain: string,
   handlers: Map<string, WebhookJob["run"]>,
+  recursiveDepth = 0,
 ) => {
   if (!shopDomain) return;
   const key = `shop:${shopDomain}`;
   if (processingKeys.has(key)) return;
+  
+  // Prevent infinite recursion
+  if (recursiveDepth >= MAX_RECURSIVE_DEPTH) {
+    logger.warn("[webhook] max recursive depth reached, stopping", { shopDomain, depth: recursiveDepth });
+    return;
+  }
+  
   processingKeys.add(key);
+  
+  // Clear any existing scheduled timer for this shop
+  const existingTimer = scheduledTimers.get(key);
+  if (existingTimer) {
+    clearTimeout(existingTimer);
+    scheduledTimers.delete(key);
+  }
   
   // Try to recover stuck jobs before processing
   await recoverStuckJobs(shopDomain);
@@ -261,9 +278,11 @@ export const processWebhookQueueForShop = async (
     const pending = await prisma.webhookJob.count({ where: { status: "queued", shopDomain } });
     if (pending) {
       const dynamicDelay = Math.min(PENDING_COOLDOWN_MS + Math.floor(pending / Math.max(1, MAX_BATCH)) * 50, PENDING_MAX_COOLDOWN_MS);
-      setTimeout(() => {
-        void processWebhookQueueForShop(shopDomain, handlers);
+      const timer = setTimeout(() => {
+        scheduledTimers.delete(key);
+        void processWebhookQueueForShop(shopDomain, handlers, recursiveDepth + 1);
       }, dynamicDelay);
+      scheduledTimers.set(key, timer);
     }
   }
 };

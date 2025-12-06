@@ -23,19 +23,23 @@ export const copilotAnswer = async (request: Request, payload: CopilotRequest) =
       throw new ValidationError("Either question or intent must be provided");
     }
 
-    let session;
+    let session: { shop: string } | null = null;
+    let authError: Error | null = null;
+    
     try {
       const auth = await authenticate.admin(request);
       session = auth.session;
     } catch (error) {
-      if (isDemoMode()) {
-        // Allow demo mode to proceed without session
-      } else {
-        throw error;
+      authError = error instanceof Error ? error : new Error(String(error));
+      // 在非 demo 模式下，认证失败应该抛出错误
+      if (!isDemoMode()) {
+        throw authError;
       }
+      // Demo 模式下，继续处理但没有 session
     }
 
-    if (!session?.shop && !isDemoMode()) {
+    // 验证 session 存在（非 demo 模式）
+    if (!isDemoMode() && (!session || !session.shop)) {
       throw new ValidationError("Invalid session: missing shop domain");
     }
 

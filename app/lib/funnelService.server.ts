@@ -84,6 +84,13 @@ export interface FunnelData {
     aiVisits: number;
     aiOrders: number;
   }[];
+  
+  // 数据来源标记（哪些数据是估算的）
+  isEstimated: {
+    visits: boolean;     // 访问数据是否为估算
+    carts: boolean;      // 加购数据是否为估算
+    checkouts: boolean;  // 结账数据是否为估算
+  };
 }
 
 export interface CheckoutPayload {
@@ -345,25 +352,39 @@ export async function getFunnelData(
   
   // 真实的结账数据
   const totalCheckoutsStarted = checkouts.length;
-  const _totalCheckoutsCompleted = checkouts.filter(c => c.status === "completed" || c.completedAt).length;
+  const totalCheckoutsCompleted = checkouts.filter(c => c.status === "completed" || c.completedAt).length;
   const aiCheckoutsStarted = checkouts.filter(c => c.aiSource).length;
-  const _aiCheckoutsCompleted = checkouts.filter(c => c.aiSource && (c.status === "completed" || c.completedAt)).length;
+  const aiCheckoutsCompleted = checkouts.filter(c => c.aiSource && (c.status === "completed" || c.completedAt)).length;
   
   // 如果没有 checkout 数据，使用估算值（向后兼容）
   const hasCheckoutData = totalCheckoutsStarted > 0;
   const effectiveCheckoutsStarted = hasCheckoutData 
     ? totalCheckoutsStarted 
     : Math.round(totalOrders / 0.7);
+  const effectiveCheckoutsCompleted = hasCheckoutData 
+    ? totalCheckoutsCompleted 
+    : totalOrders;
   const effectiveAiCheckoutsStarted = hasCheckoutData 
     ? aiCheckoutsStarted 
     : Math.round(aiOrders / 0.7);
+  const effectiveAiCheckoutsCompleted = hasCheckoutData 
+    ? aiCheckoutsCompleted 
+    : aiOrders;
   
   // 访问和加购数据仍然需要估算（需要前端埋点才能获取真实数据）
   // 使用保守的估算系数
+  // 注意：这些数据是基于行业平均值的估算，仅供参考
   const estimatedVisits = Math.max(effectiveCheckoutsStarted * 10, totalOrders * 15);
   const estimatedCarts = Math.max(effectiveCheckoutsStarted * 2, totalOrders * 2.5);
   const estimatedAiVisits = Math.max(effectiveAiCheckoutsStarted * 10, aiOrders * 15);
   const estimatedAiCarts = Math.max(effectiveAiCheckoutsStarted * 2, aiOrders * 2.5);
+  
+  // 标记哪些数据是估算的
+  const isEstimated = {
+    visits: true, // 访问数据始终是估算的
+    carts: true,  // 加购数据始终是估算的
+    checkouts: !hasCheckoutData, // 如果没有真实 checkout 数据则是估算的
+  };
   
   // 构建漏斗阶段
   const buildFunnelStages = (
@@ -415,7 +436,7 @@ export async function getFunnelData(
     Math.round(estimatedVisits),
     Math.round(estimatedCarts),
     effectiveCheckoutsStarted,
-    totalOrders, // checkoutsCompleted ≈ orders
+    effectiveCheckoutsCompleted,
     totalOrders,
     totalOrderGMV,
   );
@@ -424,7 +445,7 @@ export async function getFunnelData(
     Math.round(estimatedAiVisits),
     Math.round(estimatedAiCarts),
     effectiveAiCheckoutsStarted,
-    aiOrders, // checkoutsCompleted ≈ orders
+    effectiveAiCheckoutsCompleted,
     aiOrders,
     aiOrderGMV,
   );
@@ -493,6 +514,7 @@ export async function getFunnelData(
     conversionRates,
     abandonment,
     trend,
+    isEstimated,
   };
 }
 

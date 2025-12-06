@@ -211,6 +211,7 @@ export class OrdersRepository {
    * 创建或更新单个订单
    * @param order - 订单记录
    * @param shopDomain - 店铺域名（创建时必须）
+   * @throws Error 如果 shopDomain 无法确定
    */
   async upsert(order: OrderRecord, shopDomain?: string): Promise<void> {
     const startTime = Date.now();
@@ -229,8 +230,11 @@ export class OrdersRepository {
         effectiveShopDomain = existing?.shopDomain || '';
       }
       
+      // 如果仍然没有 shopDomain，抛出错误而不是创建无效记录
       if (!effectiveShopDomain) {
-        logger.warn('[OrdersRepository] Creating order without shopDomain', { orderId: order.id });
+        const errorMsg = `Cannot upsert order ${order.id}: shopDomain is required but not provided and order does not exist`;
+        logger.error('[OrdersRepository] shopDomain validation failed', { orderId: order.id });
+        throw new Error(errorMsg);
       }
       
       await prisma.order.upsert({

@@ -7,6 +7,7 @@ import { metricOrderValue } from "../lib/metrics";
 import { requireFeature, FEATURES } from "../lib/access.server";
 import { isDemoMode } from "../lib/runtime.server";
 import { enforceRateLimit, RateLimitRules } from "../lib/security/rateLimit.server";
+import { toCsvValue } from "../lib/export";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   let session;
@@ -41,12 +42,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       const header = [
         "order_name","placed_at","ai_channel","gmv","gmv_metric","referrer","landing_page","source_name","utm_source","utm_medium","detection","order_id","customer_id","new_customer",
       ];
+      // 添加 UTF-8 BOM 以确保 Excel 正确识别中文
+      controller.enqueue(new Uint8Array([0xEF, 0xBB, 0xBF]));
       controller.enqueue(encoder.encode(`# 仅统计可识别的 AI 流量（依赖 referrer/UTM/标签，结果为保守估计）；GMV 口径=${metric}\n`));
       controller.enqueue(encoder.encode(header.join(",") + "\n"));
-      const toCsv = (v: string | number | null | undefined) => {
-        const s = v === null || v === undefined ? "" : String(v);
-        return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-      };
       for (const order of orders) {
         if (!order.aiSource) continue;
         const row = [
@@ -64,7 +63,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           order.id,
           order.customerId,
           order.isNewCustomer ? "true" : "false",
-        ].map(toCsv).join(",") + "\n";
+        ].map(toCsvValue).join(",") + "\n";
         controller.enqueue(encoder.encode(row));
       }
       controller.close();

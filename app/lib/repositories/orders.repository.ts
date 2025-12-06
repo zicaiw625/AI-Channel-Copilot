@@ -6,14 +6,13 @@
 import prisma from '../../db.server';
 import { Prisma, type Order, type OrderProduct, type AiSource } from '@prisma/client';
 import type { DateRange, OrderRecord } from '../aiTypes';
-import { fromPrismaAiSource, toPrismaAiSource } from '../aiSourceMapper';
+import { toPrismaAiSource } from '../aiSourceMapper';
 import { logger } from '../logger.server';
 import { metrics, recordDbMetrics } from '../metrics/collector';
-
-// 数据库订单类型（带 products 关系）
-type OrderWithProducts = Order & {
-  products: OrderProduct[];
-};
+import {
+  mapOrderToRecord,
+  type OrderWithProducts,
+} from '../mappers/orderMapper';
 
 export class OrdersRepository {
   /**
@@ -219,7 +218,7 @@ export class OrdersRepository {
     try {
       // 先 upsert Order
       const prismaAiSource = toPrismaAiSource(order.aiSource);
-      
+
       // 尝试获取现有订单的 shopDomain
       let effectiveShopDomain = shopDomain;
       if (!effectiveShopDomain) {
@@ -229,77 +228,85 @@ export class OrdersRepository {
         });
         effectiveShopDomain = existing?.shopDomain || '';
       }
-      
+
       // 如果仍然没有 shopDomain，抛出错误而不是创建无效记录
       if (!effectiveShopDomain) {
         const errorMsg = `Cannot upsert order ${order.id}: shopDomain is required but not provided and order does not exist`;
         logger.error('[OrdersRepository] shopDomain validation failed', { orderId: order.id });
         throw new Error(errorMsg);
       }
-      
-      await prisma.order.upsert({
-        where: { id: order.id },
-        update: {
-          name: order.name,
-          totalPrice: order.totalPrice,
-          currency: order.currency,
-          subtotalPrice: order.subtotalPrice,
-          refundTotal: order.refundTotal,
-          aiSource: prismaAiSource,
-          detection: order.detection,
-          detectionSignals: order.signals as Prisma.InputJsonValue,
-          referrer: order.referrer,
-          landingPage: order.landingPage,
-          utmSource: order.utmSource,
-          utmMedium: order.utmMedium,
-          sourceName: order.sourceName,
-          customerId: order.customerId,
-          isNewCustomer: order.isNewCustomer,
-          updatedAt: new Date(),
-        },
-        create: {
-          id: order.id,
-          shopDomain: effectiveShopDomain,
-          name: order.name,
-          createdAt: new Date(order.createdAt),
-          totalPrice: order.totalPrice,
-          currency: order.currency,
-          subtotalPrice: order.subtotalPrice,
-          refundTotal: order.refundTotal,
-          aiSource: prismaAiSource,
-          detection: order.detection,
-          detectionSignals: order.signals as Prisma.InputJsonValue,
-          referrer: order.referrer,
-          landingPage: order.landingPage,
-          utmSource: order.utmSource,
-          utmMedium: order.utmMedium,
-          sourceName: order.sourceName,
-          customerId: order.customerId,
-          isNewCustomer: order.isNewCustomer,
-        },
+
+      // 【修复】使用事务确保订单和产品更新的原子性
+      await prisma.$transaction(async (tx) => {
+        await tx.order.upsert({
+          where: { id: order.id },
+          update: {
+            name: order.name,
+            totalPrice: order.totalPrice,
+            currency: order.currency,
+            subtotalPrice: order.subtotalPrice,
+            refundTotal: order.refundTotal,
+            aiSource: prismaAiSource,
+            detection: order.detection,
+            detectionSignals: order.signals as Prisma.InputJsonValue,
+            referrer: order.referrer,
+            landingPage: order.landingPage,
+            utmSource: order.utmSource,
+            utmMedium: order.utmMedium,
+            sourceName: order.sourceName,
+            customerId: order.customerId,
+            isNewCustomer: order.isNewCustomer,
+            updatedAt: new Date(),
+          },
+          create: {
+            id: order.id,
+            shopDomain: effectiveShopDomain,
+            name: order.name,
+            createdAt: new Date(order.createdAt),
+            totalPrice: order.totalPrice,
+            currency: order.currency,
+            subtotalPrice: order.subtotalPrice,
+            refundTotal: order.refundTotal,
+            aiSource: prismaAiSource,
+            detection: order.detection,
+            detectionSignals: order.signals as Prisma.InputJsonValue,
+            referrer: order.referrer,
+            landingPage: order.landingPage,
+            utmSource: order.utmSource,
+            utmMedium: order.utmMedium,
+            sourceName: order.sourceName,
+            customerId: order.customerId,
+            isNewCustomer: order.isNewCustomer,
+          },
+        });
+
+        // 处理 OrderProducts（在同一事务内）
+        if (order.products && order.products.length > 0) {
+          // 删除旧的 products
+          await tx.orderProduct.deleteMany({
+            where: { orderId: order.id },
+          });
+
+          // 创建新的 products
+          await tx.orderProduct.createMany({
+            data: order.products.map((p) => ({
+              orderId: order.id,
+              productId: p.id,
+              title: p.title,
+              handle: p.handle,
+              url: p.url,
+              price: p.price,
+              currency: p.currency,
+              quantity: p.quantity,
+            })),
+          });
+        } else {
+          // 如果没有产品，也需要清理可能存在的旧产品记录
+          await tx.orderProduct.deleteMany({
+            where: { orderId: order.id },
+          });
+        }
       });
-
-      // 处理 OrderProducts
-      if (order.products && order.products.length > 0) {
-        // 删除旧的 products
-        await prisma.orderProduct.deleteMany({
-          where: { orderId: order.id },
-        });
-
-        // 创建新的 products
-        await prisma.orderProduct.createMany({
-          data: order.products.map(p => ({
-            orderId: order.id,
-            productId: p.id,
-            title: p.title,
-            handle: p.handle,
-            url: p.url,
-            price: p.price,
-            currency: p.currency,
-            quantity: p.quantity,
-          })),
-        });
-      }
 
       recordDbMetrics('upsert', 'Order', Date.now() - startTime, true);
     } catch (error) {
@@ -366,37 +373,13 @@ export class OrdersRepository {
 
   /**
    * 将数据库记录映射到 OrderRecord
+   * 【优化】委托给共享的 mapper 函数，保持一致性
    */
   private mapToOrderRecord(order: OrderWithProducts): OrderRecord {
-    return {
-      id: order.id,
-      name: order.name,
-      createdAt: order.createdAt.toISOString(),
-      totalPrice: order.totalPrice,
-      currency: order.currency,
-      subtotalPrice: order.subtotalPrice ?? undefined,
-      refundTotal: order.refundTotal,
-      aiSource: fromPrismaAiSource(order.aiSource),
-      detection: order.detection || "",
-      signals: Array.isArray(order.detectionSignals) ? (order.detectionSignals as string[]) : [],
-      referrer: order.referrer || "",
-      landingPage: order.landingPage || "",
-      utmSource: order.utmSource || undefined,
-      utmMedium: order.utmMedium || undefined,
-      sourceName: order.sourceName || undefined,
-      customerId: order.customerId || null,
-      isNewCustomer: order.isNewCustomer,
-      tags: [],
-      products: order.products?.map((p: OrderProduct) => ({
-        id: p.productId,
-        title: p.title,
-        handle: p.handle || "",
-        url: p.url || "",
-        price: p.price,
-        currency: p.currency,
-        quantity: p.quantity,
-      })) || [],
-    };
+    return mapOrderToRecord(order, {
+      includeProducts: true,
+      subtotalFallback: "undefined", // 保持原有行为
+    });
   }
 }
 

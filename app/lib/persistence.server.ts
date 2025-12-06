@@ -5,18 +5,49 @@ import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 import { getPlatform, isDemoMode } from "./runtime.server";
 import { MAX_DASHBOARD_ORDERS, MAX_DETECTION_LENGTH } from "./constants";
 import { getSettings } from "./settings.server";
-import { toPrismaAiSource, fromPrismaAiSource } from "./aiSourceMapper";
-import { loadCustomersByIds as loadCustomersFromService } from "./customerService.server";
+import { toPrismaAiSource } from "./aiSourceMapper";
 import { validateOrderData } from "./orderService.server";
 import { DatabaseError, ValidationError } from "./errors";
 import { logger } from "./logger.server";
 import { toZonedDate } from "./dateUtils";
+import {
+  mapOrderToRecord,
+  type CustomerState,
+  mapCustomerToState,
+  createInitialCustomerState,
+} from "./mappers/orderMapper";
 
 const tableMissing = (error: unknown) =>
   (error instanceof PrismaClientKnownRequestError && error.code === "P2021") ||
   (error instanceof Error && error.message.includes("not available"));
 
 const platform = getPlatform();
+
+/**
+ * 按客户ID分组订单，确保同一客户的订单按时间排序
+ * 这样可以避免竞态条件，确保客户统计正确累加
+ */
+const groupOrdersByCustomer = (
+  orders: OrderRecord[]
+): Map<string | null, OrderRecord[]> => {
+  const grouped = new Map<string | null, OrderRecord[]>();
+
+  for (const order of orders) {
+    const key = order.customerId;
+    const list = grouped.get(key) || [];
+    list.push(order);
+    grouped.set(key, list);
+  }
+
+  // 对每个客户的订单按时间排序（旧订单优先，确保首单判断正确）
+  for (const [, customerOrders] of grouped) {
+    customerOrders.sort(
+      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    );
+  }
+
+  return grouped;
+};
 
 export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) => {
   // 输入验证
@@ -66,23 +97,33 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
 
       const { created: batchCreated, updated: batchUpdated } = await prisma.$transaction(
         async (tx) => {
+          // 查询已存在的订单（在事务内）
           const existingOrders = await tx.order.findMany({ where: { id: { in: orderIds } } });
+          const orderMap = new Map(existingOrders.map((o) => [o.id, o]));
+
+          // 【修复】在事务内查询客户，避免脏读
           const existingCustomers = customerIds.length
-            ? await loadCustomersFromService(shopDomain, customerIds)
+            ? await tx.customer.findMany({
+                where: { shopDomain, id: { in: customerIds } },
+              })
             : [];
 
-          const orderMap = new Map(existingOrders.map((o) => [o.id, o]));
-          const customerState = new Map<string, any>(
-            existingCustomers.map((c) => [c.id, { ...c }])
+          // 【修复】使用类型安全的 CustomerState Map
+          const customerStateMap = new Map<string, CustomerState>(
+            existingCustomers.map((c) => [c.id, mapCustomerToState(c)])
           );
 
           let localCreated = 0;
           let localUpdated = 0;
 
+          // 【修复】按客户分组订单，确保同一客户的订单串行处理
+          // 这样可以避免竞态条件，确保 orderCount 和 totalSpent 正确累加
+          const ordersByCustomer = groupOrdersByCustomer(chunk);
+
+          // 先处理所有订单的基本数据和产品
           for (const order of chunk) {
             const aiSource = toPrismaAiSource(order.aiSource);
             const createdAt = new Date(order.createdAt);
-            const existingOrder = orderMap.get(order.id);
             const detection = (order.detection || "").slice(0, MAX_DETECTION_LENGTH);
 
             const orderData: Prisma.OrderUpsertArgs["create"] = {
@@ -113,14 +154,14 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
               create: orderData,
               update: orderData,
             });
-            
-            // Batch process order products for better performance
+
+            // 处理订单产品
             const newLines = order.products || [];
             const existingLines = await tx.orderProduct.findMany({ where: { orderId: order.id } });
             const existingByPid = new Map(existingLines.map((p) => [p.productId, p]));
             const nextByPid = new Map(newLines.map((l) => [l.id, l]));
 
-            // Collect items for batch operations
+            // 收集批量操作
             const toCreate: Prisma.OrderProductCreateManyInput[] = [];
             const toDeleteIds: number[] = [];
 
@@ -135,7 +176,6 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
                   prev.currency !== (line.currency || prev.currency) ||
                   prev.quantity !== line.quantity;
                 if (changed) {
-                  // For updates, we still need individual calls due to different data per row
                   await tx.orderProduct.update({
                     where: { id: prev.id },
                     data: {
@@ -162,14 +202,14 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
               }
             }
 
-            // Collect IDs to delete
+            // 收集要删除的产品 ID
             for (const prev of existingLines) {
               if (!nextByPid.has(prev.productId)) {
                 toDeleteIds.push(prev.id);
               }
             }
 
-            // Batch create new products
+            // 批量创建新产品
             if (toCreate.length > 0) {
               await tx.orderProduct.createMany({
                 data: toCreate,
@@ -177,95 +217,132 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
               });
             }
 
-            // Batch delete removed products
+            // 批量删除已移除的产品
             if (toDeleteIds.length > 0) {
               await tx.orderProduct.deleteMany({
                 where: { id: { in: toDeleteIds } },
               });
             }
 
-            if (order.customerId) {
-              const current = customerState.get(order.customerId) || {
-                id: order.customerId,
+            const existingOrder = orderMap.get(order.id);
+            if (existingOrder) {
+              localUpdated += 1;
+            } else {
+              localCreated += 1;
+            }
+          }
+
+          // 【修复】按客户分组处理客户统计，确保同一客户的多个订单正确累加
+          for (const [customerId, customerOrders] of ordersByCustomer) {
+            if (!customerId) continue;
+
+            // 获取或创建客户状态
+            let current = customerStateMap.get(customerId);
+            if (!current) {
+              const firstOrder = customerOrders[0];
+              const firstCreatedAt = new Date(firstOrder.createdAt);
+              current = createInitialCustomerState(
+                customerId,
                 shopDomain,
                 platform,
-                firstOrderAt: createdAt,
-                firstOrderId: order.id,
-                lastOrderAt: createdAt,
-                orderCount: 0,
-                totalSpent: 0,
-                acquiredViaAi: Boolean(order.aiSource),
-                firstAiOrderId: order.aiSource ? order.id : null,
-              };
+                {
+                  createdAt: firstCreatedAt,
+                  id: firstOrder.id,
+                  aiSource: toPrismaAiSource(firstOrder.aiSource),
+                }
+              );
+            }
 
-              const isFirstKnownOrder = !current.firstOrderAt || createdAt <= current.firstOrderAt;
-              const nextFirstOrderAt = isFirstKnownOrder ? createdAt : current.firstOrderAt;
-              const nextFirstOrderId = isFirstKnownOrder ? order.id : current.firstOrderId;
+            // 串行处理该客户的所有订单（已按时间排序）
+            for (const order of customerOrders) {
+              const createdAt = new Date(order.createdAt);
+              const existingOrder = orderMap.get(order.id);
+              const aiSource = toPrismaAiSource(order.aiSource);
 
-              const previousContribution =
-                existingOrder && existingOrder.customerId === order.customerId
+              // 判断是否为最早的订单（显式类型注解避免循环引用类型推断问题）
+              const isFirstKnownOrder: boolean =
+                !current.firstOrderAt || createdAt <= current.firstOrderAt;
+              const nextFirstOrderAt: Date | null = isFirstKnownOrder
+                ? createdAt
+                : current.firstOrderAt;
+              const nextFirstOrderId: string | null = isFirstKnownOrder
+                ? order.id
+                : current.firstOrderId;
+
+              // 计算订单金额变化
+              const previousContribution: number =
+                existingOrder && existingOrder.customerId === customerId
                   ? existingOrder.totalPrice
                   : 0;
 
-              const nextOrderCount = existingOrder
+              // 订单计数：如果是更新现有订单，保持计数不变；否则 +1
+              const nextOrderCount: number = existingOrder
                 ? Math.max(current.orderCount, 1)
                 : current.orderCount + 1;
 
-              const nextTotal = current.totalSpent - previousContribution + order.totalPrice;
+              // 总消费：减去旧订单金额，加上新订单金额
+              const nextTotal: number =
+                current.totalSpent - previousContribution + order.totalPrice;
 
-              const nextLastOrderAt = current.lastOrderAt && current.lastOrderAt > createdAt
-                ? current.lastOrderAt
-                : createdAt;
+              // 最后订单时间
+              const nextLastOrderAt: Date =
+                current.lastOrderAt && current.lastOrderAt > createdAt
+                  ? current.lastOrderAt
+                  : createdAt;
 
-              const acquiredViaAi =
-                current.orderCount || existingOrder ? current.acquiredViaAi : Boolean(order.aiSource);
+              // acquiredViaAi 只在首单时设置，之后不再改变
+              const nextAcquiredViaAi: boolean =
+                current.orderCount > 0 || existingOrder
+                  ? current.acquiredViaAi
+                  : Boolean(aiSource);
 
-              const firstAiOrderId = current.firstAiOrderId || (order.aiSource ? order.id : null);
+              // 第一个 AI 订单 ID
+              const nextFirstAiOrderId: string | null =
+                current.firstAiOrderId || (aiSource ? order.id : null);
 
-              await tx.customer.upsert({
-                where: { id: order.customerId },
-                create: {
-                  id: order.customerId,
-                  shopDomain,
-                  platform,
-                  firstOrderAt: createdAt,
-                  firstOrderId: order.id,
-                  lastOrderAt: createdAt,
-                  orderCount: 1,
-                  totalSpent: order.totalPrice,
-                  acquiredViaAi,
-                  firstAiOrderId,
-                },
-                update: {
-                  shopDomain,
-                  platform,
-                  firstOrderAt: nextFirstOrderAt,
-                  firstOrderId: nextFirstOrderId,
-                  lastOrderAt: nextLastOrderAt,
-                  orderCount: nextOrderCount,
-                  totalSpent: nextTotal,
-                  acquiredViaAi,
-                  firstAiOrderId,
-                },
-              });
-
-              customerState.set(order.customerId, {
+              // 更新内存状态（确保下一个订单看到最新值）
+              current = {
                 ...current,
                 firstOrderAt: nextFirstOrderAt,
                 firstOrderId: nextFirstOrderId,
                 lastOrderAt: nextLastOrderAt,
                 orderCount: nextOrderCount,
                 totalSpent: nextTotal,
-                acquiredViaAi,
-                firstAiOrderId,
-              });
+                acquiredViaAi: nextAcquiredViaAi,
+                firstAiOrderId: nextFirstAiOrderId,
+              };
             }
 
-            if (existingOrder) {
-              localUpdated += 1;
-            } else {
-              localCreated += 1;
-            }
+            // 批量更新客户记录（只写入一次数据库）
+            await tx.customer.upsert({
+              where: { id: customerId },
+              create: {
+                id: customerId,
+                shopDomain,
+                platform,
+                firstOrderAt: current.firstOrderAt!,
+                firstOrderId: current.firstOrderId!,
+                lastOrderAt: current.lastOrderAt!,
+                orderCount: current.orderCount,
+                totalSpent: current.totalSpent,
+                acquiredViaAi: current.acquiredViaAi,
+                firstAiOrderId: current.firstAiOrderId,
+              },
+              update: {
+                shopDomain,
+                platform,
+                firstOrderAt: current.firstOrderAt,
+                firstOrderId: current.firstOrderId,
+                lastOrderAt: current.lastOrderAt,
+                orderCount: current.orderCount,
+                totalSpent: current.totalSpent,
+                acquiredViaAi: current.acquiredViaAi,
+                firstAiOrderId: current.firstAiOrderId,
+              },
+            });
+
+            // 更新状态缓存
+            customerStateMap.set(customerId, current);
           }
 
           return { created: localCreated, updated: localUpdated };
@@ -313,20 +390,7 @@ export const loadOrdersFromDb = async (
   if (!shopDomain || isDemoMode()) return { orders: [], clamped: false };
 
   try {
-    // Direct database query to avoid circular imports
-    const totalCount = await prisma.order.count({
-      where: {
-        shopDomain,
-        createdAt: {
-          gte: range.start,
-          lte: range.end,
-        },
-      },
-    });
-
-    const clamped = totalCount > MAX_DASHBOARD_ORDERS;
-    const actualLimit = clamped ? MAX_DASHBOARD_ORDERS : undefined;
-
+    // 使用 limit + 1 策略判断是否截断，避免额外的 COUNT 查询
     const orders = await prisma.order.findMany({
       where: {
         shopDomain,
@@ -335,44 +399,24 @@ export const loadOrdersFromDb = async (
           lte: range.end,
         },
       },
-      take: actualLimit,
+      take: MAX_DASHBOARD_ORDERS + 1,
       orderBy: { createdAt: "desc" },
       include: { products: true },
     });
 
-    const orderRecords: OrderRecord[] = orders.map((order) => ({
-      id: order.id,
-      name: order.name,
-      createdAt: order.createdAt.toISOString(),
-      totalPrice: order.totalPrice,
-      currency: order.currency,
-      subtotalPrice: order.subtotalPrice ?? order.totalPrice,
-      refundTotal: order.refundTotal,
-      aiSource: fromPrismaAiSource(order.aiSource),
-      detection: order.detection || "",
-      signals: Array.isArray(order.detectionSignals) ? (order.detectionSignals as string[]) : [],
-      referrer: order.referrer || "",
-      landingPage: order.landingPage || "",
-      utmSource: order.utmSource || undefined,
-      utmMedium: order.utmMedium || undefined,
-      sourceName: order.sourceName || undefined,
-      customerId: order.customerId,
-      isNewCustomer: order.isNewCustomer,
-      products: order.products.map((p) => ({
-        id: p.productId,
-        title: p.title,
-        handle: p.handle || "",
-        url: p.url || "",
-        price: p.price,
-        currency: p.currency,
-        quantity: p.quantity,
-      })),
-    }));
+    const clamped = orders.length > MAX_DASHBOARD_ORDERS;
+    if (clamped) {
+      orders.pop(); // 移除多余的一条记录
+    }
+
+    // 【优化】使用共享的 mapper 函数
+    const orderRecords = orders.map((order) =>
+      mapOrderToRecord(order, { includeProducts: true, subtotalFallback: "totalPrice" })
+    );
 
     logger.info("[persistence] Loaded orders from database", {
       shopDomain,
       dateRange: range.label,
-      totalCount,
       loadedCount: orderRecords.length,
       clamped,
     });
@@ -404,8 +448,12 @@ export const loadCustomersByIdsLegacy = async (
   if (!shopDomain || !ids.length || isDemoMode()) return [];
 
   try {
-    const customers = await loadCustomersFromService(shopDomain, ids);
-    return customers.map(c => ({ id: c.id, acquiredViaAi: c.acquiredViaAi }));
+    // 直接查询数据库，避免循环依赖
+    const customers = await prisma.customer.findMany({
+      where: { shopDomain, id: { in: ids } },
+      select: { id: true, acquiredViaAi: true },
+    });
+    return customers.map((c) => ({ id: c.id, acquiredViaAi: c.acquiredViaAi }));
   } catch (error) {
     if (tableMissing(error)) {
       logger.warn("[persistence] Database tables not available for customer loading", { shopDomain });

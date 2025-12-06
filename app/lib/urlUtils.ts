@@ -46,45 +46,95 @@ export const domainMatches = (ruleDomain: string, url: URL | null): boolean => {
 
 /**
  * 从 URL 字符串中提取 UTM 参数
+ * 优化：确保 utm_source 和 utm_medium 来自同一 URL，避免混淆
  */
 export const extractUtm = (...urls: (string | null | undefined)[]): {
   utmSource: string | undefined;
   utmMedium: string | undefined;
+  sourceUrl?: string;
 } => {
-  let utmSource: string | undefined;
-  let utmMedium: string | undefined;
+  // 策略：优先返回同时包含 utm_source 和 utm_medium 的 URL
+  // 如果没有，则返回第一个包含任一参数的 URL
+  let bestMatch: { utmSource?: string; utmMedium?: string; sourceUrl?: string } | null = null;
+  let partialMatch: { utmSource?: string; utmMedium?: string; sourceUrl?: string } | null = null;
 
   for (const value of urls) {
     const parsed = safeUrl(value);
     if (!parsed) continue;
-    if (!utmSource) utmSource = parsed.searchParams.get("utm_source") || undefined;
-    if (!utmMedium) utmMedium = parsed.searchParams.get("utm_medium") || undefined;
-    if (utmSource && utmMedium) break;
+    
+    const utmSource = parsed.searchParams.get("utm_source") || undefined;
+    const utmMedium = parsed.searchParams.get("utm_medium") || undefined;
+    
+    if (utmSource && utmMedium) {
+      // 找到完整匹配，立即返回
+      bestMatch = { utmSource, utmMedium, sourceUrl: value || undefined };
+      break;
+    }
+    
+    if ((utmSource || utmMedium) && !partialMatch) {
+      // 记录第一个部分匹配
+      partialMatch = { utmSource, utmMedium, sourceUrl: value || undefined };
+    }
   }
 
-  return { utmSource, utmMedium };
+  const result = bestMatch || partialMatch;
+  return {
+    utmSource: result?.utmSource,
+    utmMedium: result?.utmMedium,
+    sourceUrl: result?.sourceUrl,
+  };
 };
 
 /**
  * 检查是否为 Bing Copilot 来源
- * 通过检查 Bing URL 中的 Copilot 相关参数
+ * 通过检查 Bing/Microsoft URL 中的 Copilot 相关参数
+ * 增强版：支持更多域名和参数格式
  */
 export const detectCopilotFromBing = (url: URL | null): string | null => {
   if (!url) return null;
   const hostname = normalizeDomain(url.hostname);
-  if (!hostname.endsWith("bing.com")) return null;
+  
+  // 扩展支持的域名：Bing 和 Microsoft Copilot 相关域名
+  const isCopilotDomain = 
+    hostname.endsWith("bing.com") ||
+    hostname === "copilot.microsoft.com" ||
+    hostname.endsWith(".copilot.microsoft.com") ||
+    hostname === "copilot.cloud.microsoft" ||
+    hostname.endsWith(".copilot.cloud.microsoft");
+  
+  if (!isCopilotDomain) return null;
 
+  // 直接是 Copilot 域名，无需检查参数
+  if (hostname.includes("copilot")) {
+    return `Copilot domain detected (${hostname}${url.pathname})`;
+  }
+
+  // Bing 域名需要检查 Copilot 相关参数
   const form = url.searchParams.get("form")?.toLowerCase() || "";
   const ocid = url.searchParams.get("ocid")?.toLowerCase() || "";
+  const ref = url.searchParams.get("ref")?.toLowerCase() || "";
+  const src = url.searchParams.get("src")?.toLowerCase() || "";
+  
   const hasCopilotParam =
+    // 路径检测
     url.pathname.includes("/chat") ||
     url.pathname.includes("/copilot") ||
+    // form 参数检测
     form.includes("bingai") ||
     form.includes("copilot") ||
-    ocid.includes("copilot");
+    form.includes("edgechat") ||
+    form.includes("sydchat") ||
+    // ocid 参数检测
+    ocid.includes("copilot") ||
+    ocid.includes("bingchat") ||
+    ocid.includes("sydneyai") ||
+    // ref/src 参数检测
+    ref.includes("copilot") ||
+    src.includes("copilot") ||
+    src.includes("bingchat");
 
   if (!hasCopilotParam) return null;
 
-  return `Bing referrer flagged as Copilot (${hostname}${url.pathname})`;
+  return `Bing/Copilot referrer detected (${hostname}${url.pathname})`;
 };
 

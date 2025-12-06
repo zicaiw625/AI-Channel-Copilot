@@ -386,7 +386,8 @@ export const buildProducts = (ordersInRange: OrderRecord[], metric: MetricKey): 
         handle: product.handle,
         url: product.url,
         aiOrders: product.aiOrders,
-        aiGMV: product.aiGMV,
+        // Bug Fix: 四舍五入到小数点后 2 位，避免浮点数精度问题
+        aiGMV: Math.round(product.aiGMV * 100) / 100,
         aiShare: product.totalOrders ? product.aiOrders / product.totalOrders : 0,
         topChannel,
       };

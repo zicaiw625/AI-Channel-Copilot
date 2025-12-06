@@ -78,3 +78,29 @@ export const resolvePlanByShopifyName = (name?: string | null): PlanConfig | nul
   return Object.values(BILLING_PLANS).find((plan) => plan.shopifyName.toLowerCase() === normalized) || null;
 };
 
+/**
+ * 验证并解析 planId
+ * 防止用户传入恶意或无效的计划 ID
+ * 
+ * @param value - 需要验证的值
+ * @returns 有效的 PlanId 或 null
+ */
+export const validatePlanId = (value: unknown): PlanId | null => {
+  if (typeof value !== "string") return null;
+  const normalized = value.toLowerCase().trim();
+  if (normalized === "free" || normalized === "pro" || normalized === "growth") {
+    return normalized as PlanId;
+  }
+  return null;
+};
+
+/**
+ * 验证 planId 并返回对应的配置
+ * 如果无效则返回 null
+ */
+export const validateAndGetPlan = (value: unknown): PlanConfig | null => {
+  const planId = validatePlanId(value);
+  if (!planId) return null;
+  return BILLING_PLANS[planId] || null;
+};
+

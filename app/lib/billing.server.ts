@@ -32,6 +32,38 @@ export type BillingState = {
 
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
 
+/**
+ * Shopify 店铺域名格式正则
+ * 有效格式: xxx.myshopify.com 或 xxx-xxx.myshopify.com
+ */
+const SHOP_DOMAIN_REGEX = /^[a-zA-Z0-9][a-zA-Z0-9-]*\.myshopify\.com$/;
+
+/**
+ * 验证 shopDomain 是否为有效的 Shopify 店铺域名
+ * 防止无效数据写入数据库和日志污染
+ */
+export const isValidShopDomain = (domain: unknown): domain is string => {
+  if (!domain || typeof domain !== "string") return false;
+  if (domain.length > 255 || domain.length < 14) return false; // 最短: x.myshopify.com = 14 字符
+  return SHOP_DOMAIN_REGEX.test(domain);
+};
+
+/**
+ * 验证 shopDomain，无效时记录警告并返回 null
+ * 用于需要安全处理的场景
+ */
+const validateShopDomain = (shopDomain: string, context: string): string | null => {
+  if (!isValidShopDomain(shopDomain)) {
+    // 使用 String() 确保类型安全，即使传入 undefined/null
+    const displayDomain = shopDomain ? String(shopDomain).slice(0, 50) : "(empty)";
+    logger.warn(`[billing] Invalid shop domain in ${context}`, { 
+      shopDomain: displayDomain,
+    });
+    return null;
+  }
+  return shopDomain;
+};
+
 const toPlanId = (raw?: string | null): PlanId => {
   if (raw === "free" || raw === "pro" || raw === "growth") return raw;
   return PRIMARY_BILLABLE_PLAN_ID;
@@ -47,7 +79,9 @@ const computeIncrementalTrialUsage = (state: BillingState, plan: PlanConfig, asO
     state.lastTrialEndAt?.getTime() ?? start + plan.defaultTrialDays * DAY_IN_MS;
   const windowEnd = Math.min(end, asOf.getTime());
   if (windowEnd <= start) return 0;
-  const diff = Math.ceil((windowEnd - start) / DAY_IN_MS);
+  // 使用 Math.floor 而非 Math.ceil，避免在边界情况下多算一天
+  // 例如：开始于 12:00，12:01 不应算作 1 天
+  const diff = Math.floor((windowEnd - start) / DAY_IN_MS);
   return Math.min(plan.defaultTrialDays, Math.max(diff, 0));
 };
 
@@ -145,7 +179,10 @@ export const markShopUninstalled = async (shopDomain: string) => {
 };
 
 export const getBillingState = async (shopDomain: string): Promise<BillingState | null> => {
-  if (!shopDomain) return null;
+  // 验证 shopDomain 格式
+  const validDomain = validateShopDomain(shopDomain, "getBillingState");
+  if (!validDomain) return null;
+  
   try {
     const record = await prisma.shopBillingState.findUnique({
       where: { shopDomain_platform: { shopDomain, platform: "shopify" } },
@@ -193,6 +230,12 @@ export const upsertBillingState = async (
   shopDomain: string,
   updates: Partial<BillingState>,
 ): Promise<BillingState> => {
+  // 验证 shopDomain 格式
+  const validDomain = validateShopDomain(shopDomain, "upsertBillingState");
+  if (!validDomain) {
+    throw new Error(`Invalid shop domain: ${shopDomain?.slice(0, 50) || "(empty)"}`);
+  }
+  
   const payload: BillingStatePayload = {
     isDevShop: updates.isDevShop ?? false,
     billingPlan: updates.billingPlan,
@@ -318,92 +361,135 @@ export const upsertBillingState = async (
 /**
  * Sync subscription status from Shopify Billing API
  * This is crucial for reinstall scenarios where the subscription may still be active
+ * 
+ * @param admin - Shopify Admin GraphQL client
+ * @param shopDomain - Shop domain
+ * @param maxRetries - Maximum number of retry attempts (default: 3)
  */
 export const syncSubscriptionFromShopify = async (
   admin: AdminGraphqlClient,
   shopDomain: string,
+  maxRetries = 3,
 ): Promise<{ synced: boolean; status?: string; planId?: PlanId }> => {
-  try {
-    const sdk = createGraphqlSdk(admin, shopDomain);
-    const QUERY = `#graphql
-      query ActiveSubscriptionsForSync {
-        currentAppInstallation {
-          activeSubscriptions { 
-            id 
-            name 
-            status 
-            trialDays 
-            currentPeriodEnd
-          }
+  const QUERY = `#graphql
+    query ActiveSubscriptionsForSync {
+      currentAppInstallation {
+        activeSubscriptions { 
+          id 
+          name 
+          status 
+          trialDays 
+          currentPeriodEnd
         }
       }
-    `;
-    
-    const resp = await sdk.request("activeSubscriptionsForSync", QUERY, {});
-    if (!resp.ok) {
-      logger.warn("[billing] Failed to sync subscription from Shopify", { shopDomain, status: resp.status });
+    }
+  `;
+
+  let lastError: Error | null = null;
+  
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const sdk = createGraphqlSdk(admin, shopDomain);
+      const resp = await sdk.request("activeSubscriptionsForSync", QUERY, {});
+      
+      if (resp.ok) {
+        const json = (await resp.json()) as {
+          data?: { 
+            currentAppInstallation?: { 
+              activeSubscriptions?: { 
+                id: string; 
+                name: string; 
+                status: string;
+                trialDays?: number | null;
+                currentPeriodEnd?: string | null;
+              }[] 
+            } 
+          };
+        };
+        
+        const subs = json.data?.currentAppInstallation?.activeSubscriptions || [];
+        
+        // Find our app's active subscription
+        const activeSub = subs.find((s) => {
+          const plan = resolvePlanByShopifyName(s.name);
+          return plan && (s.status === "ACTIVE" || s.status === "PENDING");
+        });
+        
+        if (!activeSub) {
+          logger.info("[billing] No active subscription found on Shopify", { shopDomain });
+          return { synced: true, status: "NONE" };
+        }
+        
+        const plan = resolvePlanByShopifyName(activeSub.name);
+        if (!plan) {
+          logger.warn("[billing] Unknown plan name from Shopify", { shopDomain, planName: activeSub.name });
+          return { synced: false };
+        }
+        
+        // Check if it's trialing
+        const trialEnd = activeSub.currentPeriodEnd ? new Date(activeSub.currentPeriodEnd) : null;
+        const isTrialing = activeSub.trialDays && activeSub.trialDays > 0 && trialEnd && trialEnd.getTime() > Date.now();
+        
+        logger.info("[billing] Syncing subscription from Shopify", { 
+          shopDomain, 
+          planId: plan.id,
+          status: activeSub.status,
+          isTrialing,
+          trialDays: activeSub.trialDays,
+        });
+        
+        // Update local billing state
+        if (isTrialing && plan.trialSupported) {
+          await setSubscriptionTrialState(shopDomain, plan.id, trialEnd, activeSub.status);
+        } else {
+          await setSubscriptionActiveState(shopDomain, plan.id, activeSub.status);
+        }
+        
+        return { synced: true, status: activeSub.status, planId: plan.id };
+      }
+      
+      // Check if error is retryable (5xx or 429)
+      if (resp.status >= 500 || resp.status === 429) {
+        lastError = new Error(`HTTP ${resp.status}`);
+        logger.warn("[billing] Retryable error syncing subscription", { 
+          shopDomain, 
+          status: resp.status,
+          attempt: attempt + 1,
+          maxRetries,
+        });
+        // Exponential backoff: 1s, 2s, 4s
+        await new Promise(r => setTimeout(r, Math.min(1000 * Math.pow(2, attempt), 10000)));
+        continue;
+      }
+      
+      // 4xx errors are not retryable
+      logger.warn("[billing] Non-retryable error syncing subscription", { 
+        shopDomain, 
+        status: resp.status,
+      });
       return { synced: false };
+      
+    } catch (error) {
+      lastError = error as Error;
+      logger.warn("[billing] Exception syncing subscription", { 
+        shopDomain, 
+        attempt: attempt + 1,
+        error: (error as Error).message,
+      });
+      
+      if (attempt < maxRetries - 1) {
+        // Exponential backoff
+        await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt)));
+      }
     }
-    
-    const json = (await resp.json()) as {
-      data?: { 
-        currentAppInstallation?: { 
-          activeSubscriptions?: { 
-            id: string; 
-            name: string; 
-            status: string;
-            trialDays?: number | null;
-            currentPeriodEnd?: string | null;
-          }[] 
-        } 
-      };
-    };
-    
-    const subs = json.data?.currentAppInstallation?.activeSubscriptions || [];
-    
-    // Find our app's active subscription
-    const activeSub = subs.find((s) => {
-      const plan = resolvePlanByShopifyName(s.name);
-      return plan && (s.status === "ACTIVE" || s.status === "PENDING");
-    });
-    
-    if (!activeSub) {
-      logger.info("[billing] No active subscription found on Shopify", { shopDomain });
-      return { synced: true, status: "NONE" };
-    }
-    
-    const plan = resolvePlanByShopifyName(activeSub.name);
-    if (!plan) {
-      logger.warn("[billing] Unknown plan name from Shopify", { shopDomain, planName: activeSub.name });
-      return { synced: false };
-    }
-    
-    // Check if it's trialing
-    const trialEnd = activeSub.currentPeriodEnd ? new Date(activeSub.currentPeriodEnd) : null;
-    const isTrialing = activeSub.trialDays && activeSub.trialDays > 0 && trialEnd && trialEnd.getTime() > Date.now();
-    
-    logger.info("[billing] Syncing subscription from Shopify", { 
-      shopDomain, 
-      planId: plan.id,
-      status: activeSub.status,
-      isTrialing,
-      trialDays: activeSub.trialDays,
-    });
-    
-    // Update local billing state
-    if (isTrialing && plan.trialSupported) {
-      await setSubscriptionTrialState(shopDomain, plan.id, trialEnd, activeSub.status);
-    } else {
-      await setSubscriptionActiveState(shopDomain, plan.id, activeSub.status);
-    }
-    
-    return { synced: true, status: activeSub.status, planId: plan.id };
-  } catch (error) {
-    logger.error("[billing] Error syncing subscription from Shopify", { shopDomain }, {
-      error: (error as Error).message,
-    });
-    return { synced: false };
   }
+  
+  logger.error("[billing] Failed to sync subscription after retries", { 
+    shopDomain, 
+    attempts: maxRetries,
+    error: lastError?.message,
+  });
+  return { synced: false };
 };
 
 export const detectAndPersistDevShop = async (

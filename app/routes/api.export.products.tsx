@@ -6,6 +6,7 @@ import { getAiDashboardData } from "../lib/aiQueries.server";
 import { requireFeature, FEATURES } from "../lib/access.server";
 import { isDemoMode } from "../lib/runtime.server";
 import { enforceRateLimit, RateLimitRules } from "../lib/security/rateLimit.server";
+import { toCsvValue } from "../lib/export";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   let session;
@@ -37,12 +38,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       const header = [
         "product_title","ai_orders","ai_gmv","ai_share","top_ai_channel","product_url","product_id","handle",
       ];
+      // 添加 UTF-8 BOM 以确保 Excel 正确识别中文
+      controller.enqueue(new Uint8Array([0xEF, 0xBB, 0xBF]));
       controller.enqueue(encoder.encode(`# 仅统计可识别的 AI 流量（依赖 referrer/UTM/标签，结果为保守估计）\n`));
       controller.enqueue(encoder.encode(header.join(",") + "\n"));
-      const toCsv = (v: string | number | null | undefined) => {
-        const s = v === null || v === undefined ? "" : String(v);
-        return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-      };
       for (const p of data.topProducts) {
         const row = [
           p.title,
@@ -53,7 +52,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           p.url,
           p.id,
           p.handle,
-        ].map(toCsv).join(",") + "\n";
+        ].map(toCsvValue).join(",") + "\n";
         controller.enqueue(encoder.encode(row));
       }
       controller.close();

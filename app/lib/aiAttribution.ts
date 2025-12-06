@@ -15,17 +15,35 @@ import {
 
 /**
  * 将 AI 相关值映射到渠道
+ * 优化：使用精确匹配和单词边界匹配，避免误判
  */
 export const aiValueToChannel = (value: string, utmSources: UtmSourceRule[]): AIChannel | null => {
-  const normalized = value.toLowerCase();
+  const normalized = value.toLowerCase().trim();
+  if (!normalized) return null;
+  
+  // 1. 精确匹配 UTM 规则（最高优先级）
   const utmMatch = utmSources.find((rule) => rule.value.toLowerCase() === normalized);
   if (utmMatch) return utmMatch.channel;
-  const channel = AI_CHANNELS.find((item) => normalized.includes(item.toLowerCase()));
-  return (channel as AIChannel | undefined) || null;
+  
+  // 2. 精确匹配渠道名称
+  const exactMatch = AI_CHANNELS.find((item) => item.toLowerCase() === normalized);
+  if (exactMatch) return exactMatch;
+  
+  // 3. 使用单词边界进行模糊匹配，避免 "notchatgpt" 匹配 "ChatGPT"
+  // 缓存正则表达式以提升性能
+  const wordBoundaryMatch = AI_CHANNELS.find((item) => {
+    // Other-AI 不参与模糊匹配
+    if (item === "Other-AI") return false;
+    const pattern = new RegExp(`\\b${item.toLowerCase().replace("-", "[-_]?")}\\b`, "i");
+    return pattern.test(normalized);
+  });
+  
+  return wordBoundaryMatch || null;
 };
 
 /**
  * 从订单备注属性中检测 AI 来源
+ * 优化：区分明确的 AI 标识和可能有歧义的词汇，减少误报
  */
 export const detectFromNoteAttributes = (
   noteAttributes: { name?: string | null; value?: string | null }[] | undefined,
@@ -33,10 +51,10 @@ export const detectFromNoteAttributes = (
 ): { aiSource: AIChannel; detection: string } | null => {
   if (!noteAttributes?.length) return null;
 
+  // 1. 显式 AI 字段检测（最高优先级）
+  const explicitAiKeys = ["ai_source", "ai-channel", "ai_channel", "ai-referrer", "ai_referrer"];
   const explicit = noteAttributes.find((attr) =>
-    ["ai_source", "ai-channel", "ai_channel", "ai-referrer"].some((key) =>
-      (attr.name || "").toLowerCase().includes(key)
-    )
+    explicitAiKeys.some((key) => (attr.name || "").toLowerCase().includes(key))
   );
 
   if (explicit?.value) {
@@ -47,31 +65,75 @@ export const detectFromNoteAttributes = (
     };
   }
 
-  // More precise AI pattern matching to avoid false positives like "daily", "email", etc.
-  // Matches: "ai", "AI", "ai-", "ai_", "-ai", "_ai", "openai", "chatgpt", "perplexity", etc.
-  const aiPatterns = [
+  // 2. 严格的 AI 平台名称匹配（无歧义）
+  const strictPatterns = [
+    { pattern: /\bopenai\b/i, channel: "ChatGPT" as AIChannel },
+    { pattern: /\bchatgpt\b/i, channel: "ChatGPT" as AIChannel },
+    { pattern: /\bperplexity\b/i, channel: "Perplexity" as AIChannel },
+    { pattern: /\bcopilot\b/i, channel: "Copilot" as AIChannel },
+    { pattern: /\bclaude\b/i, channel: "Other-AI" as AIChannel },
+    { pattern: /\bdeepseek\b/i, channel: "Other-AI" as AIChannel },
+    { pattern: /\banthropic\b/i, channel: "Other-AI" as AIChannel },
+  ];
+
+  for (const attr of noteAttributes) {
+    const value = (attr.value || "").toLowerCase();
+    for (const { pattern, channel } of strictPatterns) {
+      if (pattern.test(value)) {
+        return {
+          aiSource: channel,
+          detection: `Note attribute contains AI platform name (${attr.name || "note"}=${attr.value || ""})`,
+        };
+      }
+    }
+  }
+
+  // 3. 可能有歧义的词汇（如 "gemini"）需要额外上下文验证
+  const ambiguousPatterns = [
+    { pattern: /\bgemini\b/i, channel: "Gemini" as AIChannel },
+  ];
+  
+  // AI 相关上下文关键词
+  const aiContextPattern = /\b(ai|llm|chat|assistant|bot|model|gpt|language\s*model)\b/i;
+
+  for (const attr of noteAttributes) {
+    const name = (attr.name || "").toLowerCase();
+    const value = (attr.value || "").toLowerCase();
+    
+    for (const { pattern, channel } of ambiguousPatterns) {
+      if (pattern.test(value)) {
+        // 检查是否有 AI 相关上下文
+        if (aiContextPattern.test(name) || aiContextPattern.test(value)) {
+          return {
+            aiSource: channel,
+            detection: `Note attribute contains ${channel} with AI context (${attr.name || "note"}=${attr.value || ""})`,
+          };
+        }
+      }
+    }
+  }
+
+  // 4. 通用 AI 模式匹配（需要字段名包含相关上下文）
+  const aiFieldNamePattern = /\b(source|channel|referr|traffic|campaign|medium)\b/i;
+  const genericAiPatterns = [
     /\bai\b/i,           // Standalone "ai" word
     /\bai[-_]/i,         // "ai-" or "ai_" prefix
     /[-_]ai\b/i,         // "-ai" or "_ai" suffix
-    /\bopenai\b/i,       // openai
-    /\bchatgpt\b/i,      // chatgpt
-    /\bperplexity\b/i,   // perplexity
-    /\bgemini\b/i,       // gemini
-    /\bcopilot\b/i,      // copilot
-    /\bclaude\b/i,       // claude
-    /\bdeepseek\b/i,     // deepseek
   ];
 
-  const fuzzyHit = noteAttributes.find((attr) => {
+  for (const attr of noteAttributes) {
+    const name = (attr.name || "").toLowerCase();
     const value = (attr.value || "").toLowerCase();
-    return aiPatterns.some((pattern) => pattern.test(value));
-  });
-
-  if (fuzzyHit) {
-    return {
-      aiSource: "Other-AI",
-      detection: `Note attribute contains AI hint (${fuzzyHit.name || "note"}=${fuzzyHit.value || ""})`,
-    };
+    
+    // 只有当字段名包含相关上下文时，才进行通用 AI 模式匹配
+    if (aiFieldNamePattern.test(name)) {
+      if (genericAiPatterns.some((pattern) => pattern.test(value))) {
+        return {
+          aiSource: "Other-AI",
+          detection: `Note attribute contains AI hint (${attr.name || "note"}=${attr.value || ""})`,
+        };
+      }
+    }
   }
 
   return null;
@@ -201,8 +263,27 @@ export const detectAiFromFields = (
   });
   if (tagMatch) {
     // 使用正则提取后缀，支持多种分隔符
-    const suffixMatch = tagMatch.match(new RegExp(`^${tagPrefix}[-:_](.+)$`, "i"));
-    const suffix = suffixMatch ? suffixMatch[1] : tagMatch.slice(tagPrefix.length + 1);
+    // 转义正则特殊字符以防止正则注入
+    const escapeRegex = (str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const suffixMatch = tagMatch.match(new RegExp(`^${escapeRegex(tagPrefix)}[-:_](.+)$`, "i"));
+    let suffix = suffixMatch ? suffixMatch[1] : tagMatch.slice(tagPrefix.length + 1);
+    
+    // 清理后缀：移除前导分隔符，处理多个连续分隔符的情况
+    suffix = suffix.replace(/^[-:_]+/, "").trim();
+    
+    // 处理空后缀的边界情况
+    if (!suffix) {
+      const low =
+        config.lang === "English"
+          ? "confidence: low (tag has empty suffix)"
+          : "置信度低（标签后缀为空）";
+      return {
+        aiSource: "Other-AI",
+        detection: `Tag ${tagMatch} has empty suffix · ${low}`,
+        signals: ["existing tag (empty suffix)"],
+      };
+    }
+    
     const channel =
       AI_CHANNELS.find((item) => item.toLowerCase() === suffix.toLowerCase()) ||
       ("Other-AI" as AIChannel);

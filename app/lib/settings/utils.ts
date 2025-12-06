@@ -1,21 +1,147 @@
 import type { ShopSettings } from "@prisma/client";
 
-import { defaultSettings, type SettingsDefaults, type PipelineStatus } from "../aiData";
+import { defaultSettings, type SettingsDefaults, type PipelineStatus, type AiDomainRule, type UtmSourceRule } from "../aiData";
 import type { SettingsUpdate } from "../validation/schemas";
 
 const MIN_RETENTION_MONTHS = 1;
 const MAX_RETENTION_MONTHS = 24;
 
-const toISOStringOrNull = (value?: Date | string | null) => {
+/**
+ * 问题 6 修复：增强日期字符串验证
+ * 安全地将值转换为 ISO 字符串，处理各种边界情况
+ */
+const toISOStringOrNull = (value?: Date | string | null): string | null => {
   if (!value) return null;
-  const date = value instanceof Date ? value : new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+  
+  // 如果是 Date 对象，直接转换
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value.toISOString();
+  }
+  
+  // 如果是字符串，进行额外验证
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    // 空字符串或纯空白字符串返回 null
+    if (!trimmed) return null;
+    
+    // 尝试解析日期
+    const date = new Date(trimmed);
+    if (Number.isNaN(date.getTime())) return null;
+    
+    // 额外验证：确保解析后的年份在合理范围内（1970-2100）
+    const year = date.getFullYear();
+    if (year < 1970 || year > 2100) return null;
+    
+    return date.toISOString();
+  }
+  
+  return null;
 };
 
-const toDateOrNull = (value?: string | Date | null) => {
+/**
+ * 问题 6 修复：增强日期解析
+ * 安全地将值转换为 Date 对象，处理各种边界情况
+ */
+const toDateOrNull = (value?: string | Date | null): Date | null => {
   if (!value) return null;
-  const date = value instanceof Date ? value : new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date;
+  
+  // 如果是 Date 对象，验证有效性
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value;
+  }
+  
+  // 如果是字符串，进行额外验证
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    
+    const date = new Date(trimmed);
+    if (Number.isNaN(date.getTime())) return null;
+    
+    // 额外验证：确保年份在合理范围内
+    const year = date.getFullYear();
+    if (year < 1970 || year > 2100) return null;
+    
+    return date;
+  }
+  
+  return null;
+};
+
+// ============================================================================
+// 问题 5 修复：JSON 字段运行时类型验证
+// ============================================================================
+
+/**
+ * 验证 AiDomainRule 数组
+ */
+const isValidAiDomainRule = (item: unknown): item is AiDomainRule => {
+  if (!item || typeof item !== 'object') return false;
+  const obj = item as Record<string, unknown>;
+  return (
+    typeof obj.domain === 'string' &&
+    obj.domain.length > 0 &&
+    typeof obj.channel === 'string' &&
+    (obj.source === 'default' || obj.source === 'custom')
+  );
+};
+
+const validateAiDomains = (data: unknown): AiDomainRule[] => {
+  if (!Array.isArray(data)) return defaultSettings.aiDomains;
+  const valid = data.filter(isValidAiDomainRule);
+  return valid.length > 0 ? valid : defaultSettings.aiDomains;
+};
+
+/**
+ * 验证 UtmSourceRule 数组
+ */
+const isValidUtmSourceRule = (item: unknown): item is UtmSourceRule => {
+  if (!item || typeof item !== 'object') return false;
+  const obj = item as Record<string, unknown>;
+  return (
+    typeof obj.value === 'string' &&
+    obj.value.length > 0 &&
+    typeof obj.channel === 'string' &&
+    (obj.source === 'default' || obj.source === 'custom')
+  );
+};
+
+const validateUtmSources = (data: unknown): UtmSourceRule[] => {
+  if (!Array.isArray(data)) return defaultSettings.utmSources;
+  const valid = data.filter(isValidUtmSourceRule);
+  return valid.length > 0 ? valid : defaultSettings.utmSources;
+};
+
+/**
+ * 验证 utmMediumKeywords 字符串数组
+ */
+const validateUtmMediumKeywords = (data: unknown): string[] => {
+  if (!Array.isArray(data)) return defaultSettings.utmMediumKeywords;
+  const valid = data.filter((item): item is string => 
+    typeof item === 'string' && item.trim().length > 0
+  );
+  return valid.length > 0 ? valid : defaultSettings.utmMediumKeywords;
+};
+
+/**
+ * 验证 PipelineStatus 数组
+ */
+const isValidPipelineStatus = (item: unknown): item is PipelineStatus => {
+  if (!item || typeof item !== 'object') return false;
+  const obj = item as Record<string, unknown>;
+  const validStatuses = ['healthy', 'warning', 'info'];
+  return (
+    typeof obj.title === 'string' &&
+    typeof obj.status === 'string' &&
+    validStatuses.includes(obj.status) &&
+    typeof obj.detail === 'string'
+  );
+};
+
+const validatePipelineStatuses = (data: unknown): PipelineStatus[] => {
+  if (!Array.isArray(data)) return defaultSettings.pipelineStatuses;
+  const valid = data.filter(isValidPipelineStatus);
+  return valid.length > 0 ? valid : defaultSettings.pipelineStatuses;
 };
 
 const mergePreferredValue = <T>(preferred: T | null | undefined, defaults: readonly T[]): T[] => {
@@ -51,15 +177,18 @@ const sanitizeExposurePreferences = (preferences: ShopSettings["aiExposurePrefer
       : defaultSettings.exposurePreferences.exposeBlogs,
 });
 
+/**
+ * 将数据库记录映射为设置对象
+ * 问题 5 修复：使用运行时类型验证替代不安全的类型断言
+ */
 export const mapRecordToSettings = (record?: Partial<ShopSettings> | null): SettingsDefaults => {
   if (!record) return defaultSettings;
 
   return {
-    aiDomains: (record.aiDomains as SettingsDefaults["aiDomains"]) || defaultSettings.aiDomains,
-    utmSources: (record.utmSources as SettingsDefaults["utmSources"]) || defaultSettings.utmSources,
-    utmMediumKeywords:
-      (record.utmMediumKeywords as SettingsDefaults["utmMediumKeywords"]) ||
-      defaultSettings.utmMediumKeywords,
+    // 问题 5 修复：使用验证函数确保 JSON 字段类型安全
+    aiDomains: validateAiDomains(record.aiDomains),
+    utmSources: validateUtmSources(record.utmSources),
+    utmMediumKeywords: validateUtmMediumKeywords(record.utmMediumKeywords),
     gmvMetric:
       record.gmvMetric === "subtotal_price" ? "subtotal_price" : defaultSettings.gmvMetric,
     primaryCurrency: record.primaryCurrency || defaultSettings.primaryCurrency,
@@ -86,9 +215,8 @@ export const mapRecordToSettings = (record?: Partial<ShopSettings> | null): Sett
     ),
     languages: mergePreferredValue(record.language, defaultSettings.languages),
     timezones: mergePreferredValue(record.timezone, defaultSettings.timezones),
-    pipelineStatuses:
-      (record.pipelineStatuses as SettingsDefaults["pipelineStatuses"]) ||
-      defaultSettings.pipelineStatuses,
+    // 问题 5 修复：使用验证函数
+    pipelineStatuses: validatePipelineStatuses(record.pipelineStatuses),
     lastOrdersWebhookAt: toISOStringOrNull(record.lastOrdersWebhookAt),
     lastBackfillAt: toISOStringOrNull(record.lastBackfillAt),
     lastTaggingAt: toISOStringOrNull(record.lastTaggingAt),

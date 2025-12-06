@@ -6,6 +6,9 @@ import { authenticate } from "../shopify.server";
 import { requireFeature, FEATURES } from "../lib/access.server";
 import { enforceRateLimit, RateLimitRules } from "../lib/security/rateLimit.server";
 
+// 请求体大小限制（10KB）
+const MAX_REQUEST_BODY_SIZE = 10 * 1024;
+
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { session } = await authenticate.admin(request);
   const shopDomain = session?.shop || "";
@@ -17,6 +20,15 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   if (request.method !== "POST") {
     return Response.json({ ok: false, message: "Method not allowed" }, { status: 405 });
+  }
+
+  // 检查请求体大小，防止大请求消耗过多内存
+  const contentLength = parseInt(request.headers.get("content-length") || "0", 10);
+  if (contentLength > MAX_REQUEST_BODY_SIZE) {
+    return Response.json(
+      { ok: false, message: "Request body too large (max 10KB)" }, 
+      { status: 413 }
+    );
   }
 
   const contentType = request.headers.get("content-type") || "";

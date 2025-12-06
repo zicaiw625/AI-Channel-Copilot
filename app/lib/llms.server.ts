@@ -7,6 +7,51 @@ import { getPlatform } from "./runtime.server";
 // Cache TTL in milliseconds (1 hour)
 const LLMS_CACHE_TTL_MS = 60 * 60 * 1000;
 
+/**
+ * YAML 字符串转义辅助函数
+ * 处理 YAML 格式中的特殊字符，避免解析错误
+ */
+const escapeYamlString = (str: string): string => {
+  if (!str) return "";
+  
+  let escaped = str
+    // 移除控制字符（除了常规空白）
+    .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, "")
+    // 换行转空格
+    .replace(/[\n\r]+/g, " ")
+    // 多个空格合并为一个
+    .replace(/\s+/g, " ")
+    .trim();
+  
+  // 检查是否需要用双引号包裹
+  // YAML 特殊字符：: # ' " \ | > [ ] { } ! & * ? @ ` , -（在开头）
+  const needsQuotes = /[:"'#|>\[\]{}!&*?,\\`@]/.test(escaped) ||
+                      /^[-?]/.test(escaped) ||
+                      /^\s/.test(escaped) ||
+                      /\s$/.test(escaped);
+  
+  if (needsQuotes) {
+    // 转义反斜杠和双引号
+    escaped = escaped
+      .replace(/\\/g, "\\\\")
+      .replace(/"/g, '\\"');
+  }
+  
+  return escaped;
+};
+
+/**
+ * 安全地生成 YAML 键值对
+ * 自动处理需要引号包裹的情况
+ */
+const yamlValue = (value: string): string => {
+  const escaped = escapeYamlString(value);
+  // 如果包含特殊字符或以特殊字符开头，需要引号
+  const needsQuotes = /[:"'#|>\[\]{}!&*?,\\`@\s]/.test(escaped) ||
+                      /^[-?]/.test(escaped);
+  return needsQuotes ? `"${escaped}"` : escaped;
+};
+
 // GraphQL query for fetching collections
 const COLLECTIONS_QUERY = `#graphql
   query CollectionsForLlms($first: Int!) {
@@ -307,35 +352,35 @@ export const buildLlmsTxt = async (
       for (const product of topProducts) {
         const details = productDetails.get(product.productId);
         lines.push(`  - url: ${product.url}`);
-        lines.push(`    title: "${product.title}"`);
+        lines.push(`    title: ${yamlValue(product.title)}`);
         
         if (details) {
           // Add price if available
           if (details.priceRangeV2?.minVariantPrice) {
             const price = details.priceRangeV2.minVariantPrice;
-            lines.push(`    price: "${price.amount} ${price.currencyCode}"`);
+            lines.push(`    price: ${yamlValue(`${price.amount} ${price.currencyCode}`)}`);
           }
           
           // Add description summary (first 150 chars)
           if (details.description) {
-            const summary = details.description
+            const rawSummary = details.description
               .replace(/[\n\r]+/g, " ")
-              .replace(/"/g, '\\"') // 转义双引号防止 YAML 格式错误
               .trim()
               .slice(0, 150);
-            if (summary) {
-              lines.push(`    summary: "${summary}${details.description.length > 150 ? "..." : ""}"`);
+            if (rawSummary) {
+              const suffix = details.description.length > 150 ? "..." : "";
+              lines.push(`    summary: ${yamlValue(rawSummary + suffix)}`);
             }
           }
           
           // Add category/type
           if (details.productType) {
-            lines.push(`    category: "${details.productType}"`);
+            lines.push(`    category: ${yamlValue(details.productType)}`);
           }
           
           // Add vendor/brand
           if (details.vendor) {
-            lines.push(`    brand: "${details.vendor}"`);
+            lines.push(`    brand: ${yamlValue(details.vendor)}`);
           }
         }
         
@@ -363,7 +408,7 @@ export const buildLlmsTxt = async (
         lines.push("collections:");
         collections.forEach(({ url, title }) => {
           lines.push(`  - url: ${url}`);
-          lines.push(`    title: "${title}"`);
+          lines.push(`    title: ${yamlValue(title)}`);
         });
       } else {
         lines.push(isEnglish 
@@ -391,7 +436,7 @@ export const buildLlmsTxt = async (
         lines.push("articles:");
         articles.forEach(({ url, title }) => {
           lines.push(`  - url: ${url}`);
-          lines.push(`    title: "${title}"`);
+          lines.push(`    title: ${yamlValue(title)}`);
         });
       } else {
         lines.push(isEnglish 

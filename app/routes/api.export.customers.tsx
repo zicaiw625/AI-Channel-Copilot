@@ -7,6 +7,7 @@ import { computeLTV } from "../lib/metrics";
 import { requireFeature, FEATURES } from "../lib/access.server";
 import { isDemoMode } from "../lib/runtime.server";
 import { enforceRateLimit, RateLimitRules } from "../lib/security/rateLimit.server";
+import { toCsvValue } from "../lib/export";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   let session;
@@ -38,34 +39,49 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
       const metric = settings.gmvMetric;
+      // 添加 UTF-8 BOM 以确保 Excel 正确识别中文
+      controller.enqueue(new Uint8Array([0xEF, 0xBB, 0xBF]));
       controller.enqueue(encoder.encode(`# 客户级 LTV（选定时间范围内累计 GMV）；GMV 口径=${metric}\n`));
       const header = ["customer_id","ltv","gmv_metric","first_ai_acquired","repeat_count","ai_order_share","first_order_at"];
       controller.enqueue(encoder.encode(header.join(",") + "\n"));
-      const toCsv = (v: string | number | null | undefined) => {
-        const s = v === null || v === undefined ? "" : String(v);
-        return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-      };
+      
       const ltvMap = computeLTV(orders, metric);
-      const counts = orders.reduce<Record<string, number>>((acc, o) => {
-        if (!o.customerId) return acc;
-        acc[o.customerId] = (acc[o.customerId] || 0) + 1;
-        return acc;
-      }, {});
-      const fallbackFirstAi: Record<string, boolean> = {};
-      orders.forEach((o) => {
-        if (!o.customerId) return;
-        const cid = o.customerId;
-        const prev = fallbackFirstAi[cid];
-        if (prev !== true) {
-          fallbackFirstAi[cid] = Boolean(o.isNewCustomer && o.aiSource);
+      
+      // 性能优化：O(n) 预处理，避免 O(n²) 的重复遍历
+      const counts = new Map<string, number>();
+      const aiCounts = new Map<string, number>();
+      const firstOrderDates = new Map<string, Date>();
+      const firstAiAcquired = new Map<string, boolean>();
+      
+      // 单次遍历预处理所有客户数据
+      for (const order of orders) {
+        if (!order.customerId) continue;
+        const cid = order.customerId;
+        const orderDate = new Date(order.createdAt);
+        
+        // 订单计数
+        counts.set(cid, (counts.get(cid) || 0) + 1);
+        
+        // AI 订单计数
+        if (order.aiSource) {
+          aiCounts.set(cid, (aiCounts.get(cid) || 0) + 1);
         }
-      });
+        
+        // 首单日期（取最早的）
+        const existingDate = firstOrderDates.get(cid);
+        if (!existingDate || orderDate < existingDate) {
+          firstOrderDates.set(cid, orderDate);
+          // 首单是否为 AI 获客（只在更新首单日期时更新此字段）
+          firstAiAcquired.set(cid, Boolean(order.isNewCustomer && order.aiSource));
+        }
+      }
+      
       for (const [customerId, ltv] of ltvMap.entries()) {
-        const firstAi = Boolean(fallbackFirstAi[customerId]);
-        const total = counts[customerId] || 0;
-        const aiCount = orders.filter((o) => o.customerId === customerId && Boolean(o.aiSource)).length;
+        const firstAi = firstAiAcquired.get(customerId) || false;
+        const total = counts.get(customerId) || 0;
+        const aiCount = aiCounts.get(customerId) || 0;
         const aiShare = total ? aiCount / total : 0;
-        const firstOrderDate = orders.filter((o) => o.customerId === customerId).map((o) => new Date(o.createdAt)).sort((a, b) => a.getTime() - b.getTime())[0];
+        const firstOrderDate = firstOrderDates.get(customerId);
         const repeat = Math.max(0, total - 1);
         const row = [
           customerId,
@@ -74,8 +90,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           firstAi ? "true" : "false",
           String(repeat),
           aiShare.toFixed(4),
-          firstOrderDate ? new Date(firstOrderDate).toISOString() : "",
-        ].map(toCsv).join(",") + "\n";
+          firstOrderDate ? firstOrderDate.toISOString() : "",
+        ].map(toCsvValue).join(",") + "\n";
         controller.enqueue(encoder.encode(row));
       }
       controller.close();

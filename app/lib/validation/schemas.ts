@@ -158,14 +158,40 @@ export const ShopifyCustomerWebhookSchema = z.object({
 // Settings Schema
 // ============================================================================
 
+/**
+ * 问题 7 修复：域名验证正则（与前端一致）
+ * 格式：字母数字、点、连字符组成，以有效 TLD 结尾
+ */
+const DOMAIN_REGEX = /^[a-z0-9.-]+\.[a-z]{2,}$/i;
+
+/**
+ * 问题 7 修复：UTM Source 验证正则（与前端一致）
+ * 格式：字母数字、下划线、连字符
+ */
+const UTM_SOURCE_REGEX = /^[a-z0-9_-]+$/i;
+
 export const AiDomainRuleSchema = z.object({
-  domain: z.string().min(1).max(255),
+  // 问题 7 修复：添加域名格式验证，与前端一致
+  domain: z.string()
+    .min(1)
+    .max(255)
+    .transform(val => val.trim().toLowerCase())
+    .refine(val => DOMAIN_REGEX.test(val), {
+      message: 'Invalid domain format. Use format like: example.com or sub.example.com',
+    }),
   channel: AISourceSchema,
   source: z.enum(['default', 'custom']).default('custom'),
 });
 
 export const UtmSourceRuleSchema = z.object({
-  value: z.string().min(1).max(100),
+  // 问题 7 修复：添加 UTM Source 格式验证，与前端一致
+  value: z.string()
+    .min(1)
+    .max(100)
+    .transform(val => val.trim().toLowerCase())
+    .refine(val => UTM_SOURCE_REGEX.test(val), {
+      message: 'Invalid UTM source format. Use only letters, numbers, underscores, and hyphens.',
+    }),
   channel: AISourceSchema,
   source: z.enum(['default', 'custom']).default('custom'),
 });
@@ -188,7 +214,13 @@ export const SettingsUpdateSchema = z.object({
   primaryCurrency: CurrencySchema.optional(),
   aiDomains: z.array(AiDomainRuleSchema).optional(),
   utmSources: z.array(UtmSourceRuleSchema).optional(),
-  utmMediumKeywords: z.array(z.string()).optional(),
+  // 问题 7 修复：确保 utmMediumKeywords 中的每个元素都是非空字符串
+  utmMediumKeywords: z.array(
+    z.string()
+      .min(1, 'Keyword cannot be empty')
+      .max(100, 'Keyword too long')
+      .transform(val => val.trim())
+  ).optional(),
   tagging: TaggingSettingsSchema.optional(),
   exposurePreferences: ExposurePreferencesSchema.optional(),
   gmvMetric: z.enum(['current_total_price', 'subtotal_price']).optional(),

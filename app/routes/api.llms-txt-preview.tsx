@@ -3,6 +3,7 @@ import { authenticate } from "../shopify.server";
 import { getSettings } from "../lib/settings.server";
 import { buildLlmsTxt, updateLlmsTxtCache } from "../lib/llms.server";
 import { hasFeature, FEATURES } from "../lib/access.server";
+import { logger } from "../lib/logger.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const url = new URL(request.url);
@@ -42,8 +43,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   // Update cache when we have admin access (includes collections/blogs)
   if (admin && shopDomain) {
-    // Fire and forget - don't block response
-    updateLlmsTxtCache(shopDomain, text).catch(() => {});
+    // Fire and forget - don't block response, but log errors
+    updateLlmsTxtCache(shopDomain, text).catch((error) => {
+      logger.warn("[llms-preview] Cache update failed", { shopDomain }, {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
   }
 
   const download = url.searchParams.get("download") === "1";

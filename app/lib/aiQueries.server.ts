@@ -14,6 +14,7 @@ import type {
 } from "./aiData";
 import { buildDashboardData, buildDashboardFromOrders, AI_CHANNELS } from "./aiData";
 import { loadOrdersFromDb, loadCustomersByIdsLegacy as loadCustomersByIds } from "./persistence.server";
+import { buildOrdersCsv, buildProductsCsv, buildCustomersCsv } from "./export";
 import { allowDemoData } from "./runtime.server";
 import prisma from "../db.server";
 import { Prisma } from "@prisma/client";
@@ -82,9 +83,10 @@ async function buildDashboardFromDb(
   ]);
 
   const totalGMV = getSum(totalAgg, metric);
-  const totalNetGMV = totalGMV - (totalAgg._sum.refundTotal || 0);
+  // Bug Fix: 使用 Math.max 防止净 GMV 为负数（与内存模式保持一致）
+  const totalNetGMV = Math.max(0, totalGMV - (totalAgg._sum.refundTotal || 0));
   const aiGMV = getSum(aiAgg, metric);
-  const aiNetGMV = aiGMV - (aiAgg._sum.refundTotal || 0);
+  const aiNetGMV = Math.max(0, aiGMV - (aiAgg._sum.refundTotal || 0));
 
   // 获取新客数（需要 GroupBy 或 Count with filter）
   const [totalNew, aiNew] = await Promise.all([
@@ -192,7 +194,8 @@ async function buildDashboardFromDb(
          sortKey = start.getTime();
        } else {
          key = new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit" }).format(date);
-         const start = new Date(date);
+         // Bug Fix: 使用 startOfDay 保持时区一致，然后设置为月初
+         const start = startOfDay(date, timezone);
          start.setUTCDate(1); 
          sortKey = start.getTime();
        }
@@ -308,19 +311,14 @@ async function buildDashboardFromDb(
       const channels = p._channels;
       const topChannel = Object.entries(channels).sort(([,a], [,b]) => b - a)[0]?.[0] as AIChannel | null;
       
-      // 注意：aiShare 在这里定义为 aiOrders / totalOrders。
-      // 我们目前没有查询该产品的 totalOrders (非 AI)。
-      // 如果需要精确的 aiShare，我们需要再查一次所有订单的 products。
-      // 为了性能，这里暂时设为 1 (100% AI) 或者省略? 
-      // 仪表盘上显示的是 "AI 占比"，如果是针对全站销量，那确实需要 Total。
-      // 鉴于性能权衡，我们再发一个聚合查询查 Top Products 的 Total Orders。
       return {
         id: p.id,
         title: p.title,
         handle: p.handle,
         url: p.url,
         aiOrders: p.aiOrders,
-        aiGMV: p.aiGMV,
+        // Bug Fix: 四舍五入到小数点后 2 位，避免浮点数精度问题
+        aiGMV: Math.round(p.aiGMV * 100) / 100,
         aiShare: p.aiShare,
         topChannel,
       };
@@ -329,18 +327,38 @@ async function buildDashboardFromDb(
     .slice(0, 8); // Top 8
 
   // 补充 Total Orders for Top 8
+  // Bug Fix: 使用子查询获取去重的订单数，而不是行数
   if (topProducts.length > 0) {
     const topIds = topProducts.map(p => p.id);
-    const totalCounts = await prisma.orderProduct.groupBy({
-      by: ["productId"],
+    
+    // 获取每个产品的去重订单数
+    // 由于 Prisma groupBy 的 _count 不支持 distinct，我们需要分步查询
+    const ordersByProduct = await prisma.orderProduct.findMany({
       where: {
         productId: { in: topIds },
         order: where
       },
-      _count: { orderId: true } // 近似订单数
+      select: {
+        productId: true,
+        orderId: true,
+      },
     });
     
-    const countMap = new Map(totalCounts.map(c => [c.productId, c._count.orderId]));
+    // 在内存中计算每个产品的去重订单数
+    const countMap = new Map<string, number>();
+    const seenOrders = new Map<string, Set<string>>();
+    
+    ordersByProduct.forEach(item => {
+      if (!seenOrders.has(item.productId)) {
+        seenOrders.set(item.productId, new Set());
+      }
+      seenOrders.get(item.productId)!.add(item.orderId);
+    });
+    
+    seenOrders.forEach((orders, productId) => {
+      countMap.set(productId, orders.size);
+    });
+    
     topProducts.forEach(p => {
       const total = countMap.get(p.id) || p.aiOrders;
       p.aiShare = total ? p.aiOrders / total : 0;
@@ -423,18 +441,22 @@ async function buildDashboardFromDb(
   const comparison = buildComparisonLocal();
 
   // 6. Top Customers (按 LTV)
-  const topCustomerAgg = await prisma.order.groupBy({
+  // Bug Fix: Prisma groupBy 的 orderBy 不支持动态 key，所以先查询更多数据再在内存中按实际 metric 排序
+  const customerAggRaw = await prisma.order.groupBy({
     by: ["customerId"],
     where: { ...where, customerId: { not: null } },
     _sum: { totalPrice: true, subtotalPrice: true },
     _count: { _all: true },
-    orderBy: {
-      _sum: {
-        totalPrice: "desc" // 默认按总价排序，如果 metric 是 subtotal 也不太好改 orderBy key，Prisma 限制
-      }
-    },
-    take: 8
   });
+  
+  // 根据实际 metric 在内存中排序并取 Top 8
+  const topCustomerAgg = [...customerAggRaw]
+    .sort((a, b) => {
+      const aVal = metric === "subtotal_price" ? (a._sum.subtotalPrice || 0) : (a._sum.totalPrice || 0);
+      const bVal = metric === "subtotal_price" ? (b._sum.subtotalPrice || 0) : (b._sum.totalPrice || 0);
+      return bVal - aVal;
+    })
+    .slice(0, 8);
 
   // 获取这些客户的 AI 属性
   const topCusIds = topCustomerAgg.map(c => c.customerId!).filter(Boolean);
@@ -512,6 +534,61 @@ async function buildDashboardFromDb(
      signals: Array.isArray(o.detectionSignals) ? (o.detectionSignals as string[]) : [],
   }));
 
+  // 8. CSV 导出数据 - 为 DB 模式提供 CSV 支持
+  // 查询 AI 订单用于 CSV 导出（限制数量避免内存问题）
+  const aiOrdersForCsv = await prisma.order.findMany({
+    where: { ...where, aiSource: { not: null } },
+    orderBy: { createdAt: "desc" },
+    take: 1000, // 限制导出数量
+    include: { products: true },
+  });
+
+  // 转换为 OrderRecord 格式以复用 CSV 构建函数
+  const ordersForCsv: OrderRecord[] = aiOrdersForCsv.map(o => ({
+    id: o.id,
+    name: o.name,
+    createdAt: o.createdAt.toISOString(),
+    totalPrice: o.totalPrice,
+    currency: o.currency,
+    subtotalPrice: o.subtotalPrice ?? undefined,
+    refundTotal: o.refundTotal,
+    aiSource: fromPrismaAiSource(o.aiSource),
+    detection: o.detection || "",
+    signals: Array.isArray(o.detectionSignals) ? (o.detectionSignals as string[]) : [],
+    referrer: o.referrer || "",
+    landingPage: o.landingPage || "",
+    utmSource: o.utmSource || undefined,
+    utmMedium: o.utmMedium || undefined,
+    sourceName: o.sourceName || undefined,
+    customerId: o.customerId || null,
+    isNewCustomer: o.isNewCustomer,
+    tags: [],
+    products: o.products.map(p => ({
+      id: p.productId,
+      title: p.title,
+      handle: p.handle || "",
+      url: p.url || "",
+      price: p.price,
+      currency: p.currency,
+      quantity: p.quantity,
+    })),
+  }));
+
+  // 构建 acquiredViaAi Map
+  const csvCustomerIds = Array.from(new Set(ordersForCsv.map(o => o.customerId).filter(Boolean) as string[]));
+  let csvAcquiredMap: Record<string, boolean> | undefined = undefined;
+  if (csvCustomerIds.length > 0) {
+    const csvCustomers = await loadCustomersByIds(shopDomain, csvCustomerIds);
+    csvAcquiredMap = csvCustomers.reduce<Record<string, boolean>>((acc, c) => {
+      acc[c.id] = Boolean(c.acquiredViaAi);
+      return acc;
+    }, {});
+  }
+
+  const ordersCsv = buildOrdersCsv(ordersForCsv, metric === "subtotal_price" ? "subtotal_price" : "current_total_price");
+  const productsCsv = buildProductsCsv(topProducts);
+  const customersCsv = buildCustomersCsv(ordersForCsv, metric === "subtotal_price" ? "subtotal_price" : "current_total_price", csvAcquiredMap);
+
   return {
     overview,
     channels,
@@ -522,9 +599,9 @@ async function buildDashboardFromDb(
     recentOrders,
     sampleNote: null, // DB 模式没有截断
     exports: {
-      ordersCsv: "", // CSV 导出在 DB 模式下暂不支持，或者需要另行处理
-      productsCsv: "",
-      customersCsv: ""
+      ordersCsv,
+      productsCsv,
+      customersCsv,
     }
   };
 }

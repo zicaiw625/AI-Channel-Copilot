@@ -1,15 +1,21 @@
 import type { OrderRecord, ProductRow } from "./aiTypes";
 import { computeLTV, metricOrderValue } from "./metrics";
 
-const toCsvValue = (value: string | number | null | undefined) => {
+export const toCsvValue = (value: string | number | null | undefined) => {
   const str = value === null || value === undefined ? "" : String(value);
-  // 防止 CSV 注入攻击（以 =, @, +, - 开头的值在 Excel 中可能被解析为公式）
-  const startsWithDangerousChar = /^[=@+-]/.test(str);
+  
+  // 防止 CSV 注入攻击
+  // 危险字符包括：=, @, +, -, Tab, 回车等可能触发公式或宏的字符
+  // @see https://owasp.org/www-community/attacks/CSV_Injection
+  const startsWithDangerousChar = /^[=@+\-\t\r]/.test(str);
+  const containsDangerousPattern = /[\t\r]/.test(str); // Tab 和回车可能在中间位置也有风险
   const needsQuoting = /[",\n\r]/.test(str);
   
-  if (startsWithDangerousChar) {
+  if (startsWithDangerousChar || containsDangerousPattern) {
     // 在危险字符前添加单引号，防止公式执行
-    return `"'${str.replace(/"/g, '""')}"`;
+    // 同时移除可能的 Tab 和回车字符
+    const sanitized = str.replace(/[\t\r]/g, ' ');
+    return `"'${sanitized.replace(/"/g, '""')}"`;
   }
   if (needsQuoting) {
     return `"${str.replace(/"/g, '""')}"`;
@@ -98,20 +104,36 @@ export const buildCustomersCsv = (
 ) => {
   const comment = `# 客户级 LTV（选定时间范围内累计 GMV）；GMV 口径=${metric}`;
   const ltvMap = computeLTV(ordersInRange, metric);
-  const counts = ordersInRange.reduce<Record<string, number>>((acc, o) => {
-    if (!o.customerId) return acc;
-    acc[o.customerId] = (acc[o.customerId] || 0) + 1;
-    return acc;
-  }, {});
-  const fallbackFirstAi: Record<string, boolean> = {};
-  ordersInRange.forEach((o) => {
-    if (!o.customerId) return;
-    const cid = o.customerId;
-    const prev = fallbackFirstAi[cid];
-    if (prev !== true) {
-      fallbackFirstAi[cid] = Boolean(o.isNewCustomer && o.aiSource);
+  
+  // 性能优化：O(n) 预处理，避免 O(n²) 的重复遍历
+  const counts = new Map<string, number>();
+  const aiCounts = new Map<string, number>();
+  const firstOrderDates = new Map<string, Date>();
+  const computedFirstAi = new Map<string, boolean>();
+  
+  // 单次遍历预处理所有客户数据
+  for (const order of ordersInRange) {
+    if (!order.customerId) continue;
+    const cid = order.customerId;
+    const orderDate = new Date(order.createdAt);
+    
+    // 订单计数
+    counts.set(cid, (counts.get(cid) || 0) + 1);
+    
+    // AI 订单计数
+    if (order.aiSource) {
+      aiCounts.set(cid, (aiCounts.get(cid) || 0) + 1);
     }
-  });
+    
+    // 首单日期（取最早的）
+    const existingDate = firstOrderDates.get(cid);
+    if (!existingDate || orderDate < existingDate) {
+      firstOrderDates.set(cid, orderDate);
+      // 首单是否为 AI 获客（只在更新首单日期时更新此字段）
+      computedFirstAi.set(cid, Boolean(order.isNewCustomer && order.aiSource));
+    }
+  }
+  
   const header = [
     "customer_id",
     "ltv",
@@ -123,18 +145,14 @@ export const buildCustomersCsv = (
   ];
   const rows: string[][] = [];
   for (const [customerId, ltv] of ltvMap.entries()) {
+    // 优先使用外部传入的 acquiredViaAiMap（来自数据库的完整历史数据）
     const firstAi = acquiredViaAiMap
       ? Boolean(acquiredViaAiMap[customerId])
-      : Boolean(fallbackFirstAi[customerId]);
-    const total = counts[customerId] || 0;
-    const aiCount = ordersInRange.filter(
-      (o) => o.customerId === customerId && Boolean(o.aiSource),
-    ).length;
+      : (computedFirstAi.get(customerId) || false);
+    const total = counts.get(customerId) || 0;
+    const aiCount = aiCounts.get(customerId) || 0;
     const aiShare = total ? aiCount / total : 0;
-    const firstOrderDate = ordersInRange
-      .filter((o) => o.customerId === customerId)
-      .map((o) => new Date(o.createdAt))
-      .sort((a, b) => a.getTime() - b.getTime())[0];
+    const firstOrderDate = firstOrderDates.get(customerId);
     const repeat = Math.max(0, total - 1);
     rows.push([
       customerId,
@@ -143,7 +161,7 @@ export const buildCustomersCsv = (
       firstAi ? "true" : "false",
       String(repeat),
       aiShare.toFixed(4),
-      firstOrderDate ? new Date(firstOrderDate).toISOString() : "",
+      firstOrderDate ? firstOrderDate.toISOString() : "",
     ]);
   }
   return [comment, header, ...rows]

@@ -6,6 +6,7 @@ import { getSettings, markActivity, updatePipelineStatuses } from "./settings.se
 import { getPlatform, isDemoMode } from "./runtime.server";
 import { enqueueWebhookJob, getWebhookQueueSize, registerWebhookHandler } from "./webhookQueue.server";
 import { logger } from "./logger.server";
+import { enforceRateLimit, RateLimitRules, buildRateLimitKey } from "./security/rateLimit.server";
 
 const WEBHOOK_STATUS_TITLE = "orders/create webhook";
 
@@ -93,6 +94,25 @@ export const handleOrderWebhook = async (request: Request, expectedTopic: string
     const webhookPayload = (payload || {}) as Record<string, unknown>;
 
     logger.info("[webhook] received", { shopDomain: shop, topic });
+
+    // 应用速率限制（店铺级别）
+    // 注意：Shopify 会重试失败的 webhook，所以我们不抛出 429，而是记录警告
+    try {
+      await enforceRateLimit(
+        buildRateLimitKey("webhook", shop, topic),
+        RateLimitRules.WEBHOOK
+      );
+    } catch (rateLimitError) {
+      if (rateLimitError instanceof Response && rateLimitError.status === 429) {
+        logger.warn("[webhook] Rate limit exceeded, returning 429 for retry", {
+          shopDomain: shop,
+          topic,
+        });
+        // 返回 429 让 Shopify 延迟重试
+        return new Response("Rate limit exceeded", { status: 429 });
+      }
+      throw rateLimitError;
+    }
 
     if (topic !== expectedTopic) {
       await setWebhookStatus(shop, "warning", `Unexpected topic ${topic}`);

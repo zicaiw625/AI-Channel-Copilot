@@ -7,9 +7,19 @@ export interface CurrencyFormatter {
   formatCompact(value: number, currency: string): string;
 }
 
-export class IntlCurrencyFormatter implements CurrencyFormatter {
+/**
+ * 通用货币格式化器
+ * 支持通过构造函数传入 locale，避免硬编码
+ */
+export class LocalizedCurrencyFormatter implements CurrencyFormatter {
+  private locale: string;
+  
+  constructor(locale: string = 'zh-CN') {
+    this.locale = locale;
+  }
+  
   format(value: number, currency: string, options?: Intl.NumberFormatOptions): string {
-    return new Intl.NumberFormat('zh-CN', {
+    return new Intl.NumberFormat(this.locale, {
       style: 'currency',
       currency,
       maximumFractionDigits: 0,
@@ -18,7 +28,7 @@ export class IntlCurrencyFormatter implements CurrencyFormatter {
   }
 
   formatCompact(value: number, currency: string): string {
-    return new Intl.NumberFormat('zh-CN', {
+    return new Intl.NumberFormat(this.locale, {
       style: 'currency',
       currency,
       maximumFractionDigits: 0,
@@ -27,23 +37,43 @@ export class IntlCurrencyFormatter implements CurrencyFormatter {
   }
 }
 
-export class EnglishCurrencyFormatter implements CurrencyFormatter {
+/**
+ * 中文货币格式化器
+ * @deprecated 使用 LocalizedCurrencyFormatter 代替
+ */
+export class IntlCurrencyFormatter implements CurrencyFormatter {
+  private formatter: LocalizedCurrencyFormatter;
+  
+  constructor() {
+    this.formatter = new LocalizedCurrencyFormatter('zh-CN');
+  }
+  
   format(value: number, currency: string, options?: Intl.NumberFormatOptions): string {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency,
-      maximumFractionDigits: 0,
-      ...options,
-    }).format(value);
+    return this.formatter.format(value, currency, options);
   }
 
   formatCompact(value: number, currency: string): string {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency,
-      maximumFractionDigits: 0,
-      notation: 'compact',
-    }).format(value);
+    return this.formatter.formatCompact(value, currency);
+  }
+}
+
+/**
+ * 英文货币格式化器
+ * @deprecated 使用 LocalizedCurrencyFormatter 代替
+ */
+export class EnglishCurrencyFormatter implements CurrencyFormatter {
+  private formatter: LocalizedCurrencyFormatter;
+  
+  constructor() {
+    this.formatter = new LocalizedCurrencyFormatter('en-US');
+  }
+  
+  format(value: number, currency: string, options?: Intl.NumberFormatOptions): string {
+    return this.formatter.format(value, currency, options);
+  }
+
+  formatCompact(value: number, currency: string): string {
+    return this.formatter.formatCompact(value, currency);
   }
 }
 
@@ -66,9 +96,26 @@ export const formatNumber = (value: number, options?: Intl.NumberFormatOptions):
 
 /**
  * 根据语言获取相应的格式化器
+ * 使用 LocalizedCurrencyFormatter 支持更多语言
  */
 export const getCurrencyFormatter = (language: string): CurrencyFormatter => {
-  return language === 'English' ? new EnglishCurrencyFormatter() : new IntlCurrencyFormatter();
+  // 语言到 locale 的映射
+  const localeMap: Record<string, string> = {
+    'English': 'en-US',
+    '中文': 'zh-CN',
+    'Chinese': 'zh-CN',
+    '日本語': 'ja-JP',
+    'Japanese': 'ja-JP',
+    'Deutsch': 'de-DE',
+    'German': 'de-DE',
+    'Français': 'fr-FR',
+    'French': 'fr-FR',
+    'Español': 'es-ES',
+    'Spanish': 'es-ES',
+  };
+  
+  const locale = localeMap[language] || (language === 'English' ? 'en-US' : 'zh-CN');
+  return new LocalizedCurrencyFormatter(locale);
 };
 
 /**

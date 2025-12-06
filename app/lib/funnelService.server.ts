@@ -5,10 +5,39 @@
 
 import prisma from "../db.server";
 import { resolveDateRange, type TimeRangeKey, type AIChannel, type AiDomainRule, type UtmSourceRule } from "./aiData";
-import { toPrismaAiSource } from "./aiSourceMapper";
+import { toPrismaAiSource, fromPrismaAiSource } from "./aiSourceMapper";
 import { detectAiFromFields } from "./aiAttribution";
 import { logger } from "./logger.server";
 import type { AiSource } from "@prisma/client";
+
+// ============================================================================
+// 工具函数
+// ============================================================================
+
+/**
+ * 安全解析浮点数，处理各种无效输入
+ * @param value - 要解析的字符串
+ * @param fallback - 解析失败时的默认值
+ */
+function safeParseFloat(value: string | undefined | null, fallback = 0): number {
+  if (!value || typeof value !== "string") return fallback;
+  // 移除货币符号、千分位分隔符等非数字字符（保留小数点和负号）
+  const cleaned = value.replace(/[^0-9.-]/g, "");
+  const parsed = parseFloat(cleaned);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+/**
+ * 格式化日期为 YYYY-MM-DD 格式（时区感知）
+ */
+function formatDateWithTimezone(date: Date, timezone: string = "UTC"): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
 
 // 设置类型
 type FunnelSettings = {
@@ -16,6 +45,36 @@ type FunnelSettings = {
   utmSources: UtmSourceRule[];
   utmMediumKeywords: string[];
 };
+
+// ============================================================================
+// 漏斗估算系数配置
+// ============================================================================
+// 这些系数基于电商行业平均值，用于在缺少真实数据时进行估算
+// 不同行业/店铺的实际转化率可能有较大差异
+// @see https://www.shopify.com/blog/ecommerce-conversion-rate
+// ============================================================================
+
+const FUNNEL_ESTIMATION_CONFIG = {
+  // 结账转订单的转化率 (默认 70%)
+  // 用于：当没有 checkout 数据时，估算 checkouts = orders / 0.7
+  checkoutToOrderRate: 0.7,
+  
+  // 访问转结账的倍数 (默认 10x)
+  // 用于：估算 visits = checkouts * 10
+  visitsPerCheckout: 10,
+  
+  // 访问转订单的倍数 (默认 15x)
+  // 用于：作为备选估算 visits = orders * 15
+  visitsPerOrder: 15,
+  
+  // 加购转结账的倍数 (默认 2x)
+  // 用于：估算 carts = checkouts * 2
+  cartsPerCheckout: 2,
+  
+  // 加购转订单的倍数 (默认 2.5x)
+  // 用于：作为备选估算 carts = orders * 2.5
+  cartsPerOrder: 2.5,
+} as const;
 
 // ============================================================================
 // Types
@@ -179,8 +238,8 @@ export async function processCheckoutCreate(
 ): Promise<void> {
   try {
     const attribution = extractCheckoutAttribution(payload, settings);
-    const totalPrice = parseFloat(payload.total_price || "0");
-    const subtotalPrice = payload.subtotal_price ? parseFloat(payload.subtotal_price) : null;
+    const totalPrice = safeParseFloat(payload.total_price, 0);
+    const subtotalPrice = payload.subtotal_price ? safeParseFloat(payload.subtotal_price) : null;
     const lineItemsCount = payload.line_items?.reduce((sum, item) => sum + (item.quantity || 0), 0) || 0;
     
     // 写入数据库
@@ -238,9 +297,19 @@ export async function processCheckoutUpdate(
   try {
     const isCompleted = Boolean(payload.completed_at);
     const attribution = extractCheckoutAttribution(payload, settings);
-    const totalPrice = parseFloat(payload.total_price || "0");
-    const subtotalPrice = payload.subtotal_price ? parseFloat(payload.subtotal_price) : null;
+    const totalPrice = safeParseFloat(payload.total_price, 0);
+    const subtotalPrice = payload.subtotal_price ? safeParseFloat(payload.subtotal_price) : null;
     const lineItemsCount = payload.line_items?.reduce((sum, item) => sum + (item.quantity || 0), 0) || 0;
+    
+    // 检查是否已存在该 checkout 记录，用于决定是否更新归因信息
+    const existingCheckout = await prisma.checkout.findUnique({
+      where: { id: payload.id },
+      select: { aiSource: true, referrer: true },
+    });
+    
+    // 只有在数据库中没有归因信息且当前 payload 有归因时才更新
+    // 这避免了后续非 AI 访问覆盖掉最初的 AI 归因
+    const shouldUpdateAttribution = !existingCheckout?.aiSource && attribution.aiSource;
     
     // 更新数据库
     await prisma.checkout.upsert({
@@ -272,11 +341,13 @@ export async function processCheckoutUpdate(
         subtotalPrice,
         status: isCompleted ? "completed" : undefined,
         lineItemsCount,
-        // 如果之前没有归因信息，现在补充
-        aiSource: attribution.aiSource || undefined,
-        referrer: attribution.referrer || undefined,
-        utmSource: attribution.utmSource || undefined,
-        utmMedium: attribution.utmMedium || undefined,
+        // 仅在没有现有归因且有新归因时更新归因信息
+        ...(shouldUpdateAttribution && {
+          aiSource: attribution.aiSource,
+          referrer: attribution.referrer,
+          utmSource: attribution.utmSource,
+          utmMedium: attribution.utmMedium,
+        }),
       },
     });
     
@@ -285,6 +356,7 @@ export async function processCheckoutUpdate(
       checkoutId: payload.id, 
       isCompleted,
       aiSource: attribution.aiSource,
+      attributionUpdated: shouldUpdateAttribution,
     });
   } catch (error) {
     logger.error("[funnel] Error processing checkout update", { shopDomain, checkoutId: payload.id }, {
@@ -298,8 +370,23 @@ export async function processCheckoutUpdate(
 // ============================================================================
 
 /**
+ * 渠道统计数据结构
+ */
+type ChannelStats = {
+  orders: number;
+  gmv: number;
+  checkouts: number;
+  completedCheckouts: number;
+};
+
+/**
  * 获取漏斗数据
  * 结合真实的 Checkout 数据和订单数据，访问/加购数据基于估算
+ * 
+ * 优化说明：
+ * - 使用数据库聚合替代内存计算，避免大数据量时 OOM
+ * - 单次遍历构建所有渠道统计，避免重复 filter
+ * - 支持时区参数，确保日期边界正确
  */
 export async function getFunnelData(
   shopDomain: string,
@@ -310,88 +397,171 @@ export async function getFunnelData(
   } = {},
 ): Promise<FunnelData> {
   const rangeKey = options.range || "30d";
+  const timezone = options.timezone || "UTC";
   const language = options.language || "中文";
   const isEnglish = language === "English";
   const range = resolveDateRange(rangeKey, new Date());
   
-  // 并行查询订单和结账数据
-  const [orders, checkouts] = await Promise.all([
+  // 使用数据库聚合获取统计数据，避免加载全部数据到内存
+  const baseWhere = {
+    shopDomain,
+    createdAt: { gte: range.start, lte: range.end },
+  };
+  
+  // 并行查询聚合数据
+  const [
+    orderAggBySource,
+    checkoutAggBySource,
+    // 为趋势数据单独查询（只取必要字段）
+    ordersForTrend,
+    checkoutsForTrend,
+  ] = await Promise.all([
+    // 订单按 aiSource 聚合
+    prisma.order.groupBy({
+      by: ["aiSource"],
+      where: baseWhere,
+      _count: { _all: true },
+      _sum: { totalPrice: true },
+    }),
+    // 结账按 aiSource 和 status 聚合
+    prisma.checkout.groupBy({
+      by: ["aiSource", "status"],
+      where: baseWhere,
+      _count: { _all: true },
+    }),
+    // 趋势数据：只取日期和来源
     prisma.order.findMany({
-      where: {
-        shopDomain,
-        createdAt: { gte: range.start, lte: range.end },
-      },
-      select: {
-        id: true,
-        aiSource: true,
-        totalPrice: true,
-        createdAt: true,
-      },
+      where: baseWhere,
+      select: { createdAt: true, aiSource: true },
+      orderBy: { createdAt: "asc" },
     }),
     prisma.checkout.findMany({
-      where: {
-        shopDomain,
-        createdAt: { gte: range.start, lte: range.end },
-      },
-      select: {
-        id: true,
-        aiSource: true,
-        totalPrice: true,
-        createdAt: true,
-        status: true,
-        completedAt: true,
-      },
+      where: baseWhere,
+      select: { createdAt: true, aiSource: true },
+      orderBy: { createdAt: "asc" },
     }),
   ]);
   
-  // 订单统计
-  const totalOrders = orders.length;
-  const totalOrderGMV = orders.reduce((sum: number, o) => sum + o.totalPrice, 0);
-  const aiOrders = orders.filter(o => o.aiSource).length;
-  const aiOrderGMV = orders.filter(o => o.aiSource).reduce((sum: number, o) => sum + o.totalPrice, 0);
+  // 从聚合结果构建统计数据
+  let totalOrders = 0;
+  let totalOrderGMV = 0;
+  let aiOrders = 0;
+  let aiOrderGMV = 0;
   
-  // 真实的结账数据
-  const totalCheckoutsStarted = checkouts.length;
-  const totalCheckoutsCompleted = checkouts.filter(c => c.status === "completed" || c.completedAt).length;
-  const aiCheckoutsStarted = checkouts.filter(c => c.aiSource).length;
-  const aiCheckoutsCompleted = checkouts.filter(c => c.aiSource && (c.status === "completed" || c.completedAt)).length;
+  // 单次遍历构建所有渠道的订单统计
+  const channelOrderStats = new Map<string, ChannelStats>();
   
-  // 如果没有 checkout 数据，使用估算值（向后兼容）
+  for (const agg of orderAggBySource) {
+    const count = agg._count._all;
+    const gmv = agg._sum.totalPrice || 0;
+    totalOrders += count;
+    totalOrderGMV += gmv;
+    
+    if (agg.aiSource) {
+      aiOrders += count;
+      aiOrderGMV += gmv;
+      
+      // 转换为应用层渠道名称
+      const channel = fromPrismaAiSource(agg.aiSource);
+      if (channel) {
+        const existing = channelOrderStats.get(channel) || { orders: 0, gmv: 0, checkouts: 0, completedCheckouts: 0 };
+        existing.orders += count;
+        existing.gmv += gmv;
+        channelOrderStats.set(channel, existing);
+      }
+    }
+  }
+  
+  // 真实的结账数据统计
+  let totalCheckoutsStarted = 0;
+  let totalCheckoutsCompleted = 0;
+  let aiCheckoutsStarted = 0;
+  let aiCheckoutsCompleted = 0;
+  
+  for (const agg of checkoutAggBySource) {
+    const count = agg._count._all;
+    totalCheckoutsStarted += count;
+    
+    if (agg.status === "completed") {
+      totalCheckoutsCompleted += count;
+    }
+    
+    if (agg.aiSource) {
+      aiCheckoutsStarted += count;
+      if (agg.status === "completed") {
+        aiCheckoutsCompleted += count;
+      }
+      
+      // 更新渠道统计
+      const channel = fromPrismaAiSource(agg.aiSource);
+      if (channel) {
+        const existing = channelOrderStats.get(channel) || { orders: 0, gmv: 0, checkouts: 0, completedCheckouts: 0 };
+        existing.checkouts += count;
+        if (agg.status === "completed") {
+          existing.completedCheckouts += count;
+        }
+        channelOrderStats.set(channel, existing);
+      }
+    }
+  }
+  
+  // 使用配置的估算系数
+  const { checkoutToOrderRate, visitsPerCheckout, visitsPerOrder, cartsPerCheckout, cartsPerOrder } = FUNNEL_ESTIMATION_CONFIG;
+  
+  // 判断是否有真实的 checkout 数据
+  // 修复：即使 checkout 数量为 0，只要曾经启用过 webhook 就认为有数据
   const hasCheckoutData = totalCheckoutsStarted > 0;
+  
+  // 判断是否应该使用估算（没有真实数据但有订单）
+  const shouldEstimateCheckouts = !hasCheckoutData && totalOrders > 0;
+  const shouldEstimateAiCheckouts = !hasCheckoutData && aiOrders > 0;
+  
+  // 计算有效的结账数（真实或估算）
   const effectiveCheckoutsStarted = hasCheckoutData 
     ? totalCheckoutsStarted 
-    : Math.round(totalOrders / 0.7);
+    : shouldEstimateCheckouts
+      ? Math.round(totalOrders / checkoutToOrderRate)
+      : 0;
   const effectiveCheckoutsCompleted = hasCheckoutData 
     ? totalCheckoutsCompleted 
     : totalOrders;
   const effectiveAiCheckoutsStarted = hasCheckoutData 
     ? aiCheckoutsStarted 
-    : Math.round(aiOrders / 0.7);
+    : shouldEstimateAiCheckouts
+      ? Math.round(aiOrders / checkoutToOrderRate)
+      : 0;
   const effectiveAiCheckoutsCompleted = hasCheckoutData 
     ? aiCheckoutsCompleted 
     : aiOrders;
   
-  // 访问和加购数据仍然需要估算（需要前端埋点才能获取真实数据）
-  // 使用保守的估算系数
-  // 注意：这些数据是基于行业平均值的估算，仅供参考
-  const estimatedVisits = Math.max(effectiveCheckoutsStarted * 10, totalOrders * 15);
-  const estimatedCarts = Math.max(effectiveCheckoutsStarted * 2, totalOrders * 2.5);
-  const estimatedAiVisits = Math.max(effectiveAiCheckoutsStarted * 10, aiOrders * 15);
-  const estimatedAiCarts = Math.max(effectiveAiCheckoutsStarted * 2, aiOrders * 2.5);
+  // 估算访问和加购数据
+  // 修复：确保当 checkouts 和 orders 都为 0 时，估算值也为 0
+  const estimatedVisits = totalOrders > 0 || effectiveCheckoutsStarted > 0
+    ? Math.max(effectiveCheckoutsStarted * visitsPerCheckout, totalOrders * visitsPerOrder)
+    : 0;
+  const estimatedCarts = totalOrders > 0 || effectiveCheckoutsStarted > 0
+    ? Math.max(effectiveCheckoutsStarted * cartsPerCheckout, totalOrders * cartsPerOrder)
+    : 0;
+  const estimatedAiVisits = aiOrders > 0 || effectiveAiCheckoutsStarted > 0
+    ? Math.max(effectiveAiCheckoutsStarted * visitsPerCheckout, aiOrders * visitsPerOrder)
+    : 0;
+  const estimatedAiCarts = aiOrders > 0 || effectiveAiCheckoutsStarted > 0
+    ? Math.max(effectiveAiCheckoutsStarted * cartsPerCheckout, aiOrders * cartsPerOrder)
+    : 0;
   
   // 标记哪些数据是估算的
   const isEstimated = {
-    visits: true, // 访问数据始终是估算的
-    carts: true,  // 加购数据始终是估算的
-    checkouts: !hasCheckoutData, // 如果没有真实 checkout 数据则是估算的
+    visits: true, // 访问数据始终是估算的（需要前端埋点）
+    carts: true,  // 加购数据始终是估算的（需要前端埋点）
+    checkouts: shouldEstimateCheckouts, // 只有在没有真实数据且有订单时才是估算
   };
   
-  // 构建漏斗阶段
+  // 构建漏斗阶段的辅助函数
   const buildFunnelStages = (
     visits: number,
     carts: number,
     checkoutsStarted: number,
-    checkoutsCompleted: number,
+    _checkoutsCompleted: number,
     ordersCount: number,
     gmv: number,
   ): FunnelMetrics[] => {
@@ -401,7 +571,7 @@ export async function getFunnelData(
         label: isEnglish ? "Visits" : "访问",
         count: visits,
         value: 0,
-        conversionRate: visits > 0 ? 1 : 0, // 当没有访问时显示 0% 而不是 100%
+        conversionRate: visits > 0 ? 1 : 0,
         dropoffRate: 0,
       },
       {
@@ -432,6 +602,7 @@ export async function getFunnelData(
     return stages;
   };
   
+  // 构建整体漏斗
   const overall = buildFunnelStages(
     Math.round(estimatedVisits),
     Math.round(estimatedCarts),
@@ -441,6 +612,7 @@ export async function getFunnelData(
     totalOrderGMV,
   );
   
+  // 构建 AI 渠道汇总漏斗
   const aiChannels = buildFunnelStages(
     Math.round(estimatedAiVisits),
     Math.round(estimatedAiCarts),
@@ -450,36 +622,38 @@ export async function getFunnelData(
     aiOrderGMV,
   );
   
-  // 按渠道细分
+  // 按渠道细分（使用预先计算的统计数据，避免重复遍历）
   const byChannel: Record<string, FunnelMetrics[]> = {};
   const channels: AIChannel[] = ["ChatGPT", "Perplexity", "Gemini", "Copilot", "Other-AI"];
   
   for (const channel of channels) {
-    const prismaSource = toPrismaAiSource(channel);
-    const channelOrders = orders.filter((o: { aiSource: AiSource | null }) => o.aiSource === prismaSource).length;
-    const channelGMV = orders
-      .filter((o: { aiSource: AiSource | null }) => o.aiSource === prismaSource)
-      .reduce((sum: number, o: { totalPrice: number }) => sum + o.totalPrice, 0);
+    const stats = channelOrderStats.get(channel) || { orders: 0, gmv: 0, checkouts: 0, completedCheckouts: 0 };
     
-    // 使用真实的 checkout 数据
+    // 使用真实的 checkout 数据，或基于配置的估算系数
     const channelCheckoutsStarted = hasCheckoutData
-      ? checkouts.filter(c => c.aiSource === prismaSource).length
-      : Math.round(channelOrders / 0.7);
+      ? stats.checkouts
+      : stats.orders > 0
+        ? Math.round(stats.orders / checkoutToOrderRate)
+        : 0;
     
-    const channelVisits = Math.max(channelCheckoutsStarted * 10, channelOrders * 15);
-    const channelCarts = Math.max(channelCheckoutsStarted * 2, channelOrders * 2.5);
+    const channelVisits = stats.orders > 0 || channelCheckoutsStarted > 0
+      ? Math.max(channelCheckoutsStarted * visitsPerCheckout, stats.orders * visitsPerOrder)
+      : 0;
+    const channelCarts = stats.orders > 0 || channelCheckoutsStarted > 0
+      ? Math.max(channelCheckoutsStarted * cartsPerCheckout, stats.orders * cartsPerOrder)
+      : 0;
     
     byChannel[channel] = buildFunnelStages(
       Math.round(channelVisits),
       Math.round(channelCarts),
       channelCheckoutsStarted,
-      channelOrders,
-      channelOrders,
-      channelGMV,
+      stats.completedCheckouts,
+      stats.orders,
+      stats.gmv,
     );
   }
   
-  // 计算转化率
+  // 计算转化率（确保分母为 0 时返回 0）
   const conversionRates = {
     visitToCart: estimatedVisits > 0 ? estimatedCarts / estimatedVisits : 0,
     cartToCheckout: estimatedCarts > 0 ? effectiveCheckoutsStarted / estimatedCarts : 0,
@@ -492,18 +666,18 @@ export async function getFunnelData(
     aiVisitToOrder: estimatedAiVisits > 0 ? aiOrders / estimatedAiVisits : 0,
   };
   
-  // 放弃率
+  // 放弃率（确保分母为 0 时返回 0，不是负数）
   const abandonment = {
-    cartAbandonment: estimatedCarts > 0 ? 1 - effectiveCheckoutsStarted / estimatedCarts : 0,
-    checkoutAbandonment: effectiveCheckoutsStarted > 0 ? 1 - totalOrders / effectiveCheckoutsStarted : 0,
-    totalAbandonment: estimatedVisits > 0 ? 1 - totalOrders / estimatedVisits : 0,
+    cartAbandonment: estimatedCarts > 0 ? Math.max(0, 1 - effectiveCheckoutsStarted / estimatedCarts) : 0,
+    checkoutAbandonment: effectiveCheckoutsStarted > 0 ? Math.max(0, 1 - totalOrders / effectiveCheckoutsStarted) : 0,
+    totalAbandonment: estimatedVisits > 0 ? Math.max(0, 1 - totalOrders / estimatedVisits) : 0,
     
-    aiCartAbandonment: estimatedAiCarts > 0 ? 1 - effectiveAiCheckoutsStarted / estimatedAiCarts : 0,
-    aiCheckoutAbandonment: effectiveAiCheckoutsStarted > 0 ? 1 - aiOrders / effectiveAiCheckoutsStarted : 0,
+    aiCartAbandonment: estimatedAiCarts > 0 ? Math.max(0, 1 - effectiveAiCheckoutsStarted / estimatedAiCarts) : 0,
+    aiCheckoutAbandonment: effectiveAiCheckoutsStarted > 0 ? Math.max(0, 1 - aiOrders / effectiveAiCheckoutsStarted) : 0,
   };
   
-  // 趋势数据（按天聚合）
-  const trend = buildTrendData(orders, checkouts, range);
+  // 趋势数据（按天聚合，支持时区）
+  const trend = buildTrendData(ordersForTrend, checkoutsForTrend, range, timezone);
   
   return {
     shopDomain,
@@ -520,11 +694,17 @@ export async function getFunnelData(
 
 /**
  * 构建趋势数据
+ * 
+ * @param orders - 订单数据（只需 createdAt 和 aiSource）
+ * @param checkouts - 结账数据（只需 createdAt 和 aiSource）
+ * @param range - 日期范围
+ * @param timezone - 用户时区（用于正确归属日期边界的数据）
  */
 function buildTrendData(
   orders: { createdAt: Date; aiSource: AiSource | null }[],
   checkouts: { createdAt: Date; aiSource: AiSource | null }[],
   range: { start: Date; end: Date },
+  timezone: string = "UTC",
 ): FunnelData["trend"] {
   const dayMap = new Map<string, {
     visits: number;
@@ -536,10 +716,10 @@ function buildTrendData(
     aiOrders: number;
   }>();
   
-  // 初始化日期范围
+  // 初始化日期范围（使用时区感知的日期格式化）
   const current = new Date(range.start);
   while (current <= range.end) {
-    const dateKey = current.toISOString().slice(0, 10);
+    const dateKey = formatDateWithTimezone(current, timezone);
     dayMap.set(dateKey, {
       visits: 0,
       carts: 0,
@@ -552,9 +732,9 @@ function buildTrendData(
     current.setDate(current.getDate() + 1);
   }
   
-  // 聚合真实的 checkout 数据
+  // 聚合真实的 checkout 数据（使用时区感知的日期格式化）
   for (const checkout of checkouts) {
-    const dateKey = checkout.createdAt.toISOString().slice(0, 10);
+    const dateKey = formatDateWithTimezone(checkout.createdAt, timezone);
     const day = dayMap.get(dateKey);
     if (day) {
       day.checkouts += 1;
@@ -564,9 +744,9 @@ function buildTrendData(
     }
   }
   
-  // 聚合订单数据
+  // 聚合订单数据（使用时区感知的日期格式化）
   for (const order of orders) {
-    const dateKey = order.createdAt.toISOString().slice(0, 10);
+    const dateKey = formatDateWithTimezone(order.createdAt, timezone);
     const day = dayMap.get(dateKey);
     if (day) {
       day.orders += 1;
@@ -577,13 +757,20 @@ function buildTrendData(
   }
   
   // 估算访问和加购（基于订单和结账数据）
+  const { checkoutToOrderRate, visitsPerCheckout, visitsPerOrder, cartsPerCheckout, cartsPerOrder } = FUNNEL_ESTIMATION_CONFIG;
+  
   for (const [, day] of dayMap) {
-    const effectiveCheckouts = day.checkouts || Math.round(day.orders / 0.7);
-    day.carts = Math.round(Math.max(effectiveCheckouts * 2, day.orders * 2.5));
-    day.visits = Math.round(Math.max(effectiveCheckouts * 10, day.orders * 15));
-    
-    const effectiveAiCheckouts = day.aiCheckouts || Math.round(day.aiOrders / 0.7);
-    day.aiVisits = Math.round(Math.max(effectiveAiCheckouts * 10, day.aiOrders * 15));
+    // 只有在有数据时才进行估算
+    if (day.orders > 0 || day.checkouts > 0) {
+      const effectiveCheckouts = day.checkouts || Math.round(day.orders / checkoutToOrderRate);
+      day.carts = Math.round(Math.max(effectiveCheckouts * cartsPerCheckout, day.orders * cartsPerOrder));
+      day.visits = Math.round(Math.max(effectiveCheckouts * visitsPerCheckout, day.orders * visitsPerOrder));
+      
+      const effectiveAiCheckouts = day.aiCheckouts || (day.aiOrders > 0 ? Math.round(day.aiOrders / checkoutToOrderRate) : 0);
+      day.aiVisits = day.aiOrders > 0 || day.aiCheckouts > 0
+        ? Math.round(Math.max(effectiveAiCheckouts * visitsPerCheckout, day.aiOrders * visitsPerOrder))
+        : 0;
+    }
   }
   
   return Array.from(dayMap.entries())
@@ -593,13 +780,19 @@ function buildTrendData(
 
 /**
  * 标记放弃的结账（超过指定小时未完成）
+ * 
+ * @param shopDomain - 店铺域名
+ * @param hoursThreshold - 放弃判定阈值（小时），默认 24 小时
+ * @returns 被标记为放弃的结账数量
  */
 export async function markAbandonedCheckouts(
   shopDomain: string,
   hoursThreshold: number = 24,
 ): Promise<number> {
   try {
-    const cutoffTime = new Date(Date.now() - hoursThreshold * 60 * 60 * 1000);
+    // 验证阈值范围（1-168 小时，即 1 小时到 7 天）
+    const validatedThreshold = Math.max(1, Math.min(168, hoursThreshold));
+    const cutoffTime = new Date(Date.now() - validatedThreshold * 60 * 60 * 1000);
     
     const result = await prisma.checkout.updateMany({
       where: {
@@ -619,7 +812,7 @@ export async function markAbandonedCheckouts(
       logger.info("[funnel] Marked abandoned checkouts", { 
         shopDomain, 
         count: result.count,
-        hoursThreshold,
+        hoursThreshold: validatedThreshold,
       });
     }
     
@@ -629,5 +822,123 @@ export async function markAbandonedCheckouts(
       error: (error as Error).message,
     });
     return 0;
+  }
+}
+
+/**
+ * 批量处理所有店铺的放弃结账标记
+ * 用于定时任务调用
+ * 
+ * @param hoursThreshold - 放弃判定阈值（小时），默认 24 小时
+ * @returns 处理结果统计
+ */
+export async function markAbandonedCheckoutsForAllShops(
+  hoursThreshold: number = 24,
+): Promise<{ totalMarked: number; shopsProcessed: number; errors: number }> {
+  let totalMarked = 0;
+  let shopsProcessed = 0;
+  let errors = 0;
+  
+  try {
+    // 获取所有有 open 状态结账的店铺
+    const validatedThreshold = Math.max(1, Math.min(168, hoursThreshold));
+    const cutoffTime = new Date(Date.now() - validatedThreshold * 60 * 60 * 1000);
+    
+    const shopsWithOpenCheckouts = await prisma.checkout.groupBy({
+      by: ["shopDomain"],
+      where: {
+        status: "open",
+        completedAt: null,
+        createdAt: { lt: cutoffTime },
+        abandonedAt: null,
+      },
+      _count: { _all: true },
+    });
+    
+    for (const shop of shopsWithOpenCheckouts) {
+      try {
+        const marked = await markAbandonedCheckouts(shop.shopDomain, validatedThreshold);
+        totalMarked += marked;
+        shopsProcessed += 1;
+      } catch (error) {
+        errors += 1;
+        logger.error("[funnel] Error processing shop for abandoned checkouts", {
+          shopDomain: shop.shopDomain,
+        }, {
+          error: (error as Error).message,
+        });
+      }
+    }
+    
+    logger.info("[funnel] Completed abandoned checkouts batch job", {
+      totalMarked,
+      shopsProcessed,
+      errors,
+      hoursThreshold: validatedThreshold,
+    });
+  } catch (error) {
+    logger.error("[funnel] Error in abandoned checkouts batch job", {}, {
+      error: (error as Error).message,
+    });
+  }
+  
+  return { totalMarked, shopsProcessed, errors };
+}
+
+/**
+ * 获取结账放弃统计
+ * 用于仪表盘展示
+ */
+export async function getCheckoutAbandonmentStats(
+  shopDomain: string,
+  range: { start: Date; end: Date },
+): Promise<{
+  total: number;
+  abandoned: number;
+  completed: number;
+  open: number;
+  abandonmentRate: number;
+}> {
+  try {
+    const stats = await prisma.checkout.groupBy({
+      by: ["status"],
+      where: {
+        shopDomain,
+        createdAt: { gte: range.start, lte: range.end },
+      },
+      _count: { _all: true },
+    });
+    
+    let total = 0;
+    let abandoned = 0;
+    let completed = 0;
+    let open = 0;
+    
+    for (const stat of stats) {
+      const count = stat._count._all;
+      total += count;
+      if (stat.status === "abandoned") abandoned = count;
+      else if (stat.status === "completed") completed = count;
+      else if (stat.status === "open") open = count;
+    }
+    
+    return {
+      total,
+      abandoned,
+      completed,
+      open,
+      abandonmentRate: total > 0 ? abandoned / total : 0,
+    };
+  } catch (error) {
+    logger.error("[funnel] Error getting abandonment stats", { shopDomain }, {
+      error: (error as Error).message,
+    });
+    return {
+      total: 0,
+      abandoned: 0,
+      completed: 0,
+      open: 0,
+      abandonmentRate: 0,
+    };
   }
 }

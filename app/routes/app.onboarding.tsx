@@ -13,7 +13,7 @@ import {
 } from "../lib/billing.server";
 import { getSettings, syncShopPreferences } from "../lib/settings.server";
 import { useUILanguage } from "../lib/useUILanguage";
-import { BILLING_PLANS, PRIMARY_BILLABLE_PLAN_ID, type PlanId } from "../lib/billing/plans";
+import { BILLING_PLANS, PRIMARY_BILLABLE_PLAN_ID, type PlanId, validatePlanId, validateAndGetPlan } from "../lib/billing/plans";
 import { isDemoMode } from "../lib/runtime.server";
 import { OrdersRepository } from "../lib/repositories/orders.repository";
 import { resolveDateRange } from "../lib/aiData";
@@ -493,10 +493,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const intent = formData.get("intent");
     
     if (intent === "select_plan") {
-        const planId = (formData.get("planId") as PlanId) || "free";
-        const plan = BILLING_PLANS[planId];
+        // 使用类型安全的 planId 验证，防止恶意输入
+        const rawPlanId = formData.get("planId");
+        const planId = validatePlanId(rawPlanId) || "free";
+        const plan = validateAndGetPlan(planId);
         if (!plan) {
-          return Response.json({ ok: false, message: "Unknown plan" }, { status: 400 });
+          return Response.json({ ok: false, message: "Invalid or unknown plan ID" }, { status: 400 });
         }
 
         if (plan.id === "free") {

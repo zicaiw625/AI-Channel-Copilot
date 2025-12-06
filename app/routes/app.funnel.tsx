@@ -16,21 +16,25 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const shopDomain = session.shop;
   const settings = await getSettings(shopDomain);
   const language = settings.languages?.[0] || "中文";
+  const timezone = settings.timezones?.[0] || "UTC";
   
   const url = new URL(request.url);
   const rangeKey = (url.searchParams.get("range") as TimeRangeKey) || "30d";
 
   const funnelData = await getFunnelData(shopDomain, {
     range: rangeKey,
+    timezone,
     language,
   });
 
   return {
     funnelData,
     language,
+    timezone,
     rangeKey,
     shopDomain,
     currency: settings.primaryCurrency || "USD",
+    isEstimated: funnelData.isEstimated,
   };
 };
 

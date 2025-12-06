@@ -17,7 +17,7 @@ import {
   getBillingState,
 } from "../lib/billing.server";
 import { getEffectivePlan, type PlanTier } from "../lib/access.server";
-import { BILLING_PLANS, PRIMARY_BILLABLE_PLAN_ID, type PlanId } from "../lib/billing/plans";
+import { BILLING_PLANS, PRIMARY_BILLABLE_PLAN_ID, type PlanId, validatePlanId, validateAndGetPlan } from "../lib/billing/plans";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { demoMode } = readAppFlags();
@@ -530,9 +530,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
 
     if (intent === "upgrade") {
-      const planId = (formData.get("planId") as PlanId) || PRIMARY_BILLABLE_PLAN_ID;
-      const plan = BILLING_PLANS[planId];
-      if (!plan) return Response.json({ ok: false, message: "Unknown plan" }, { status: 400 });
+      // 使用类型安全的 planId 验证，防止恶意输入
+      const rawPlanId = formData.get("planId");
+      const planId = validatePlanId(rawPlanId) || PRIMARY_BILLABLE_PLAN_ID;
+      const plan = validateAndGetPlan(planId);
+      if (!plan) return Response.json({ ok: false, message: "Invalid or unknown plan ID" }, { status: 400 });
       if (plan.status !== "live") return Response.json({ ok: false, message: "Plan unavailable" }, { status: 400 });
       if (plan.priceUsd === 0) {
         await activateFreePlan(shopDomain);
@@ -554,15 +556,53 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     if (intent === "downgrade") {
       const paidPlans = Object.values(BILLING_PLANS).filter((plan) => plan.priceUsd > 0);
       let activeDetails: { id: string; planId: PlanId } | null = null;
+      
+      // Step 1: 查找当前活跃的付费订阅
       for (const plan of paidPlans) {
         const details = await getActiveSubscriptionDetails(admin!, plan.shopifyName);
-        if (details?.id) { activeDetails = { id: details.id, planId: plan.id }; break; }
+        if (details?.id) { 
+          activeDetails = { id: details.id, planId: plan.id }; 
+          break; 
+        }
       }
+      
+      // Step 2: 如果有活跃订阅，先在 Shopify 取消
+      let shopifyCancelled = false;
       if (activeDetails) {
-        try { await cancelSubscription(admin!, activeDetails.id, true); }
-        catch { return Response.json({ ok: false, message: "Failed to cancel subscription in Shopify." }, { status: 500 }); }
+        try { 
+          await cancelSubscription(admin!, activeDetails.id, true);
+          shopifyCancelled = true;
+        } catch (cancelError) {
+          // Shopify 取消失败，不继续操作本地状态
+          console.error("[billing] Failed to cancel subscription in Shopify:", cancelError);
+          return Response.json({ 
+            ok: false, 
+            message: "Failed to cancel subscription in Shopify. Please try again or contact support." 
+          }, { status: 500 });
+        }
       }
-      await activateFreePlan(shopDomain);
+      
+      // Step 3: Shopify 取消成功（或无订阅需要取消），更新本地状态
+      try {
+        await activateFreePlan(shopDomain);
+      } catch (localError) {
+        // 本地状态更新失败，但 Shopify 已取消
+        // 记录错误，返回部分成功（用户需要刷新页面）
+        console.error("[billing] Failed to update local billing state after Shopify cancellation:", localError);
+        
+        if (shopifyCancelled) {
+          // Shopify 已取消，但本地状态未更新 - 返回成功但带警告
+          return Response.json({ 
+            ok: true, 
+            message: "Subscription cancelled in Shopify. Please refresh the page to see updated status." 
+          });
+        }
+        return Response.json({ 
+          ok: false, 
+          message: "Failed to update subscription status. Please refresh and try again." 
+        }, { status: 500 });
+      }
+      
       return Response.json({ ok: true });
     }
 

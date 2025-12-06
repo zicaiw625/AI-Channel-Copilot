@@ -16,10 +16,21 @@ interface RateLimitEntry {
   resetAt: number;
 }
 
+interface CheckLimitResult {
+  allowed: boolean;
+  remaining: number;
+  resetAt: number;
+}
+
 export class RateLimiter {
   private static instance: RateLimiter;
+  private static listenerAdded = false;
   private store: Map<string, RateLimitEntry>;
   private cleanupInterval?: NodeJS.Timeout;
+  
+  // 内存保护：最大条目数限制
+  private readonly MAX_ENTRIES = 100000;
+  private readonly EMERGENCY_CLEANUP_THRESHOLD = 0.8;
 
   private constructor() {
     this.store = new Map();
@@ -34,13 +45,18 @@ export class RateLimiter {
   }
 
   /**
-   * 检查并记录请求
-   * @returns true 如果允许请求，false 如果超出限制
+   * 检查并记录请求（会增加计数）
+   * @returns 包含 allowed, remaining, resetAt 的结果对象
    */
   async checkLimit(
     identifier: string,
     rule: RateLimitRule
-  ): Promise<{ allowed: boolean; remaining: number; resetAt: number }> {
+  ): Promise<CheckLimitResult> {
+    // 内存保护：检查是否需要紧急清理
+    if (this.store.size > this.MAX_ENTRIES) {
+      this.emergencyCleanup();
+    }
+    
     const now = Date.now();
     const key = this.getKey(identifier, rule.windowMs);
     
@@ -63,7 +79,7 @@ export class RateLimiter {
 
     if (!allowed) {
       logger.warn('[RateLimit] Request blocked', {
-        identifier,
+        identifier: identifier.slice(0, 100), // 限制日志长度
         count: entry.count,
         limit: rule.maxRequests,
         windowMs: rule.windowMs
@@ -73,6 +89,34 @@ export class RateLimiter {
     return {
       allowed,
       remaining,
+      resetAt: entry.resetAt
+    };
+  }
+
+  /**
+   * 只读查询当前状态（不增加计数）
+   * 用于获取响应头等场景
+   */
+  peek(
+    identifier: string,
+    rule: RateLimitRule
+  ): CheckLimitResult {
+    const now = Date.now();
+    const key = this.getKey(identifier, rule.windowMs);
+    const entry = this.store.get(key);
+
+    // 如果没有记录或已过期
+    if (!entry || entry.resetAt <= now) {
+      return {
+        allowed: true,
+        remaining: rule.maxRequests,
+        resetAt: now + rule.windowMs
+      };
+    }
+
+    return {
+      allowed: entry.count < rule.maxRequests,
+      remaining: Math.max(0, rule.maxRequests - entry.count),
       resetAt: entry.resetAt
     };
   }
@@ -95,7 +139,7 @@ export class RateLimiter {
   }
 
   /**
-   * 获取当前统计信息
+   * 获取当前统计信息（只读，不增加计数）
    */
   getStats(identifier: string, windowMs: number): RateLimitEntry | null {
     const key = this.getKey(identifier, windowMs);
@@ -105,7 +149,15 @@ export class RateLimiter {
       return null;
     }
     
-    return entry;
+    // 返回副本，防止外部修改
+    return { count: entry.count, resetAt: entry.resetAt };
+  }
+
+  /**
+   * 获取当前存储大小（用于监控）
+   */
+  getStoreSize(): number {
+    return this.store.size;
   }
 
   /**
@@ -130,8 +182,40 @@ export class RateLimiter {
     }
 
     if (cleaned > 0) {
-      logger.debug('[RateLimit] Cleanup completed', { cleaned });
+      logger.debug('[RateLimit] Cleanup completed', { cleaned, remaining: this.store.size });
     }
+  }
+
+  /**
+   * 紧急清理：当内存使用过高时触发
+   */
+  private emergencyCleanup(): void {
+    const startSize = this.store.size;
+    const now = Date.now();
+    
+    // 1. 先删除所有过期的
+    for (const [key, entry] of this.store.entries()) {
+      if (entry.resetAt <= now) {
+        this.store.delete(key);
+      }
+    }
+    
+    // 2. 如果还是太多，删除最早过期的 20%
+    if (this.store.size > this.MAX_ENTRIES * this.EMERGENCY_CLEANUP_THRESHOLD) {
+      const entries = Array.from(this.store.entries())
+        .sort((a, b) => a[1].resetAt - b[1].resetAt);
+      
+      const toDelete = Math.floor(entries.length * 0.2);
+      for (let i = 0; i < toDelete; i++) {
+        this.store.delete(entries[i][0]);
+      }
+    }
+    
+    logger.warn('[RateLimit] Emergency cleanup triggered', {
+      before: startSize,
+      after: this.store.size,
+      maxEntries: this.MAX_ENTRIES
+    });
   }
 
   /**
@@ -143,13 +227,20 @@ export class RateLimiter {
       this.cleanup();
     }, 60 * 1000);
 
-    // 确保在 Node.js 退出时清理定时器
-    if (typeof process !== 'undefined') {
-      process.on('beforeExit', () => {
+    // 防止重复添加事件监听器
+    if (typeof process !== 'undefined' && !RateLimiter.listenerAdded) {
+      RateLimiter.listenerAdded = true;
+      
+      const cleanupHandler = () => {
         if (this.cleanupInterval) {
           clearInterval(this.cleanupInterval);
+          this.cleanupInterval = undefined;
         }
-      });
+      };
+      
+      // 使用 once 避免重复执行
+      process.once('SIGTERM', cleanupHandler);
+      process.once('SIGINT', cleanupHandler);
     }
   }
 }
@@ -213,6 +304,20 @@ export const RateLimitRules = {
     maxRequests: 10,
     windowMs: 60 * 1000, // 1分钟
     message: 'Rate limit exceeded for sensitive operation'
+  },
+  
+  // App Proxy 限制 (llms.txt 等公开端点)
+  PROXY: {
+    maxRequests: 60,
+    windowMs: 60 * 1000, // 1分钟
+    message: 'Proxy rate limit exceeded'
+  },
+  
+  // IP 级别的全局限制 (防 DDoS)
+  GLOBAL_IP: {
+    maxRequests: 300,
+    windowMs: 60 * 1000, // 1分钟
+    message: 'Too many requests from this IP address'
   }
 } as const;
 
@@ -252,14 +357,15 @@ export async function enforceRateLimit(
 }
 
 /**
- * 获取速率限制响应头
+ * 获取速率限制响应头（只读，不消耗配额）
  */
-export async function getRateLimitHeaders(
+export function getRateLimitHeaders(
   identifier: string,
   rule: RateLimitRule = RateLimitRules.API_DEFAULT
-): Promise<Record<string, string>> {
+): Record<string, string> {
   const limiter = RateLimiter.getInstance();
-  const result = await limiter.checkLimit(identifier, rule);
+  // 使用 peek 方法，不增加计数
+  const result = limiter.peek(identifier, rule);
 
   return {
     'X-RateLimit-Limit': rule.maxRequests.toString(),
@@ -294,4 +400,62 @@ export function withRateLimit(
 
 // 导出单例实例
 export const rateLimiter = RateLimiter.getInstance();
+
+// ============================================================================
+// 工具函数
+// ============================================================================
+
+/**
+ * 从请求中提取客户端 IP 地址
+ * 支持常见的代理头
+ */
+export function getClientIp(request: Request): string {
+  // 优先级：X-Forwarded-For > X-Real-IP > CF-Connecting-IP > 默认
+  const forwardedFor = request.headers.get('x-forwarded-for');
+  if (forwardedFor) {
+    // X-Forwarded-For 可能包含多个 IP，取第一个（原始客户端）
+    const firstIp = forwardedFor.split(',')[0]?.trim();
+    if (firstIp && isValidIp(firstIp)) {
+      return firstIp;
+    }
+  }
+  
+  const realIp = request.headers.get('x-real-ip');
+  if (realIp && isValidIp(realIp)) {
+    return realIp;
+  }
+  
+  const cfIp = request.headers.get('cf-connecting-ip');
+  if (cfIp && isValidIp(cfIp)) {
+    return cfIp;
+  }
+  
+  return 'unknown';
+}
+
+/**
+ * 简单的 IP 地址格式验证
+ */
+function isValidIp(ip: string): boolean {
+  // IPv4 格式验证
+  const ipv4Regex = /^(\d{1,3}\.){3}\d{1,3}$/;
+  if (ipv4Regex.test(ip)) {
+    const parts = ip.split('.').map(Number);
+    return parts.every(p => p >= 0 && p <= 255);
+  }
+  
+  // IPv6 格式验证（简化版）
+  const ipv6Regex = /^([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$|^::$|^::1$/;
+  return ipv6Regex.test(ip);
+}
+
+/**
+ * 组合多个标识符创建复合限制键
+ */
+export function buildRateLimitKey(...parts: (string | undefined | null)[]): string {
+  return parts
+    .filter((p): p is string => typeof p === 'string' && p.length > 0)
+    .map(p => p.slice(0, 100)) // 限制每部分长度
+    .join(':');
+}
 

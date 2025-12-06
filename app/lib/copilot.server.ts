@@ -17,6 +17,10 @@ type CopilotRequest = {
 };
 
 export const copilotAnswer = async (request: Request, payload: CopilotRequest) => {
+  // 在函数开始时声明缓存变量，供错误处理使用
+  let cachedLanguage = "中文";
+  let shopDomain = "";
+  
   try {
     // 验证输入
     if (!payload.question && !payload.intent) {
@@ -24,16 +28,14 @@ export const copilotAnswer = async (request: Request, payload: CopilotRequest) =
     }
 
     let session: { shop: string } | null = null;
-    let authError: Error | null = null;
     
     try {
       const auth = await authenticate.admin(request);
       session = auth.session;
     } catch (error) {
-      authError = error instanceof Error ? error : new Error(String(error));
       // 在非 demo 模式下，认证失败应该抛出错误
       if (!isDemoMode()) {
-        throw authError;
+        throw error instanceof Error ? error : new Error(String(error));
       }
       // Demo 模式下，继续处理但没有 session
     }
@@ -43,8 +45,11 @@ export const copilotAnswer = async (request: Request, payload: CopilotRequest) =
       throw new ValidationError("Invalid session: missing shop domain");
     }
 
-    const shopDomain = session?.shop || "";
+    shopDomain = session?.shop || "";
     const settings = await getSettings(shopDomain);
+    
+    // 缓存语言设置，供错误处理使用
+    cachedLanguage = settings.languages?.[0] || "中文";
 
     // 验证和解析时间范围
     const rangeKey: TimeRangeKey = (payload.range as TimeRangeKey) || "30d";
@@ -114,6 +119,7 @@ export const copilotAnswer = async (request: Request, payload: CopilotRequest) =
     );
 
     logger.error("[copilot] Error processing request", {
+      shopDomain,
       error: appError.message,
       code: appError.code,
       payload: {
@@ -123,21 +129,10 @@ export const copilotAnswer = async (request: Request, payload: CopilotRequest) =
       }
     });
 
-    // 根据用户语言设置返回错误消息
-    let userMessage = "抱歉，处理您的请求时出现错误，请稍后重试。";
-    try {
-      // 尝试获取用户语言设置
-      const auth = await authenticate.admin(request).catch(() => null);
-      if (auth?.session?.shop) {
-        const settings = await getSettings(auth.session.shop);
-        const language = settings.languages?.[0] || "中文";
-        if (language === "English") {
-          userMessage = "Sorry, an error occurred while processing your request. Please try again later.";
-        }
-      }
-    } catch {
-      // 获取语言设置失败时使用默认中文
-    }
+    // 使用已缓存的语言设置，无需再次调用 authenticate
+    const userMessage = cachedLanguage === "English"
+      ? "Sorry, an error occurred while processing your request. Please try again later."
+      : "抱歉，处理您的请求时出现错误，请稍后重试。";
 
     return {
       ok: false,

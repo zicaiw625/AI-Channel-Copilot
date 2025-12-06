@@ -26,13 +26,16 @@ const REVERSE_AI_SOURCE_MAP: Record<PrismaAiSource, AIChannel> = {
 
 /**
  * 将应用层的AIChannel枚举转换为数据库的AiSource枚举
+ * 对于未知来源，返回 "Other_AI" 而非抛出异常，保证系统稳定性
  */
 export const toPrismaAiSource = (source: AIChannel | null): PrismaAiSource | null => {
   if (!source) return null;
 
   const mapped = AI_SOURCE_MAP[source];
   if (!mapped) {
-    throw new Error(`Unknown AI source: ${source}`);
+    // 优雅降级：未知来源映射到 Other_AI，避免中断请求
+    console.warn(`[aiSourceMapper] Unknown AI source: ${source}, falling back to Other_AI`);
+    return "Other_AI";
   }
 
   return mapped;
@@ -40,13 +43,16 @@ export const toPrismaAiSource = (source: AIChannel | null): PrismaAiSource | nul
 
 /**
  * 将数据库的AiSource枚举转换为应用层的AIChannel枚举
+ * 对于未知来源，返回 "Other-AI" 而非抛出异常，保证系统稳定性
  */
 export const fromPrismaAiSource = (source: PrismaAiSource | null): AIChannel | null => {
   if (!source) return null;
 
   const mapped = REVERSE_AI_SOURCE_MAP[source];
   if (!mapped) {
-    throw new Error(`Unknown Prisma AI source: ${source}`);
+    // 优雅降级：未知来源映射到 Other-AI，避免中断请求
+    console.warn(`[aiSourceMapper] Unknown Prisma AI source: ${source}, falling back to Other-AI`);
+    return "Other-AI";
   }
 
   return mapped;

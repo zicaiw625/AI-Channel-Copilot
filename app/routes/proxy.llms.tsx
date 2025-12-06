@@ -4,6 +4,7 @@ import { getSettings } from "../lib/settings.server";
 import { buildLlmsTxt, getLlmsTxtCache } from "../lib/llms.server";
 import { logger } from "../lib/logger.server";
 import { readCriticalEnv } from "../lib/env.server";
+import { enforceRateLimit, RateLimitRules, getClientIp, buildRateLimitKey } from "../lib/security/rateLimit.server";
 
 /**
  * Verify Shopify App Proxy signature
@@ -15,6 +16,11 @@ function verifyAppProxySignature(
 ): boolean {
   const signature = query.get("signature");
   if (!signature) return false;
+  
+  // 验证签名格式：只允许十六进制字符，避免恶意输入
+  if (!/^[0-9a-f]+$/i.test(signature)) {
+    return false;
+  }
 
   // Build the message by sorting query params (excluding signature)
   const params: string[] = [];
@@ -32,13 +38,20 @@ function verifyAppProxySignature(
     .update(message)
     .digest("hex");
 
-  // Constant-time comparison
+  // 确保长度相同后再进行常量时间比较
+  // 这避免了通过长度差异泄露信息
+  if (signature.length !== expectedSignature.length) {
+    return false;
+  }
+
+  // Constant-time comparison to prevent timing attacks
   try {
     return crypto.timingSafeEqual(
       Buffer.from(signature, "hex"),
       Buffer.from(expectedSignature, "hex"),
     );
   } catch {
+    // Buffer.from 失败（如无效的十六进制）时返回 false
     return false;
   }
 }
@@ -51,18 +64,47 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const url = new URL(request.url);
   const query = url.searchParams;
   const shopDomain = query.get("shop") || "";
+  const clientIp = getClientIp(request);
 
-  // Verify the request signature
+  // 1. IP 级别的全局速率限制（在签名验证之前，防止 DDoS）
+  try {
+    await enforceRateLimit(
+      buildRateLimitKey("proxy", "ip", clientIp),
+      RateLimitRules.GLOBAL_IP
+    );
+  } catch (error) {
+    if (error instanceof Response) {
+      logger.warn("[proxy.llms] IP rate limit exceeded", { clientIp });
+      return error;
+    }
+    throw error;
+  }
+
+  // 2. Verify the request signature
   const { SHOPIFY_API_SECRET: apiSecret } = readCriticalEnv();
   const isValid = verifyAppProxySignature(query, apiSecret);
 
   if (!isValid) {
-    logger.warn("[proxy.llms] Invalid signature", { shopDomain });
+    logger.warn("[proxy.llms] Invalid signature", { shopDomain, clientIp });
     return new Response("Unauthorized", { status: 401 });
   }
 
   if (!shopDomain) {
     return new Response("Missing shop parameter", { status: 400 });
+  }
+
+  // 3. 店铺级别的速率限制（签名验证后）
+  try {
+    await enforceRateLimit(
+      buildRateLimitKey("proxy", "shop", shopDomain),
+      RateLimitRules.PROXY
+    );
+  } catch (error) {
+    if (error instanceof Response) {
+      logger.warn("[proxy.llms] Shop rate limit exceeded", { shopDomain });
+      return error;
+    }
+    throw error;
   }
 
   try {

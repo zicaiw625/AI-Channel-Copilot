@@ -38,8 +38,17 @@ export async function getEffectivePlan(shopDomain: string): Promise<PlanTier> {
         trialEndAt: state.lastTrialEndAt.toISOString(),
       });
       
-      // Update state asynchronously (don't block the current request)
-      void setSubscriptionExpiredState(shopDomain, billingPlan as "pro" | "growth" | "free", "TRIAL_EXPIRED");
+      // 同步更新状态以避免竞态条件
+      // 虽然这会稍微增加响应时间，但确保后续请求不会获得过期的权限
+      try {
+        await setSubscriptionExpiredState(shopDomain, billingPlan as "pro" | "growth" | "free", "TRIAL_EXPIRED");
+      } catch (error) {
+        // 状态更新失败时记录错误，但仍然返回 none 以确保安全
+        logger.error("[access] Failed to update expired trial state", { 
+          shopDomain, 
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
       
       return "none";
     }

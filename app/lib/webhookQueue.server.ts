@@ -18,6 +18,30 @@ type WebhookJob = {
 const processingKeys = new Set<string>();
 const scheduledTimers = new Map<string, NodeJS.Timeout>(); // Track scheduled timers to prevent duplicates
 const queue = getQueueConfig();
+
+// 清理所有 scheduled timers（用于优雅关闭）
+const cleanupAllTimers = () => {
+  for (const [key, timer] of scheduledTimers.entries()) {
+    clearTimeout(timer);
+    scheduledTimers.delete(key);
+  }
+  logger.info("[webhook] All scheduled timers cleaned up", { count: scheduledTimers.size });
+};
+
+// 注册进程退出时的清理钩子
+if (typeof process !== "undefined") {
+  // 使用 once 避免重复注册
+  const exitHandler = () => {
+    cleanupAllTimers();
+  };
+  
+  process.once("beforeExit", exitHandler);
+  process.once("SIGINT", exitHandler);
+  process.once("SIGTERM", exitHandler);
+}
+
+// 导出清理函数供测试或手动调用
+export const cleanupWebhookTimers = cleanupAllTimers;
 const MAX_RETRIES = queue.maxRetries;
 const BASE_DELAY_MS = queue.baseDelayMs;
 const MAX_DELAY_MS = queue.maxDelayMs;

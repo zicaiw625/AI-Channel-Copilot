@@ -6,6 +6,7 @@ import { loadOrdersFromDb } from "../lib/orderService.server";
 import { computeLTV } from "../lib/metrics";
 import { requireFeature, FEATURES } from "../lib/access.server";
 import { isDemoMode } from "../lib/runtime.server";
+import { enforceRateLimit, RateLimitRules } from "../lib/security/rateLimit.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   let session;
@@ -17,6 +18,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   }
 
   const shopDomain = session?.shop || "";
+  
+  // Rate limiting: 5 requests per 5 minutes per shop
+  await enforceRateLimit(`export:customers:${shopDomain}`, RateLimitRules.EXPORT);
+  
   await requireFeature(shopDomain, FEATURES.EXPORTS);
   const url = new URL(request.url);
   const rangeKey = (url.searchParams.get("range") as TimeRangeKey) || "90d";

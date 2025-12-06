@@ -1,4 +1,3 @@
- 
 import type { ActionFunctionArgs } from "react-router";
 
 import { authenticate } from "../shopify.server";
@@ -8,6 +7,7 @@ import {
   pruneHistoricalData,
   resolveRetentionMonths,
 } from "../lib/retention.server";
+import { enforceRateLimit, RateLimitRules } from "../lib/security/rateLimit.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { session } = await authenticate.admin(request);
@@ -15,6 +15,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   if (!shopDomain) {
     return Response.json({ ok: false, message: "unauthorized" }, { status: 401 });
   }
+  
+  // Rate limiting: 10 requests per minute per shop (strict limit for retention operations)
+  await enforceRateLimit(`retention:${shopDomain}`, RateLimitRules.STRICT);
 
   const settings = await getSettings(shopDomain);
   const retentionMonths = resolveRetentionMonths(settings);

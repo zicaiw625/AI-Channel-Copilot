@@ -1,4 +1,3 @@
- 
 import type { ActionFunctionArgs } from "react-router";
 
 import { resolveDateRange, type TimeRangeKey } from "../lib/aiData";
@@ -7,6 +6,7 @@ import { getSettings } from "../lib/settings.server";
 import { authenticate } from "../shopify.server";
 import { DEFAULT_RANGE_KEY, MAX_BACKFILL_DURATION_MS, MAX_BACKFILL_ORDERS } from "../lib/constants";
 import { isDemoMode } from "../lib/runtime.server";
+import { enforceRateLimit, RateLimitRules } from "../lib/security/rateLimit.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   if (request.method !== "POST")
@@ -23,6 +23,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
 
   const shopDomain = session?.shop || "";
+  
+  // Rate limiting: 10 requests per minute per shop (strict limit for backfill operations)
+  if (shopDomain) {
+    await enforceRateLimit(`backfill:${shopDomain}`, RateLimitRules.STRICT);
+  }
   // In demo mode, if no shop domain, we can't trigger backfill
   if (!shopDomain && isDemoMode()) {
     return Response.json({

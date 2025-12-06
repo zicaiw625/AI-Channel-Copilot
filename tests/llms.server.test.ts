@@ -24,10 +24,10 @@ vi.mock('../app/lib/logger.server', () => ({
 describe('llms.server buildLlmsTxt', () => {
   const baseSettings = { exposurePreferences: { exposeProducts: true, exposeCollections: false, exposeBlogs: false }, primaryCurrency: 'USD', languages: ['中文'] }
 
-  it('generates Chinese text with product allow list', async () => {
+  it('generates Chinese text with product list', async () => {
     const text = await llms.buildLlmsTxt('shop.example.com', baseSettings, { range: '30d', topN: 2 })
     expect(text).toMatchSnapshot()
-    expect(text).toContain('allow:')
+    expect(text).toContain('products:')
     expect(text).toContain('https://shop.example.com/products/a')
   })
 
@@ -40,8 +40,8 @@ describe('llms.server buildLlmsTxt', () => {
     expect(text).toMatchSnapshot()
     expect(text).toContain('# llms.txt · AI crawling preferences (experimental)')
     // Without admin, it should show "require API access" message
-    expect(text).toContain('# Collections require API access (preview mode)')
-    expect(text).toContain('# Blog articles require API access (preview mode)')
+    expect(text).toContain('# Collections require API access')
+    expect(text).toContain('# Blog articles require API access')
   })
 
   it('shows disabled messages when exposure is off', async () => {
@@ -50,9 +50,9 @@ describe('llms.server buildLlmsTxt', () => {
       languages: ['English'],
       exposurePreferences: { exposeProducts: false, exposeCollections: false, exposeBlogs: false }
     }, { range: '30d' })
-    expect(text).toContain('# Product page exposure is disabled')
+    expect(text).toContain('# Product exposure is disabled')
     expect(text).toContain('# Collections exposure is disabled')
-    expect(text).toContain('# Blog/content exposure is disabled')
+    expect(text).toContain('# Blog exposure is disabled')
   })
 })
 

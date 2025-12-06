@@ -4,10 +4,15 @@ import type { CopilotIntent } from "../lib/copilot.intent";
 import { copilotAnswer } from "../lib/copilot.server";
 import { authenticate } from "../shopify.server";
 import { requireFeature, FEATURES } from "../lib/access.server";
+import { enforceRateLimit, RateLimitRules } from "../lib/security/rateLimit.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { session } = await authenticate.admin(request);
   const shopDomain = session?.shop || "";
+  
+  // Rate limiting: 20 requests per minute per shop
+  await enforceRateLimit(`copilot:${shopDomain}`, RateLimitRules.COPILOT);
+  
   await requireFeature(shopDomain, FEATURES.COPILOT);
 
   if (request.method !== "POST") {

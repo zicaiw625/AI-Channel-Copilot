@@ -1,9 +1,9 @@
- 
 import type { LoaderFunctionArgs } from "react-router";
 
 import prisma from "../db.server";
 import { authenticate } from "../shopify.server";
 import { isDemoMode } from "../lib/runtime.server";
+import { enforceRateLimit, RateLimitRules } from "../lib/security/rateLimit.server";
 
 type JobStatus = "queued" | "processing" | "completed" | "failed";
 interface JobSnapshot {
@@ -39,6 +39,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   }
 
   const shopDomain = session?.shop || "";
+  
+  // Rate limiting: 30 requests per minute per shop (dashboard polling)
+  if (shopDomain) {
+    await enforceRateLimit(`jobs:${shopDomain}`, RateLimitRules.DASHBOARD);
+  }
   // In demo mode, if we can't determine shop domain, return empty or mock data instead of 401
   if (!shopDomain && isDemoMode()) {
     // Return empty snapshot for demo

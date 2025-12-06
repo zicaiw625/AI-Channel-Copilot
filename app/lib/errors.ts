@@ -217,14 +217,14 @@ export const handleError = (error: unknown, context?: Record<string, unknown>): 
 /**
  * 异步错误包装器
  */
-export const asyncErrorHandler = <T extends any[], R>(
+export const asyncErrorHandler = <T extends unknown[], R>(
   fn: (...args: T) => Promise<R>
 ) => {
   return async (...args: T): Promise<R> => {
     try {
       return await fn(...args);
     } catch (error) {
-      throw handleError(error, { function: fn.name, args });
+      throw handleError(error, { function: fn.name, args: args.slice(0, 3) }); // 只记录前3个参数避免敏感数据泄露
     }
   };
 };

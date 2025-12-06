@@ -1,5 +1,6 @@
 /**
  * 缓存系统 - 用于优化性能和减少数据库查询
+ * 统一的缓存实现，支持 TTL、自动清理、模式匹配删除等功能
  */
 
 import { logger } from "./logger.server";
@@ -16,16 +17,19 @@ export interface CacheEntry<T> {
 }
 
 /**
- * 简单的内存缓存实现
+ * 内存缓存实现
+ * 支持 TTL、自动清理、模式匹配删除等功能
  */
 export class MemoryCache<T> {
   private cache = new Map<string, CacheEntry<T>>();
   private readonly maxSize: number;
   private readonly defaultTtl: number;
+  private cleanupInterval?: NodeJS.Timeout;
 
   constructor(options: CacheOptions = {}) {
     this.maxSize = options.maxSize || 1000;
     this.defaultTtl = options.ttl || 5 * 60 * 1000; // 默认5分钟
+    this.startCleanup();
   }
 
   /**
@@ -48,6 +52,20 @@ export class MemoryCache<T> {
   }
 
   /**
+   * 获取缓存数据，如果不存在或过期则执行 fetcher 函数
+   */
+  async getOrSet(key: string, fetcher: () => Promise<T>, ttlMs?: number): Promise<T> {
+    const cached = this.get(key);
+    if (cached !== null) {
+      return cached;
+    }
+
+    const data = await fetcher();
+    this.set(key, data, ttlMs);
+    return data;
+  }
+
+  /**
    * 设置缓存数据
    */
   set(key: string, data: T, ttl?: number): void {
@@ -58,10 +76,7 @@ export class MemoryCache<T> {
 
     // 如果仍然满，删除最老的条目
     if (this.cache.size >= this.maxSize) {
-      const firstKey = this.cache.keys().next().value;
-      if (firstKey) {
-        this.cache.delete(firstKey);
-      }
+      this.evictOldest();
     }
 
     this.cache.set(key, {
@@ -76,6 +91,25 @@ export class MemoryCache<T> {
    */
   delete(key: string): boolean {
     return this.cache.delete(key);
+  }
+
+  /**
+   * 删除匹配模式的所有缓存条目
+   */
+  deletePattern(pattern: string | RegExp): number {
+    const regex = typeof pattern === 'string' 
+      ? new RegExp(pattern.replace(/\*/g, '.*'))
+      : pattern;
+    
+    let deleted = 0;
+    for (const key of this.cache.keys()) {
+      if (regex.test(key)) {
+        this.cache.delete(key);
+        deleted++;
+      }
+    }
+    
+    return deleted;
   }
 
   /**
@@ -97,10 +131,53 @@ export class MemoryCache<T> {
    */
   private evictExpired(): void {
     const now = Date.now();
+    let cleaned = 0;
     for (const [key, entry] of this.cache.entries()) {
       if (now - entry.timestamp > entry.ttl) {
         this.cache.delete(key);
+        cleaned++;
       }
+    }
+    if (cleaned > 0) {
+      logger.debug("[Cache] Cleaned expired entries", { cleaned });
+    }
+  }
+
+  /**
+   * 驱逐最旧的缓存条目
+   */
+  private evictOldest(): void {
+    let oldestKey: string | null = null;
+    let oldestTime = Infinity;
+
+    for (const [key, entry] of this.cache.entries()) {
+      if (entry.timestamp < oldestTime) {
+        oldestTime = entry.timestamp;
+        oldestKey = key;
+      }
+    }
+
+    if (oldestKey) {
+      this.cache.delete(oldestKey);
+    }
+  }
+
+  /**
+   * 启动定期清理任务
+   */
+  private startCleanup(): void {
+    // 每分钟清理一次过期条目
+    this.cleanupInterval = setInterval(() => {
+      this.evictExpired();
+    }, 60 * 1000);
+
+    // 确保在 Node.js 退出时清理定时器
+    if (typeof process !== 'undefined') {
+      process.on('beforeExit', () => {
+        if (this.cleanupInterval) {
+          clearInterval(this.cleanupInterval);
+        }
+      });
     }
   }
 
@@ -124,7 +201,7 @@ export class MemoryCache<T> {
       total: this.cache.size,
       valid: validEntries,
       expired: expiredEntries,
-      hitRate: 0, // 需要额外的跟踪机制
+      maxSize: this.maxSize,
     };
   }
 }
@@ -132,19 +209,19 @@ export class MemoryCache<T> {
 /**
  * 缓存装饰器 - 用于方法级别的缓存
  */
-export function cached<T extends any[], R>(
-  cache: MemoryCache<R>,
+export function cached<T extends unknown[], R>(
+  cacheInstance: MemoryCache<R>,
   keyFn?: (...args: T) => string,
   options?: CacheOptions
 ) {
-  return function (target: any, propertyName: string, descriptor: PropertyDescriptor) {
-    const method = descriptor.value;
+  return function (target: object, propertyName: string, descriptor: PropertyDescriptor) {
+    const method = descriptor.value as (...args: T) => Promise<R>;
 
     descriptor.value = async function (...args: T): Promise<R> {
       const key = keyFn ? keyFn(...args) : `${propertyName}:${JSON.stringify(args)}`;
 
       // 尝试从缓存获取
-      const cachedResult = cache.get(key);
+      const cachedResult = cacheInstance.get(key);
       if (cachedResult !== null) {
         logger.debug("[cache] Cache hit", { key });
         return cachedResult;
@@ -155,7 +232,7 @@ export function cached<T extends any[], R>(
       const result = await method.apply(this, args);
 
       // 缓存结果
-      cache.set(key, result, options?.ttl);
+      cacheInstance.set(key, result, options?.ttl);
 
       return result;
     };
@@ -165,11 +242,21 @@ export function cached<T extends any[], R>(
 }
 
 /**
+ * 缓存统计信息类型
+ */
+export interface CacheStats {
+  total: number;
+  valid: number;
+  expired: number;
+  maxSize: number;
+}
+
+/**
  * 应用级缓存管理器
  */
 export class CacheManager {
   private static instance: CacheManager;
-  private caches = new Map<string, MemoryCache<any>>();
+  private caches = new Map<string, MemoryCache<unknown>>();
 
   static getInstance(): CacheManager {
     if (!CacheManager.instance) {
@@ -183,17 +270,17 @@ export class CacheManager {
    */
   getCache<T>(name: string, options?: CacheOptions): MemoryCache<T> {
     if (!this.caches.has(name)) {
-      this.caches.set(name, new MemoryCache<T>(options));
+      this.caches.set(name, new MemoryCache<unknown>(options));
     }
-    return this.caches.get(name)!;
+    return this.caches.get(name) as MemoryCache<T>;
   }
 
   /**
    * 清空所有缓存
    */
   clearAll(): void {
-    for (const cache of this.caches.values()) {
-      cache.clear();
+    for (const cacheInstance of this.caches.values()) {
+      cacheInstance.clear();
     }
     logger.info("[CacheManager] All caches cleared");
   }
@@ -201,11 +288,11 @@ export class CacheManager {
   /**
    * 获取缓存统计信息
    */
-  getStats() {
-    const stats: Record<string, any> = {};
+  getStats(): Record<string, CacheStats> {
+    const stats: Record<string, CacheStats> = {};
 
-    for (const [name, cache] of this.caches.entries()) {
-      stats[name] = cache.getStats();
+    for (const [name, cacheInstance] of this.caches.entries()) {
+      stats[name] = cacheInstance.getStats();
     }
 
     return stats;
@@ -215,9 +302,9 @@ export class CacheManager {
    * 清理过期条目
    */
   cleanup(): void {
-    for (const cache of this.caches.values()) {
+    for (const cacheInstance of this.caches.values()) {
       // 触发清理
-      cache.getStats();
+      cacheInstance.getStats();
     }
     logger.debug("[CacheManager] Cache cleanup completed");
   }
@@ -227,9 +314,9 @@ export class CacheManager {
 export const cacheManager = CacheManager.getInstance();
 
 // 常用缓存实例
-export const settingsCache = cacheManager.getCache<any>("settings", { ttl: 10 * 60 * 1000 }); // 10分钟
-export const dashboardCache = cacheManager.getCache<any>("dashboard", { ttl: 5 * 60 * 1000 }); // 5分钟
-export const customerCache = cacheManager.getCache<any>("customers", { ttl: 15 * 60 * 1000 }); // 15分钟
+export const settingsCache = cacheManager.getCache<unknown>("settings", { ttl: 10 * 60 * 1000 }); // 10分钟
+export const dashboardCache = cacheManager.getCache<unknown>("dashboard", { ttl: 5 * 60 * 1000 }); // 5分钟
+export const customerCache = cacheManager.getCache<unknown>("customers", { ttl: 15 * 60 * 1000 }); // 15分钟
 
 /**
  * 定期清理缓存的工具函数
@@ -238,4 +325,45 @@ export const startCacheCleanup = (intervalMs: number = 10 * 60 * 1000) => { // �
   setInterval(() => {
     cacheManager.cleanup();
   }, intervalMs);
+};
+
+// ============================================================================
+// 预定义的缓存键生成器
+// ============================================================================
+
+export const CacheKeys = {
+  settings: (shopDomain: string) => `settings:${shopDomain}`,
+  dashboard: (shopDomain: string, range: string) => `dashboard:${shopDomain}:${range}`,
+  billingState: (shopDomain: string) => `billing:${shopDomain}`,
+  customerAcquisition: (shopDomain: string) => `customer-ai:${shopDomain}`,
+  orderCount: (shopDomain: string, range: string) => `orders:count:${shopDomain}:${range}`,
+};
+
+// ============================================================================
+// 预定义的 TTL 常量 (毫秒)
+// ============================================================================
+
+export const CacheTTL = {
+  SHORT: 1 * 60 * 1000,        // 1 分钟
+  MEDIUM: 5 * 60 * 1000,       // 5 分钟
+  LONG: 30 * 60 * 1000,        // 30 分钟
+  VERY_LONG: 60 * 60 * 1000,   // 1 小时
+};
+
+// ============================================================================
+// 统一导出的全局缓存实例
+// ============================================================================
+
+// 创建一个统一的全局缓存实例，供需要简单缓存的模块使用
+const globalCache = new MemoryCache<unknown>({ ttl: CacheTTL.MEDIUM, maxSize: 1000 });
+
+export const cache = {
+  get: <T>(key: string): T | null => globalCache.get(key) as T | null,
+  set: <T>(key: string, data: T, ttl?: number): void => globalCache.set(key, data, ttl),
+  delete: (key: string): boolean => globalCache.delete(key),
+  deletePattern: (pattern: string | RegExp): number => globalCache.deletePattern(pattern),
+  clear: (): void => globalCache.clear(),
+  getStats: () => globalCache.getStats(),
+  getOrSet: <T>(key: string, fetcher: () => Promise<T>, ttl?: number): Promise<T> => 
+    globalCache.getOrSet(key, fetcher as () => Promise<unknown>, ttl) as Promise<T>,
 };

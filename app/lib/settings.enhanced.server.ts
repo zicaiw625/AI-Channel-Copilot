@@ -5,7 +5,7 @@
 
 import prisma from '../db.server';
 import { defaultSettings, type SettingsDefaults } from './aiData';
-import { cache, CacheKeys, CacheTTL } from './cache.enhanced';
+import { cache, CacheKeys, CacheTTL } from './cache';
 import { metrics, MetricNames } from './metrics/collector';
 import { logger } from './logger.server';
 import { buildSettingsUpdatePayload, mapRecordToSettings as mapRecordToSettingsUtil } from './settings/utils';

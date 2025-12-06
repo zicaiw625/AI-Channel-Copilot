@@ -4,11 +4,16 @@
  */
 
 import prisma from '../../db.server';
-import { Prisma } from '@prisma/client';
+import { Prisma, type Order, type OrderProduct, type AiSource } from '@prisma/client';
 import type { DateRange, OrderRecord } from '../aiTypes';
 import { fromPrismaAiSource, toPrismaAiSource } from '../aiSourceMapper';
 import { logger } from '../logger.server';
 import { metrics, recordDbMetrics } from '../metrics/collector';
+
+// 数据库订单类型（带 products 关系）
+type OrderWithProducts = Order & {
+  products: OrderProduct[];
+};
 
 export class OrdersRepository {
   /**
@@ -78,7 +83,7 @@ export class OrdersRepository {
       const where: Prisma.OrderWhereInput = {
         shopDomain,
         createdAt: { gte: range.start, lte: range.end },
-        aiSource: aiSource ? (aiSource as any) : { not: null },
+        aiSource: aiSource ? (aiSource as AiSource) : { not: null },
         sourceName: { notIn: ['pos', 'draft'] },
       };
 
@@ -221,7 +226,7 @@ export class OrdersRepository {
           refundTotal: order.refundTotal,
           aiSource: prismaAiSource,
           detection: order.detection,
-          detectionSignals: order.signals as any,
+          detectionSignals: order.signals as Prisma.InputJsonValue,
           referrer: order.referrer,
           landingPage: order.landingPage,
           utmSource: order.utmSource,
@@ -242,7 +247,7 @@ export class OrdersRepository {
           refundTotal: order.refundTotal,
           aiSource: prismaAiSource,
           detection: order.detection,
-          detectionSignals: order.signals as any,
+          detectionSignals: order.signals as Prisma.InputJsonValue,
           referrer: order.referrer,
           landingPage: order.landingPage,
           utmSource: order.utmSource,
@@ -283,6 +288,32 @@ export class OrdersRepository {
   }
 
   /**
+   * 获取店铺最后订单时间
+   */
+  async getLastOrderAt(shopDomain: string): Promise<Date | null> {
+    const startTime = Date.now();
+
+    try {
+      const lastOrder = await prisma.order.findFirst({
+        where: {
+          shopDomain,
+          sourceName: { notIn: ['pos', 'draft'] },
+        },
+        orderBy: { createdAt: 'desc' },
+        select: { createdAt: true },
+      });
+
+      recordDbMetrics('getLastOrderAt', 'Order', Date.now() - startTime, true);
+
+      return lastOrder?.createdAt ?? null;
+    } catch (error) {
+      recordDbMetrics('getLastOrderAt', 'Order', Date.now() - startTime, false);
+      logger.error('[OrdersRepository] getLastOrderAt failed', { shopDomain }, { error });
+      return null;
+    }
+  }
+
+  /**
    * 删除过期订单
    */
   async deleteOlderThan(shopDomain: string, beforeDate: Date): Promise<number> {
@@ -315,14 +346,14 @@ export class OrdersRepository {
   /**
    * 将数据库记录映射到 OrderRecord
    */
-  private mapToOrderRecord(order: any): OrderRecord {
+  private mapToOrderRecord(order: OrderWithProducts): OrderRecord {
     return {
       id: order.id,
       name: order.name,
       createdAt: order.createdAt.toISOString(),
       totalPrice: order.totalPrice,
       currency: order.currency,
-      subtotalPrice: order.subtotalPrice,
+      subtotalPrice: order.subtotalPrice ?? undefined,
       refundTotal: order.refundTotal,
       aiSource: fromPrismaAiSource(order.aiSource),
       detection: order.detection || "",
@@ -335,7 +366,7 @@ export class OrdersRepository {
       customerId: order.customerId || null,
       isNewCustomer: order.isNewCustomer,
       tags: [],
-      products: order.products?.map((p: any) => ({
+      products: order.products?.map((p: OrderProduct) => ({
         id: p.productId,
         title: p.title,
         handle: p.handle || "",

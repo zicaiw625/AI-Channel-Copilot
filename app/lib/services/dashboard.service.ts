@@ -5,7 +5,7 @@
 
 import { ordersRepository } from '../repositories/orders.repository';
 import { getSettings } from '../settings.enhanced.server';
-import { cache, CacheKeys, CacheTTL } from '../cache.enhanced';
+import { cache, CacheKeys, CacheTTL } from '../cache';
 import { metrics, withMetrics } from '../metrics/collector';
 import { logger } from '../logger.server';
 import { buildDashboardFromOrders } from '../aiData';
@@ -206,9 +206,10 @@ export class DashboardService {
       const { resolveDateRange } = await import('../aiData');
       const range = resolveDateRange('30d');
 
-      const [settings, stats] = await Promise.all([
+      const [settings, stats, lastOrderAt] = await Promise.all([
         getSettings(shopDomain),
         ordersRepository.getAggregateStats(shopDomain, range),
+        ordersRepository.getLastOrderAt(shopDomain),
       ]);
 
       // 检查订单量
@@ -232,7 +233,7 @@ export class DashboardService {
         healthy,
         ordersCount: stats.total.orders,
         aiOrdersCount: stats.ai.orders,
-        lastOrderAt: null, // TODO: 实现最后订单时间查询
+        lastOrderAt,
         issues,
       };
     } catch (error) {

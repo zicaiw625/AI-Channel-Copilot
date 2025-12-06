@@ -22,7 +22,15 @@ import { getEffectivePlan, hasFeature, FEATURES } from "../lib/access.server";
 import { isDemoMode } from "../lib/runtime.server";
 import { readAppFlags } from "../lib/env.server";
 
-type Lang = "English" | "中文";
+// Dashboard 子组件
+import { 
+  KPICards, 
+  ChannelBreakdown, 
+  TrendChart,
+  type Lang,
+  type TrendScope,
+  type JobSnapshot,
+} from "../components/dashboard";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const _demo = isDemoMode();
@@ -112,45 +120,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   };
 };
 
+// 格式化工具函数
 const fmtNumber = (value: number) =>
   new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(value);
 
 const fmtPercent = (value: number, fractionDigits = 1) =>
   `${(value * 100).toFixed(fractionDigits)}%`;
 
-type TrendScope = "overall" | "ai" | AIChannel;
-
 type JobStatus = "queued" | "processing" | "completed" | "failed";
-
-type JobSnapshot = {
-  ok: boolean;
-  backfills: {
-    recent: {
-      id: number;
-      range: string;
-      status: JobStatus;
-      error?: string | null;
-      ordersFetched: number;
-      createdAt: string;
-      startedAt?: string | null;
-      finishedAt?: string | null;
-    }[];
-    counts: Partial<Record<JobStatus, number>>;
-  };
-  webhooks: {
-    recent: {
-      id: number;
-      topic: string;
-      intent: string;
-      status: JobStatus;
-      error?: string | null;
-      createdAt: string;
-      startedAt?: string | null;
-      finishedAt?: string | null;
-    }[];
-    counts: Partial<Record<JobStatus, number>>;
-  };
-};
 
 export default function Index() {
   const {
@@ -217,9 +194,7 @@ export default function Index() {
     }
   };
 
-  const [metricView, setMetricView] = useState<"gmv" | "orders" | "newCustomers">("gmv");
-  const [trendMetric, setTrendMetric] = useState<"gmv" | "orders">("gmv");
-  const [trendScope, setTrendScope] = useState<TrendScope>("ai");
+  // 注意：metricView, trendMetric, trendScope 已移至各子组件内部管理
   const [customFrom, setCustomFrom] = useState(
     (dateRange.fromParam as string | undefined) || dateRange.start.slice(0, 10),
   );
@@ -326,46 +301,7 @@ export default function Index() {
     });
   }, [debugChannelFilter, debugOrderFilter, recentOrders]);
 
-  const trendScopes = useMemo(
-    () => [
-      { key: "overall" as TrendScope, label: uiLanguage === "English" ? "All Orders" : "全部订单" },
-      { key: "ai" as TrendScope, label: uiLanguage === "English" ? "AI Summary" : "AI 汇总" },
-      ...channelList.map((channel) => ({ key: channel as TrendScope, label: channel })),
-    ],
-    [uiLanguage],
-  );
-
-  const channelMax = useMemo(() => {
-    const values = channels.map((channel) => {
-      if (metricView === "gmv") return channel.gmv;
-      if (metricView === "orders") return channel.orders;
-      return channel.newCustomers;
-    });
-    return Math.max(1, ...values);
-  }, [channels, metricView]);
-
-  const getTrendValue = useCallback(
-    (point: (typeof trend)[number]) => {
-      if (trendScope === "overall") {
-        return trendMetric === "gmv" ? point.overallGMV : point.overallOrders;
-      }
-      if (trendScope === "ai") {
-        return trendMetric === "gmv" ? point.aiGMV : point.aiOrders;
-      }
-      const channelMetrics = point.byChannel[trendScope];
-      if (!channelMetrics) return 0;
-      return trendMetric === "gmv" ? channelMetrics.gmv : channelMetrics.orders;
-    },
-    [trendMetric, trendScope],
-  );
-
-  const trendScopeLabel =
-    trendScopes.find((item) => item.key === trendScope)?.label || (uiLanguage === "English" ? "AI Summary" : "AI 汇总");
-
-  const trendMax = useMemo(
-    () => Math.max(1, ...trend.map((point) => getTrendValue(point))),
-    [getTrendValue, trend],
-  );
+  // 注意：trendScopes, channelMax, getTrendValue, trendScopeLabel, trendMax 已移至子组件内部管理
 
   const setRange = (value: TimeRangeKey) => {
     if (isFreePlan && value !== "7d") {
@@ -661,36 +597,12 @@ export default function Index() {
           </div>
         </div>
 
-        <div className={styles.kpiGrid}>
-          <div className={styles.card}>
-            <p className={styles.cardLabel}>{t(lang, "kpi_total_gmv")}</p>
-            <p className={styles.cardValue}>{fmtCurrency(overview.totalGMV)}</p>
-            <p className={styles.cardMeta}>
-              {uiLanguage === "English" ? "Orders" : t(lang, "kpi_orders")} {fmtNumber(overview.totalOrders)} · {uiLanguage === "English" ? "New" : t(lang, "kpi_new_customers")} {fmtNumber(overview.totalNewCustomers)}
-            </p>
-            <p className={styles.helpText}>{t(lang, "kpi_net_gmv")} {fmtCurrency(overview.netGMV)}</p>
-          </div>
-          <div className={styles.card}>
-            <p className={styles.cardLabel}>{t(lang, "kpi_ai_gmv")}</p>
-            <p className={styles.cardValue}>{fmtCurrency(overview.aiGMV)}</p>
-            <p className={styles.cardMeta}>{uiLanguage === "English" ? "Share" : t(lang, "kpi_ai_share")} {fmtPercent(overview.aiShare)}</p>
-            <p className={styles.helpText}>{uiLanguage === "English" ? "AI Net GMV" : "AI 净 GMV"} {fmtCurrency(overview.netAiGMV)}</p>
-          </div>
-          <div className={styles.card}>
-            <p className={styles.cardLabel}>{t(lang, "kpi_ai_orders")}</p>
-            <p className={styles.cardValue}>{fmtNumber(overview.aiOrders)}</p>
-            <p className={styles.cardMeta}>
-              {uiLanguage === "English" ? "Total Orders" : t(lang, "kpi_ai_order_share")} {fmtNumber(overview.totalOrders)} · {fmtPercent(overview.aiOrderShare)}
-            </p>
-          </div>
-          <div className={styles.card}>
-            <p className={styles.cardLabel}>{t(lang, "kpi_ai_new_customers")}</p>
-            <p className={styles.cardValue}>{fmtNumber(overview.aiNewCustomers)}</p>
-            <p className={styles.cardMeta}>
-              {uiLanguage === "English" ? "AI New Customer Rate" : t(lang, "kpi_ai_new_customer_rate")} {fmtPercent(overview.aiNewCustomerRate)} · {uiLanguage === "English" ? "Site New" : "全站新客"} {fmtNumber(overview.totalNewCustomers)}
-            </p>
-          </div>
-        </div>
+        {/* KPI 卡片组件 */}
+        <KPICards 
+          overview={overview} 
+          lang={lang} 
+          formatters={{ fmtCurrency, fmtNumber, fmtPercent, fmtTime }} 
+        />
         {isLowSample && (
           <div className={styles.lowSampleNotice}>
             {uiLanguage === "English" ? `Sample < ${LOW_SAMPLE_THRESHOLD}, metrics for reference only; extend range for more stable trends.` : `样本 < ${LOW_SAMPLE_THRESHOLD}，所有指标仅供参考；延长时间范围后可获得更稳定的趋势。`}
@@ -698,61 +610,12 @@ export default function Index() {
         )}
 
         <div className={styles.twoCol}>
-          <div className={styles.card}>
-            <div className={styles.sectionHeader}>
-              <div>
-                <p className={styles.sectionLabel}>{t(lang, "channels_section_label")}</p>
-                <h3 className={styles.sectionTitle}>{t(lang, "channels_section_title")}</h3>
-              </div>
-              <div className={styles.toggleGroup}>
-                {[
-                  { key: "gmv", label: t(lang, "toggle_gmv") },
-                  { key: "orders", label: t(lang, "toggle_orders") },
-                  { key: "newCustomers", label: t(lang, "toggle_new_customers") },
-                ].map(({ key, label }) => (
-                  <button
-                    key={key}
-                    className={`${styles.toggle} ${metricView === key ? styles.toggleActive : ""}`}
-                    onClick={() => setMetricView(key as typeof metricView)}
-                    type="button"
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className={styles.channelList}>
-              {channels.map((channel) => {
-                const value =
-                  metricView === "gmv"
-                    ? channel.gmv
-                    : metricView === "orders"
-                      ? channel.orders
-                      : channel.newCustomers;
-                const barWidth = `${(value / channelMax) * 100}%`;
-                return (
-                  <div key={channel.channel} className={styles.channelRow}>
-                    <div className={styles.channelLabel}>
-                      <span className={styles.channelDot} style={{ background: channel.color }} />
-                      <span>{channel.channel}</span>
-                    </div>
-                    <div className={styles.channelBar}>
-                      <div
-                        className={styles.channelFill}
-                        style={{ width: barWidth, background: channel.color }}
-                      />
-                    </div>
-                    <span className={styles.channelValue}>
-                      {metricView === "gmv" ? fmtCurrency(value) : fmtNumber(value)}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-            <p className={styles.helpText}>
-              {uiLanguage === "English" ? "Priority: referrer > UTM. AI traffic without referrer/UTM cannot be attributed; results are conservative." : "优先级：referrer > UTM。未带 referrer/UTM 的 AI 流量无法被识别，结果为保守估计。"}
-            </p>
-          </div>
+          {/* 渠道分布组件 */}
+          <ChannelBreakdown 
+            channels={channels} 
+            lang={lang} 
+            formatters={{ fmtCurrency, fmtNumber, fmtPercent, fmtTime }} 
+          />
 
           <div className={styles.card} style={{ position: "relative" }}>
              {!canViewFull && <UpgradeOverlay />}
@@ -857,83 +720,12 @@ export default function Index() {
         </div>
 
         <div className={styles.twoCol}>
-          <div className={styles.card}>
-            <div className={styles.sectionHeader}>
-              <div>
-                <p className={styles.sectionLabel}>{uiLanguage === "English" ? "Trend" : "趋势"}</p>
-                <h3 className={styles.sectionTitle}>{t(lang, "trend_section_title")}</h3>
-              </div>
-              <div className={styles.trendControls}>
-                <div className={styles.toggleGroup}>
-                  {[
-                    { key: "gmv", label: "GMV" },
-                    { key: "orders", label: uiLanguage === "English" ? "Orders" : "订单" },
-                  ].map(({ key, label }) => (
-                    <button
-                      key={key}
-                      className={`${styles.toggle} ${trendMetric === key ? styles.toggleActive : ""}`}
-                      onClick={() => setTrendMetric(key as typeof trendMetric)}
-                      type="button"
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-                <div className={styles.trendFilterGroup}>
-                  {trendScopes.map((scope) => (
-                    <button
-                      key={scope.key}
-                      className={`${styles.toggle} ${trendScope === scope.key ? styles.toggleActive : ""}`}
-                      onClick={() => setTrendScope(scope.key)}
-                      type="button"
-                    >
-                      {scope.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-            <div className={styles.legend}>
-              <span className={styles.legendDot} />
-              <span>
-                {trendScopeLabel} · {trendMetric === "gmv" ? "GMV" : (uiLanguage === "English" ? "Orders" : "订单数")}
-              </span>
-            </div>
-            <div className={styles.trendList}>
-              {trend.map((point) => {
-                const value = getTrendValue(point);
-                const secondary =
-                  trendScope === "overall"
-                    ? trendMetric === "gmv"
-                      ? (uiLanguage === "English" ? `AI GMV ${fmtCurrency(point.aiGMV)}` : `AI GMV ${fmtCurrency(point.aiGMV)}`)
-                      : (uiLanguage === "English" ? `AI Orders ${fmtNumber(point.aiOrders)}` : `AI 订单 ${fmtNumber(point.aiOrders)}`)
-                    : trendMetric === "gmv"
-                      ? (uiLanguage === "English" ? `Total GMV ${fmtCurrency(point.overallGMV)}` : `总 GMV ${fmtCurrency(point.overallGMV)}`)
-                      : (uiLanguage === "English" ? `Total Orders ${fmtNumber(point.overallOrders)}` : `总订单 ${fmtNumber(point.overallOrders)}`);
-
-                return (
-                  <div key={point.label} className={styles.trendRow}>
-                    <div className={styles.trendLabel}>{point.label}</div>
-                    <div className={styles.trendBarBlock}>
-                      <div className={styles.trendBar}>
-                        <div
-                          className={styles.trendFill}
-                          style={{ width: `${(value / trendMax) * 100}%` }}
-                        />
-                      </div>
-                      <div className={styles.trendMeta}>
-                        <span>{trendMetric === "gmv" ? fmtCurrency(value) : fmtNumber(value)}</span>
-                        <span>{secondary}</span>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            <p className={styles.helpText}>
-              {uiLanguage === "English" ? "Toggle GMV/Orders and filter by channel. Low sample sizes can exaggerate variance; read alongside channel details." : "可切换 GMV / 订单并按渠道过滤；样本量低时单笔订单会放大波动，解读时需结合渠道详情。"}
-            </p>
-        </div>
+          {/* 趋势图组件 */}
+          <TrendChart 
+            trend={trend} 
+            lang={lang} 
+            formatters={{ fmtCurrency, fmtNumber, fmtPercent, fmtTime }} 
+          />
 
         <div className={styles.card} style={{ position: "relative" }}>
              {!canViewFull && <UpgradeOverlay />}

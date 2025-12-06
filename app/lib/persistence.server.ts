@@ -10,6 +10,7 @@ import { loadCustomersByIds as loadCustomersFromService } from "./customerServic
 import { validateOrderData } from "./orderService.server";
 import { DatabaseError, ValidationError } from "./errors";
 import { logger } from "./logger.server";
+import { toZonedDate } from "./dateUtils";
 
 const tableMissing = (error: unknown) =>
   (error instanceof PrismaClientKnownRequestError && error.code === "P2021") ||
@@ -122,7 +123,6 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
             // Collect items for batch operations
             const toCreate: Prisma.OrderProductCreateManyInput[] = [];
             const toDeleteIds: number[] = [];
-            let updatedCount = 0;
 
             for (const line of newLines) {
               const prev = existingByPid.get(line.id);
@@ -135,7 +135,6 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
                   prev.currency !== (line.currency || prev.currency) ||
                   prev.quantity !== line.quantity;
                 if (changed) {
-                  updatedCount++;
                   // For updates, we still need individual calls due to different data per row
                   await tx.orderProduct.update({
                     where: { id: prev.id },
@@ -444,19 +443,4 @@ export const aggregateAiShare = async (shopDomain: string) => {
 
 export const hasAnyTables = () => {
   return true;
-};
-const toZonedDate = (date: Date, timeZone?: string) => {
-  if (!timeZone) return new Date(date);
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hourCycle: "h23",
-  }).formatToParts(date);
-  const get = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((p) => p.type === type)?.value || 0);
-  return new Date(Date.UTC(get("year"), get("month") - 1, get("day"), get("hour"), get("minute"), get("second")));
 };

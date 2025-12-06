@@ -123,8 +123,21 @@ export const copilotAnswer = async (request: Request, payload: CopilotRequest) =
       }
     });
 
-    // 返回用户友好的错误信息 (默认中文)
-    const userMessage = "抱歉，处理您的请求时出现错误，请稍后重试。";
+    // 根据用户语言设置返回错误消息
+    let userMessage = "抱歉，处理您的请求时出现错误，请稍后重试。";
+    try {
+      // 尝试获取用户语言设置
+      const auth = await authenticate.admin(request).catch(() => null);
+      if (auth?.session?.shop) {
+        const settings = await getSettings(auth.session.shop);
+        const language = settings.languages?.[0] || "中文";
+        if (language === "English") {
+          userMessage = "Sorry, an error occurred while processing your request. Please try again later.";
+        }
+      }
+    } catch {
+      // 获取语言设置失败时使用默认中文
+    }
 
     return {
       ok: false,

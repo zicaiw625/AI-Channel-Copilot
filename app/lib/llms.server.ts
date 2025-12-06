@@ -320,6 +320,7 @@ export const buildLlmsTxt = async (
           if (details.description) {
             const summary = details.description
               .replace(/[\n\r]+/g, " ")
+              .replace(/"/g, '\\"') // 转义双引号防止 YAML 格式错误
               .trim()
               .slice(0, 150);
             if (summary) {

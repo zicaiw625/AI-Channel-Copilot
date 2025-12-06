@@ -2,7 +2,7 @@
  * Dashboard 组件共享类型定义
  */
 
-import type { AIChannel, TimeRangeKey } from "../../lib/aiData";
+import type { AIChannel } from "../../lib/aiData";
 
 export type Lang = "English" | "中文";
 

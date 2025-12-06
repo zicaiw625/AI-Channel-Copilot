@@ -333,9 +333,23 @@ export const normalizeSettingsPayload = (incoming: unknown): SettingsDefaults =>
     pipelineStatuses: Array.isArray(parsed.pipelineStatuses)
       ? (parsed.pipelineStatuses as SettingsDefaults["pipelineStatuses"])
       : defaultSettings.pipelineStatuses,
-    lastOrdersWebhookAt: parsed.lastOrdersWebhookAt || undefined,
-    lastBackfillAt: parsed.lastBackfillAt || undefined,
-    lastTaggingAt: parsed.lastTaggingAt || undefined,
+    // 日期字段使用严格的类型检查，避免 0 或空字符串被错误处理
+    // 这些字段在 SettingsDefaults 中是 string | null | undefined 类型
+    lastOrdersWebhookAt: (typeof parsed.lastOrdersWebhookAt === 'string' && parsed.lastOrdersWebhookAt.trim())
+      ? parsed.lastOrdersWebhookAt
+      : (parsed.lastOrdersWebhookAt && typeof parsed.lastOrdersWebhookAt === 'object' && 'toISOString' in parsed.lastOrdersWebhookAt)
+        ? (parsed.lastOrdersWebhookAt as Date).toISOString()
+        : undefined,
+    lastBackfillAt: (typeof parsed.lastBackfillAt === 'string' && parsed.lastBackfillAt.trim())
+      ? parsed.lastBackfillAt
+      : (parsed.lastBackfillAt && typeof parsed.lastBackfillAt === 'object' && 'toISOString' in parsed.lastBackfillAt)
+        ? (parsed.lastBackfillAt as Date).toISOString()
+        : undefined,
+    lastTaggingAt: (typeof parsed.lastTaggingAt === 'string' && parsed.lastTaggingAt.trim())
+      ? parsed.lastTaggingAt
+      : (parsed.lastTaggingAt && typeof parsed.lastTaggingAt === 'object' && 'toISOString' in parsed.lastTaggingAt)
+        ? (parsed.lastTaggingAt as Date).toISOString()
+        : undefined,
     retentionMonths: normalizeRetentionMonths(
       parsed.retentionMonths,
       defaultSettings.retentionMonths ?? 6,

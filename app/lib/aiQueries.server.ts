@@ -27,11 +27,24 @@ type DashboardQueryOptions = {
   orders?: OrderRecord[];
 };
 
-// 辅助函数：计算总值
-const getSum = (agg: Prisma.GetOrderAggregateType<any>, metric: string) => {
-  const sum = agg._sum as any;
-  if (metric === "subtotal_price") return sum.subtotalPrice || 0;
-  return sum.totalPrice || 0; // Default to current_total_price which maps to totalPrice in DB schema
+// 定义聚合结果的类型
+type OrderAggregateResult = {
+  _sum: {
+    totalPrice: number | null;
+    subtotalPrice: number | null;
+    refundTotal: number | null;
+  };
+  _count: {
+    _all: number;
+  };
+};
+
+// 辅助函数：计算总值（类型安全版本）
+const getSum = (agg: OrderAggregateResult, metric: string): number => {
+  if (metric === "subtotal_price") {
+    return agg._sum.subtotalPrice ?? 0;
+  }
+  return agg._sum.totalPrice ?? 0; // Default to current_total_price which maps to totalPrice in DB schema
 };
 
 /**

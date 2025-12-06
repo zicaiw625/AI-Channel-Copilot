@@ -119,8 +119,12 @@ export const resolveDateRange = (
 
   const preset = timeRanges[baseKey === "custom" ? DEFAULT_RANGE_KEY : baseKey] || timeRanges[DEFAULT_RANGE_KEY];
   const end = endOfDay(nowDate, timeZone);
-  const start = startOfDay(end, timeZone);
-  start.setUTCDate(start.getUTCDate() - (preset.days - 1));
+  
+  // 正确计算开始日期：先基于 nowDate 计算开始日期，再应用时区转换
+  // 避免在已转换时区的日期上直接操作 UTC 日期导致的偏差
+  const startDate = new Date(nowDate);
+  startDate.setDate(startDate.getDate() - (preset.days - 1));
+  const start = startOfDay(startDate, timeZone);
 
   return {
     key: baseKey === "custom" ? DEFAULT_RANGE_KEY : baseKey,
@@ -432,8 +436,20 @@ export const mapShopifyOrderToRecord = (
       const handle = product?.handle || "";
       const url = product?.onlineStoreUrl || "";
 
+      // 优先使用产品 ID，其次是 legacyResourceId，最后才使用行项目 ID
+      // 注意：使用行项目 ID 作为回退可能导致产品聚合不准确
+      let productId = product?.id;
+      if (!productId && product?.legacyResourceId) {
+        productId = `gid://shopify/Product/${product.legacyResourceId}`;
+      }
+      // 如果仍然没有产品 ID，说明这是一个自定义行项目或已删除的产品
+      // 使用行项目 ID 但添加前缀以区分
+      if (!productId) {
+        productId = `lineitem:${node.id}`;
+      }
+
       return {
-        id: product?.id || product?.legacyResourceId?.toString() || node.id,
+        id: productId,
         title: product?.title || node.name,
         handle,
         url,

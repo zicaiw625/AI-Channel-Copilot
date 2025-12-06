@@ -3,7 +3,15 @@ import { computeLTV, metricOrderValue } from "./metrics";
 
 const toCsvValue = (value: string | number | null | undefined) => {
   const str = value === null || value === undefined ? "" : String(value);
-  if (/[",\n]/.test(str)) {
+  // 防止 CSV 注入攻击（以 =, @, +, - 开头的值在 Excel 中可能被解析为公式）
+  const startsWithDangerousChar = /^[=@+-]/.test(str);
+  const needsQuoting = /[",\n\r]/.test(str);
+  
+  if (startsWithDangerousChar) {
+    // 在危险字符前添加单引号，防止公式执行
+    return `"'${str.replace(/"/g, '""')}"`;
+  }
+  if (needsQuoting) {
     return `"${str.replace(/"/g, '""')}"`;
   }
   return str;

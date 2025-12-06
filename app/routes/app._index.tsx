@@ -4,7 +4,7 @@ import { Link, useFetcher, useLoaderData, useLocation, useNavigate } from "react
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 
-import { channelList, defaultSettings, timeRanges, type AIChannel, type TimeRangeKey, LOW_SAMPLE_THRESHOLD } from "../lib/aiData";
+import { channelList, defaultSettings, timeRanges, type TimeRangeKey, LOW_SAMPLE_THRESHOLD } from "../lib/aiData";
 import { downloadFromApi } from "../lib/downloadUtils";
 import { getSettings, syncShopPreferences } from "../lib/settings.server";
 import { authenticate } from "../shopify.server";
@@ -226,9 +226,10 @@ export default function Index() {
     };
     
     // 延迟首次轮询，避免与页面加载同时发生
-    let initialTimer: ReturnType<typeof setTimeout> | null = window.setTimeout(poll, 1000);
-    let intervalTimer: ReturnType<typeof setInterval> | null = window.setInterval(poll, 12000);
-    let visibilityDelayTimer: ReturnType<typeof setTimeout> | null = null;
+    // 使用 number 类型因为浏览器环境中 setTimeout/setInterval 返回 number
+    let initialTimer: number | null = window.setTimeout(poll, 1000);
+    let intervalTimer: number | null = window.setInterval(poll, 12000);
+    let visibilityDelayTimer: number | null = null;
     
     const clearAllTimers = () => {
       if (initialTimer) {
@@ -253,8 +254,8 @@ export default function Index() {
         visibilityDelayTimer = window.setTimeout(() => {
           poll();
           visibilityDelayTimer = null;
-        }, 500);
-        intervalTimer = window.setInterval(poll, 12000);
+        }, 500) as number;
+        intervalTimer = window.setInterval(poll, 12000) as number;
       } else {
         // 页面不可见时清除所有定时器
         clearAllTimers();

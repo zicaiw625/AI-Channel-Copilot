@@ -191,9 +191,18 @@ export const detectAiFromFields = (
 
   // 8. 标签匹配
   const tagPrefix = config.tagPrefix || "AI-Source";
-  const tagMatch = tags?.find((tag) => tag.startsWith(tagPrefix));
+  // 支持多种标签格式: "AI-Source-ChatGPT", "AI-Source:ChatGPT", "AI-Source_ChatGPT"
+  const tagMatch = tags?.find((tag) => {
+    const normalizedTag = tag.toLowerCase();
+    const normalizedPrefix = tagPrefix.toLowerCase();
+    return normalizedTag.startsWith(normalizedPrefix + "-") ||
+           normalizedTag.startsWith(normalizedPrefix + ":") ||
+           normalizedTag.startsWith(normalizedPrefix + "_");
+  });
   if (tagMatch) {
-    const suffix = tagMatch.replace(`${tagPrefix}-`, "");
+    // 使用正则提取后缀，支持多种分隔符
+    const suffixMatch = tagMatch.match(new RegExp(`^${tagPrefix}[-:_](.+)$`, "i"));
+    const suffix = suffixMatch ? suffixMatch[1] : tagMatch.slice(tagPrefix.length + 1);
     const channel =
       AI_CHANNELS.find((item) => item.toLowerCase() === suffix.toLowerCase()) ||
       ("Other-AI" as AIChannel);

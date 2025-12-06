@@ -539,8 +539,15 @@ export const calculateRemainingTrialDays = async (
 
   const remainingBudget = Math.max(plan.defaultTrialDays - (state.usedTrialDays || 0), 0);
   // If firstInstalledAt is missing but we have a state record, do NOT reset to full trial.
-  // Only return the calculated remaining budget.
-  if (!state.firstInstalledAt) return remainingBudget;
+  // If usedTrialDays is 0 and hasEverSubscribed is true, user has exhausted trial.
+  // Only return remaining budget if user hasn't completed a subscription before.
+  if (!state.firstInstalledAt) {
+    // If user has ever subscribed to this plan, no more trial
+    if (state.hasEverSubscribed && toPlanId(state.billingPlan) === plan.id) {
+      return 0;
+    }
+    return remainingBudget;
+  }
   return remainingBudget;
 };
 

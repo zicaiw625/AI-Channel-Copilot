@@ -228,8 +228,14 @@ const platform = getPlatform();
 // 检查 GraphQL 错误是否与 noteAttributes 字段相关
 const isNoteAttributesError = (errors: unknown): boolean => {
   if (!errors) return false;
-  const errStr = JSON.stringify(errors);
-  return errStr.includes("noteAttributes") && errStr.includes("doesn't exist");
+  const errStr = typeof errors === "string" ? errors : JSON.stringify(errors);
+  // 检查多种可能的格式（包括不同的引号字符）
+  const hasNoteAttributes = errStr.includes("noteAttributes");
+  const hasDoesntExist = errStr.includes("doesn't exist") || 
+                         errStr.includes("doesn't exist") || // 特殊撇号
+                         errStr.includes("does not exist") ||
+                         errStr.toLowerCase().includes("field") && errStr.toLowerCase().includes("not exist");
+  return hasNoteAttributes && hasDoesntExist;
 };
 
 const fetchOrdersPage = async (
@@ -245,9 +251,39 @@ const fetchOrdersPage = async (
   const useFallback = shouldUseFallbackQuery(shopDomain, "orders");
   const ordersQuery = useFallback ? ORDERS_QUERY_FALLBACK : ORDERS_QUERY;
   
-  const response = await sdk.request("orders query", ordersQuery, { first: 50, after, query }, { timeoutMs: DEFAULT_GRAPHQL_TIMEOUT_MS });
+  let response: Response;
+  try {
+    response = await sdk.request("orders query", ordersQuery, { first: 50, after, query }, { timeoutMs: DEFAULT_GRAPHQL_TIMEOUT_MS });
+  } catch (error) {
+    // 检查是否是 noteAttributes 字段不存在的错误（可能在 HTTP 层面就失败了）
+    const errMsg = (error as Error).message || "";
+    if (!useFallback && isNoteAttributesError(errMsg)) {
+      logger.warn("[backfill] noteAttributes field not available (HTTP error), switching to fallback query", {
+        platform,
+        shopDomain: context?.shopDomain,
+        jobType: "backfill",
+        intent: context?.intent,
+      });
+      markShopNeedsFallback(shopDomain, "orders");
+      // 使用备用查询重试
+      return fetchOrdersPage(admin, query, after, context);
+    }
+    throw error;
+  }
+  
   if (!response.ok) {
     const text = await response.text();
+    // 检查是否是 noteAttributes 字段不存在的错误
+    if (!useFallback && isNoteAttributesError(text)) {
+      logger.warn("[backfill] noteAttributes field not available (non-200), switching to fallback query", {
+        platform,
+        shopDomain: context?.shopDomain,
+        jobType: "backfill",
+        intent: context?.intent,
+      });
+      markShopNeedsFallback(shopDomain, "orders");
+      return fetchOrdersPage(admin, query, after, context);
+    }
     logger.error("[backfill] orders page fetch failed", {
       platform,
       shopDomain: context?.shopDomain,
@@ -467,9 +503,39 @@ export const fetchOrderById = async (
   const useFallback = shouldUseFallbackQuery(shopDomain, "single");
   const orderQuery = useFallback ? ORDER_QUERY_FALLBACK : ORDER_QUERY;
   
-  const response = await sdk.request("order query", orderQuery, { id }, { timeoutMs: DEFAULT_GRAPHQL_TIMEOUT_MS });
+  let response: Response;
+  try {
+    response = await sdk.request("order query", orderQuery, { id }, { timeoutMs: DEFAULT_GRAPHQL_TIMEOUT_MS });
+  } catch (error) {
+    // 检查是否是 noteAttributes 字段不存在的错误
+    const errMsg = (error as Error).message || "";
+    if (!useFallback && isNoteAttributesError(errMsg)) {
+      logger.warn("[webhook] noteAttributes field not available (HTTP error), switching to fallback query", {
+        platform,
+        id,
+        jobType: "webhook",
+        shopDomain,
+      });
+      markShopNeedsFallback(shopDomain, "single");
+      return fetchOrderById(admin, id, settings, context);
+    }
+    logger.error("[webhook] order fetch failed with exception", { platform, id, jobType: "webhook", shopDomain }, { error: errMsg });
+    return null;
+  }
+  
   if (!response.ok) {
     const text = await response.text();
+    // 检查是否是 noteAttributes 字段不存在的错误
+    if (!useFallback && isNoteAttributesError(text)) {
+      logger.warn("[webhook] noteAttributes field not available (non-200), switching to fallback query", {
+        platform,
+        id,
+        jobType: "webhook",
+        shopDomain,
+      });
+      markShopNeedsFallback(shopDomain, "single");
+      return fetchOrderById(admin, id, settings, context);
+    }
     logger.error("[webhook] order fetch failed", { platform, id, jobType: "webhook", shopDomain }, { status: response.status, body: text });
     return null;
   }

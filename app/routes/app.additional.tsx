@@ -223,11 +223,40 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     return Response.json({ ok: true, intent });
   } catch (error) {
+    const errorMessage = (error as Error).message || "";
     logger.error("Failed to save settings", { shopDomain }, {
-      message: (error as Error).message,
+      message: errorMessage,
     });
+    
+    // 获取语言设置用于错误消息
+    let lang = "中文";
+    try {
+      const s = await getSettings(shopDomain);
+      lang = s.languages?.[0] || "中文";
+    } catch { /* ignore */ }
+    
+    // 将技术错误转换为用户友好的消息
+    let friendlyMessage: string;
+    if (errorMessage.includes("noteAttributes") || errorMessage.includes("doesn't exist on type")) {
+      friendlyMessage = lang === "English" 
+        ? "Query compatibility issue detected. Retrying with fallback query..."
+        : "检测到查询兼容性问题，正在切换备用查询...";
+    } else if (errorMessage.includes("query failed") || errorMessage.includes("GraphQL")) {
+      friendlyMessage = lang === "English" 
+        ? "Shopify API temporarily unavailable. Please try again."
+        : "Shopify API 暂时不可用，请稍后重试。";
+    } else if (errorMessage.includes("timeout") || errorMessage.includes("timed out")) {
+      friendlyMessage = lang === "English" 
+        ? "Request timed out. Please try again."
+        : "请求超时，请稍后重试。";
+    } else {
+      friendlyMessage = lang === "English" 
+        ? "Operation failed. Please check settings and retry."
+        : "操作失败，请检查设置后重试。";
+    }
+    
     return Response.json(
-      { ok: false, message: (error as Error).message },
+      { ok: false, message: friendlyMessage },
       { status: 400 },
     );
   }
@@ -453,9 +482,22 @@ export default function SettingsAndExport() {
         // Trigger llms.txt preview refresh after successful save
         setLastSavedAt(Date.now());
       } else {
-        shopify.toast.show?.(
-          data.message || (language === "English" ? "Save failed. Check configuration or retry later." : "保存失败，请检查配置或稍后重试"),
-        );
+        // 将技术错误转换为用户友好的消息
+        let friendlyMessage = data.message || "";
+        if (friendlyMessage.includes("noteAttributes") || friendlyMessage.includes("doesn't exist on type")) {
+          friendlyMessage = language === "English" 
+            ? "Retrying with compatible query... Please try again." 
+            : "正在切换兼容查询，请重试...";
+        } else if (friendlyMessage.includes("query failed") || friendlyMessage.includes("GraphQL")) {
+          friendlyMessage = language === "English" 
+            ? "Shopify API error. Please try again later." 
+            : "Shopify API 错误，请稍后重试。";
+        } else if (!friendlyMessage || friendlyMessage.includes("failed") || friendlyMessage.includes("error")) {
+          friendlyMessage = language === "English" 
+            ? "Save failed. Check configuration or retry later." 
+            : "保存失败，请检查配置或稍后重试";
+        }
+        shopify.toast.show?.(friendlyMessage);
       }
     }
   }, [fetcher.data, shopify, language]);

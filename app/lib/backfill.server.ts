@@ -4,7 +4,7 @@ import { fetchOrdersForRange } from "./shopifyOrders.server";
 import { markActivity, updatePipelineStatuses } from "./settings.server";
 import { persistOrders } from "./persistence.server";
 import prisma from "../db.server";
-import { withAdvisoryLock } from "./locks.server";
+import { withAdvisoryLockSimple } from "./locks.server";
 import { logger } from "./logger.server";
 import { MAX_BACKFILL_DURATION_MS, MAX_BACKFILL_ORDERS } from "./constants";
 
@@ -87,7 +87,7 @@ const processQueue = async (
   processing = true;
 
   try {
-    await withAdvisoryLock(1002, async () => {
+    await withAdvisoryLockSimple(1002, async () => {
       for (;;) {
         const job = await dequeue(where);
         if (!job) break;

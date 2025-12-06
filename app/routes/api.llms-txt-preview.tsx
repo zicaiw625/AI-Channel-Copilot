@@ -4,6 +4,7 @@ import { getSettings } from "../lib/settings.server";
 import { buildLlmsTxt, updateLlmsTxtCache } from "../lib/llms.server";
 import { hasFeature, FEATURES } from "../lib/access.server";
 import { logger } from "../lib/logger.server";
+import { enforceRateLimit, RateLimitRules } from "../lib/security/rateLimit.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const url = new URL(request.url);
@@ -20,6 +21,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       return Response.json({ ok: false, message: "Unauthorized" }, { status: 401 });
     }
   }
+
+  // 速率限制：使用 EXPORT 规则（5 次/5 分钟）防止滥用
+  await enforceRateLimit(`llms-preview:${shopDomain}`, RateLimitRules.EXPORT);
 
   const allowed = await hasFeature(shopDomain, FEATURES.EXPORTS);
   if (!allowed) {

@@ -3,9 +3,7 @@ import { resolveDateRange, type TimeRangeKey } from "./aiData";
 import { createGraphqlSdk, type AdminGraphqlClient } from "./graphqlSdk.server";
 import { logger } from "./logger.server";
 import { getPlatform } from "./runtime.server";
-
-// Cache TTL in milliseconds (1 hour)
-const LLMS_CACHE_TTL_MS = 60 * 60 * 1000;
+import { LLMS_CACHE_TTL_MS, LLMS_CACHE_UPDATE_COOLDOWN_MS } from "./constants";
 
 /**
  * YAML 字符串转义辅助函数
@@ -571,16 +569,35 @@ export const getLlmsTxtCache = async (
 
 /**
  * Update llms.txt cache for a shop
+ * Includes cooldown check to prevent concurrent updates
  */
 export const updateLlmsTxtCache = async (
   shopDomain: string,
   text: string,
-): Promise<void> => {
-  if (!shopDomain) return;
+): Promise<{ updated: boolean; reason?: string }> => {
+  if (!shopDomain) return { updated: false, reason: "no_shop" };
 
   const platform = getPlatform();
 
   try {
+    // 先检查上次更新时间，避免频繁更新
+    const existing = await prisma.shopSettings.findUnique({
+      where: { shopDomain_platform: { shopDomain, platform } },
+      select: { llmsTxtCachedAt: true },
+    });
+
+    if (existing?.llmsTxtCachedAt) {
+      const timeSinceLastUpdate = Date.now() - existing.llmsTxtCachedAt.getTime();
+      if (timeSinceLastUpdate < LLMS_CACHE_UPDATE_COOLDOWN_MS) {
+        logger.debug("[llms] Cache update skipped (cooldown)", { 
+          shopDomain, 
+          timeSinceLastUpdate,
+          cooldownMs: LLMS_CACHE_UPDATE_COOLDOWN_MS,
+        });
+        return { updated: false, reason: "cooldown" };
+      }
+    }
+
     await prisma.shopSettings.update({
       where: { shopDomain_platform: { shopDomain, platform } },
       data: {
@@ -589,9 +606,11 @@ export const updateLlmsTxtCache = async (
       },
     });
     logger.info("[llms] Cache updated", { shopDomain });
+    return { updated: true };
   } catch (error) {
     logger.warn("[llms] Failed to update cache", { shopDomain }, {
       error: (error as Error).message,
     });
+    return { updated: false, reason: "error" };
   }
 };

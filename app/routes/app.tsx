@@ -8,6 +8,7 @@ import { NavMenu } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import { readAppFlags, requireEnv } from "../lib/env.server";
 import { getSettings, syncShopPreferences } from "../lib/settings.server";
+import { logger } from "../lib/logger.server";
 import { detectAndPersistDevShop, shouldSkipBillingForPath, calculateRemainingTrialDays } from "../lib/billing.server";
 import { getEffectivePlan, FEATURES, hasFeature, type PlanTier } from "../lib/access.server";
 
@@ -40,7 +41,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       settings = await syncShopPreferences(admin, shopDomain, settings);
     } catch (e) {
       // If syncShopPreferences fails, log but continue with default settings
-      console.warn("syncShopPreferences failed:", (e as Error).message);
+      logger.warn("[app] syncShopPreferences failed", { shopDomain }, { error: (e as Error).message });
     }
   }
 
@@ -91,7 +92,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     };
   } catch (e) {
     if (e instanceof Response) throw e;
-    console.error(e);
+    logger.error("[app] loader error", { shopDomain }, { error: e });
     return {
       apiKey: requireEnv("SHOPIFY_API_KEY"),
       language: settings.languages[0] || "中文",

@@ -456,38 +456,38 @@ export const buildLlmsTxt = async (
 
   // === FAQ Section (New) ===
   if (includeFAQs && settings.exposurePreferences.exposeProducts) {
-    lines.push(isEnglish ? "## Common Questions (Suggested)" : "## 常见问题（建议）");
+    lines.push(isEnglish ? "## Common Questions (Templates - Please Customize)" : "## 常见问题（模板 - 请根据实际情况修改）");
     lines.push(isEnglish 
-      ? "# AI assistants can use these Q&A pairs to answer customer queries."
-      : "# AI 助手可使用这些问答对回答客户查询。");
+      ? "# IMPORTANT: These are template answers. Please update them to match your actual store policies."
+      : "# 重要提示：以下为模板答案，请根据您店铺的实际政策进行修改。");
     lines.push("");
     lines.push("faqs:");
     
-    // Generate common FAQs
+    // Generate template FAQs with clear indicators that they need customization
     const faqs = [
       {
         q: isEnglish ? "What payment methods do you accept?" : "你们接受哪些付款方式？",
         a: isEnglish 
-          ? "We accept major credit cards, PayPal, and Shop Pay for secure checkout."
-          : "我们接受主流信用卡、PayPal 和 Shop Pay 安全结账。",
+          ? "[CUSTOMIZE] We accept [list your actual payment methods]. Please update this answer."
+          : "[请修改] 我们接受 [请填写您实际支持的支付方式]。请更新此答案。",
       },
       {
         q: isEnglish ? "What is your shipping policy?" : "你们的发货政策是什么？",
         a: isEnglish
-          ? "We typically ship orders within 1-3 business days. Delivery times vary by location."
-          : "我们通常在 1-3 个工作日内发货。具体送达时间因地区而异。",
+          ? "[CUSTOMIZE] We ship within [X] business days. [Add your actual shipping details]."
+          : "[请修改] 我们在 [X] 个工作日内发货。[请添加您的实际发货详情]",
       },
       {
         q: isEnglish ? "What is your return policy?" : "你们的退换货政策是什么？",
         a: isEnglish
-          ? "We offer hassle-free returns within 30 days of purchase. Please contact our support team for assistance."
-          : "我们提供 30 天内无忧退换货服务。请联系客服获取帮助。",
+          ? "[CUSTOMIZE] We offer returns within [X] days. [Add your actual return policy details]."
+          : "[请修改] 我们提供 [X] 天内退换货服务。[请添加您的实际退换货政策]",
       },
       {
-        q: isEnglish ? "How can I track my order?" : "如何追踪我的订单？",
+        q: isEnglish ? "How can I contact customer support?" : "如何联系客服？",
         a: isEnglish
-          ? "Once shipped, you'll receive a tracking number via email to monitor your delivery status."
-          : "发货后，您将通过邮件收到追踪号码以查看配送状态。",
+          ? "[CUSTOMIZE] Contact us at [your email] or [your phone]. [Add your actual contact info]."
+          : "[请修改] 请通过 [您的邮箱] 或 [您的电话] 联系我们。[请添加您的实际联系方式]",
       },
     ];
     

@@ -353,6 +353,25 @@ export default function AIOptimization() {
                 : "评分基于您 AI 渠道表现最好的产品。分数越高表示 AI 可发现性越好。"}
             </p>
           )}
+          
+          {/* AI 流量检测限制说明 */}
+          <div
+            style={{
+              background: "#fffbe6",
+              border: "1px solid #ffe58f",
+              borderRadius: 8,
+              padding: 16,
+              marginTop: 12,
+            }}
+          >
+            <p style={{ margin: 0, fontSize: 13, color: "#614700" }}>
+              <strong>⚠️ {isEnglish ? "Detection Limitations" : "检测限制说明"}</strong>
+              <br />
+              {isEnglish
+                ? "AI traffic detection depends on referrer data and UTM parameters. Some AI platforms may not send referrer headers when users click links. For best results, encourage AI platforms to include UTM parameters (e.g., ?utm_source=chatgpt) in shared links."
+                : "AI 流量检测依赖于 referrer 数据和 UTM 参数。部分 AI 平台在用户点击链接时可能不会发送 referrer 信息。为获得最佳检测效果，建议在分享链接时添加 UTM 参数（如 ?utm_source=chatgpt）。"}
+            </p>
+          </div>
         </div>
 
         {/* 高优先级建议 */}
@@ -426,7 +445,7 @@ export default function AIOptimization() {
                     <th>{isEnglish ? "AI GMV" : "AI GMV"}</th>
                     <th>{isEnglish ? "AI Orders" : "AI 订单"}</th>
                     <th>{isEnglish ? "Top Channel" : "主要渠道"}</th>
-                    <th>{isEnglish ? "Schema Status" : "Schema 状态"}</th>
+                    <th>{isEnglish ? "Content Status" : "信息完整度"}</th>
                     <th>{isEnglish ? "Improvements" : "改进项"}</th>
                   </tr>
                 </thead>

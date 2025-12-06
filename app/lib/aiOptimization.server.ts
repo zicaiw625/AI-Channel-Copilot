@@ -317,7 +317,9 @@ function productNodeToPerformance(product: ProductNode, shopDomain: string): Pro
 }
 
 /**
- * 分析产品的 Schema 标记状态
+ * 分析产品的内容完整度
+ * 注意：这不是检测页面上是否有 Schema 标记，而是检查产品信息是否完整
+ * 完整的产品信息是添加 Schema 标记的前提条件
  */
 function analyzeSchemaStatus(product: ProductNode): "complete" | "partial" | "missing" {
   const hasDescription = Boolean(product.description?.trim());
@@ -370,6 +372,7 @@ function generateProductSuggestions(product: ProductNode): string[] {
 
 /**
  * 基于 AI 热销产品生成 FAQ 建议
+ * 注意：发货相关的 FAQ 为模板，商家需要根据实际情况修改
  */
 function generateFAQSuggestions(
   products: ProductNode[],
@@ -383,7 +386,7 @@ function generateFAQSuggestions(
     const productName = product.title;
     const price = product.variants.edges[0]?.node.price;
     
-    // 价格问题
+    // 价格问题 - 基于实际产品数据
     if (price) {
       faqs.push({
         question: isEnglish 
@@ -396,7 +399,7 @@ function generateFAQSuggestions(
       });
     }
     
-    // 产品特点问题
+    // 产品特点问题 - 基于实际产品描述
     if (product.description) {
       faqs.push({
         question: isEnglish
@@ -407,14 +410,14 @@ function generateFAQSuggestions(
       });
     }
     
-    // 发货问题
+    // 发货问题 - 模板答案，需要商家自定义
     faqs.push({
       question: isEnglish
         ? `How long does shipping take for ${productName}?`
         : `${productName} 发货需要多久？`,
       suggestedAnswer: isEnglish
-        ? "We typically ship orders within 1-3 business days. Delivery times vary by location."
-        : "我们通常在 1-3 个工作日内发货。具体送达时间因地区而异。",
+        ? "[Please customize] We typically ship orders within X business days. Actual delivery times depend on your location."
+        : "[请根据实际情况修改] 我们通常在 X 个工作日内发货。具体送达时间因地区而异。",
       basedOnProduct: product.id,
     });
   }
@@ -433,7 +436,7 @@ function generateSuggestions(
   const suggestions: OptimizationSuggestion[] = [];
   const isEnglish = language === "English";
   
-  // 检查 Schema 标记覆盖率
+  // 检查产品信息完整度（作为 Schema 标记的前提条件）
   const missingSchema = products.filter(p => p.schemaMarkupStatus === "missing").length;
   const partialSchema = products.filter(p => p.schemaMarkupStatus === "partial").length;
   
@@ -444,11 +447,11 @@ function generateSuggestions(
       priority: "high",
       title: isEnglish ? "Add Product Schema Markup" : "添加产品 Schema 标记",
       description: isEnglish
-        ? `${missingSchema} products are missing structured data markup, reducing their visibility to AI assistants.`
-        : `${missingSchema} 个产品缺少结构化数据标记，这会降低 AI 助手的识别能力。`,
+        ? `${missingSchema} products lack complete information needed for structured data markup, reducing their visibility to AI assistants.`
+        : `${missingSchema} 个产品缺少结构化数据标记所需的完整信息，这会降低 AI 助手的识别能力。`,
       impact: isEnglish
-        ? "Products with complete schema markup are 2-3x more likely to be recommended by AI assistants."
-        : "拥有完整 Schema 标记的产品被 AI 助手推荐的概率高 2-3 倍。",
+        ? "Products with complete schema markup may improve AI discoverability. Actual impact varies by platform and product category."
+        : "拥有完整 Schema 标记的产品可能提升 AI 发现率。实际效果因平台和产品类别而异。",
       action: isEnglish
         ? "Add JSON-LD Product schema to your product pages. Include name, description, price, availability, and images."
         : "在产品页面添加 JSON-LD Product schema，包含名称、描述、价格、库存状态和图片。",
@@ -477,16 +480,16 @@ function generateSuggestions(
       id: "schema-partial",
       category: "schema_markup",
       priority: "medium",
-      title: isEnglish ? "Complete Partial Schema Markup" : "完善部分 Schema 标记",
+      title: isEnglish ? "Complete Product Information" : "完善产品信息",
       description: isEnglish
-        ? `${partialSchema} products have incomplete structured data. Adding missing fields will improve AI understanding.`
-        : `${partialSchema} 个产品的结构化数据不完整。补充缺失字段可提升 AI 理解能力。`,
+        ? `${partialSchema} products have incomplete information. Adding missing fields will improve AI understanding.`
+        : `${partialSchema} 个产品的信息不完整。补充缺失字段可提升 AI 理解能力。`,
       impact: isEnglish
-        ? "Complete schema markup helps AI provide more accurate product recommendations."
-        : "完整的 Schema 标记帮助 AI 提供更准确的产品推荐。",
+        ? "Complete product information helps AI provide more accurate product recommendations."
+        : "完整的产品信息帮助 AI 提供更准确的产品推荐。",
       action: isEnglish
-        ? "Review and add missing fields like reviews, brand, SKU, and detailed specifications."
-        : "检查并添加缺失字段，如评论、品牌、SKU 和详细规格。",
+        ? "Review and add missing fields like description, images, SEO title, and specifications."
+        : "检查并添加缺失字段，如描述、图片、SEO 标题和详细规格。",
       affectedProducts: products.filter(p => p.schemaMarkupStatus === "partial").map(p => p.productId),
       estimatedLift: isEnglish ? "+10-15% AI visibility" : "+10-15% AI 可见性",
     });
@@ -504,8 +507,8 @@ function generateSuggestions(
         ? `${shortDescriptions} products have descriptions under 100 characters. Longer, detailed descriptions help AI understand and recommend products.`
         : `${shortDescriptions} 个产品的描述少于 100 字符。更长、更详细的描述有助于 AI 理解和推荐产品。`,
       impact: isEnglish
-        ? "Products with rich descriptions (200+ words) see 30-50% higher AI recommendation rates."
-        : "拥有丰富描述（200+ 词）的产品，AI 推荐率高 30-50%。",
+        ? "Products with rich descriptions (200+ words) provide more context for AI platforms to understand and recommend."
+        : "拥有丰富描述（200+ 词）的产品为 AI 平台提供更多上下文，有助于理解和推荐。",
       action: isEnglish
         ? "Add detailed product descriptions including features, benefits, use cases, and specifications."
         : "添加详细的产品描述，包括功能、优势、使用场景和规格。",
@@ -525,8 +528,8 @@ function generateSuggestions(
         ? "FAQ content helps AI assistants answer customer questions about your products directly."
         : "FAQ 内容帮助 AI 助手直接回答客户关于产品的问题。",
       impact: isEnglish
-        ? "Stores with comprehensive FAQs see 20-40% more AI-referred traffic for product queries."
-        : "拥有完善 FAQ 的店铺，产品查询的 AI 引荐流量高 20-40%。",
+        ? "Stores with comprehensive FAQs can improve AI-referred traffic for product queries. Results depend on product category and AI platform usage."
+        : "拥有完善 FAQ 的店铺可能提升产品查询的 AI 引荐流量。实际效果取决于产品类别和 AI 平台使用情况。",
       action: isEnglish
         ? "Create FAQ pages for top-selling products covering pricing, shipping, returns, and product features."
         : "为热销产品创建 FAQ 页面，涵盖价格、发货、退换货和产品特点。",

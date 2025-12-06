@@ -128,9 +128,26 @@ const ORDER_QUERY_FALLBACK = `#graphql
   }
 `;
 
-// 跟踪是否需要使用备用查询（一旦发现 noteAttributes 不可用，后续请求都使用备用查询）
-let useOrdersFallbackQuery = false;
-let useSingleOrderFallbackQuery = false;
+// Track shops that need fallback queries (noteAttributes not available)
+// Using a Set per shop domain to avoid cross-tenant state pollution
+const shopsFallbackOrders = new Set<string>();
+const shopsFallbackSingleOrder = new Set<string>();
+
+const shouldUseFallbackQuery = (shopDomain: string | undefined, type: "orders" | "single"): boolean => {
+  if (!shopDomain) return false;
+  return type === "orders" 
+    ? shopsFallbackOrders.has(shopDomain) 
+    : shopsFallbackSingleOrder.has(shopDomain);
+};
+
+const markShopNeedsFallback = (shopDomain: string | undefined, type: "orders" | "single"): void => {
+  if (!shopDomain) return;
+  if (type === "orders") {
+    shopsFallbackOrders.add(shopDomain);
+  } else {
+    shopsFallbackSingleOrder.add(shopDomain);
+  }
+};
 
 
 const MAX_BACKFILL_PAGES = 20;
@@ -152,9 +169,11 @@ const fetchOrdersPage = async (
   context: FetchContext,
 ) => {
   const sdk = createGraphqlSdk(admin, context.shopDomain);
+  const shopDomain = context.shopDomain;
   
-  // 选择使用的查询（完整版或备用版）
-  const ordersQuery = useOrdersFallbackQuery ? ORDERS_QUERY_FALLBACK : ORDERS_QUERY;
+  // 选择使用的查询（完整版或备用版）- per shop
+  const useFallback = shouldUseFallbackQuery(shopDomain, "orders");
+  const ordersQuery = useFallback ? ORDERS_QUERY_FALLBACK : ORDERS_QUERY;
   
   const response = await sdk.request("orders query", ordersQuery, { first: 50, after, query }, { timeoutMs: DEFAULT_GRAPHQL_TIMEOUT_MS });
   if (!response.ok) {
@@ -180,14 +199,14 @@ const fetchOrdersPage = async (
   
   if (json.errors) {
     // 检查是否是 noteAttributes 字段不存在的错误
-    if (!useOrdersFallbackQuery && isNoteAttributesError(json.errors)) {
+    if (!useFallback && isNoteAttributesError(json.errors)) {
       logger.warn("[backfill] noteAttributes field not available, switching to fallback query", {
         platform,
         shopDomain: context?.shopDomain,
         jobType: "backfill",
         intent: context?.intent,
       });
-      useOrdersFallbackQuery = true;
+      markShopNeedsFallback(shopDomain, "orders");
       // 使用备用查询重试
       return fetchOrdersPage(admin, query, after, context);
     }
@@ -371,15 +390,17 @@ export const fetchOrderById = async (
     return null;
   }
 
-  const sdk = createGraphqlSdk(admin, context?.shopDomain);
+  const shopDomain = context?.shopDomain;
+  const sdk = createGraphqlSdk(admin, shopDomain);
   
-  // 选择使用的查询（完整版或备用版）
-  const orderQuery = useSingleOrderFallbackQuery ? ORDER_QUERY_FALLBACK : ORDER_QUERY;
+  // 选择使用的查询（完整版或备用版）- per shop
+  const useFallback = shouldUseFallbackQuery(shopDomain, "single");
+  const orderQuery = useFallback ? ORDER_QUERY_FALLBACK : ORDER_QUERY;
   
   const response = await sdk.request("order query", orderQuery, { id }, { timeoutMs: DEFAULT_GRAPHQL_TIMEOUT_MS });
   if (!response.ok) {
     const text = await response.text();
-    logger.error("[webhook] order fetch failed", { platform, id, jobType: "webhook", shopDomain: context?.shopDomain }, { status: response.status, body: text });
+    logger.error("[webhook] order fetch failed", { platform, id, jobType: "webhook", shopDomain }, { status: response.status, body: text });
     return null;
   }
 
@@ -387,19 +408,19 @@ export const fetchOrderById = async (
   
   if (json.errors) {
     // 检查是否是 noteAttributes 字段不存在的错误
-    if (!useSingleOrderFallbackQuery && isNoteAttributesError(json.errors)) {
+    if (!useFallback && isNoteAttributesError(json.errors)) {
       logger.warn("[webhook] noteAttributes field not available, switching to fallback query", {
         platform,
         id,
         jobType: "webhook",
-        shopDomain: context?.shopDomain,
+        shopDomain,
       });
-      useSingleOrderFallbackQuery = true;
+      markShopNeedsFallback(shopDomain, "single");
       // 使用备用查询重试
       return fetchOrderById(admin, id, settings, context);
     }
     
-    logger.error("[webhook] order GraphQL errors", { platform, id, jobType: "webhook", shopDomain: context?.shopDomain }, { errors: json.errors });
+    logger.error("[webhook] order GraphQL errors", { platform, id, jobType: "webhook", shopDomain }, { errors: json.errors });
     return null;
   }
   if (!json.data?.order) return null;

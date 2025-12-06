@@ -25,8 +25,22 @@ export async function getEffectivePlan(shopDomain: string): Promise<PlanTier> {
     return "none";
   }
   
-  // If active or trialing
-  if (billingState.includes("ACTIVE") || billingState.includes("TRIALING")) {
+  // Check if trialing - verify trial hasn't expired
+  if (billingState.includes("TRIALING")) {
+    // If lastTrialEndAt exists and is in the past, trial has expired
+    if (state.lastTrialEndAt && state.lastTrialEndAt.getTime() < Date.now()) {
+      // Trial has expired - should be treated as no subscription
+      // Note: Ideally the billing webhook should update this, but we check here as a safety net
+      return "none";
+    }
+    // Trial is still valid
+    if (billingPlan === "growth") return "growth";
+    if (billingPlan === "pro") return "pro";
+    if (billingPlan === "free") return "free";
+  }
+  
+  // If active (not trialing)
+  if (billingState.includes("ACTIVE")) {
      if (billingPlan === "growth") return "growth";
      if (billingPlan === "pro") return "pro";
      if (billingPlan === "free") return "free";

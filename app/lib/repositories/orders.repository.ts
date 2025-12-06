@@ -209,13 +209,30 @@ export class OrdersRepository {
 
   /**
    * 创建或更新单个订单
+   * @param order - 订单记录
+   * @param shopDomain - 店铺域名（创建时必须）
    */
-  async upsert(order: OrderRecord): Promise<void> {
+  async upsert(order: OrderRecord, shopDomain?: string): Promise<void> {
     const startTime = Date.now();
 
     try {
       // 先 upsert Order
       const prismaAiSource = toPrismaAiSource(order.aiSource);
+      
+      // 尝试获取现有订单的 shopDomain
+      let effectiveShopDomain = shopDomain;
+      if (!effectiveShopDomain) {
+        const existing = await prisma.order.findUnique({
+          where: { id: order.id },
+          select: { shopDomain: true },
+        });
+        effectiveShopDomain = existing?.shopDomain || '';
+      }
+      
+      if (!effectiveShopDomain) {
+        logger.warn('[OrdersRepository] Creating order without shopDomain', { orderId: order.id });
+      }
+      
       await prisma.order.upsert({
         where: { id: order.id },
         update: {
@@ -238,7 +255,7 @@ export class OrdersRepository {
         },
         create: {
           id: order.id,
-          shopDomain: '',
+          shopDomain: effectiveShopDomain,
           name: order.name,
           createdAt: new Date(order.createdAt),
           totalPrice: order.totalPrice,

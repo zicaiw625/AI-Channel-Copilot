@@ -232,6 +232,7 @@ async function buildDashboardFromDb(
       order: { ...where, aiSource: { not: null } }
     },
     select: {
+      orderId: true, // 添加 orderId 用于去重
       productId: true, title: true, handle: true, url: true, price: true, quantity: true,
       order: { select: { aiSource: true, totalPrice: true, subtotalPrice: true, products: { select: { price: true, quantity: true } } } }
     }
@@ -267,9 +268,7 @@ async function buildDashboardFromDb(
     const allocatedGmv = orderVal * share;
     
     // 使用订单 ID 去重，避免同一订单中同一产品多次计数
-    // 注意：aiProductLines 没有直接的 orderId，需要通过其他方式识别
-    // 这里用 order 对象的引用作为 key（同一订单的 line 共享同一个 order 引用）
-    const orderKey = `${order.totalPrice}-${order.subtotalPrice}-${order.aiSource}`;
+    const orderKey = line.orderId;
     if (!p._seenOrders.has(orderKey)) {
       p.aiOrders += 1;
       p._seenOrders.add(orderKey);

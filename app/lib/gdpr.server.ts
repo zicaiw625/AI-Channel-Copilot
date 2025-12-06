@@ -97,6 +97,11 @@ export const redactCustomerRecords = async (
       }
 
       if (customerIds.length) {
+        // First, delete OrderProducts for orders belonging to these customers
+        // to avoid foreign key constraint violations
+        await tx.orderProduct.deleteMany({
+          where: { order: { shopDomain, customerId: { in: customerIds } } },
+        });
         await tx.order.deleteMany({
           where: { shopDomain, customerId: { in: customerIds } },
         });

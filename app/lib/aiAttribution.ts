@@ -47,9 +47,25 @@ export const detectFromNoteAttributes = (
     };
   }
 
-  const fuzzyHit = noteAttributes.find((attr) =>
-    (attr.value || "").toLowerCase().includes("ai")
-  );
+  // More precise AI pattern matching to avoid false positives like "daily", "email", etc.
+  // Matches: "ai", "AI", "ai-", "ai_", "-ai", "_ai", "openai", "chatgpt", "perplexity", etc.
+  const aiPatterns = [
+    /\bai\b/i,           // Standalone "ai" word
+    /\bai[-_]/i,         // "ai-" or "ai_" prefix
+    /[-_]ai\b/i,         // "-ai" or "_ai" suffix
+    /\bopenai\b/i,       // openai
+    /\bchatgpt\b/i,      // chatgpt
+    /\bperplexity\b/i,   // perplexity
+    /\bgemini\b/i,       // gemini
+    /\bcopilot\b/i,      // copilot
+    /\bclaude\b/i,       // claude
+    /\bdeepseek\b/i,     // deepseek
+  ];
+
+  const fuzzyHit = noteAttributes.find((attr) => {
+    const value = (attr.value || "").toLowerCase();
+    return aiPatterns.some((pattern) => pattern.test(value));
+  });
 
   if (fuzzyHit) {
     return {

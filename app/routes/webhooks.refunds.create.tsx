@@ -1,6 +1,6 @@
 import type { ActionFunctionArgs } from "react-router";
-import { handleOrderWebhook } from "../lib/orderWebhooks.server";
+import { handleRefundWebhook } from "../lib/refundWebhooks.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  return handleOrderWebhook(request, "refunds/create");
+  return handleRefundWebhook(request);
 };

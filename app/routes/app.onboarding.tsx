@@ -17,6 +17,7 @@ import { BILLING_PLANS, PRIMARY_BILLABLE_PLAN_ID, type PlanId, validatePlanId, v
 import { isDemoMode } from "../lib/runtime.server";
 import { OrdersRepository } from "../lib/repositories/orders.repository";
 import { resolveDateRange } from "../lib/aiData";
+import { logger } from "../lib/logger.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   type AuthShape = Awaited<ReturnType<typeof authenticate.admin>>;
@@ -94,7 +95,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       hasData: stats.total.orders > 0,
     };
   } catch (e) {
-    console.warn("Failed to load AI snapshot for onboarding:", (e as Error).message);
+    logger.warn("[onboarding] Failed to load AI snapshot", { shopDomain }, { error: e });
   }
   
   return { 
@@ -539,7 +540,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return null;
   } catch (error) {
     if (error instanceof Response) throw error;
-    console.error(error);
+    logger.error("[onboarding] Action failed", { intent: "select_plan" }, { error });
     return Response.json({
       ok: false,
       message: "Action failed. Please try again.",

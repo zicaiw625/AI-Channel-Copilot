@@ -51,7 +51,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     try {
       settings = await syncShopPreferences(admin, shopDomain, settings);
     } catch (e) {
-      console.warn("syncShopPreferences failed in settings:", (e as Error).message);
+      logger.warn("[settings] syncShopPreferences failed", { shopDomain }, { error: (e as Error).message });
     }
   }
   const exportRange = (url.searchParams.get("range") as TimeRangeKey) || "90d";

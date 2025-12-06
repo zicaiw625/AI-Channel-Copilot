@@ -14,8 +14,28 @@ import {
 } from "./urlUtils";
 
 /**
+ * 预编译的渠道匹配正则表达式
+ * 在模块加载时初始化，避免每次调用时重新创建
+ */
+const CHANNEL_WORD_BOUNDARY_PATTERNS: ReadonlyMap<AIChannel, RegExp> = new Map(
+  AI_CHANNELS
+    .filter((channel): channel is Exclude<AIChannel, "Other-AI"> => channel !== "Other-AI")
+    .map((channel) => [
+      channel,
+      new RegExp(`\\b${channel.toLowerCase().replace("-", "[-_]?")}\\b`, "i"),
+    ])
+);
+
+/**
+ * 预编译的渠道名称小写映射（用于精确匹配）
+ */
+const CHANNEL_LOWERCASE_MAP: ReadonlyMap<string, AIChannel> = new Map(
+  AI_CHANNELS.map((channel) => [channel.toLowerCase(), channel])
+);
+
+/**
  * 将 AI 相关值映射到渠道
- * 优化：使用精确匹配和单词边界匹配，避免误判
+ * 优化：使用预编译的正则表达式和 Map 查找，提升性能
  */
 export const aiValueToChannel = (value: string, utmSources: UtmSourceRule[]): AIChannel | null => {
   const normalized = value.toLowerCase().trim();
@@ -25,20 +45,18 @@ export const aiValueToChannel = (value: string, utmSources: UtmSourceRule[]): AI
   const utmMatch = utmSources.find((rule) => rule.value.toLowerCase() === normalized);
   if (utmMatch) return utmMatch.channel;
   
-  // 2. 精确匹配渠道名称
-  const exactMatch = AI_CHANNELS.find((item) => item.toLowerCase() === normalized);
+  // 2. 精确匹配渠道名称（使用预编译的 Map）
+  const exactMatch = CHANNEL_LOWERCASE_MAP.get(normalized);
   if (exactMatch) return exactMatch;
   
-  // 3. 使用单词边界进行模糊匹配，避免 "notchatgpt" 匹配 "ChatGPT"
-  // 缓存正则表达式以提升性能
-  const wordBoundaryMatch = AI_CHANNELS.find((item) => {
-    // Other-AI 不参与模糊匹配
-    if (item === "Other-AI") return false;
-    const pattern = new RegExp(`\\b${item.toLowerCase().replace("-", "[-_]?")}\\b`, "i");
-    return pattern.test(normalized);
-  });
+  // 3. 使用预编译的正则表达式进行单词边界匹配
+  for (const [channel, pattern] of CHANNEL_WORD_BOUNDARY_PATTERNS) {
+    if (pattern.test(normalized)) {
+      return channel;
+    }
+  }
   
-  return wordBoundaryMatch || null;
+  return null;
 };
 
 /**
@@ -94,7 +112,9 @@ export const detectFromNoteAttributes = (
   ];
   
   // AI 相关上下文关键词
-  const aiContextPattern = /\b(ai|llm|chat|assistant|bot|model|gpt|language\s*model)\b/i;
+  // 注意：使用 (?:^|[_\-\s]) 和 (?:[_\-\s]|$) 来支持下划线和连字符作为边界
+  // 因为 \b 在 JavaScript 中不将下划线视为单词边界
+  const aiContextPattern = /(?:^|[_\-\s])(ai|llm|chat|assistant|bot|model|gpt)(?:[_\-\s]|$)/i;
 
   for (const attr of noteAttributes) {
     const name = (attr.name || "").toLowerCase();
@@ -114,19 +134,52 @@ export const detectFromNoteAttributes = (
   }
 
   // 4. 通用 AI 模式匹配（需要字段名包含相关上下文）
-  const aiFieldNamePattern = /\b(source|channel|referr|traffic|campaign|medium)\b/i;
+  // 注意：使用严格的模式避免误判（如 "hawaii" 不应匹配 "ai"）
+  // 支持下划线和连字符作为边界，因为字段名常用 snake_case 或 kebab-case
+  const aiFieldNamePattern = /(?:^|[_\-])(source|channel|referr|traffic|campaign|medium)(?:[_\-]|$)/i;
+  
+  // 严格的 AI 模式：
+  // - 独立的 "ai" 单词必须有明确边界（不能是单词的一部分）
+  // - 使用负向前瞻/后顾确保 "ai" 不是更长单词的一部分
   const genericAiPatterns = [
-    /\bai\b/i,           // Standalone "ai" word
-    /\bai[-_]/i,         // "ai-" or "ai_" prefix
-    /[-_]ai\b/i,         // "-ai" or "_ai" suffix
+    // 匹配独立的 "ai"：前后必须是非字母字符或字符串边界
+    // 排除 "hawaii", "email", "again", "contain" 等包含 "ai" 的常见词
+    /(?<![a-z])ai(?![a-z])/i,  // "ai" 前后不能是字母
+    /^ai[-_]/i,                 // 以 "ai-" 或 "ai_" 开头
+    /[-_]ai$/i,                 // 以 "-ai" 或 "_ai" 结尾
+    /[-_]ai[-_]/i,              // 中间的 "-ai-" 或 "_ai_"
   ];
+  
+  // 明确的 AI 相关值白名单（精确匹配）
+  const explicitAiValues = new Set([
+    "ai",
+    "ai-assistant",
+    "ai_assistant",
+    "ai-chat",
+    "ai_chat",
+    "ai-search",
+    "ai_search",
+    "ai-referral",
+    "ai_referral",
+    "llm",
+    "llm-referral",
+  ]);
 
   for (const attr of noteAttributes) {
     const name = (attr.name || "").toLowerCase();
-    const value = (attr.value || "").toLowerCase();
+    const value = (attr.value || "").toLowerCase().trim();
     
     // 只有当字段名包含相关上下文时，才进行通用 AI 模式匹配
     if (aiFieldNamePattern.test(name)) {
+      // 优先使用白名单精确匹配
+      if (explicitAiValues.has(value)) {
+        return {
+          aiSource: "Other-AI",
+          detection: `Note attribute contains AI hint (${attr.name || "note"}=${attr.value || ""})`,
+        };
+      }
+      
+      // 使用严格的模式匹配
       if (genericAiPatterns.some((pattern) => pattern.test(value))) {
         return {
           aiSource: "Other-AI",

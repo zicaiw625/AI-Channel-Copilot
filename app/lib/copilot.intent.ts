@@ -45,7 +45,7 @@ export const parseIntent = (raw?: string | null): CopilotIntent | undefined => {
   
   // ===== Top 产品关键词 =====
   // 高权重：明确的排名/热销词汇
-  if (/\b(top\s*\d*|热门|热销|best\s*sell|畅销|排名|排行|ranking)\b/i.test(q)) {
+  if (/\b(top\s*\d*|热门|热销|best\s*sell(?:er)?s?|畅销|排名|排行|ranking)\b/i.test(q)) {
     scores.ai_top_products += 5;
   }
   // 中权重：产品相关词汇

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest'
 import * as llms from '../app/lib/llms.server'
 
 vi.mock('../app/db.server', () => ({
@@ -22,6 +22,17 @@ vi.mock('../app/lib/logger.server', () => ({
 }))
 
 describe('llms.server buildLlmsTxt', () => {
+  // Mock Date to ensure consistent timestamps in snapshots
+  const FIXED_DATE = new Date('2025-01-01T00:00:00.000Z')
+  
+  beforeAll(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(FIXED_DATE)
+  })
+  
+  afterAll(() => {
+    vi.useRealTimers()
+  })
   const baseSettings = { exposurePreferences: { exposeProducts: true, exposeCollections: false, exposeBlogs: false }, primaryCurrency: 'USD', languages: ['中文'] }
 
   it('generates Chinese text with product list', async () => {

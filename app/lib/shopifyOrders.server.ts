@@ -128,10 +128,80 @@ const ORDER_QUERY_FALLBACK = `#graphql
   }
 `;
 
+/**
+ * 简单的 TTL 缓存，用于追踪需要降级查询的店铺
+ * 防止无限增长导致内存泄漏
+ */
+class TTLCache<K, V> {
+  private cache = new Map<K, { value: V; expiresAt: number }>();
+  private maxSize: number;
+  private ttlMs: number;
+
+  constructor(options: { maxSize?: number; ttlMs?: number } = {}) {
+    this.maxSize = options.maxSize ?? 1000;
+    this.ttlMs = options.ttlMs ?? 24 * 60 * 60 * 1000; // 默认 24 小时
+  }
+
+  set(key: K, value: V): void {
+    // 清理过期条目
+    this.cleanup();
+    
+    // 如果达到最大容量，删除最旧的条目
+    if (this.cache.size >= this.maxSize) {
+      const oldestKey = this.cache.keys().next().value;
+      if (oldestKey !== undefined) {
+        this.cache.delete(oldestKey);
+      }
+    }
+    
+    this.cache.set(key, {
+      value,
+      expiresAt: Date.now() + this.ttlMs,
+    });
+  }
+
+  get(key: K): V | undefined {
+    const entry = this.cache.get(key);
+    if (!entry) return undefined;
+    
+    if (Date.now() > entry.expiresAt) {
+      this.cache.delete(key);
+      return undefined;
+    }
+    
+    return entry.value;
+  }
+
+  has(key: K): boolean {
+    return this.get(key) !== undefined;
+  }
+
+  private cleanup(): void {
+    const now = Date.now();
+    for (const [key, entry] of this.cache) {
+      if (now > entry.expiresAt) {
+        this.cache.delete(key);
+      }
+    }
+  }
+
+  // 用于调试和监控
+  get size(): number {
+    this.cleanup();
+    return this.cache.size;
+  }
+}
+
 // Track shops that need fallback queries (noteAttributes not available)
-// Using a Set per shop domain to avoid cross-tenant state pollution
-const shopsFallbackOrders = new Set<string>();
-const shopsFallbackSingleOrder = new Set<string>();
+// Using TTL cache to prevent memory leaks and allow recovery if API changes
+const shopsFallbackOrders = new TTLCache<string, boolean>({ 
+  maxSize: 1000, 
+  ttlMs: 24 * 60 * 60 * 1000, // 24 小时后重试完整查询
+});
+const shopsFallbackSingleOrder = new TTLCache<string, boolean>({ 
+  maxSize: 1000, 
+  ttlMs: 24 * 60 * 60 * 1000,
+});
 
 const shouldUseFallbackQuery = (shopDomain: string | undefined, type: "orders" | "single"): boolean => {
   if (!shopDomain) return false;
@@ -143,9 +213,9 @@ const shouldUseFallbackQuery = (shopDomain: string | undefined, type: "orders" |
 const markShopNeedsFallback = (shopDomain: string | undefined, type: "orders" | "single"): void => {
   if (!shopDomain) return;
   if (type === "orders") {
-    shopsFallbackOrders.add(shopDomain);
+    shopsFallbackOrders.set(shopDomain, true);
   } else {
-    shopsFallbackSingleOrder.add(shopDomain);
+    shopsFallbackSingleOrder.set(shopDomain, true);
   }
 };
 

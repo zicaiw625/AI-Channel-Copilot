@@ -55,11 +55,15 @@ const FunnelChart = ({
   
   if (!hasData) {
     return (
-      <div style={{ 
-        padding: "40px 20px", 
-        textAlign: "center",
-        color: "#637381",
-      }}>
+      <div 
+        style={{ 
+          padding: "40px 20px", 
+          textAlign: "center",
+          color: "#637381",
+        }}
+        role="status"
+        aria-label={isEnglish ? "No funnel data available" : "暂无漏斗数据"}
+      >
         <p style={{ margin: 0, fontSize: 14 }}>
           {isEnglish ? "No data available for this period" : "该时间段内暂无数据"}
         </p>
@@ -73,7 +77,25 @@ const FunnelChart = ({
   }
   
   return (
-    <div style={{ padding: "20px 0" }}>
+    <div 
+      style={{ padding: "20px 0" }}
+      role="img"
+      aria-label={isEnglish 
+        ? `Funnel chart showing ${stages.length} stages from ${stages[0]?.label} to ${stages[stages.length - 1]?.label}`
+        : `漏斗图表，显示从 ${stages[0]?.label} 到 ${stages[stages.length - 1]?.label} 的 ${stages.length} 个阶段`
+      }
+    >
+      {/* 屏幕阅读器专用摘要 */}
+      <div className="sr-only" role="list" aria-label={isEnglish ? "Funnel stages" : "漏斗阶段"}>
+        {stages.map((stage) => (
+          <div key={`sr-${stage.stage}`} role="listitem">
+            {stage.label}: {stage.count.toLocaleString()} 
+            ({(stage.conversionRate * 100).toFixed(1)}% {isEnglish ? "conversion" : "转化率"})
+            {stage.value > 0 && ` - $${stage.value.toLocaleString()}`}
+          </div>
+        ))}
+      </div>
+      
       {stages.map((stage, index) => {
         const widthPercent = maxCount > 0 ? (stage.count / maxCount) * 100 : 0;
         const nextStage = stages[index + 1];
@@ -82,7 +104,7 @@ const FunnelChart = ({
           : null;
         
         return (
-          <div key={stage.stage} style={{ marginBottom: 24 }}>
+          <div key={stage.stage} style={{ marginBottom: 24 }} aria-hidden="true">
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
               <span style={{ fontWeight: 600, fontSize: 14 }}>{stage.label}</span>
               <span style={{ color: "#637381", fontSize: 14 }}>
@@ -98,6 +120,11 @@ const FunnelChart = ({
                 borderRadius: 8,
                 overflow: "hidden",
               }}
+              role="progressbar"
+              aria-valuenow={Math.round(stage.conversionRate * 100)}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label={`${stage.label}: ${(stage.conversionRate * 100).toFixed(1)}%`}
             >
               <div
                 style={{
@@ -135,8 +162,12 @@ const FunnelChart = ({
                   marginTop: 8,
                   paddingLeft: 20,
                 }}
+                aria-label={isEnglish 
+                  ? `${dropoff}% drop-off to next stage` 
+                  : `到下一阶段流失 ${dropoff}%`
+                }
               >
-                <span style={{ color: "#de3618", fontSize: 12 }}>↓</span>
+                <span style={{ color: "#de3618", fontSize: 12 }} aria-hidden="true">↓</span>
                 <span style={{ color: "#de3618", fontSize: 12 }}>
                   {isEnglish ? `${dropoff}% drop-off` : `${dropoff}% 流失`}
                 </span>
@@ -164,9 +195,12 @@ const ConversionCard = ({
   const isEnglish = language === "English";
   const diff = aiRate - rate;
   const diffColor = diff >= 0 ? "#50b83c" : "#de3618";
+  const diffDescription = diff >= 0 
+    ? (isEnglish ? "higher" : "更高") 
+    : (isEnglish ? "lower" : "更低");
   
   return (
-    <div
+    <article
       style={{
         background: "#fff",
         border: "1px solid #e0e0e0",
@@ -174,10 +208,13 @@ const ConversionCard = ({
         padding: 16,
         flex: 1,
       }}
+      aria-label={`${title}: ${isEnglish ? "Overall" : "全站"} ${(rate * 100).toFixed(1)}%, AI ${(aiRate * 100).toFixed(1)}%`}
     >
-      <p style={{ margin: "0 0 8px", fontSize: 12, color: "#637381" }}>{title}</p>
+      <p style={{ margin: "0 0 8px", fontSize: 12, color: "#637381" }} id={`card-title-${title.replace(/\s+/g, '-')}`}>
+        {title}
+      </p>
       <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-        <span style={{ fontSize: 24, fontWeight: 700 }}>
+        <span style={{ fontSize: 24, fontWeight: 700 }} aria-label={`${(rate * 100).toFixed(1)}% ${isEnglish ? "overall" : "全站"}`}>
           {(rate * 100).toFixed(1)}%
         </span>
         <span style={{ fontSize: 12, color: "#637381" }}>

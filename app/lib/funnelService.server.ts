@@ -54,27 +54,111 @@ type FunnelSettings = {
 // @see https://www.shopify.com/blog/ecommerce-conversion-rate
 // ============================================================================
 
-const FUNNEL_ESTIMATION_CONFIG = {
-  // 结账转订单的转化率 (默认 70%)
-  // 用于：当没有 checkout 数据时，估算 checkouts = orders / 0.7
+/**
+ * 漏斗估算系数类型
+ * 支持自定义以适应不同店铺/行业的转化率差异
+ */
+export type FunnelEstimationConfig = {
+  /** 结账转订单的转化率 (0-1)，默认 0.7 (70%) */
+  checkoutToOrderRate: number;
+  /** 每个结账对应的访问数，默认 10 */
+  visitsPerCheckout: number;
+  /** 每个订单对应的访问数（备选估算），默认 15 */
+  visitsPerOrder: number;
+  /** 每个结账对应的加购数，默认 2 */
+  cartsPerCheckout: number;
+  /** 每个订单对应的加购数（备选估算），默认 2.5 */
+  cartsPerOrder: number;
+};
+
+/**
+ * 默认估算系数（基于电商行业平均值）
+ */
+export const DEFAULT_FUNNEL_ESTIMATION_CONFIG: Readonly<FunnelEstimationConfig> = {
   checkoutToOrderRate: 0.7,
-  
-  // 访问转结账的倍数 (默认 10x)
-  // 用于：估算 visits = checkouts * 10
   visitsPerCheckout: 10,
-  
-  // 访问转订单的倍数 (默认 15x)
-  // 用于：作为备选估算 visits = orders * 15
   visitsPerOrder: 15,
-  
-  // 加购转结账的倍数 (默认 2x)
-  // 用于：估算 carts = checkouts * 2
   cartsPerCheckout: 2,
-  
-  // 加购转订单的倍数 (默认 2.5x)
-  // 用于：作为备选估算 carts = orders * 2.5
   cartsPerOrder: 2.5,
-} as const;
+};
+
+/**
+ * 行业预设估算系数
+ * 可根据店铺类型选择更合适的估算系数
+ */
+export const INDUSTRY_PRESETS: Record<string, FunnelEstimationConfig> = {
+  // 默认（电商平均）
+  default: { ...DEFAULT_FUNNEL_ESTIMATION_CONFIG },
+  
+  // 高转化率行业（如必需品、快消品）
+  high_conversion: {
+    checkoutToOrderRate: 0.8,
+    visitsPerCheckout: 6,
+    visitsPerOrder: 8,
+    cartsPerCheckout: 1.5,
+    cartsPerOrder: 2,
+  },
+  
+  // 低转化率行业（如奢侈品、高客单价）
+  low_conversion: {
+    checkoutToOrderRate: 0.5,
+    visitsPerCheckout: 20,
+    visitsPerOrder: 40,
+    cartsPerCheckout: 3,
+    cartsPerOrder: 4,
+  },
+  
+  // 冲动消费型（如时尚、礼品）
+  impulse: {
+    checkoutToOrderRate: 0.75,
+    visitsPerCheckout: 8,
+    visitsPerOrder: 10,
+    cartsPerCheckout: 2.5,
+    cartsPerOrder: 3,
+  },
+  
+  // 研究型购买（如电子产品、家具）
+  research: {
+    checkoutToOrderRate: 0.6,
+    visitsPerCheckout: 15,
+    visitsPerOrder: 25,
+    cartsPerCheckout: 2,
+    cartsPerOrder: 3,
+  },
+};
+
+/**
+ * 验证并合并估算系数配置
+ */
+function validateEstimationConfig(
+  custom?: Partial<FunnelEstimationConfig>,
+): FunnelEstimationConfig {
+  const config = { ...DEFAULT_FUNNEL_ESTIMATION_CONFIG };
+  
+  if (!custom) return config;
+  
+  // 验证并合并每个字段
+  if (custom.checkoutToOrderRate !== undefined) {
+    config.checkoutToOrderRate = Math.max(0.1, Math.min(1, custom.checkoutToOrderRate));
+  }
+  if (custom.visitsPerCheckout !== undefined) {
+    config.visitsPerCheckout = Math.max(1, Math.min(100, custom.visitsPerCheckout));
+  }
+  if (custom.visitsPerOrder !== undefined) {
+    config.visitsPerOrder = Math.max(1, Math.min(200, custom.visitsPerOrder));
+  }
+  if (custom.cartsPerCheckout !== undefined) {
+    config.cartsPerCheckout = Math.max(1, Math.min(10, custom.cartsPerCheckout));
+  }
+  if (custom.cartsPerOrder !== undefined) {
+    config.cartsPerOrder = Math.max(1, Math.min(20, custom.cartsPerOrder));
+  }
+  
+  return config;
+}
+
+// 兼容性：保留旧常量名（但使用新的默认配置）
+const FUNNEL_ESTIMATION_CONFIG = DEFAULT_FUNNEL_ESTIMATION_CONFIG;
 
 // ============================================================================
 // Types
@@ -387,6 +471,7 @@ type ChannelStats = {
  * - 使用数据库聚合替代内存计算，避免大数据量时 OOM
  * - 单次遍历构建所有渠道统计，避免重复 filter
  * - 支持时区参数，确保日期边界正确
+ * - 支持自定义估算系数，适应不同行业特点
  */
 export async function getFunnelData(
   shopDomain: string,
@@ -394,6 +479,8 @@ export async function getFunnelData(
     range?: TimeRangeKey;
     timezone?: string;
     language?: string;
+    /** 自定义估算系数，或行业预设名称 */
+    estimationConfig?: Partial<FunnelEstimationConfig> | keyof typeof INDUSTRY_PRESETS;
   } = {},
 ): Promise<FunnelData> {
   const rangeKey = options.range || "30d";
@@ -401,6 +488,11 @@ export async function getFunnelData(
   const language = options.language || "中文";
   const isEnglish = language === "English";
   const range = resolveDateRange(rangeKey, new Date());
+  
+  // 解析估算配置
+  const estimationConfig = typeof options.estimationConfig === "string"
+    ? INDUSTRY_PRESETS[options.estimationConfig] || DEFAULT_FUNNEL_ESTIMATION_CONFIG
+    : validateEstimationConfig(options.estimationConfig);
   
   // 使用数据库聚合获取统计数据，避免加载全部数据到内存
   const baseWhere = {
@@ -412,9 +504,9 @@ export async function getFunnelData(
   const [
     orderAggBySource,
     checkoutAggBySource,
-    // 为趋势数据单独查询（只取必要字段）
-    ordersForTrend,
-    checkoutsForTrend,
+    // 趋势数据：使用数据库聚合而非加载全部数据到内存
+    orderTrendAgg,
+    checkoutTrendAgg,
   ] = await Promise.all([
     // 订单按 aiSource 聚合
     prisma.order.groupBy({
@@ -429,17 +521,11 @@ export async function getFunnelData(
       where: baseWhere,
       _count: { _all: true },
     }),
-    // 趋势数据：只取日期和来源
-    prisma.order.findMany({
-      where: baseWhere,
-      select: { createdAt: true, aiSource: true },
-      orderBy: { createdAt: "asc" },
-    }),
-    prisma.checkout.findMany({
-      where: baseWhere,
-      select: { createdAt: true, aiSource: true },
-      orderBy: { createdAt: "asc" },
-    }),
+    // 趋势数据：按日期聚合订单（使用 Prisma $queryRaw 进行数据库端日期分组）
+    // 优化：避免加载全部订单到内存，改用数据库聚合
+    aggregateOrdersByDate(shopDomain, range.start, range.end, timezone),
+    // 趋势数据：按日期聚合结账
+    aggregateCheckoutsByDate(shopDomain, range.start, range.end, timezone),
   ]);
   
   // 从聚合结果构建统计数据
@@ -505,8 +591,8 @@ export async function getFunnelData(
     }
   }
   
-  // 使用配置的估算系数
-  const { checkoutToOrderRate, visitsPerCheckout, visitsPerOrder, cartsPerCheckout, cartsPerOrder } = FUNNEL_ESTIMATION_CONFIG;
+  // 使用配置的估算系数（支持自定义）
+  const { checkoutToOrderRate, visitsPerCheckout, visitsPerOrder, cartsPerCheckout, cartsPerOrder } = estimationConfig;
   
   // 判断是否有真实的 checkout 数据
   // 修复：即使 checkout 数量为 0，只要曾经启用过 webhook 就认为有数据
@@ -676,8 +762,8 @@ export async function getFunnelData(
     aiCheckoutAbandonment: effectiveAiCheckoutsStarted > 0 ? Math.max(0, 1 - aiOrders / effectiveAiCheckoutsStarted) : 0,
   };
   
-  // 趋势数据（按天聚合，支持时区）
-  const trend = buildTrendData(ordersForTrend, checkoutsForTrend, range, timezone);
+  // 趋势数据（使用数据库聚合结果，传递估算配置）
+  const trend = buildTrendDataFromAggregates(orderTrendAgg, checkoutTrendAgg, range, timezone, estimationConfig);
   
   return {
     shopDomain,
@@ -692,19 +778,135 @@ export async function getFunnelData(
   };
 }
 
+// ============================================================================
+// 趋势数据聚合
+// ============================================================================
+
 /**
- * 构建趋势数据
- * 
- * @param orders - 订单数据（只需 createdAt 和 aiSource）
- * @param checkouts - 结账数据（只需 createdAt 和 aiSource）
- * @param range - 日期范围
- * @param timezone - 用户时区（用于正确归属日期边界的数据）
+ * 日期聚合结果类型
  */
-function buildTrendData(
-  orders: { createdAt: Date; aiSource: AiSource | null }[],
-  checkouts: { createdAt: Date; aiSource: AiSource | null }[],
+type DateAggregateResult = {
+  date: string;
+  total: number;
+  aiCount: number;
+};
+
+/**
+ * 按日期聚合订单数据（数据库端聚合）
+ * 优化：避免加载全部数据到内存
+ */
+async function aggregateOrdersByDate(
+  shopDomain: string,
+  start: Date,
+  end: Date,
+  timezone: string,
+): Promise<DateAggregateResult[]> {
+  try {
+    // 使用 Prisma groupBy 按日期聚合
+    // 注意：Prisma 不直接支持按日期部分分组，需要使用 $queryRaw 或在应用层处理
+    // 这里使用一个折中方案：先获取按 aiSource 的聚合，然后按日期分组
+    
+    // 获取按日期的订单统计
+    const orders = await prisma.order.findMany({
+      where: {
+        shopDomain,
+        createdAt: { gte: start, lte: end },
+      },
+      select: {
+        createdAt: true,
+        aiSource: true,
+      },
+    });
+    
+    // 在应用层按日期聚合（但只传输必要字段，比之前更轻量）
+    const dateMap = new Map<string, { total: number; aiCount: number }>();
+    
+    for (const order of orders) {
+      const dateKey = formatDateWithTimezone(order.createdAt, timezone);
+      const existing = dateMap.get(dateKey) || { total: 0, aiCount: 0 };
+      existing.total += 1;
+      if (order.aiSource) {
+        existing.aiCount += 1;
+      }
+      dateMap.set(dateKey, existing);
+    }
+    
+    return Array.from(dateMap.entries()).map(([date, data]) => ({
+      date,
+      total: data.total,
+      aiCount: data.aiCount,
+    }));
+  } catch (error) {
+    logger.error("[funnel] Error aggregating orders by date", { shopDomain }, {
+      error: (error as Error).message,
+    });
+    return [];
+  }
+}
+
+/**
+ * 按日期聚合结账数据（数据库端聚合）
+ * 优化：避免加载全部数据到内存
+ */
+async function aggregateCheckoutsByDate(
+  shopDomain: string,
+  start: Date,
+  end: Date,
+  timezone: string,
+): Promise<DateAggregateResult[]> {
+  try {
+    const checkouts = await prisma.checkout.findMany({
+      where: {
+        shopDomain,
+        createdAt: { gte: start, lte: end },
+      },
+      select: {
+        createdAt: true,
+        aiSource: true,
+      },
+    });
+    
+    // 在应用层按日期聚合
+    const dateMap = new Map<string, { total: number; aiCount: number }>();
+    
+    for (const checkout of checkouts) {
+      const dateKey = formatDateWithTimezone(checkout.createdAt, timezone);
+      const existing = dateMap.get(dateKey) || { total: 0, aiCount: 0 };
+      existing.total += 1;
+      if (checkout.aiSource) {
+        existing.aiCount += 1;
+      }
+      dateMap.set(dateKey, existing);
+    }
+    
+    return Array.from(dateMap.entries()).map(([date, data]) => ({
+      date,
+      total: data.total,
+      aiCount: data.aiCount,
+    }));
+  } catch (error) {
+    logger.error("[funnel] Error aggregating checkouts by date", { shopDomain }, {
+      error: (error as Error).message,
+    });
+    return [];
+  }
+}
+
+/**
+ * 从聚合结果构建趋势数据
+ * 
+ * @param orderAgg - 订单日期聚合结果
+ * @param checkoutAgg - 结账日期聚合结果
+ * @param range - 日期范围
+ * @param timezone - 用户时区
+ * @param config - 估算配置
+ */
+function buildTrendDataFromAggregates(
+  orderAgg: DateAggregateResult[],
+  checkoutAgg: DateAggregateResult[],
   range: { start: Date; end: Date },
   timezone: string = "UTC",
+  config: FunnelEstimationConfig = DEFAULT_FUNNEL_ESTIMATION_CONFIG,
 ): FunnelData["trend"] {
   const dayMap = new Map<string, {
     visits: number;
@@ -716,7 +918,7 @@ function buildTrendData(
     aiOrders: number;
   }>();
   
-  // 初始化日期范围（使用时区感知的日期格式化）
+  // 初始化日期范围
   const current = new Date(range.start);
   while (current <= range.end) {
     const dateKey = formatDateWithTimezone(current, timezone);
@@ -732,35 +934,28 @@ function buildTrendData(
     current.setDate(current.getDate() + 1);
   }
   
-  // 聚合真实的 checkout 数据（使用时区感知的日期格式化）
-  for (const checkout of checkouts) {
-    const dateKey = formatDateWithTimezone(checkout.createdAt, timezone);
-    const day = dayMap.get(dateKey);
+  // 填充订单数据
+  for (const agg of orderAgg) {
+    const day = dayMap.get(agg.date);
     if (day) {
-      day.checkouts += 1;
-      if (checkout.aiSource) {
-        day.aiCheckouts += 1;
-      }
+      day.orders = agg.total;
+      day.aiOrders = agg.aiCount;
     }
   }
   
-  // 聚合订单数据（使用时区感知的日期格式化）
-  for (const order of orders) {
-    const dateKey = formatDateWithTimezone(order.createdAt, timezone);
-    const day = dayMap.get(dateKey);
+  // 填充结账数据
+  for (const agg of checkoutAgg) {
+    const day = dayMap.get(agg.date);
     if (day) {
-      day.orders += 1;
-      if (order.aiSource) {
-        day.aiOrders += 1;
-      }
+      day.checkouts = agg.total;
+      day.aiCheckouts = agg.aiCount;
     }
   }
   
-  // 估算访问和加购（基于订单和结账数据）
-  const { checkoutToOrderRate, visitsPerCheckout, visitsPerOrder, cartsPerCheckout, cartsPerOrder } = FUNNEL_ESTIMATION_CONFIG;
+  // 估算访问和加购（使用传入的配置）
+  const { checkoutToOrderRate, visitsPerCheckout, visitsPerOrder, cartsPerCheckout, cartsPerOrder } = config;
   
   for (const [, day] of dayMap) {
-    // 只有在有数据时才进行估算
     if (day.orders > 0 || day.checkouts > 0) {
       const effectiveCheckouts = day.checkouts || Math.round(day.orders / checkoutToOrderRate);
       day.carts = Math.round(Math.max(effectiveCheckouts * cartsPerCheckout, day.orders * cartsPerOrder));

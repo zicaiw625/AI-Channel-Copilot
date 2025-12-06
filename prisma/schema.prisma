@@ -308,6 +308,10 @@ model Checkout {
   @@index([aiSource])
   @@index([status])
   @@index([customerId])
+  // 用于 markAbandonedCheckouts 查询优化
+  @@index([shopDomain, status, abandonedAt, createdAt], map: "checkout_abandonment_query")
+  // 用于按 aiSource 和 status 聚合
+  @@index([shopDomain, aiSource, status], map: "checkout_ai_status")
 }
 
 model FunnelEvent {

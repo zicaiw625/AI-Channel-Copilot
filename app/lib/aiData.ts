@@ -138,24 +138,115 @@ export const resolveDateRange = (
 };
 
 const defaultAiDomains: AiDomainRule[] = [
+  // ChatGPT / OpenAI
   { domain: "chat.openai.com", channel: "ChatGPT", source: "default" },
   { domain: "chatgpt.com", channel: "ChatGPT", source: "default" },
+  { domain: "www.chatgpt.com", channel: "ChatGPT", source: "default" },
+  
+  // Perplexity AI
   { domain: "perplexity.ai", channel: "Perplexity", source: "default" },
   { domain: "www.perplexity.ai", channel: "Perplexity", source: "default" },
+  { domain: "labs.perplexity.ai", channel: "Perplexity", source: "default" },
+  
+  // Google Gemini
   { domain: "gemini.google.com", channel: "Gemini", source: "default" },
+  { domain: "bard.google.com", channel: "Gemini", source: "default" }, // 旧域名重定向
+  
+  // Microsoft Copilot
   { domain: "copilot.microsoft.com", channel: "Copilot", source: "default" },
   { domain: "www.copilot.microsoft.com", channel: "Copilot", source: "default" },
+  { domain: "copilot.cloud.microsoft", channel: "Copilot", source: "default" },
+  
+  // Claude (Anthropic)
   { domain: "claude.ai", channel: "Other-AI", source: "default" },
+  { domain: "www.claude.ai", channel: "Other-AI", source: "default" },
+  
+  // DeepSeek
   { domain: "deepseek.com", channel: "Other-AI", source: "default" },
+  { domain: "chat.deepseek.com", channel: "Other-AI", source: "default" },
+  
+  // You.com (AI 搜索引擎)
+  { domain: "you.com", channel: "Other-AI", source: "default" },
+  { domain: "www.you.com", channel: "Other-AI", source: "default" },
+  
+  // Phind (AI 代码助手)
+  { domain: "phind.com", channel: "Other-AI", source: "default" },
+  { domain: "www.phind.com", channel: "Other-AI", source: "default" },
+  
+  // Poe (多模型聚合平台)
+  { domain: "poe.com", channel: "Other-AI", source: "default" },
+  { domain: "www.poe.com", channel: "Other-AI", source: "default" },
+  
+  // HuggingChat
+  { domain: "huggingface.co", channel: "Other-AI", source: "default" },
+  
+  // Meta AI
+  { domain: "meta.ai", channel: "Other-AI", source: "default" },
+  { domain: "www.meta.ai", channel: "Other-AI", source: "default" },
+  
+  // Kimi (月之暗面)
+  { domain: "kimi.moonshot.cn", channel: "Other-AI", source: "default" },
+  
+  // 通义千问 (阿里巴巴)
+  { domain: "tongyi.aliyun.com", channel: "Other-AI", source: "default" },
+  { domain: "qianwen.aliyun.com", channel: "Other-AI", source: "default" },
+  
+  // 文心一言 (百度)
+  { domain: "yiyan.baidu.com", channel: "Other-AI", source: "default" },
+  
+  // 智谱 AI
+  { domain: "chatglm.cn", channel: "Other-AI", source: "default" },
+  { domain: "open.bigmodel.cn", channel: "Other-AI", source: "default" },
+  
+  // Mistral AI
+  { domain: "chat.mistral.ai", channel: "Other-AI", source: "default" },
+  { domain: "mistral.ai", channel: "Other-AI", source: "default" },
+  
+  // Pi (Inflection AI)
+  { domain: "pi.ai", channel: "Other-AI", source: "default" },
+  
+  // Character.AI
+  { domain: "character.ai", channel: "Other-AI", source: "default" },
+  { domain: "beta.character.ai", channel: "Other-AI", source: "default" },
 ];
 
 const defaultUtmSources: UtmSourceRule[] = [
+  // 主要 AI 平台
   { value: "chatgpt", channel: "ChatGPT", source: "default" },
+  { value: "openai", channel: "ChatGPT", source: "default" },
   { value: "perplexity", channel: "Perplexity", source: "default" },
   { value: "gemini", channel: "Gemini", source: "default" },
+  { value: "bard", channel: "Gemini", source: "default" }, // 旧名称
   { value: "copilot", channel: "Copilot", source: "default" },
+  { value: "bing-chat", channel: "Copilot", source: "default" },
+  { value: "bingchat", channel: "Copilot", source: "default" },
+  
+  // 其他 AI 平台
   { value: "deepseek", channel: "Other-AI", source: "default" },
   { value: "claude", channel: "Other-AI", source: "default" },
+  { value: "anthropic", channel: "Other-AI", source: "default" },
+  { value: "you", channel: "Other-AI", source: "default" },
+  { value: "you.com", channel: "Other-AI", source: "default" },
+  { value: "phind", channel: "Other-AI", source: "default" },
+  { value: "poe", channel: "Other-AI", source: "default" },
+  { value: "huggingchat", channel: "Other-AI", source: "default" },
+  { value: "meta-ai", channel: "Other-AI", source: "default" },
+  { value: "kimi", channel: "Other-AI", source: "default" },
+  { value: "moonshot", channel: "Other-AI", source: "default" },
+  { value: "tongyi", channel: "Other-AI", source: "default" },
+  { value: "qianwen", channel: "Other-AI", source: "default" },
+  { value: "yiyan", channel: "Other-AI", source: "default" },
+  { value: "ernie", channel: "Other-AI", source: "default" },
+  { value: "chatglm", channel: "Other-AI", source: "default" },
+  { value: "zhipu", channel: "Other-AI", source: "default" },
+  { value: "mistral", channel: "Other-AI", source: "default" },
+  { value: "pi-ai", channel: "Other-AI", source: "default" },
+  { value: "character-ai", channel: "Other-AI", source: "default" },
+  
+  // 通用 AI 标识
+  { value: "ai-assistant", channel: "Other-AI", source: "default" },
+  { value: "ai-search", channel: "Other-AI", source: "default" },
+  { value: "llm", channel: "Other-AI", source: "default" },
 ];
 
 const defaultUtmMediums = [
@@ -165,6 +256,10 @@ const defaultUtmMediums = [
   "ai-search",
   "ai-chat",
   "ai-referral",
+  "llm",
+  "llm-chat",
+  "chatbot",
+  "ai-bot",
 ];
 
 const defaultPipelineStatuses: PipelineStatus[] = [

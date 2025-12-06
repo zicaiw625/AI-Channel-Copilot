@@ -5,7 +5,7 @@
 
 import prisma from "../db.server";
 import { resolveDateRange, type TimeRangeKey, type AIChannel, type AiDomainRule, type UtmSourceRule } from "./aiData";
-import { fromPrismaAiSource, toPrismaAiSource } from "./aiSourceMapper";
+import { toPrismaAiSource } from "./aiSourceMapper";
 import { detectAiFromFields } from "./aiAttribution";
 import { logger } from "./logger.server";
 import type { AiSource } from "@prisma/client";
@@ -345,9 +345,9 @@ export async function getFunnelData(
   
   // 真实的结账数据
   const totalCheckoutsStarted = checkouts.length;
-  const totalCheckoutsCompleted = checkouts.filter(c => c.status === "completed" || c.completedAt).length;
+  const _totalCheckoutsCompleted = checkouts.filter(c => c.status === "completed" || c.completedAt).length;
   const aiCheckoutsStarted = checkouts.filter(c => c.aiSource).length;
-  const aiCheckoutsCompleted = checkouts.filter(c => c.aiSource && (c.status === "completed" || c.completedAt)).length;
+  const _aiCheckoutsCompleted = checkouts.filter(c => c.aiSource && (c.status === "completed" || c.completedAt)).length;
   
   // 如果没有 checkout 数据，使用估算值（向后兼容）
   const hasCheckoutData = totalCheckoutsStarted > 0;

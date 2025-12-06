@@ -25,7 +25,7 @@ import { readAppFlags } from "../lib/env.server";
 type Lang = "English" | "中文";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const demo = isDemoMode();
+  const _demo = isDemoMode();
   let admin, session;
   let authFailed = false;
   

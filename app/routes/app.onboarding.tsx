@@ -141,7 +141,7 @@ export default function Onboarding() {
     return <div style={{padding: 20}}>Unauthorized. Please access via Shopify Admin.</div>;
   }
 
-  const handleSelectPlan = undefined as never;
+  const _handleSelectPlan = undefined as never;
   
   // 格式化货币
   const formatCurrency = (amount: number, currency: string) => {

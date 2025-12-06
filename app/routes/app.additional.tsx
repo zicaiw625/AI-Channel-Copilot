@@ -30,7 +30,7 @@ import { logger } from "../lib/logger.server";
 import { hasFeature, FEATURES } from "../lib/access.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const demo = isDemoMode();
+  const _demo = isDemoMode();
   let admin, session;
   let authFailed = false;
   

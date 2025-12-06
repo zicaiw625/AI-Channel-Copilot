@@ -4,7 +4,6 @@ import {
   setSubscriptionTrialState,
   setSubscriptionActiveState,
   setSubscriptionExpiredState,
-  activateFreePlan,
 } from "../lib/billing.server";
 import { resolvePlanByShopifyName, getPlanConfig, PRIMARY_BILLABLE_PLAN_ID } from "../lib/billing/plans";
 

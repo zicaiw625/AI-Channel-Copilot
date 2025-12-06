@@ -324,6 +324,7 @@ export function sanitizeUserInput(input: string, maxLength = 1000): string {
   }
   
   // 移除控制字符和不可见字符
+  // eslint-disable-next-line no-control-regex
   let sanitized = input.replace(/[\x00-\x1F\x7F-\x9F]/g, '');
   
   // 限制长度

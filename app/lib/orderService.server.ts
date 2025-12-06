@@ -17,6 +17,7 @@ export interface OrderQueryOptions {
 
 /**
  * 从数据库加载订单数据
+ * 优化：使用 limit + 1 策略避免额外的 COUNT 查询
  */
 export const loadOrdersFromDb = async (
   shopDomain: string,
@@ -26,20 +27,7 @@ export const loadOrdersFromDb = async (
   const { limit = 10000, includeProducts = true } = options;
 
   try {
-    // 首先检查总订单数
-    const totalCount = await prisma.order.count({
-      where: {
-        shopDomain,
-        createdAt: {
-          gte: dateRange.start,
-          lte: dateRange.end,
-        },
-      },
-    });
-
-    const clamped = totalCount > limit;
-    const actualLimit = clamped ? limit : undefined;
-
+    // 优化：获取 limit + 1 条记录来判断是否被截断，避免额外的 COUNT 查询
     const orders = await prisma.order.findMany({
       where: {
         shopDomain,
@@ -48,12 +36,20 @@ export const loadOrdersFromDb = async (
           lte: dateRange.end,
         },
       },
-      take: actualLimit,
+      take: limit + 1,
       orderBy: {
         createdAt: 'desc' as const,
       },
       ...(includeProducts && { include: { products: true } }),
     });
+
+    // 判断是否超过限制
+    const clamped = orders.length > limit;
+    
+    // 如果超过限制，移除多余的一条记录
+    if (clamped) {
+      orders.pop();
+    }
 
     // 转换数据格式，包括 AI 来源枚举转换
     const orderRecords: OrderRecord[] = orders.map((order) => {
@@ -93,7 +89,6 @@ export const loadOrdersFromDb = async (
     logger.info("[orderService] Loaded orders from database", {
       shopDomain,
       dateRange: dateRange.label,
-      totalCount,
       loadedCount: orderRecords.length,
       clamped,
     });
@@ -115,6 +110,7 @@ export const loadOrdersFromDb = async (
 
 /**
  * 获取订单统计信息
+ * 优化：使用 Promise.all 并行执行两个独立查询
  */
 export const getOrderStats = async (
   shopDomain: string,
@@ -122,40 +118,38 @@ export const getOrderStats = async (
   _settings: SettingsDefaults
 ) => {
   try {
-    const stats = await prisma.order.groupBy({
-      by: ['aiSource'],
-      where: {
-        shopDomain,
-        createdAt: {
-          gte: dateRange.start,
-          lte: dateRange.end,
-        },
+    const whereClause = {
+      shopDomain,
+      createdAt: {
+        gte: dateRange.start,
+        lte: dateRange.end,
       },
-      _count: {
-        id: true,
-      },
-      _sum: {
-        totalPrice: true,
-        refundTotal: true,
-      },
-    });
+    };
 
-    const totalStats = await prisma.order.aggregate({
-      where: {
-        shopDomain,
-        createdAt: {
-          gte: dateRange.start,
-          lte: dateRange.end,
+    // 并行执行两个独立的数据库查询
+    const [stats, totalStats] = await Promise.all([
+      prisma.order.groupBy({
+        by: ['aiSource'],
+        where: whereClause,
+        _count: {
+          id: true,
         },
-      },
-      _count: {
-        id: true,
-      },
-      _sum: {
-        totalPrice: true,
-        refundTotal: true,
-      },
-    });
+        _sum: {
+          totalPrice: true,
+          refundTotal: true,
+        },
+      }),
+      prisma.order.aggregate({
+        where: whereClause,
+        _count: {
+          id: true,
+        },
+        _sum: {
+          totalPrice: true,
+          refundTotal: true,
+        },
+      }),
+    ]);
 
     return {
       bySource: stats,

@@ -9,12 +9,9 @@ import { PrismaSessionStorage } from "@shopify/shopify-app-session-storage-prism
 import prisma from "./db.server";
 import { readCriticalEnv, getAppConfig } from "./lib/env.server";
 import { runStartupSelfCheck } from "./lib/selfcheck.server";
-import { BILLING_PLANS, PRIMARY_BILLABLE_PLAN_ID } from "./lib/billing/plans";
 
 const { SHOPIFY_API_KEY: apiKey, SHOPIFY_API_SECRET: apiSecretKey, SHOPIFY_APP_URL: appUrl, SCOPES: scopes } =
   readCriticalEnv();
-
-const primaryPlan = BILLING_PLANS[PRIMARY_BILLABLE_PLAN_ID];
 
 const resolveCustomShopDomains = () => {
   const customDomainsEnv = process.env.SHOP_CUSTOM_DOMAIN;
@@ -51,6 +48,8 @@ const appConfig = {
   authPathPrefix: "/auth",
   sessionStorage: new PrismaSessionStorage(prisma),
   distribution: AppDistribution.AppStore,
+  // Shopify SDK expects a specific billing type structure with dynamic plan names
+  // Using type assertion here as the plan name is determined at runtime from env config
   billing: {
     [MONTHLY_PLAN]: {
       lineItems: [
@@ -62,7 +61,7 @@ const appConfig = {
       ],
       trialDays: appCfg.billing.trialDays,
     },
-  } as any,
+  } as Parameters<typeof shopifyApp>[0]["billing"],
   ...(customShopDomains.length ? { customShopDomains } : {}),
 };
 

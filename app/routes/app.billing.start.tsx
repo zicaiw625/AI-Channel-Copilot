@@ -1,6 +1,6 @@
 import type { HeadersFunction, ActionFunctionArgs } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
-import { authenticate, BILLING_PLAN } from "../shopify.server";
+import { authenticate, MONTHLY_PLAN } from "../shopify.server";
 import { requireEnv } from "../lib/env.server";
 import { computeIsTestMode } from "../lib/billing.server";
 import { isDemoMode } from "../lib/runtime.server";
@@ -21,7 +21,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const shopDomain = session?.shop || "";
     const isTest = await computeIsTestMode(shopDomain);
     const appUrl = requireEnv("SHOPIFY_APP_URL");
-    await billing.request({ plan: BILLING_PLAN as any, isTest, returnUrl: `${appUrl}/app/billing/confirm` });
+    // Use MONTHLY_PLAN directly as the plan name for billing request
+    // Type assertion needed because plan names are dynamic (from env config)
+    await billing.request({ 
+      plan: MONTHLY_PLAN as Parameters<typeof billing.request>[0]["plan"], 
+      isTest, 
+      returnUrl: `${appUrl}/app/billing/confirm` 
+    });
     return null;
   } catch (error) {
     if (error instanceof Response) throw error;

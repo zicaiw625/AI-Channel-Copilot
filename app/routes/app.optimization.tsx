@@ -5,7 +5,7 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 
 import { authenticate } from "../shopify.server";
 import { getSettings } from "../lib/settings.server";
-import { generateAIOptimizationReport, type AIOptimizationReport, type OptimizationSuggestion } from "../lib/aiOptimization.server";
+import { generateAIOptimizationReport, type OptimizationSuggestion } from "../lib/aiOptimization.server";
 import { useUILanguage } from "../lib/useUILanguage";
 import styles from "../styles/app.dashboard.module.css";
 
@@ -240,7 +240,7 @@ const SuggestionCard = ({
 };
 
 export default function AIOptimization() {
-  const { report, language, shopDomain } = useLoaderData<typeof loader>();
+  const { report, language, shopDomain: _shopDomain } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   

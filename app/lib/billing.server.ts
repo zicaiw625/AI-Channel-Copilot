@@ -1,5 +1,5 @@
 import prisma from "../db.server";
-import { isNonProduction, readAppFlags, requireEnv, getAppConfig } from "./env.server";
+import { isNonProduction, readAppFlags, getAppConfig } from "./env.server";
 import { isSchemaMissing, isIgnorableMigrationError, isInitializationError } from "./prismaErrors";
 import { createGraphqlSdk, type AdminGraphqlClient } from "./graphqlSdk.server";
 import { logger } from "./logger.server";

@@ -2,9 +2,7 @@ import { AppProvider } from "@shopify/shopify-app-react-router/react";
 import { useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs, HeadersFunction } from "react-router";
 import { useActionData, useLoaderData, useRouteError, Form } from "react-router";
-import { useAppBridge } from "@shopify/app-bridge-react";
 import { boundary } from "@shopify/shopify-app-react-router/server";
-import { useNonce } from "../../lib/nonce";
 
 import { login } from "../../shopify.server";
 import { loginErrorMessage } from "./error.server";

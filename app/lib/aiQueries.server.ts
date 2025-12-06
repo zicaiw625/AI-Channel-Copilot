@@ -216,7 +216,7 @@ async function buildDashboardFromDb(
     // 按时间排序
     return Array.from(bucketMap.values())
       .sort((a, b) => a.sortKey - b.sortKey)
-      .map(({ sortKey, ...rest }) => rest);
+      .map(({ sortKey: _sortKey, ...rest }) => rest);
   };
   
   const trend = buildTrendLocal();

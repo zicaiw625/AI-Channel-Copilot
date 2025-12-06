@@ -6,7 +6,6 @@ import { authenticate } from "../shopify.server";
 import { getSettings } from "../lib/settings.server";
 import { requireEnv } from "../lib/env.server";
 import { useUILanguage } from "../lib/useUILanguage";
-import { useNonce } from "../lib/nonce";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   let language = "中文";

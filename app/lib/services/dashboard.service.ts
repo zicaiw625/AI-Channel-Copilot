@@ -9,7 +9,7 @@ import { cache, CacheKeys, CacheTTL } from '../cache.enhanced';
 import { metrics, withMetrics } from '../metrics/collector';
 import { logger } from '../logger.server';
 import { buildDashboardFromOrders } from '../aiData';
-import type { DashboardData, DateRange, SettingsDefaults } from '../aiTypes';
+import type { DashboardData, DateRange } from '../aiTypes';
 
 export class DashboardService {
   /**

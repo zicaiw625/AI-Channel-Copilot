@@ -5,7 +5,7 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 
 import { authenticate } from "../shopify.server";
 import { getSettings } from "../lib/settings.server";
-import { getFunnelData, type FunnelData, type FunnelMetrics } from "../lib/funnelService.server";
+import { getFunnelData, type FunnelMetrics } from "../lib/funnelService.server";
 import { useUILanguage } from "../lib/useUILanguage";
 import styles from "../styles/app.dashboard.module.css";
 import { channelList, timeRanges, type TimeRangeKey } from "../lib/aiData";
@@ -198,7 +198,7 @@ const ConversionCard = ({
 };
 
 export default function FunnelAnalysis() {
-  const { funnelData, language, rangeKey, shopDomain, currency } = useLoaderData<typeof loader>();
+  const { funnelData, language, rangeKey, shopDomain: _shopDomain, currency: _currency } = useLoaderData<typeof loader>();
   const uiLanguage = useUILanguage(language);
   const isEnglish = uiLanguage === "English";
   const navigate = useNavigate();

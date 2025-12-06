@@ -624,7 +624,7 @@ export const getAiDashboardData = async (
       const data = await buildDashboardFromDb(shopDomain, range, settings, options.timezone);
       return { data, orders: [] }; // DB 模式不返回完整订单列表
     } catch (error) {
-      logger.error("DB aggregation failed, falling back to legacy", { error });
+      logger.error("[dashboard] DB aggregation failed, falling back to legacy", { shopDomain, rangeKey: range.key }, { error });
       // Fallback to legacy if DB fails (e.g. missing indexes or connection issues)
     }
   }

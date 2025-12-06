@@ -22,6 +22,7 @@ import { t } from "../lib/i18n";
 import { getEffectivePlan, hasFeature, FEATURES } from "../lib/access.server";
 import { isDemoMode } from "../lib/runtime.server";
 import { readAppFlags } from "../lib/env.server";
+import { logger } from "../lib/logger.server";
 
 // Dashboard 子组件
 import { 
@@ -56,7 +57,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       settings = await syncShopPreferences(admin, shopDomain, settings);
     } catch (e) {
       // If sync fails, continue with cached settings
-      console.warn("syncShopPreferences failed in dashboard:", (e as Error).message);
+      logger.warn("[dashboard] syncShopPreferences failed", { shopDomain }, { error: e });
     }
   }
 

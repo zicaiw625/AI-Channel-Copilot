@@ -40,9 +40,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   const shopDomain = session?.shop || "";
   
-  // Rate limiting: 30 requests per minute per shop (dashboard polling)
+  // Rate limiting: 60 requests per minute per shop (polling endpoint)
   if (shopDomain) {
-    await enforceRateLimit(`jobs:${shopDomain}`, RateLimitRules.DASHBOARD);
+    await enforceRateLimit(`jobs:${shopDomain}`, RateLimitRules.POLLING);
   }
   // In demo mode, if we can't determine shop domain, return empty or mock data instead of 401
   if (!shopDomain && isDemoMode()) {

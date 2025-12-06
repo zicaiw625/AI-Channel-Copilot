@@ -236,17 +236,28 @@ export default function Index() {
   const jobFetcher = useFetcher<JobSnapshot>();
 
   useEffect(() => {
+    let lastPollTime = 0;
+    const MIN_POLL_INTERVAL = 5000; // 最小轮询间隔 5 秒，防止 429
+    
     const poll = () => {
       if (document.visibilityState !== "visible") return;
-      if (jobFetcher.state !== "loading") {
-        jobFetcher.load("/api/jobs");
-      }
+      if (jobFetcher.state === "loading") return;
+      
+      const now = Date.now();
+      if (now - lastPollTime < MIN_POLL_INTERVAL) return;
+      
+      lastPollTime = now;
+      jobFetcher.load("/api/jobs");
     };
-    poll();
+    
+    // 延迟首次轮询，避免与页面加载同时发生
+    const initialTimer = window.setTimeout(poll, 1000);
     let timer = window.setInterval(poll, 12000);
+    
     const onVisibility = () => {
       if (document.visibilityState === "visible") {
-        poll();
+        // 延迟一下再轮询，避免快速切换标签页时触发过多请求
+        window.setTimeout(poll, 500);
         clearInterval(timer);
         timer = window.setInterval(poll, 12000);
       } else {
@@ -255,6 +266,7 @@ export default function Index() {
     };
     document.addEventListener("visibilitychange", onVisibility);
     return () => {
+      clearTimeout(initialTimer);
       clearInterval(timer);
       document.removeEventListener("visibilitychange", onVisibility);
     };

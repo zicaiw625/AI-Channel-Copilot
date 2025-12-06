@@ -180,6 +180,13 @@ export const RateLimitRules = {
     message: 'Dashboard query rate limit exceeded'
   },
   
+  // 轮询端点限制 (jobs 状态查询等)
+  POLLING: {
+    maxRequests: 60,
+    windowMs: 60 * 1000, // 1分钟 60次，约每秒1次
+    message: 'Polling rate limit exceeded'
+  },
+  
   // Copilot 查询限制
   COPILOT: {
     maxRequests: 20,

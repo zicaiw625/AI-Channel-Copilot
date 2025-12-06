@@ -5,6 +5,7 @@
 
 import type { AIChannel } from "./aiTypes";
 import type { AiSource as PrismaAiSource } from "@prisma/client";
+import { logger } from "./logger.server";
 
 /** 应用层 AIChannel 到 Prisma AiSource 的映射 */
 const AI_SOURCE_MAP: Record<AIChannel, PrismaAiSource> = {
@@ -34,7 +35,7 @@ export const toPrismaAiSource = (source: AIChannel | null): PrismaAiSource | nul
   const mapped = AI_SOURCE_MAP[source];
   if (!mapped) {
     // 优雅降级：未知来源映射到 Other_AI，避免中断请求
-    console.warn(`[aiSourceMapper] Unknown AI source: ${source}, falling back to Other_AI`);
+    logger.warn("[aiSourceMapper] Unknown AI source, falling back to Other_AI", { source });
     return "Other_AI";
   }
 
@@ -51,7 +52,7 @@ export const fromPrismaAiSource = (source: PrismaAiSource | null): AIChannel | n
   const mapped = REVERSE_AI_SOURCE_MAP[source];
   if (!mapped) {
     // 优雅降级：未知来源映射到 Other-AI，避免中断请求
-    console.warn(`[aiSourceMapper] Unknown Prisma AI source: ${source}, falling back to Other-AI`);
+    logger.warn("[aiSourceMapper] Unknown Prisma AI source, falling back to Other-AI", { source });
     return "Other-AI";
   }
 

@@ -1,5 +1,6 @@
 import { getBillingState, setSubscriptionExpiredState } from "./billing.server";
 import { logger } from "./logger.server";
+import { withAdvisoryLock } from "./locks.server";
 
 export type PlanTier = "free" | "pro" | "growth" | "none";
 
@@ -9,6 +10,60 @@ export const FEATURES = {
   COPILOT: "copilot",
   EXPORTS: "exports",
   MULTI_STORE: "multi_store", // Growth only
+};
+
+// FNV-1a hash for generating lock keys from shop domain
+const hashShopDomain = (shopDomain: string): number => {
+  let hash = 2166136261;
+  for (let i = 0; i < shopDomain.length; i++) {
+    hash ^= shopDomain.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  // Use a specific offset to avoid conflicts with other lock types
+  return (hash >>> 0) + 0x50000000; // 0x50000000 = "plan" offset
+};
+
+/**
+ * 使用 advisory lock 安全地更新过期试用状态
+ * 避免多个并发请求同时更新
+ */
+const updateExpiredTrialState = async (
+  shopDomain: string,
+  billingPlan: string,
+  trialEndAt: Date
+): Promise<void> => {
+  const lockKey = hashShopDomain(shopDomain);
+  
+  const { lockInfo } = await withAdvisoryLock(
+    lockKey,
+    async () => {
+      // 在锁内再次检查状态，避免重复更新
+      const currentState = await getBillingState(shopDomain);
+      if (!currentState?.billingState?.includes("TRIALING")) {
+        // 状态已被其他请求更新
+        logger.debug("[access] Trial state already updated by another request", { shopDomain });
+        return;
+      }
+      
+      logger.info("[access] Trial expired, updating billing state", { 
+        shopDomain, 
+        billingPlan,
+        trialEndAt: trialEndAt.toISOString(),
+      });
+      
+      await setSubscriptionExpiredState(
+        shopDomain, 
+        billingPlan as "pro" | "growth" | "free", 
+        "TRIAL_EXPIRED"
+      );
+    },
+    { fallbackOnError: false }
+  );
+  
+  if (!lockInfo.acquired) {
+    // 锁被其他请求持有，说明正在更新中，无需重复操作
+    logger.debug("[access] Skipped trial expiry update (lock held)", { shopDomain });
+  }
 };
 
 export async function getEffectivePlan(shopDomain: string): Promise<PlanTier> {
@@ -30,26 +85,16 @@ export async function getEffectivePlan(shopDomain: string): Promise<PlanTier> {
   if (billingState.includes("TRIALING")) {
     // If lastTrialEndAt exists and is in the past, trial has expired
     if (state.lastTrialEndAt && state.lastTrialEndAt.getTime() < Date.now()) {
-      // Trial has expired - update the billing state and return none
-      // This is a safety net in case the billing webhook didn't update the state
-      logger.info("[access] Trial expired, updating billing state", { 
-        shopDomain, 
-        billingPlan,
-        trialEndAt: state.lastTrialEndAt.toISOString(),
-      });
-      
-      // 同步更新状态以避免竞态条件
-      // 虽然这会稍微增加响应时间，但确保后续请求不会获得过期的权限
-      try {
-        await setSubscriptionExpiredState(shopDomain, billingPlan as "pro" | "growth" | "free", "TRIAL_EXPIRED");
-      } catch (error) {
-        // 状态更新失败时记录错误，但仍然返回 none 以确保安全
+      // Trial has expired - update the billing state using lock to prevent race conditions
+      // Fire and forget - don't block the response on state update
+      updateExpiredTrialState(shopDomain, billingPlan, state.lastTrialEndAt).catch((error) => {
         logger.error("[access] Failed to update expired trial state", { 
           shopDomain, 
           error: error instanceof Error ? error.message : String(error),
         });
-      }
+      });
       
+      // Always return "none" immediately for expired trials
       return "none";
     }
     // Trial is still valid

@@ -3,6 +3,7 @@ import { isNonProduction, readAppFlags, getAppConfig } from "./env.server";
 import { isSchemaMissing, isIgnorableMigrationError, isInitializationError } from "./prismaErrors";
 import { createGraphqlSdk, type AdminGraphqlClient } from "./graphqlSdk.server";
 import { logger } from "./logger.server";
+import { withAdvisoryLock } from "./locks.server";
 import {
   PRIMARY_BILLABLE_PLAN_ID,
   getPlanConfig,
@@ -10,6 +11,19 @@ import {
   type PlanConfig,
   type PlanId,
 } from "./billing/plans";
+
+// FNV-1a hash for generating lock keys
+const hashForLock = (str: string, offset: number): number => {
+  let hash = 2166136261;
+  for (let i = 0; i < str.length; i++) {
+    hash ^= str.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0) + offset;
+};
+
+// Lock key offsets to avoid collisions
+const LOCK_OFFSET_SYNC = 0x60000000;  // subscription sync
 
 export type BillingState = {
   shopDomain: string;
@@ -226,6 +240,64 @@ type BillingStatePayload = {
   lastReinstalledAt?: Date | null;
 };
 
+// Prisma 返回的记录类型
+type BillingStateRecord = {
+  isDevShop: boolean;
+  billingPlan: string;
+  billingState: string;
+  firstInstalledAt: Date | null;
+  usedTrialDays: number;
+  hasEverSubscribed: boolean;
+  lastSubscriptionStatus: string | null;
+  lastTrialStartAt: Date | null;
+  lastTrialEndAt: Date | null;
+  lastCheckedAt: Date | null;
+  lastUninstalledAt: Date | null;
+  lastReinstalledAt: Date | null;
+};
+
+/**
+ * 将数据库记录转换为 BillingState 对象
+ * 统一处理 null 值的转换
+ */
+const recordToBillingState = (shopDomain: string, record: BillingStateRecord): BillingState => ({
+  shopDomain,
+  isDevShop: record.isDevShop,
+  billingPlan: record.billingPlan,
+  billingState: record.billingState,
+  firstInstalledAt: record.firstInstalledAt,
+  usedTrialDays: record.usedTrialDays,
+  hasEverSubscribed: record.hasEverSubscribed,
+  lastSubscriptionStatus: record.lastSubscriptionStatus,
+  lastTrialStartAt: record.lastTrialStartAt || null,
+  lastTrialEndAt: record.lastTrialEndAt || null,
+  lastCheckedAt: record.lastCheckedAt || null,
+  lastUninstalledAt: record.lastUninstalledAt || null,
+  lastReinstalledAt: record.lastReinstalledAt || null,
+});
+
+/**
+ * 创建用于测试/无数据库环境的最小状态对象
+ */
+const createMinimalBillingState = (
+  shopDomain: string, 
+  updates: Partial<BillingState>
+): BillingState => ({
+  shopDomain,
+  isDevShop: false,
+  billingPlan: updates.billingPlan || "NO_PLAN",
+  billingState: updates.billingState || "NO_PLAN",
+  firstInstalledAt: null,
+  usedTrialDays: updates.usedTrialDays || 0,
+  hasEverSubscribed: updates.hasEverSubscribed ?? false,
+  lastSubscriptionStatus: updates.lastSubscriptionStatus || null,
+  lastTrialStartAt: updates.lastTrialStartAt || null,
+  lastTrialEndAt: updates.lastTrialEndAt || null,
+  lastCheckedAt: updates.lastCheckedAt || null,
+  lastUninstalledAt: updates.lastUninstalledAt || null,
+  lastReinstalledAt: updates.lastReinstalledAt || null,
+});
+
 export const upsertBillingState = async (
   shopDomain: string,
   updates: Partial<BillingState>,
@@ -256,117 +328,53 @@ export const upsertBillingState = async (
     Object.entries(payload).filter(([_, value]) => value !== undefined)
   ) as BillingStatePayload;
 
+  const createData = {
+    shopDomain, 
+    platform: "shopify", 
+    ...cleanedPayload,
+    billingPlan: cleanedPayload.billingPlan || updates.billingPlan || "NO_PLAN",
+    billingState: cleanedPayload.billingState || updates.billingState || "NO_PLAN",
+    usedTrialDays: cleanedPayload.usedTrialDays ?? updates.usedTrialDays ?? 0,
+  };
+
   try {
-    const createData = {
-      shopDomain, 
-      platform: "shopify", 
-      ...cleanedPayload,
-      billingPlan: cleanedPayload.billingPlan || updates.billingPlan || "NO_PLAN",
-      billingState: cleanedPayload.billingState || updates.billingState || "NO_PLAN",
-      usedTrialDays: cleanedPayload.usedTrialDays ?? updates.usedTrialDays ?? 0,
-    };
     const record = await prisma.shopBillingState.upsert({
       where: { shopDomain_platform: { shopDomain, platform: "shopify" } },
       update: cleanedPayload,
       create: createData,
     });
-    return {
-      shopDomain,
-      isDevShop: record.isDevShop,
-      billingPlan: record.billingPlan,
-      billingState: record.billingState,
-      firstInstalledAt: record.firstInstalledAt,
-      usedTrialDays: record.usedTrialDays,
-      hasEverSubscribed: record.hasEverSubscribed,
-      lastSubscriptionStatus: record.lastSubscriptionStatus,
-      lastTrialStartAt: record.lastTrialStartAt || null,
-      lastTrialEndAt: record.lastTrialEndAt || null,
-      lastCheckedAt: record.lastCheckedAt || null,
-      lastUninstalledAt: record.lastUninstalledAt || null,
-      lastReinstalledAt: record.lastReinstalledAt || null,
-    };
+    return recordToBillingState(shopDomain, record);
   } catch (error) {
     if (!isIgnorableMigrationError(error)) {
       if (isInitializationError(error)) {
         // In test or no-DB environments, skip persistence and return a minimal state
-        return {
-          shopDomain,
-          isDevShop: false,
-          billingPlan: updates.billingPlan || "NO_PLAN",
-          billingState: updates.billingState || "NO_PLAN",
-          firstInstalledAt: null,
-          usedTrialDays: updates.usedTrialDays || 0,
-          hasEverSubscribed: updates.hasEverSubscribed ?? false,
-          lastSubscriptionStatus: updates.lastSubscriptionStatus,
-          lastTrialStartAt: updates.lastTrialStartAt || null,
-          lastTrialEndAt: updates.lastTrialEndAt || null,
-          lastCheckedAt: updates.lastCheckedAt || null,
-          lastUninstalledAt: updates.lastUninstalledAt || null,
-          lastReinstalledAt: updates.lastReinstalledAt || null,
-        };
+        return createMinimalBillingState(shopDomain, updates);
       }
       throw error;
     }
-    const existing = await prisma.shopBillingState.findFirst({ where: { shopDomain, platform: "shopify" } });
+    
+    // Migration error fallback: try find + update/create
+    const existing = await prisma.shopBillingState.findFirst({ 
+      where: { shopDomain, platform: "shopify" } 
+    });
+    
     if (existing) {
       const updated = await prisma.shopBillingState.update({
         where: { id: existing.id },
         data: cleanedPayload,
       });
-      return {
-        shopDomain,
-        isDevShop: updated.isDevShop,
-        billingPlan: updated.billingPlan,
-        billingState: updated.billingState,
-        firstInstalledAt: updated.firstInstalledAt,
-        usedTrialDays: updated.usedTrialDays,
-        hasEverSubscribed: updated.hasEverSubscribed,
-        lastSubscriptionStatus: updated.lastSubscriptionStatus,
-        lastTrialStartAt: updated.lastTrialStartAt || null,
-        lastTrialEndAt: updated.lastTrialEndAt || null,
-      lastCheckedAt: updated.lastCheckedAt || null,
-      lastUninstalledAt: updated.lastUninstalledAt || null,
-      lastReinstalledAt: updated.lastReinstalledAt || null,
-      };
+      return recordToBillingState(shopDomain, updated);
     }
-    const createPayload = {
-      shopDomain, 
-      platform: "shopify", 
-      ...cleanedPayload,
-      billingPlan: cleanedPayload.billingPlan || updates.billingPlan || "NO_PLAN",
-      billingState: cleanedPayload.billingState || updates.billingState || "NO_PLAN",
-      usedTrialDays: cleanedPayload.usedTrialDays ?? updates.usedTrialDays ?? 0,
-    };
-    const created = await prisma.shopBillingState.create({
-      data: createPayload,
-    });
-    return {
-      shopDomain,
-      isDevShop: created.isDevShop,
-      billingPlan: created.billingPlan,
-      billingState: created.billingState,
-      firstInstalledAt: created.firstInstalledAt,
-      usedTrialDays: created.usedTrialDays,
-      hasEverSubscribed: created.hasEverSubscribed,
-      lastSubscriptionStatus: created.lastSubscriptionStatus,
-      lastTrialStartAt: created.lastTrialStartAt || null,
-      lastTrialEndAt: created.lastTrialEndAt || null,
-      lastCheckedAt: created.lastCheckedAt || null,
-      lastUninstalledAt: created.lastUninstalledAt || null,
-      lastReinstalledAt: created.lastReinstalledAt || null,
-    };
+    
+    const created = await prisma.shopBillingState.create({ data: createData });
+    return recordToBillingState(shopDomain, created);
   }
 };
 
 /**
- * Sync subscription status from Shopify Billing API
- * This is crucial for reinstall scenarios where the subscription may still be active
- * 
- * @param admin - Shopify Admin GraphQL client
- * @param shopDomain - Shop domain
- * @param maxRetries - Maximum number of retry attempts (default: 3)
+ * 内部订阅同步逻辑（不带锁）
  */
-export const syncSubscriptionFromShopify = async (
+const syncSubscriptionFromShopifyInternal = async (
   admin: AdminGraphqlClient,
   shopDomain: string,
   maxRetries = 3,
@@ -490,6 +498,37 @@ export const syncSubscriptionFromShopify = async (
     error: lastError?.message,
   });
   return { synced: false };
+};
+
+/**
+ * Sync subscription status from Shopify Billing API
+ * This is crucial for reinstall scenarios where the subscription may still be active
+ * Uses advisory lock to prevent concurrent sync operations for the same shop
+ * 
+ * @param admin - Shopify Admin GraphQL client
+ * @param shopDomain - Shop domain
+ * @param maxRetries - Maximum number of retry attempts (default: 3)
+ */
+export const syncSubscriptionFromShopify = async (
+  admin: AdminGraphqlClient,
+  shopDomain: string,
+  maxRetries = 3,
+): Promise<{ synced: boolean; status?: string; planId?: PlanId }> => {
+  const lockKey = hashForLock(shopDomain, LOCK_OFFSET_SYNC);
+  
+  const { result, lockInfo } = await withAdvisoryLock(
+    lockKey,
+    () => syncSubscriptionFromShopifyInternal(admin, shopDomain, maxRetries),
+    { fallbackOnError: false }
+  );
+  
+  if (!lockInfo.acquired) {
+    // Another request is already syncing for this shop
+    logger.debug("[billing] Subscription sync skipped (lock held)", { shopDomain });
+    return { synced: false };
+  }
+  
+  return result ?? { synced: false };
 };
 
 export const detectAndPersistDevShop = async (

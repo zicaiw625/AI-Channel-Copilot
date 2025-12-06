@@ -44,9 +44,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     try {
       settings = await syncShopPreferences(admin, shopDomain, settings);
       await detectAndPersistDevShop(admin, shopDomain);
-    } catch (e) {
+    } catch (_e) {
       // If these fail, continue with cached data
-      console.warn("Admin operations failed in onboarding:", (e as Error).message);
     }
   }
   const trialDaysEntries = await Promise.all(

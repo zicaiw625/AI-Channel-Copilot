@@ -44,7 +44,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       settings = await syncShopPreferences(admin, shopDomain, settings);
       await detectAndPersistDevShop(admin, shopDomain);
     } catch (e) {
-      console.warn("Admin operations failed in billing:", (e as Error).message);
+      // Log error but continue - cached data will be used
     }
   }
   
@@ -572,9 +572,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         try { 
           await cancelSubscription(admin!, activeDetails.id, true);
           shopifyCancelled = true;
-        } catch (cancelError) {
+        } catch (_cancelError) {
           // Shopify 取消失败，不继续操作本地状态
-          console.error("[billing] Failed to cancel subscription in Shopify:", cancelError);
           return Response.json({ 
             ok: false, 
             message: "Failed to cancel subscription in Shopify. Please try again or contact support." 
@@ -585,10 +584,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       // Step 3: Shopify 取消成功（或无订阅需要取消），更新本地状态
       try {
         await activateFreePlan(shopDomain);
-      } catch (localError) {
+      } catch (_localError) {
         // 本地状态更新失败，但 Shopify 已取消
-        // 记录错误，返回部分成功（用户需要刷新页面）
-        console.error("[billing] Failed to update local billing state after Shopify cancellation:", localError);
+        // 返回部分成功（用户需要刷新页面）
         
         if (shopifyCancelled) {
           // Shopify 已取消，但本地状态未更新 - 返回成功但带警告

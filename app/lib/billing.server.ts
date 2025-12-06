@@ -6,6 +6,7 @@ import { logger } from "./logger.server";
 import {
   PRIMARY_BILLABLE_PLAN_ID,
   getPlanConfig,
+  resolvePlanByShopifyName,
   type PlanConfig,
   type PlanId,
 } from "./billing/plans";
@@ -300,6 +301,97 @@ export const upsertBillingState = async (
   }
 };
 
+/**
+ * Sync subscription status from Shopify Billing API
+ * This is crucial for reinstall scenarios where the subscription may still be active
+ */
+export const syncSubscriptionFromShopify = async (
+  admin: AdminGraphqlClient,
+  shopDomain: string,
+): Promise<{ synced: boolean; status?: string; planId?: PlanId }> => {
+  try {
+    const sdk = createGraphqlSdk(admin, shopDomain);
+    const QUERY = `#graphql
+      query ActiveSubscriptionsForSync {
+        currentAppInstallation {
+          activeSubscriptions { 
+            id 
+            name 
+            status 
+            trialDays 
+            currentPeriodEnd
+          }
+        }
+      }
+    `;
+    
+    const resp = await sdk.request("activeSubscriptionsForSync", QUERY, {});
+    if (!resp.ok) {
+      logger.warn("[billing] Failed to sync subscription from Shopify", { shopDomain, status: resp.status });
+      return { synced: false };
+    }
+    
+    const json = (await resp.json()) as {
+      data?: { 
+        currentAppInstallation?: { 
+          activeSubscriptions?: { 
+            id: string; 
+            name: string; 
+            status: string;
+            trialDays?: number | null;
+            currentPeriodEnd?: string | null;
+          }[] 
+        } 
+      };
+    };
+    
+    const subs = json.data?.currentAppInstallation?.activeSubscriptions || [];
+    
+    // Find our app's active subscription
+    const activeSub = subs.find((s) => {
+      const plan = resolvePlanByShopifyName(s.name);
+      return plan && (s.status === "ACTIVE" || s.status === "PENDING");
+    });
+    
+    if (!activeSub) {
+      logger.info("[billing] No active subscription found on Shopify", { shopDomain });
+      return { synced: true, status: "NONE" };
+    }
+    
+    const plan = resolvePlanByShopifyName(activeSub.name);
+    if (!plan) {
+      logger.warn("[billing] Unknown plan name from Shopify", { shopDomain, planName: activeSub.name });
+      return { synced: false };
+    }
+    
+    // Check if it's trialing
+    const trialEnd = activeSub.currentPeriodEnd ? new Date(activeSub.currentPeriodEnd) : null;
+    const isTrialing = activeSub.trialDays && activeSub.trialDays > 0 && trialEnd && trialEnd.getTime() > Date.now();
+    
+    logger.info("[billing] Syncing subscription from Shopify", { 
+      shopDomain, 
+      planId: plan.id,
+      status: activeSub.status,
+      isTrialing,
+      trialDays: activeSub.trialDays,
+    });
+    
+    // Update local billing state
+    if (isTrialing && plan.trialSupported) {
+      await setSubscriptionTrialState(shopDomain, plan.id, trialEnd, activeSub.status);
+    } else {
+      await setSubscriptionActiveState(shopDomain, plan.id, activeSub.status);
+    }
+    
+    return { synced: true, status: activeSub.status, planId: plan.id };
+  } catch (error) {
+    logger.error("[billing] Error syncing subscription from Shopify", { shopDomain }, {
+      error: (error as Error).message,
+    });
+    return { synced: false };
+  }
+};
+
 export const detectAndPersistDevShop = async (
   admin: AdminGraphqlClient | null,
   shopDomain: string,
@@ -317,7 +409,14 @@ export const detectAndPersistDevShop = async (
   if (existing?.lastCheckedAt && existing.isDevShop !== undefined) {
     const hoursSinceCheck = (Date.now() - existing.lastCheckedAt.getTime()) / (1000 * 60 * 60);
     if (hoursSinceCheck < 24) {
-      return existing.isDevShop;
+      // Check if this is a reinstall that needs subscription sync
+      const isReinstall = existing.lastUninstalledAt && 
+        (!existing.lastReinstalledAt || existing.lastReinstalledAt < existing.lastUninstalledAt);
+      const needsSync = isReinstall || existing.billingState === "CANCELLED";
+      
+      if (!needsSync) {
+        return existing.isDevShop;
+      }
     }
   }
 
@@ -355,15 +454,34 @@ export const detectAndPersistDevShop = async (
   if (!existing?.firstInstalledAt) {
       updates.firstInstalledAt = new Date();
   }
-  if (existing?.lastUninstalledAt) {
-    const reinstalledAt = new Date();
-    if (!existing.lastReinstalledAt || existing.lastReinstalledAt < existing.lastUninstalledAt) {
-      updates.lastReinstalledAt = reinstalledAt;
+  
+  // Handle reinstall scenario
+  const isReinstall = existing?.lastUninstalledAt && 
+    (!existing?.lastReinstalledAt || existing.lastReinstalledAt < existing.lastUninstalledAt);
+  
+  if (isReinstall) {
+    updates.lastReinstalledAt = new Date();
+    logger.info("[billing] Detected reinstall, will sync subscription", { shopDomain });
+  }
+  
+  await upsertBillingState(shopDomain, updates);
+  
+  // If this is a reinstall OR billing state is CANCELLED, sync subscription from Shopify
+  // This handles the case where user uninstalled but subscription is still active on Shopify
+  const needsSubscriptionSync = isReinstall || existing?.billingState === "CANCELLED";
+  
+  if (needsSubscriptionSync && !isDev) {
+    const syncResult = await syncSubscriptionFromShopify(admin, shopDomain);
+    if (syncResult.synced) {
+      logger.info("[billing] Subscription synced after reinstall", { 
+        shopDomain, 
+        status: syncResult.status,
+        planId: syncResult.planId,
+      });
     }
   }
   
-  const state = await upsertBillingState(shopDomain, updates);
-  return state.isDevShop;
+  return isDev;
 };
 
 export const computeIsTestMode = async (shopDomain: string): Promise<boolean> => {

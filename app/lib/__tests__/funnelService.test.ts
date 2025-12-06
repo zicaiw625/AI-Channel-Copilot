@@ -37,7 +37,8 @@ vi.mock("../logger.server", () => ({
 }));
 
 // 导入被测试的模块（在 mock 之后）
-import prisma from "../../db.server";
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import _prisma from "../../db.server";
 
 // ============================================================================
 // safeParseFloat 测试
@@ -154,7 +155,7 @@ describe("漏斗估算逻辑", () => {
   describe("当没有任何数据时", () => {
     it("应该返回 0 而不是估算值", () => {
       const hasCheckoutData = false;
-      const totalCheckoutsStarted = 0;
+      const _totalCheckoutsStarted = 0; // 用于文档目的：模拟无 checkout 数据
       const totalOrders = 0;
       
       const shouldEstimate = !hasCheckoutData && totalOrders > 0;

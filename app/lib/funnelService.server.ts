@@ -158,7 +158,8 @@ function validateEstimationConfig(
 }
 
 // 兼容性：保留旧常量名（但使用新的默认配置）
-const FUNNEL_ESTIMATION_CONFIG = DEFAULT_FUNNEL_ESTIMATION_CONFIG;
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const _FUNNEL_ESTIMATION_CONFIG = DEFAULT_FUNNEL_ESTIMATION_CONFIG;
 
 // ============================================================================
 // Types

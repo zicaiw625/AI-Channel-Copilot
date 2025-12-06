@@ -197,17 +197,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           { status: 401 },
         );
       }
-      // Check if dry-run mode is enabled
-      if (merged.tagging.dryRun) {
-        return Response.json({
-          ok: true,
-          intent: "tag",
-          dryRun: true,
-          message: currentLanguage === "English"
-            ? "Dry-run mode enabled. No tags were written. Uncheck 'Write to Shopify' simulation mode to actually write tags."
-            : "当前为模拟模式，未实际写入标签。请取消勾选「写入 Shopify」的模拟模式以实际写入标签。",
-        });
-      }
       const { orders } = await fetchOrdersForRange(admin, range, merged, {
         shopDomain,
         intent: "settings-tagging",
@@ -451,18 +440,9 @@ export default function SettingsAndExport() {
   };
 
   useEffect(() => {
-    const data = fetcher.data as { ok: boolean; intent?: string; message?: string; dryRun?: boolean } | undefined;
+    const data = fetcher.data as { ok: boolean; intent?: string; message?: string } | undefined;
     if (data) {
       if (data.ok) {
-        // Handle dry-run mode for tagging
-        if (data.intent === "tag" && data.dryRun) {
-          shopify.toast.show?.(
-            data.message || (language === "English"
-              ? "Dry-run mode: No tags written. Disable simulation to write."
-              : "模拟模式：未写入标签。请关闭模拟模式以实际写入。")
-          );
-          return;
-        }
         const message =
           data.intent === "tag"
             ? (language === "English" ? "Tag write-back triggered (based on last 90 days AI orders)" : "标签写回已触发（基于最近 90 天 AI 订单）")
@@ -506,7 +486,7 @@ export default function SettingsAndExport() {
             {language === "English" ? "Last tagging: " : "最近标签写回："}
             {settings.lastTaggingAt
               ? new Date(settings.lastTaggingAt).toLocaleString(locale)
-              : language === "English" ? "None / Simulated" : "暂无 / 模拟"}
+              : language === "English" ? "None" : "暂无"}
           </span>
           <span>
             {language === "English" ? "Shop Currency: " : "店铺货币："}
@@ -773,21 +753,6 @@ export default function SettingsAndExport() {
               <div>
                 <div className={styles.ruleTitle}>{language === "English" ? "Write AI acquisition tag to customers" : "向客户写回 AI 获客标签"}</div>
                 <div className={styles.ruleMeta}>{language === "English" ? "Example: " : "示例："}{tagging.customerTag}</div>
-              </div>
-            </div>
-            <div className={styles.checkboxRow}>
-              <input
-                type="checkbox"
-                checked={!tagging.dryRun}
-                onChange={(event) =>
-                  setTagging((prev) => ({ ...prev, dryRun: !event.target.checked }))
-                }
-              />
-              <div>
-                <div className={styles.ruleTitle}>{language === "English" ? "Write to Shopify (unchecked = simulate)" : "实际写入 Shopify（关闭则为模拟）"}</div>
-                <div className={styles.ruleMeta}>
-                  {language === "English" ? "Default is dry-run to avoid mistakes; uncheck to actually write order/customer tags." : "默认模拟模式避免误写；取消选中后才会真正写入订单/客户标签。"}
-                </div>
               </div>
             </div>
             <div className={styles.alert}>{t(language as Lang, "tagging_enable_alert")}</div>

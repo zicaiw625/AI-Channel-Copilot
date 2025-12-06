@@ -201,7 +201,7 @@ export const TaggingSettingsSchema = z.object({
   customerTag: z.string().max(50).default('AI-Customer'),
   writeOrderTags: z.boolean().default(false),
   writeCustomerTags: z.boolean().default(false),
-  dryRun: z.boolean().default(true),
+  dryRun: z.boolean().default(false),
 });
 
 export const ExposurePreferencesSchema = z.object({

@@ -291,7 +291,7 @@ export const defaultSettings: SettingsDefaults = {
     customerTag: "AI-Customer",
     writeOrderTags: false,
     writeCustomerTags: false,
-    dryRun: true,
+    dryRun: false,
   },
   exposurePreferences: {
     exposeProducts: false,

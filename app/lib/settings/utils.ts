@@ -244,7 +244,7 @@ export const buildPersistenceData = (payload: SettingsDefaults) => {
     customerTag: payload.tagging.customerTag,
     writeOrderTags: payload.tagging.writeOrderTags,
     writeCustomerTags: payload.tagging.writeCustomerTags,
-    taggingDryRun: payload.tagging.dryRun ?? true,
+    taggingDryRun: payload.tagging.dryRun ?? false,
     retentionMonths,
     language: payload.languages[0] || defaultSettings.languages[0],
     timezone: payload.timezones[0] || defaultSettings.timezones[0],

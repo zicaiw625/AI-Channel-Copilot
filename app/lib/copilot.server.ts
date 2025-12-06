@@ -76,14 +76,29 @@ export const copilotAnswer = async (request: Request, payload: CopilotRequest) =
       });
 
       const language = settings.languages?.[0] || "中文";
+      
+      // 提供更友好的错误提示，附带建议的问法
+      const suggestions = language === "English"
+        ? [
+            '"How is AI channel performing?"',
+            '"Compare AI vs overall AOV"',
+            '"Top products from AI channels"',
+          ]
+        : [
+            '"AI 渠道表现如何？"',
+            '"AI 渠道 vs 全部渠道 AOV 对比"',
+            '"AI 渠道热销产品有哪些？"',
+          ];
+      
       const message = language === "English"
-        ? "Unable to recognize question intent, please select preset questions or clearly state metrics"
-        : "无法识别问题意图，请选择预设问题或明确说明指标";
+        ? `Unable to recognize your question. Try asking:\n• ${suggestions.join("\n• ")}\n\nOr use the preset buttons above.`
+        : `无法识别您的问题。试试这样问：\n• ${suggestions.join("\n• ")}\n\n或使用上方的快捷按钮。`;
 
       return {
         ok: false,
         message,
         range: dateRange.label,
+        suggestions, // 返回建议列表，前端可以展示为可点击项
       };
     }
 

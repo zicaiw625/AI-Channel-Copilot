@@ -9,6 +9,28 @@ import { enforceRateLimit, RateLimitRules } from "../lib/security/rateLimit.serv
 // 请求体大小限制（10KB）
 const MAX_REQUEST_BODY_SIZE = 10 * 1024;
 
+// ISO 日期格式验证（YYYY-MM-DD 或 ISO 8601）
+const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}(\.\d{3})?(Z|[+-]\d{2}:\d{2})?)?$/;
+
+/**
+ * 验证日期参数格式
+ * @returns 有效的日期字符串或 null
+ */
+const validateDateParam = (value: unknown): string | null => {
+  if (!value || typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  
+  // 检查格式是否匹配
+  if (!ISO_DATE_REGEX.test(trimmed)) return null;
+  
+  // 验证日期是否有效（防止 2024-02-30 这种）
+  const date = new Date(trimmed);
+  if (isNaN(date.getTime())) return null;
+  
+  return trimmed;
+};
+
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { session } = await authenticate.admin(request);
   const shopDomain = session?.shop || "";
@@ -60,12 +82,33 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return Response.json({ ok: false, message: "question too long" }, { status: 400 });
   }
 
+  // 验证自定义日期范围参数
+  const fromDate = validateDateParam(payload.from);
+  const toDate = validateDateParam(payload.to);
+  
+  // 如果是 custom 范围，必须提供有效的 from/to
+  if (range === "custom") {
+    if (!fromDate || !toDate) {
+      return Response.json({ 
+        ok: false, 
+        message: "Custom range requires valid 'from' and 'to' dates (YYYY-MM-DD format)" 
+      }, { status: 400 });
+    }
+    // 验证 from <= to
+    if (new Date(fromDate) > new Date(toDate)) {
+      return Response.json({ 
+        ok: false, 
+        message: "'from' date must be before or equal to 'to' date" 
+      }, { status: 400 });
+    }
+  }
+
   const result = await copilotAnswer(request, {
     intent: intent as CopilotIntent | undefined,
     question,
     range: range as TimeRangeKey | undefined,
-    from: (payload.from as string | null) || null,
-    to: (payload.to as string | null) || null,
+    from: fromDate,
+    to: toDate,
   });
 
   return Response.json(result);

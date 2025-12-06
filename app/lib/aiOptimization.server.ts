@@ -137,6 +137,47 @@ const PRODUCT_DETAILS_QUERY = `#graphql
   }
 `;
 
+// 获取店铺最新产品（用于没有 AI 订单数据时的评分）
+const RECENT_PRODUCTS_QUERY = `#graphql
+  query RecentProductsForOptimization($first: Int!) {
+    products(first: $first, sortKey: UPDATED_AT, reverse: true, query: "status:active") {
+      edges {
+        node {
+          id
+          title
+          handle
+          description
+          descriptionHtml
+          onlineStoreUrl
+          seo {
+            title
+            description
+          }
+          images(first: 5) {
+            edges {
+              node {
+                url
+                altText
+              }
+            }
+          }
+          variants(first: 1) {
+            edges {
+              node {
+                price
+                sku
+              }
+            }
+          }
+          productType
+          vendor
+          tags
+        }
+      }
+    }
+  }
+`;
+
 type ProductNode = {
   id: string;
   title: string;
@@ -204,6 +245,75 @@ export async function fetchProductDetails(
   }
   
   return productMap;
+}
+
+/**
+ * 获取店铺最新产品（用于没有 AI 订单数据时的评分）
+ */
+async function fetchRecentProducts(
+  admin: AdminGraphqlClient,
+  shopDomain: string,
+  limit: number = 20,
+): Promise<ProductNode[]> {
+  try {
+    const sdk = createGraphqlSdk(admin, shopDomain);
+    
+    const response = await sdk.request(
+      "recentProductsForOptimization",
+      RECENT_PRODUCTS_QUERY,
+      { first: limit }
+    );
+    
+    if (!response.ok) {
+      logger.warn("[aiOptimization] Failed to fetch recent products", { shopDomain, status: response.status });
+      return [];
+    }
+    
+    const json = await response.json() as {
+      data?: { products?: { edges: { node: ProductNode }[] } };
+    };
+    
+    return json.data?.products?.edges.map(e => e.node) || [];
+  } catch (error) {
+    logger.error("[aiOptimization] Error fetching recent products", { shopDomain }, {
+      error: (error as Error).message,
+    });
+    return [];
+  }
+}
+
+/**
+ * 将 ProductNode 转换为 ProductAIPerformance（用于没有 AI 订单数据时）
+ */
+function productNodeToPerformance(product: ProductNode, shopDomain: string): ProductAIPerformance {
+  const description = product.description || "";
+  const hasDescription = Boolean(description.trim());
+  const descriptionLength = description.length;
+  const hasImages = product.images.edges.length > 0;
+  const imageCount = product.images.edges.length;
+  const hasSEOTitle = Boolean(product.seo?.title);
+  const hasSEODescription = Boolean(product.seo?.description);
+  
+  return {
+    productId: product.id,
+    title: product.title,
+    handle: product.handle,
+    url: product.onlineStoreUrl || `https://${shopDomain}/products/${product.handle}`,
+    aiGMV: 0,
+    aiOrders: 0,
+    totalGMV: 0,
+    totalOrders: 0,
+    aiShare: 0,
+    topChannel: null,
+    hasDescription,
+    descriptionLength,
+    hasImages,
+    imageCount,
+    hasSEOTitle,
+    hasSEODescription,
+    schemaMarkupStatus: analyzeSchemaStatus(product),
+    suggestedImprovements: generateProductSuggestions(product),
+  };
 }
 
 /**
@@ -448,6 +558,43 @@ function generateSuggestions(
 }
 
 /**
+ * 计算 FAQ 覆盖分数
+ * 基于产品信息的完整度来评估 FAQ 生成潜力
+ * - 有详细描述：可以生成产品特点 FAQ
+ * - 有价格信息：可以生成价格 FAQ
+ * - 有多张图片：可以生成外观相关 FAQ
+ * - 有 SEO 描述：可以生成搜索相关 FAQ
+ */
+function calculateFAQCoverage(products: ProductAIPerformance[]): number {
+  if (products.length === 0) return 0;
+  
+  const faqScores = products.map(p => {
+    let score = 0;
+    
+    // 有详细描述可以生成产品特点 FAQ (+30)
+    if (p.descriptionLength >= 200) score += 30;
+    else if (p.descriptionLength >= 100) score += 20;
+    else if (p.hasDescription) score += 10;
+    
+    // 有多张图片可以生成外观相关 FAQ (+25)
+    if (p.imageCount >= 3) score += 25;
+    else if (p.hasImages) score += 15;
+    
+    // 有 SEO 信息可以更好地回答搜索问题 (+25)
+    if (p.hasSEOTitle && p.hasSEODescription) score += 25;
+    else if (p.hasSEOTitle || p.hasSEODescription) score += 15;
+    
+    // Schema 完整说明可以提供结构化答案 (+20)
+    if (p.schemaMarkupStatus === "complete") score += 20;
+    else if (p.schemaMarkupStatus === "partial") score += 10;
+    
+    return score;
+  });
+  
+  return Math.round(faqScores.reduce((a, b) => a + b, 0) / products.length);
+}
+
+/**
  * 计算优化分数
  */
 function calculateScores(products: ProductAIPerformance[]): {
@@ -480,8 +627,8 @@ function calculateScores(products: ProductAIPerformance[]): {
   });
   const contentQuality = Math.round(contentScores.reduce((a, b) => a + b, 0) / products.length);
   
-  // FAQ 覆盖（这里用一个基准分数，实际需要检查店铺是否有 FAQ）
-  const faqCoverage = 40; // 基准分数，可根据实际 FAQ 数量调整
+  // FAQ 覆盖分数（基于产品信息完整度计算）
+  const faqCoverage = calculateFAQCoverage(products);
   
   // 产品完整度
   const completenessScores = products.map(p => {
@@ -638,8 +785,23 @@ export async function generateAIOptimizationReport(
     })
     .sort((a, b) => b.aiGMV - a.aiGMV);
   
-  // 计算分数
-  const scores = calculateScores(products);
+  // 如果没有 AI 订单数据，获取店铺最新产品来计算准备度分数
+  let productsForScoring: ProductAIPerformance[] = products;
+  let fallbackProductNodes: ProductNode[] = [];
+  const hasAIOrderData = products.length > 0;
+  
+  if (!hasAIOrderData && admin) {
+    // 获取店铺最新的 20 个产品
+    fallbackProductNodes = await fetchRecentProducts(admin, shopDomain, 20);
+    productsForScoring = fallbackProductNodes.map(p => productNodeToPerformance(p, shopDomain));
+    logger.info("[aiOptimization] No AI order data, using recent products for scoring", { 
+      shopDomain, 
+      productCount: productsForScoring.length 
+    });
+  }
+  
+  // 计算分数（基于 AI 订单产品或店铺产品）
+  const scores = calculateScores(productsForScoring);
   
   // 检查 llms.txt 是否已启用（至少有一个暴露选项开启）
   const hasLlmsTxtEnabled = Boolean(
@@ -648,14 +810,17 @@ export async function generateAIOptimizationReport(
     exposurePrefs?.exposeBlogs
   );
   
-  // 生成建议
-  const suggestions = generateSuggestions(products, language, hasLlmsTxtEnabled);
+  // 生成建议（基于用于评分的产品）
+  const suggestions = generateSuggestions(productsForScoring, language, hasLlmsTxtEnabled);
   
   // 生成 FAQ 建议
-  const topProductNodes = products
-    .slice(0, 5)
-    .map(p => productDetails.get(p.productId))
-    .filter((p): p is ProductNode => p !== undefined);
+  // 如果有 AI 订单数据，使用 AI 产品；否则使用店铺产品
+  const topProductNodes = hasAIOrderData
+    ? products
+        .slice(0, 5)
+        .map(p => productDetails.get(p.productId))
+        .filter((p): p is ProductNode => p !== undefined)
+    : fallbackProductNodes.slice(0, 5);
   const suggestedFAQs = generateFAQSuggestions(topProductNodes, language);
   
   // llms.txt 增强建议
@@ -685,7 +850,7 @@ export async function generateAIOptimizationReport(
   
   const llmsEnhancements = {
     currentCoverage: llmsCoverage,
-    suggestedAdditions: products
+    suggestedAdditions: productsForScoring
       .filter(p => p.schemaMarkupStatus === "complete")
       .slice(0, 5)
       .map(p => p.url),
@@ -704,8 +869,9 @@ export async function generateAIOptimizationReport(
       productCompleteness: scores.productCompleteness,
     },
     suggestions,
+    // topProducts 只显示有 AI 订单的产品（保持原有行为）
     topProducts: products.slice(0, 10),
-    underperformingProducts: products
+    underperformingProducts: productsForScoring
       .filter(p => p.schemaMarkupStatus !== "complete" || p.descriptionLength < 100)
       .slice(0, 5),
     suggestedFAQs,

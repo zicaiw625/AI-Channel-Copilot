@@ -308,9 +308,6 @@ export default function AIOptimization() {
                 {isEnglish ? "AI Visibility & Content Quality" : "AI 可见性与内容质量"}
               </h3>
             </div>
-            <span className={styles.badge}>
-              {isEnglish ? "Beta" : "测试版"}
-            </span>
           </div>
           
           <div style={{ display: "flex", justifyContent: "space-around", padding: "20px 0" }}>
@@ -335,18 +332,18 @@ export default function AIOptimization() {
           {report.topProducts.length === 0 ? (
             <div
               style={{
-                background: "#fff8e5",
-                border: "1px solid #f4a623",
+                background: "#e6f7ff",
+                border: "1px solid #91d5ff",
                 borderRadius: 8,
                 padding: 16,
                 marginBottom: 12,
               }}
             >
-              <p style={{ margin: 0, fontSize: 14, color: "#8a6116" }}>
-                <strong>{isEnglish ? "No AI order data yet." : "暂无 AI 订单数据。"}</strong>{" "}
+              <p style={{ margin: 0, fontSize: 14, color: "#0050b3" }}>
+                <strong>{isEnglish ? "AI Readiness Score" : "AI 就绪度评分"}</strong>{" "}
                 {isEnglish
-                  ? "Scores will be calculated once you receive orders from AI channels. Follow the suggestions below to improve your AI visibility."
-                  : "当您收到来自 AI 渠道的订单后，评分将会自动计算。请参考下方建议来提升您的 AI 可见性。"}
+                  ? "Scores are calculated based on your product content quality. Once you receive AI orders, scores will reflect your top-performing products."
+                  : "评分基于您店铺产品的内容质量计算。当您收到 AI 订单后，评分将基于表现最好的产品进行计算。"}
               </p>
             </div>
           ) : (

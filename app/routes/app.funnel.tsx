@@ -234,7 +234,7 @@ const ConversionCard = ({
           </span>
         )}
       </div>
-    </div>
+    </article>
   );
 };
 

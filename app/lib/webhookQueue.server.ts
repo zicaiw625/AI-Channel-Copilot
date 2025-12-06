@@ -116,7 +116,7 @@ const sanitizeErrorMessage = (error: unknown): string => {
       /mysql:\/\//i,
     ];
     
-    let message = error.message;
+    const message = error.message;
     for (const pattern of sensitivePatterns) {
       if (pattern.test(message)) {
         return "Internal error (details redacted)";
@@ -512,34 +512,34 @@ export const processWebhookQueueForShop = async (
     });
   } finally {
     processingKeys.delete(key);
+  }
+  
+  // 如果正在关闭，不调度新的处理（移出 finally 块避免 no-unsafe-finally）
+  if (isShuttingDown) return;
+  
+  // 检查是否还有待处理任务
+  try {
+    const pending = await prisma.webhookJob.count({ 
+      where: { status: "queued", shopDomain } 
+    });
     
-    // 如果正在关闭，不调度新的处理
-    if (isShuttingDown) return;
-    
-    // 检查是否还有待处理任务
-    try {
-      const pending = await prisma.webhookJob.count({ 
-        where: { status: "queued", shopDomain } 
-      });
+    if (pending > 0) {
+      const dynamicDelay = Math.min(
+        PENDING_COOLDOWN_MS + Math.floor(pending / Math.max(1, MAX_BATCH)) * 50, 
+        PENDING_MAX_COOLDOWN_MS
+      );
       
-      if (pending > 0) {
-        const dynamicDelay = Math.min(
-          PENDING_COOLDOWN_MS + Math.floor(pending / Math.max(1, MAX_BATCH)) * 50, 
-          PENDING_MAX_COOLDOWN_MS
-        );
-        
-        const timer = setTimeout(() => {
-          scheduledTimers.delete(key);
-          void processWebhookQueueForShop(shopDomain, handlers, recursiveDepth + 1);
-        }, dynamicDelay);
-        
-        scheduledTimers.set(key, timer);
-      }
-    } catch (countError) {
-      logger.error("[webhook] failed to check pending jobs", { 
-        shopDomain, 
-        error: sanitizeErrorMessage(countError) 
-      });
+      const timer = setTimeout(() => {
+        scheduledTimers.delete(key);
+        void processWebhookQueueForShop(shopDomain, handlers, recursiveDepth + 1);
+      }, dynamicDelay);
+      
+      scheduledTimers.set(key, timer);
     }
+  } catch (countError) {
+    logger.error("[webhook] failed to check pending jobs", { 
+      shopDomain, 
+      error: sanitizeErrorMessage(countError) 
+    });
   }
 };

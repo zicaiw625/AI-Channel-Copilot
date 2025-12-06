@@ -14,6 +14,7 @@ const escapeYamlString = (str: string): string => {
   
   let escaped = str
     // 移除控制字符（除了常规空白）
+    // eslint-disable-next-line no-control-regex -- 有意移除控制字符
     .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, "")
     // 换行转空格
     .replace(/[\n\r]+/g, " ")
@@ -23,7 +24,7 @@ const escapeYamlString = (str: string): string => {
   
   // 检查是否需要用双引号包裹
   // YAML 特殊字符：: # ' " \ | > [ ] { } ! & * ? @ ` , -（在开头）
-  const needsQuotes = /[:"'#|>\[\]{}!&*?,\\`@]/.test(escaped) ||
+  const needsQuotes = /[:"'#|>[\]{}!&*?,\\`@]/.test(escaped) ||
                       /^[-?]/.test(escaped) ||
                       /^\s/.test(escaped) ||
                       /\s$/.test(escaped);
@@ -45,7 +46,7 @@ const escapeYamlString = (str: string): string => {
 const yamlValue = (value: string): string => {
   const escaped = escapeYamlString(value);
   // 如果包含特殊字符或以特殊字符开头，需要引号
-  const needsQuotes = /[:"'#|>\[\]{}!&*?,\\`@\s]/.test(escaped) ||
+  const needsQuotes = /[:"'#|>[\]{}!&*?,\\`@\s]/.test(escaped) ||
                       /^[-?]/.test(escaped);
   return needsQuotes ? `"${escaped}"` : escaped;
 };

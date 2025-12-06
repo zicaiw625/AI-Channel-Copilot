@@ -136,7 +136,7 @@ export const detectFromNoteAttributes = (
   // 4. 通用 AI 模式匹配（需要字段名包含相关上下文）
   // 注意：使用严格的模式避免误判（如 "hawaii" 不应匹配 "ai"）
   // 支持下划线和连字符作为边界，因为字段名常用 snake_case 或 kebab-case
-  const aiFieldNamePattern = /(?:^|[_\-])(source|channel|referr|traffic|campaign|medium)(?:[_\-]|$)/i;
+  const aiFieldNamePattern = /(?:^|[_-])(source|channel|referr|traffic|campaign|medium)(?:[_-]|$)/i;
   
   // 严格的 AI 模式：
   // - 独立的 "ai" 单词必须有明确边界（不能是单词的一部分）

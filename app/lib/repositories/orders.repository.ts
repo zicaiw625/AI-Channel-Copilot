@@ -4,7 +4,7 @@
  */
 
 import prisma from '../../db.server';
-import { Prisma, type Order, type OrderProduct, type AiSource } from '@prisma/client';
+import { Prisma, type AiSource } from '@prisma/client';
 import type { DateRange, OrderRecord } from '../aiTypes';
 import { toPrismaAiSource } from '../aiSourceMapper';
 import { logger } from '../logger.server';

@@ -195,7 +195,7 @@ const ConversionCard = ({
   const isEnglish = language === "English";
   const diff = aiRate - rate;
   const diffColor = diff >= 0 ? "#50b83c" : "#de3618";
-  const diffDescription = diff >= 0 
+  const _diffDescription = diff >= 0 
     ? (isEnglish ? "higher" : "更高") 
     : (isEnglish ? "lower" : "更低");
   

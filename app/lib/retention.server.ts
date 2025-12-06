@@ -40,6 +40,7 @@ const deleteOrdersInBatches = async (
   let totalDeleted = 0;
   let batchCount = 0;
   
+  // eslint-disable-next-line no-constant-condition -- 分批处理循环，通过 break 退出
   while (true) {
     // 先查询要删除的订单 ID
     const ordersToDelete = await prisma.order.findMany({
@@ -92,6 +93,7 @@ const deleteOrphanCustomersInBatches = async (
   let totalDeleted = 0;
   let batchCount = 0;
   
+  // eslint-disable-next-line no-constant-condition -- 分批处理循环，通过 break 退出
   while (true) {
     // 查询要删除的客户 ID（无订单关联且已过期）
     const customersToDelete = await prisma.customer.findMany({

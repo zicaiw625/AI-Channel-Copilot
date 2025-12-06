@@ -151,7 +151,7 @@ describe("漏斗估算逻辑", () => {
   describe("当没有任何数据时", () => {
     it("应该返回 0 而不是估算值", () => {
       const hasCheckoutData = false;
-      const totalCheckoutsStarted = 0;
+      const _totalCheckoutsStarted = 0; // 用于文档目的
       const totalOrders = 0;
       
       const shouldEstimate = !hasCheckoutData && totalOrders > 0;

@@ -145,7 +145,7 @@ export const UpgradePrompt = ({
   const en = lang === "English";
   const details = featureDetails[feature];
 
-  // Overlay 模式：覆盖在模糊内容上（紧凑版）
+  // Overlay 模式：极简紧凑版
   if (variant === "overlay") {
     return (
       <div
@@ -155,92 +155,54 @@ export const UpgradePrompt = ({
           left: 0,
           right: 0,
           bottom: 0,
-          background: "rgba(255,255,255,0.88)",
+          background: "rgba(255,255,255,0.9)",
           backdropFilter: "blur(2px)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
           zIndex: 10,
-          padding: 12,
+          padding: 8,
         }}
       >
         <div
           style={{
             background: "white",
-            padding: "16px 20px",
-            borderRadius: 10,
-            boxShadow: "0 2px 12px rgba(0,0,0,0.1)",
-            maxWidth: 260,
+            padding: "12px 16px",
+            borderRadius: 8,
+            boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+            maxWidth: 180,
             textAlign: "center",
           }}
         >
-          <div style={{ fontSize: 24, marginBottom: 8 }}>{details.icon}</div>
+          <div style={{ fontSize: 20, marginBottom: 6 }}>{details.icon}</div>
           <h3
             style={{
-              margin: "0 0 4px",
-              fontSize: 14,
+              margin: "0 0 8px",
+              fontSize: 12,
               fontWeight: 600,
               color: "#212b36",
+              lineHeight: 1.3,
             }}
           >
             {en ? details.title.en : details.title.zh}
           </h3>
-          <p
-            style={{
-              margin: "0 0 10px",
-              fontSize: 11,
-              color: "#637381",
-              lineHeight: 1.4,
-            }}
-          >
-            {en ? details.description.en : details.description.zh}
-          </p>
-
-          {/* 功能点列表 - 更紧凑 */}
-          <ul
-            style={{
-              listStyle: "none",
-              padding: 0,
-              margin: "0 0 12px",
-              textAlign: "left",
-            }}
-          >
-            {(en ? details.benefits.en : details.benefits.zh).map((benefit, i) => (
-              <li
-                key={i}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                  fontSize: 11,
-                  color: "#555",
-                  padding: "2px 0",
-                }}
-              >
-                <span style={{ color: "#50b83c", fontSize: 10 }}>✓</span>
-                {benefit}
-              </li>
-            ))}
-          </ul>
-
           <Link
             to="/app/onboarding?step=plan_selection"
             style={{
               display: "inline-block",
               background: "#635bff",
               color: "white",
-              padding: "8px 16px",
-              borderRadius: 5,
+              padding: "6px 12px",
+              borderRadius: 4,
               textDecoration: "none",
-              fontSize: 12,
+              fontSize: 11,
               fontWeight: 600,
-              transition: "background 0.2s",
             }}
           >
             {en ? "Upgrade to Pro" : "升级到 Pro"}
           </Link>
-          <div style={{ marginTop: 6, fontSize: 10, color: "#919eab" }}>
-            {en ? "14-day free trial included" : "包含 14 天免费试用"}
+          <div style={{ marginTop: 4, fontSize: 9, color: "#919eab" }}>
+            {en ? "14-day free trial" : "14 天免费试用"}
           </div>
         </div>
       </div>

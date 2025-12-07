@@ -30,7 +30,6 @@ import {
   ChannelBreakdown, 
   TrendChart,
   WhyAI,
-  ConfidenceBadge,
   type Lang,
   type TrendScope,
   type JobSnapshot,

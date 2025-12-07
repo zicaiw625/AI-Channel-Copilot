@@ -9,13 +9,13 @@ import type { Lang } from "./types";
 export type ConfidenceLevel = "high" | "medium" | "low";
 
 export interface WhyAIProps {
-  aiSource: string | null;
-  referrer: string | null;
-  utmSource: string | null;
-  utmMedium: string | null;
-  sourceName: string | null;
-  detection: string | null;
-  signals: string[] | null;
+  aiSource: string | null | undefined;
+  referrer: string | null | undefined;
+  utmSource: string | null | undefined;
+  utmMedium: string | null | undefined;
+  sourceName: string | null | undefined;
+  detection: string | null | undefined;
+  signals: string[] | null | undefined;
   lang: Lang;
   /** 紧凑模式：只显示置信度徽章，点击展开详情 */
   compact?: boolean;
@@ -24,7 +24,7 @@ export interface WhyAIProps {
 /**
  * 从 detection 字符串中解析置信度
  */
-const parseConfidence = (detection: string | null): ConfidenceLevel => {
+const parseConfidence = (detection: string | null | undefined): ConfidenceLevel => {
   if (!detection) return "low";
   const lower = detection.toLowerCase();
   if (lower.includes("confidence: high") || lower.includes("置信度高") || lower.includes("高置信度")) {
@@ -58,9 +58,9 @@ const confidenceLabels: Record<ConfidenceLevel, { en: string; zh: string }> = {
  * 解析检测结果，提取匹配类型
  */
 const parseMatchType = (
-  detection: string | null,
-  referrer: string | null,
-  utmSource: string | null,
+  detection: string | null | undefined,
+  referrer: string | null | undefined,
+  utmSource: string | null | undefined,
   lang: Lang
 ): { type: string; value: string; icon: string }[] => {
   const matches: { type: string; value: string; icon: string }[] = [];

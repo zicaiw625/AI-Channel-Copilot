@@ -443,28 +443,28 @@ export default function FunnelAnalysis() {
             rate={funnelData.conversionRates.visitToCart}
             aiRate={funnelData.conversionRates.aiVisitToCart}
             language={uiLanguage}
-            isEstimated={funnelData.isEstimated}
+            isEstimated={funnelData.isEstimated.visits || funnelData.isEstimated.carts}
           />
           <ConversionCard
             title={isEnglish ? "Cart → Checkout" : "加购 → 结账"}
             rate={funnelData.conversionRates.cartToCheckout}
             aiRate={funnelData.conversionRates.aiCartToCheckout}
             language={uiLanguage}
-            isEstimated={funnelData.isEstimated}
+            isEstimated={funnelData.isEstimated.carts || funnelData.isEstimated.checkouts}
           />
           <ConversionCard
             title={isEnglish ? "Checkout → Order" : "结账 → 订单"}
             rate={funnelData.conversionRates.checkoutToOrder}
             aiRate={funnelData.conversionRates.aiCheckoutToOrder}
             language={uiLanguage}
-            isEstimated={false}
+            isEstimated={funnelData.isEstimated.checkouts}
           />
           <ConversionCard
             title={isEnglish ? "Visit → Order" : "访问 → 订单"}
             rate={funnelData.conversionRates.visitToOrder}
             aiRate={funnelData.conversionRates.aiVisitToOrder}
             language={uiLanguage}
-            isEstimated={funnelData.isEstimated}
+            isEstimated={funnelData.isEstimated.visits}
           />
         </div>
 
@@ -499,7 +499,7 @@ export default function FunnelAnalysis() {
               stages={selectedFunnel}
               language={uiLanguage}
               maxCount={maxCount}
-              isEstimated={funnelData.isEstimated}
+              isEstimated={funnelData.isEstimated.visits || funnelData.isEstimated.carts}
             />
           </div>
 

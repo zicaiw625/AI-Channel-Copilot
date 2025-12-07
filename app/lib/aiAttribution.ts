@@ -3,7 +3,7 @@
  * 负责检测订单是否来自 AI 渠道
  */
 
-import type { AIChannel, UtmSourceRule, DetectionConfig, DetectionResult } from "./aiTypes";
+import type { AIChannel, UtmSourceRule, DetectionConfig, DetectionResult, DetectionSignal, ConfidenceLevel } from "./aiTypes";
 import { AI_CHANNELS } from "./aiTypes";
 import {
   safeUrl,
@@ -198,8 +198,36 @@ export const detectFromNoteAttributes = (
 export const extractUtm = extractUtmFromUrls;
 
 /**
+ * 🆕 构建结构化信号的辅助函数
+ */
+const buildStructuredSignal = (
+  type: DetectionSignal["type"],
+  source: string,
+  matched: string,
+  confidence: number,
+  isPrimary: boolean = false,
+): DetectionSignal => ({
+  type,
+  source,
+  matched,
+  confidence: Math.max(0, Math.min(100, confidence)),
+  isPrimary,
+});
+
+/**
+ * 🆕 根据置信度分数计算置信度等级
+ */
+const getConfidenceLevel = (score: number): ConfidenceLevel => {
+  if (score >= 80) return "high";
+  if (score >= 50) return "medium";
+  return "low";
+};
+
+/**
  * 从订单字段中检测 AI 来源
  * 优先级：referrer > UTM > 备注属性 > 标签
+ * 
+ * 🆕 增强：返回结构化的证据链数据
  */
 export const detectAiFromFields = (
   referrer: string,
@@ -215,12 +243,27 @@ export const detectAiFromFields = (
   const refDomain = extractHostname(referrer);
   const landingDomain = extractHostname(landingPage);
   const signals: string[] = [];
+  const structuredSignals: DetectionSignal[] = [];
 
   // 1. 检查 Bing Copilot 特殊情况
   const bingCopilotReason = detectCopilotFromBing(refUrl) || detectCopilotFromBing(landingUrl);
   if (bingCopilotReason) {
     const high = config.lang === "English" ? "confidence: high" : "高置信度";
-    return { aiSource: "Copilot", detection: `${bingCopilotReason} · ${high}`, signals: [] };
+    structuredSignals.push(buildStructuredSignal(
+      "bing_copilot",
+      refUrl?.href || landingUrl?.href || "",
+      "bing.com/chat",
+      95,
+      true,
+    ));
+    return { 
+      aiSource: "Copilot", 
+      detection: `${bingCopilotReason} · ${high}`, 
+      signals: [],
+      structuredSignals,
+      confidence: "high",
+      confidenceScore: 95,
+    };
   }
 
   // 2. 检查域名匹配
@@ -248,23 +291,62 @@ export const detectAiFromFields = (
             : `; utm_source=${utmSource} 已确认`
           : "";
 
-    if (domainHitRef) signals.push(`referrer matched ${domainHit.domain}`);
-    if (domainHitLanding) signals.push(`landing matched ${domainHit.domain}`);
-    if (utmMatch) signals.push(`utm_source=${utmSource}`);
+    if (domainHitRef) {
+      signals.push(`referrer matched ${domainHit.domain}`);
+      structuredSignals.push(buildStructuredSignal(
+        "referrer",
+        refDomain || referrer,
+        domainHit.domain,
+        90,
+        true,
+      ));
+    }
+    if (domainHitLanding) {
+      signals.push(`landing matched ${domainHit.domain}`);
+      structuredSignals.push(buildStructuredSignal(
+        "referrer",
+        landingDomain || landingPage,
+        domainHit.domain,
+        85,
+        true,
+      ));
+    }
+    if (utmMatch) {
+      signals.push(`utm_source=${utmSource}`);
+      structuredSignals.push(buildStructuredSignal(
+        "utm_source",
+        utmSource || "",
+        utmMatch.value,
+        utmMatch.channel === domainHit.channel ? 85 : 60, // 冲突时降低置信度
+        false,
+      ));
+    }
 
     const clamped = signals.slice(0, 10).map((s) => (s.length > 255 ? s.slice(0, 255) : s));
     const high = config.lang === "English" ? "confidence: high" : "置信度高";
+    const confidenceScore = domainHitRef ? 90 : 85;
 
     return {
       aiSource: domainHit.channel,
       detection: `${signals.join(" + ")} · ${high}${conflictNote}`,
       signals: clamped,
+      structuredSignals,
+      confidence: "high",
+      confidenceScore,
     };
   }
 
   // 5. UTM Source 匹配
   if (utmMatch) {
     signals.push(`utm_source=${utmSource}`);
+    structuredSignals.push(buildStructuredSignal(
+      "utm_source",
+      utmSource || "",
+      utmMatch.value,
+      65,
+      true,
+    ));
+    
     const clamped = signals.slice(0, 10).map((s) => (s.length > 255 ? s.slice(0, 255) : s));
     const medium =
       config.lang === "English"
@@ -275,6 +357,9 @@ export const detectAiFromFields = (
       aiSource: utmMatch.channel,
       detection: `${signals.join(" + ")} · ${medium}`,
       signals: clamped,
+      structuredSignals,
+      confidence: "medium",
+      confidenceScore: 65,
     };
   }
 
@@ -287,6 +372,14 @@ export const detectAiFromFields = (
 
   if (mediumHit) {
     signals.push(`utm_medium=${utmMedium}`);
+    structuredSignals.push(buildStructuredSignal(
+      "utm_medium",
+      utmMedium || "",
+      mediumHit,
+      25,
+      false,
+    ));
+    
     const clamped = signals.slice(0, 10).map((s) => (s.length > 255 ? s.slice(0, 255) : s));
     const low =
       config.lang === "English"
@@ -297,12 +390,30 @@ export const detectAiFromFields = (
       aiSource: null,
       detection: `${signals.join(" + ")} · ${low}`,
       signals: clamped,
+      structuredSignals,
+      confidence: "low",
+      confidenceScore: 25,
     };
   }
 
   // 7. 备注属性匹配
   const noteHit = detectFromNoteAttributes(noteAttributes, config.utmSources);
-  if (noteHit) return { ...noteHit, signals: [] };
+  if (noteHit) {
+    structuredSignals.push(buildStructuredSignal(
+      "note_attribute",
+      noteHit.detection,
+      "note_attributes",
+      55,
+      true,
+    ));
+    return { 
+      ...noteHit, 
+      signals: [],
+      structuredSignals,
+      confidence: "medium",
+      confidenceScore: 55,
+    };
+  }
 
   // 8. 标签匹配
   const tagPrefix = config.tagPrefix || "AI-Source";
@@ -330,10 +441,20 @@ export const detectAiFromFields = (
         config.lang === "English"
           ? "confidence: low (tag has empty suffix)"
           : "置信度低（标签后缀为空）";
+      structuredSignals.push(buildStructuredSignal(
+        "tag",
+        tagMatch,
+        tagPrefix,
+        20,
+        true,
+      ));
       return {
         aiSource: "Other-AI",
         detection: `Tag ${tagMatch} has empty suffix · ${low}`,
         signals: ["existing tag (empty suffix)"],
+        structuredSignals,
+        confidence: "low",
+        confidenceScore: 20,
       };
     }
     
@@ -346,10 +467,21 @@ export const detectAiFromFields = (
         ? "confidence: medium (may come from app tag write-back)"
         : "置信度中等（可能来自本应用标签写回）";
 
+    structuredSignals.push(buildStructuredSignal(
+      "tag",
+      tagMatch,
+      suffix,
+      50,
+      true,
+    ));
+
     return {
       aiSource: channel,
       detection: `Detected by existing tag ${tagMatch} · ${medium}`,
       signals: clamped,
+      structuredSignals,
+      confidence: "medium",
+      confidenceScore: 50,
     };
   }
 
@@ -364,5 +496,8 @@ export const detectAiFromFields = (
     aiSource: null,
     detection: none,
     signals: clamped,
+    structuredSignals: [],
+    confidence: "low",
+    confidenceScore: 0,
   };
 };

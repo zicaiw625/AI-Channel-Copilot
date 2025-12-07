@@ -49,12 +49,40 @@ export type DetectionConfig = {
 };
 
 /**
+ * 🆕 结构化检测信号（用于证据链展示）
+ * 支持更清晰的 UI 展示和数据分析
+ */
+export type DetectionSignal = {
+  /** 信号类型 */
+  type: "referrer" | "utm_source" | "utm_medium" | "note_attribute" | "tag" | "bing_copilot";
+  /** 原始值 */
+  source: string;
+  /** 匹配的规则或域名 */
+  matched: string;
+  /** 置信度分数 (0-100) */
+  confidence: number;
+  /** 是否为主要判定依据 */
+  isPrimary: boolean;
+};
+
+/**
+ * 🆕 置信度等级
+ */
+export type ConfidenceLevel = "high" | "medium" | "low";
+
+/**
  * AI 检测结果
  */
 export type DetectionResult = {
   aiSource: AIChannel | null;
   detection: string;
   signals: string[];
+  /** 🆕 结构化信号（用于证据链展示） */
+  structuredSignals?: DetectionSignal[];
+  /** 🆕 最终置信度 */
+  confidence?: ConfidenceLevel;
+  /** 🆕 置信度分数 (0-100) */
+  confidenceScore?: number;
 };
 
 /**

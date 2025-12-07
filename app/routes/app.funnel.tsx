@@ -343,7 +343,7 @@ export default function FunnelAnalysis() {
           </div>
         </div>
 
-        {/* 数据来源说明 - 强调估算 vs 实际 */}
+        {/* 🆕 增强版数据来源说明 - 清晰的估算 vs 实际数据分层 */}
         <div className={styles.card}>
           <div className={styles.sectionHeader}>
             <div>
@@ -356,84 +356,119 @@ export default function FunnelAnalysis() {
               <span className={styles.badge}>
                 {isEnglish ? "Beta" : "测试版"}
               </span>
-              {funnelData.isEstimated && (
-                <span 
-                  className={styles.badge} 
-                  style={{ background: "#fff2e8", color: "#d4380d", border: "1px solid #ffbb96" }}
-                >
-                  {isEnglish ? "Estimated Data" : "估算数据"}
-                </span>
-              )}
             </div>
           </div>
           
-          {/* 数据可靠性指示器 */}
+          {/* 🆕 数据来源分层说明 - 更清晰的估算 vs 实际 */}
           <div style={{ 
-            display: "flex", 
-            gap: 16, 
-            padding: "12px 16px", 
-            background: funnelData.isEstimated ? "#fffbe6" : "#f6ffed",
-            border: `1px solid ${funnelData.isEstimated ? "#ffe58f" : "#b7eb8f"}`,
-            borderRadius: 8,
-            marginBottom: 12,
+            display: "grid", 
+            gridTemplateColumns: "1fr 1fr", 
+            gap: 12, 
+            marginBottom: 16,
           }}>
-            <div style={{ flex: 1 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                <span style={{ fontSize: 16 }}>{funnelData.isEstimated ? "⚠️" : "✅"}</span>
-                <strong style={{ fontSize: 14 }}>
-                  {isEnglish ? "Data Reliability" : "数据可靠性"}
+            {/* 实际数据区域 */}
+            <div style={{ 
+              padding: "12px 16px", 
+              background: "#f6ffed",
+              border: "1px solid #b7eb8f",
+              borderRadius: 8,
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                <span style={{ 
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: 24, 
+                  height: 24, 
+                  borderRadius: "50%", 
+                  background: "#52c41a",
+                  color: "#fff",
+                  fontSize: 14,
+                  fontWeight: "bold",
+                }}>✓</span>
+                <strong style={{ fontSize: 14, color: "#237804" }}>
+                  {isEnglish ? "Actual Data (100% Accurate)" : "实际数据（100% 准确）"}
                 </strong>
               </div>
-              <p style={{ margin: 0, fontSize: 13, color: "#555" }}>
-                {funnelData.isEstimated 
-                  ? (isEnglish 
-                      ? "Visit and Add-to-Cart counts are estimates based on order patterns. Checkout and Order data are actual."
-                      : "访问和加购数量为基于订单模式的估算值。结账和订单数据为实际值。")
-                  : (isEnglish
-                      ? "All funnel stages are based on actual tracked events."
-                      : "所有漏斗阶段均基于实际追踪事件。")}
-              </p>
+              <ul style={{ margin: 0, paddingLeft: 16, fontSize: 13, color: "#555", lineHeight: 1.6 }}>
+                <li><strong>{isEnglish ? "Checkout" : "结账"}</strong>: {isEnglish ? "From Shopify Checkout Webhooks" : "来自 Shopify Checkout Webhooks"}</li>
+                <li><strong>{isEnglish ? "Order" : "订单"}</strong>: {isEnglish ? "From Shopify Order Webhooks" : "来自 Shopify Order Webhooks"}</li>
+                <li style={{ color: "#237804", fontStyle: "italic" }}>
+                  {isEnglish ? "These metrics are verified and can be trusted for reporting" : "这些指标已验证，可用于正式报告"}
+                </li>
+              </ul>
             </div>
+            
+            {/* 估算数据区域 */}
             <div style={{ 
-              display: "flex", 
-              flexDirection: "column", 
-              gap: 4, 
-              fontSize: 11, 
-              color: "#637381",
-              borderLeft: "1px solid rgba(0,0,0,0.1)",
-              paddingLeft: 16,
+              padding: "12px 16px", 
+              background: "#fffbe6",
+              border: "1px dashed #faad14",
+              borderRadius: 8,
             }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
                 <span style={{ 
-                  width: 8, height: 8, borderRadius: "50%", 
-                  background: funnelData.isEstimated ? "#faad14" : "#52c41a" 
-                }} />
-                {isEnglish ? "Visit: " : "访问: "}
-                {funnelData.isEstimated ? (isEnglish ? "Estimated" : "估算") : (isEnglish ? "Actual" : "实际")}
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: 24, 
+                  height: 24, 
+                  borderRadius: "50%", 
+                  background: "#faad14",
+                  color: "#fff",
+                  fontSize: 14,
+                }}>~</span>
+                <strong style={{ fontSize: 14, color: "#ad6800" }}>
+                  {isEnglish ? "Estimated Data (Reference Only)" : "估算数据（仅供参考）"}
+                </strong>
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{ 
-                  width: 8, height: 8, borderRadius: "50%", 
-                  background: funnelData.isEstimated ? "#faad14" : "#52c41a" 
-                }} />
-                {isEnglish ? "Cart: " : "加购: "}
-                {funnelData.isEstimated ? (isEnglish ? "Estimated" : "估算") : (isEnglish ? "Actual" : "实际")}
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#52c41a" }} />
-                {isEnglish ? "Checkout: Actual" : "结账: 实际"}
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#52c41a" }} />
-                {isEnglish ? "Order: Actual" : "订单: 实际"}
-              </div>
+              <ul style={{ margin: 0, paddingLeft: 16, fontSize: 13, color: "#555", lineHeight: 1.6 }}>
+                <li><strong>{isEnglish ? "Visit" : "访问"}</strong>: {isEnglish ? "Estimated from order patterns" : "基于订单模式估算"}</li>
+                <li><strong>{isEnglish ? "Add to Cart" : "加购"}</strong>: {isEnglish ? "Estimated from checkout data" : "基于结账数据估算"}</li>
+                <li style={{ color: "#ad6800", fontStyle: "italic" }}>
+                  {isEnglish 
+                    ? "Based on e-commerce industry averages (adjustable)" 
+                    : "基于电商行业平均值（可调整）"}
+                </li>
+              </ul>
             </div>
           </div>
 
+          {/* 🆕 估算方法说明 */}
+          <details style={{ 
+            background: "#f9f9f9", 
+            borderRadius: 6, 
+            padding: "8px 12px",
+            marginBottom: 12,
+            fontSize: 12,
+            color: "#666",
+          }}>
+            <summary style={{ cursor: "pointer", fontWeight: 500, color: "#333" }}>
+              {isEnglish ? "📊 How estimates are calculated" : "📊 估算方法说明"}
+            </summary>
+            <div style={{ marginTop: 8, paddingLeft: 4 }}>
+              <p style={{ margin: "4px 0" }}>
+                {isEnglish 
+                  ? "Our estimates use industry-standard conversion rates:" 
+                  : "我们使用行业标准转化率进行估算："}
+              </p>
+              <ul style={{ margin: "4px 0 0", paddingLeft: 16 }}>
+                <li>{isEnglish ? "Checkout → Order rate: ~70%" : "结账 → 订单转化率：约 70%"}</li>
+                <li>{isEnglish ? "Visits per checkout: ~10" : "每次结账对应访问数：约 10"}</li>
+                <li>{isEnglish ? "Carts per checkout: ~2" : "每次结账对应加购数：约 2"}</li>
+              </ul>
+              <p style={{ margin: "8px 0 0", fontStyle: "italic" }}>
+                {isEnglish 
+                  ? "💡 Tip: For accurate Visit/Cart data, enable client-side tracking or checkout webhooks." 
+                  : "💡 提示：如需准确的访问/加购数据，可启用客户端追踪或 checkout webhooks。"}
+              </p>
+            </div>
+          </details>
+
           <p className={styles.helpText}>
             {isEnglish
-              ? "Track how AI-referred visitors convert through your purchase funnel. Enable checkout webhooks for more accurate Visit/Cart data."
-              : "追踪 AI 引荐访客在购买漏斗中的转化情况。启用 checkout webhook 可获得更准确的访问/加购数据。"}
+              ? "Track how AI-referred visitors convert through your purchase funnel. Checkout and Order data are 100% actual; Visit/Cart are estimates."
+              : "追踪 AI 引荐访客在购买漏斗中的转化情况。结账和订单数据为 100% 实际数据；访问/加购为估算值。"}
           </p>
         </div>
 

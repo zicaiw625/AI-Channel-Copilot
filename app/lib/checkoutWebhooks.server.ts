@@ -6,7 +6,7 @@
 import { authenticate } from "../shopify.server";
 import { getSettings } from "./settings.server";
 import { processCheckoutCreate, processCheckoutUpdate, type CheckoutPayload } from "./funnelService.server";
-import { enqueueWebhookJob, registerWebhookHandler } from "./webhookQueue.server";
+import { enqueueWebhookJob, registerWebhookHandler, checkWebhookDuplicate } from "./webhookQueue.server";
 import { logger } from "./logger.server";
 import { enforceRateLimit, RateLimitRules, buildRateLimitKey } from "./security/rateLimit.server";
 import {
@@ -64,6 +64,18 @@ export const handleCheckoutCreateWebhook = async (request: Request) => {
                         request.headers.get("x-shopify-triggered-at") || 
                         null;
     const eventTime = triggeredAt ? new Date(triggeredAt) : null;
+
+    // 🆕 早期去重检查：在入队前检查 X-Shopify-Webhook-Id（Shopify 最佳实践）
+    if (externalId) {
+      const isDuplicate = await checkWebhookDuplicate(shop, "checkouts/create", externalId);
+      if (isDuplicate) {
+        logger.info("[webhook] Duplicate checkout/create ignored by X-Shopify-Webhook-Id", {
+          shop,
+          externalId,
+        });
+        return webhookSuccess(); // 返回 200 告诉 Shopify 已处理
+      }
+    }
 
     // 入队异步处理
     await enqueueWebhookJob({
@@ -153,6 +165,18 @@ export const handleCheckoutUpdateWebhook = async (request: Request) => {
                         request.headers.get("x-shopify-triggered-at") || 
                         null;
     const eventTime = triggeredAt ? new Date(triggeredAt) : null;
+
+    // 🆕 早期去重检查：在入队前检查 X-Shopify-Webhook-Id（Shopify 最佳实践）
+    if (externalId) {
+      const isDuplicate = await checkWebhookDuplicate(shop, "checkouts/update", externalId);
+      if (isDuplicate) {
+        logger.info("[webhook] Duplicate checkout/update ignored by X-Shopify-Webhook-Id", {
+          shop,
+          externalId,
+        });
+        return webhookSuccess(); // 返回 200 告诉 Shopify 已处理
+      }
+    }
 
     // 入队异步处理
     await enqueueWebhookJob({

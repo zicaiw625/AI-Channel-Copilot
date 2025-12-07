@@ -4,7 +4,7 @@ import { fetchOrderById } from "./shopifyOrders.server";
 import { persistOrders } from "./persistence.server";
 import { getSettings, markActivity, updatePipelineStatuses } from "./settings.server";
 import { getPlatform, isDemoMode } from "./runtime.server";
-import { enqueueWebhookJob, getWebhookQueueSize, registerWebhookHandler } from "./webhookQueue.server";
+import { enqueueWebhookJob, getWebhookQueueSize, registerWebhookHandler, checkWebhookDuplicate } from "./webhookQueue.server";
 import { logger } from "./logger.server";
 import { enforceRateLimit, RateLimitRules, buildRateLimitKey } from "./security/rateLimit.server";
 
@@ -131,6 +131,24 @@ export const handleOrderWebhook = async (request: Request, expectedTopic: string
       return new Response("Missing order id", { status: 400 });
     }
 
+    // 🆕 早期去重检查：在入队前检查 X-Shopify-Webhook-Id（Shopify 最佳实践）
+    const externalId = request.headers.get("X-Shopify-Webhook-Id") || request.headers.get("x-shopify-webhook-id") || null;
+    const triggeredAt = request.headers.get("X-Shopify-Triggered-At") || request.headers.get("x-shopify-triggered-at") || null;
+    const eventTime = triggeredAt ? new Date(triggeredAt) : null;
+
+    if (externalId) {
+      const isDuplicate = await checkWebhookDuplicate(shop, topic, externalId);
+      if (isDuplicate) {
+        logger.info("[webhook] Duplicate ignored by X-Shopify-Webhook-Id (early check)", {
+          shopDomain: shop,
+          topic,
+          externalId,
+        });
+        // 返回 200 告诉 Shopify 已处理，避免重试
+        return new Response("Duplicate", { status: 200 });
+      }
+    }
+
     const handler = async (jobPayload: Record<string, unknown>) => {
       const jobOrderGid = jobPayload.orderGid as string;
       const jobShopDomain = (jobPayload.shopDomain as string) || shop;
@@ -204,10 +222,7 @@ export const handleOrderWebhook = async (request: Request, expectedTopic: string
       return new Response();
     }
 
-    const externalId = request.headers.get("X-Shopify-Webhook-Id") || request.headers.get("x-shopify-webhook-id") || null;
-    const triggeredAt = request.headers.get("X-Shopify-Triggered-At") || request.headers.get("x-shopify-triggered-at") || null;
-    const eventTime = triggeredAt ? new Date(triggeredAt) : null;
-
+    // externalId 和 eventTime 已在上方早期去重检查时提取
     await enqueueWebhookJob({
       shopDomain: shop,
       topic,

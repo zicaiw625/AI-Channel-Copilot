@@ -387,6 +387,57 @@ export const getDeadLetterJobs = async (limit = 50) =>
   prisma.webhookJob.findMany({ where: { status: "failed" }, orderBy: { finishedAt: "desc" }, take: limit });
 
 /**
+ * 🆕 早期去重检查（Shopify 最佳实践）
+ * 在入队前检查 X-Shopify-Webhook-Id 是否已处理
+ * 这比依赖数据库唯一约束更高效，避免不必要的入队和处理
+ * 
+ * @param shopDomain - 店铺域名
+ * @param topic - Webhook 主题
+ * @param externalId - X-Shopify-Webhook-Id
+ * @returns 是否为重复的 webhook
+ */
+export const checkWebhookDuplicate = async (
+  shopDomain: string,
+  topic: string,
+  externalId: string,
+): Promise<boolean> => {
+  if (!externalId) return false;
+  
+  try {
+    // 检查是否已存在相同的 webhook（任何状态）
+    const existing = await prisma.webhookJob.findFirst({
+      where: {
+        shopDomain,
+        topic,
+        externalId,
+      },
+      select: { id: true, status: true },
+    });
+    
+    if (existing) {
+      // 记录重复 webhook 的监控指标
+      logger.debug("[webhook] Duplicate detected by externalId", {
+        shopDomain,
+        topic,
+        externalId,
+        existingStatus: existing.status,
+      });
+      return true;
+    }
+    
+    return false;
+  } catch (error) {
+    // 查询失败时不阻止正常处理，记录警告后继续
+    logger.warn("[webhook] Duplicate check failed, proceeding", {
+      shopDomain,
+      topic,
+      error: sanitizeErrorMessage(error),
+    });
+    return false;
+  }
+};
+
+/**
  * 处理指定店铺的 Webhook 队列
  */
 export const processWebhookQueueForShop = async (

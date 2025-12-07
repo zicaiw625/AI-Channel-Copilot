@@ -29,6 +29,8 @@ import {
   KPICards, 
   ChannelBreakdown, 
   TrendChart,
+  WhyAI,
+  ConfidenceBadge,
   type Lang,
   type TrendScope,
   type JobSnapshot,
@@ -927,11 +929,9 @@ export default function Index() {
                 <tr>
                   <th>{t(lang, "debug_table_order")}</th>
                   <th>{t(lang, "debug_table_time")}</th>
-                  <th>{t(lang, "debug_table_ai_channel")}</th>
+                  <th>{uiLanguage === "English" ? "AI Channel & Evidence" : "AI 渠道 & 证据"}</th>
                   <th>{t(lang, "debug_table_gmv")}</th>
                   <th>{t(lang, "debug_table_ref_utm")}</th>
-                  <th>{t(lang, "debug_table_detection")}</th>
-                  <th>{t(lang, "debug_table_signals")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -939,7 +939,18 @@ export default function Index() {
                   <tr key={order.id}>
                     <td className={styles.cellLabel}>{order.name}</td>
                     <td>{timeFormatter.format(new Date(order.createdAt))}</td>
-                    <td>{order.aiSource ?? "-"}</td>
+                    <td style={{ minWidth: 200 }}>
+                      <WhyAI
+                        aiSource={order.aiSource}
+                        referrer={order.referrer}
+                        utmSource={order.utmSource}
+                        utmMedium={order.utmMedium}
+                        sourceName={order.sourceName}
+                        detection={order.detection}
+                        signals={order.signals}
+                        lang={lang}
+                      />
+                    </td>
                     <td>{fmtCurrency(order.totalPrice)}</td>
                     <td>
                       <div className={styles.debugCol}>
@@ -948,15 +959,6 @@ export default function Index() {
                         <span>utm_source: {order.utmSource || "—"}</span>
                         <span>utm_medium: {order.utmMedium || "—"}</span>
                       </div>
-                    </td>
-                    <td>{order.detection}</td>
-                    <td>
-                      <ul className={styles.signalList}>
-                        {(order.signals || []).map((signal, index) => (
-                          <li key={`${order.id}-${index}`}>{signal}</li>
-                        ))}
-                        {(!order.signals || order.signals.length === 0) && <li>—</li>}
-                      </ul>
                     </td>
                   </tr>
                 ))}

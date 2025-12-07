@@ -38,15 +38,22 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   };
 };
 
+// 判断漏斗阶段是否为估算数据
+const isEstimatedStage = (stage: string): boolean => {
+  return stage === "visit" || stage === "add_to_cart" || stage === "page_view";
+};
+
 // 漏斗可视化组件
 const FunnelChart = ({ 
   stages, 
   language,
   maxCount,
+  isEstimated = true,
 }: { 
   stages: FunnelMetrics[]; 
   language: string;
   maxCount: number;
+  isEstimated?: boolean;
 }) => {
   const isEnglish = language === "English";
   
@@ -102,13 +109,31 @@ const FunnelChart = ({
         const dropoff = nextStage && stage.count > 0
           ? ((stage.count - nextStage.count) / stage.count * 100).toFixed(1)
           : null;
+        const stageIsEstimated = isEstimated && isEstimatedStage(stage.stage);
         
         return (
           <div key={stage.stage} style={{ marginBottom: 24 }} aria-hidden="true">
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-              <span style={{ fontWeight: 600, fontSize: 14 }}>{stage.label}</span>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontWeight: 600, fontSize: 14 }}>{stage.label}</span>
+                {stageIsEstimated && (
+                  <span 
+                    style={{ 
+                      fontSize: 10, 
+                      padding: "2px 6px", 
+                      background: "#fff7e6", 
+                      color: "#d46b08",
+                      borderRadius: 4,
+                      border: "1px solid #ffd591",
+                    }}
+                    title={isEnglish ? "This value is estimated based on order patterns" : "此数值基于订单模式估算"}
+                  >
+                    {isEnglish ? "Est." : "估算"}
+                  </span>
+                )}
+              </div>
               <span style={{ color: "#637381", fontSize: 14 }}>
-                {stage.count.toLocaleString()}
+                {stageIsEstimated && "~"}{stage.count.toLocaleString()}
                 {stage.value > 0 && ` · $${stage.value.toLocaleString()}`}
               </span>
             </div>
@@ -186,11 +211,13 @@ const ConversionCard = ({
   rate,
   aiRate,
   language,
+  isEstimated = false,
 }: {
   title: string;
   rate: number;
   aiRate: number;
   language: string;
+  isEstimated?: boolean;
 }) => {
   const isEnglish = language === "English";
   const diff = aiRate - rate;
@@ -203,19 +230,38 @@ const ConversionCard = ({
     <article
       style={{
         background: "#fff",
-        border: "1px solid #e0e0e0",
+        border: isEstimated ? "1px dashed #ffd591" : "1px solid #e0e0e0",
         borderRadius: 8,
         padding: 16,
         flex: 1,
+        position: "relative",
       }}
       aria-label={`${title}: ${isEnglish ? "Overall" : "全站"} ${(rate * 100).toFixed(1)}%, AI ${(aiRate * 100).toFixed(1)}%`}
     >
+      {isEstimated && (
+        <span 
+          style={{ 
+            position: "absolute",
+            top: 8,
+            right: 8,
+            fontSize: 9, 
+            padding: "2px 5px", 
+            background: "#fff7e6", 
+            color: "#d46b08",
+            borderRadius: 3,
+            border: "1px solid #ffd591",
+          }}
+          title={isEnglish ? "Based on estimated data" : "基于估算数据"}
+        >
+          {isEnglish ? "Est." : "估算"}
+        </span>
+      )}
       <p style={{ margin: "0 0 8px", fontSize: 12, color: "#637381" }} id={`card-title-${title.replace(/\s+/g, '-')}`}>
         {title}
       </p>
       <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
         <span style={{ fontSize: 24, fontWeight: 700 }} aria-label={`${(rate * 100).toFixed(1)}% ${isEnglish ? "overall" : "全站"}`}>
-          {(rate * 100).toFixed(1)}%
+          {isEstimated && "~"}{(rate * 100).toFixed(1)}%
         </span>
         <span style={{ fontSize: 12, color: "#637381" }}>
           {isEnglish ? "Overall" : "全站"}
@@ -223,7 +269,7 @@ const ConversionCard = ({
       </div>
       <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginTop: 4 }}>
         <span style={{ fontSize: 18, fontWeight: 600, color: "#635bff" }}>
-          {(aiRate * 100).toFixed(1)}%
+          {isEstimated && "~"}{(aiRate * 100).toFixed(1)}%
         </span>
         <span style={{ fontSize: 12, color: "#637381" }}>
           {isEnglish ? "AI Channels" : "AI 渠道"}
@@ -296,7 +342,7 @@ export default function FunnelAnalysis() {
           </div>
         </div>
 
-        {/* 说明 */}
+        {/* 数据来源说明 - 强调估算 vs 实际 */}
         <div className={styles.card}>
           <div className={styles.sectionHeader}>
             <div>
@@ -305,14 +351,88 @@ export default function FunnelAnalysis() {
                 {isEnglish ? "Visit → Add to Cart → Checkout → Order" : "访问 → 加购 → 结账 → 成交"}
               </h3>
             </div>
-            <span className={styles.badge}>
-              {isEnglish ? "Beta" : "测试版"}
-            </span>
+            <div style={{ display: "flex", gap: 8 }}>
+              <span className={styles.badge}>
+                {isEnglish ? "Beta" : "测试版"}
+              </span>
+              {funnelData.isEstimated && (
+                <span 
+                  className={styles.badge} 
+                  style={{ background: "#fff2e8", color: "#d4380d", border: "1px solid #ffbb96" }}
+                >
+                  {isEnglish ? "Estimated Data" : "估算数据"}
+                </span>
+              )}
+            </div>
           </div>
+          
+          {/* 数据可靠性指示器 */}
+          <div style={{ 
+            display: "flex", 
+            gap: 16, 
+            padding: "12px 16px", 
+            background: funnelData.isEstimated ? "#fffbe6" : "#f6ffed",
+            border: `1px solid ${funnelData.isEstimated ? "#ffe58f" : "#b7eb8f"}`,
+            borderRadius: 8,
+            marginBottom: 12,
+          }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                <span style={{ fontSize: 16 }}>{funnelData.isEstimated ? "⚠️" : "✅"}</span>
+                <strong style={{ fontSize: 14 }}>
+                  {isEnglish ? "Data Reliability" : "数据可靠性"}
+                </strong>
+              </div>
+              <p style={{ margin: 0, fontSize: 13, color: "#555" }}>
+                {funnelData.isEstimated 
+                  ? (isEnglish 
+                      ? "Visit and Add-to-Cart counts are estimates based on order patterns. Checkout and Order data are actual."
+                      : "访问和加购数量为基于订单模式的估算值。结账和订单数据为实际值。")
+                  : (isEnglish
+                      ? "All funnel stages are based on actual tracked events."
+                      : "所有漏斗阶段均基于实际追踪事件。")}
+              </p>
+            </div>
+            <div style={{ 
+              display: "flex", 
+              flexDirection: "column", 
+              gap: 4, 
+              fontSize: 11, 
+              color: "#637381",
+              borderLeft: "1px solid rgba(0,0,0,0.1)",
+              paddingLeft: 16,
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ 
+                  width: 8, height: 8, borderRadius: "50%", 
+                  background: funnelData.isEstimated ? "#faad14" : "#52c41a" 
+                }} />
+                {isEnglish ? "Visit: " : "访问: "}
+                {funnelData.isEstimated ? (isEnglish ? "Estimated" : "估算") : (isEnglish ? "Actual" : "实际")}
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ 
+                  width: 8, height: 8, borderRadius: "50%", 
+                  background: funnelData.isEstimated ? "#faad14" : "#52c41a" 
+                }} />
+                {isEnglish ? "Cart: " : "加购: "}
+                {funnelData.isEstimated ? (isEnglish ? "Estimated" : "估算") : (isEnglish ? "Actual" : "实际")}
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#52c41a" }} />
+                {isEnglish ? "Checkout: Actual" : "结账: 实际"}
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#52c41a" }} />
+                {isEnglish ? "Order: Actual" : "订单: 实际"}
+              </div>
+            </div>
+          </div>
+
           <p className={styles.helpText}>
             {isEnglish
-              ? "Track how AI-referred visitors convert through your purchase funnel. Note: Visit and Add-to-Cart data are estimates based on checkout/order patterns. Enable checkout webhooks for more accurate data."
-              : "追踪 AI 引荐访客在购买漏斗中的转化情况。注意：访问和加购数据是基于结账/订单模式的估算。启用 checkout webhook 可获得更准确的数据。"}
+              ? "Track how AI-referred visitors convert through your purchase funnel. Enable checkout webhooks for more accurate Visit/Cart data."
+              : "追踪 AI 引荐访客在购买漏斗中的转化情况。启用 checkout webhook 可获得更准确的访问/加购数据。"}
           </p>
         </div>
 
@@ -323,24 +443,28 @@ export default function FunnelAnalysis() {
             rate={funnelData.conversionRates.visitToCart}
             aiRate={funnelData.conversionRates.aiVisitToCart}
             language={uiLanguage}
+            isEstimated={funnelData.isEstimated}
           />
           <ConversionCard
             title={isEnglish ? "Cart → Checkout" : "加购 → 结账"}
             rate={funnelData.conversionRates.cartToCheckout}
             aiRate={funnelData.conversionRates.aiCartToCheckout}
             language={uiLanguage}
+            isEstimated={funnelData.isEstimated}
           />
           <ConversionCard
             title={isEnglish ? "Checkout → Order" : "结账 → 订单"}
             rate={funnelData.conversionRates.checkoutToOrder}
             aiRate={funnelData.conversionRates.aiCheckoutToOrder}
             language={uiLanguage}
+            isEstimated={false}
           />
           <ConversionCard
             title={isEnglish ? "Visit → Order" : "访问 → 订单"}
             rate={funnelData.conversionRates.visitToOrder}
             aiRate={funnelData.conversionRates.aiVisitToOrder}
             language={uiLanguage}
+            isEstimated={funnelData.isEstimated}
           />
         </div>
 
@@ -375,6 +499,7 @@ export default function FunnelAnalysis() {
               stages={selectedFunnel}
               language={uiLanguage}
               maxCount={maxCount}
+              isEstimated={funnelData.isEstimated}
             />
           </div>
 

@@ -266,7 +266,42 @@ export default function Onboarding() {
   // Render Step 3: Plan Selection
   return (
     <section style={{ maxWidth: 900, margin: "40px auto", padding: 20, fontFamily: "system-ui, sans-serif" }}>
-      <h2 style={{ textAlign: "center", marginBottom: 30 }}>{en ? "Choose Your Plan" : "选择适合您的计划"}</h2>
+      <h2 style={{ textAlign: "center", marginBottom: 16 }}>{en ? "Choose Your Plan" : "选择适合您的计划"}</h2>
+      
+      {/* Pro 核心价值突出 */}
+      <div style={{ 
+        maxWidth: 700, 
+        margin: "0 auto 24px", 
+        padding: "16px 20px", 
+        background: "linear-gradient(135deg, #f0f7ff 0%, #e6f4ff 100%)",
+        border: "1px solid #91caff",
+        borderRadius: 12,
+      }}>
+        <div style={{ textAlign: "center", marginBottom: 12 }}>
+          <span style={{ fontSize: 14, color: "#0958d9", fontWeight: 600 }}>
+            {en ? "💡 Why upgrade to Pro?" : "💡 为什么升级到 Pro？"}
+          </span>
+        </div>
+        <div style={{ display: "flex", gap: 16, justifyContent: "center", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "#333" }}>
+            <span>🔍</span>
+            <span>{en ? "Evidence chain for every AI order" : "每笔 AI 订单的证据链"}</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "#333" }}>
+            <span>📊</span>
+            <span>{en ? "Full conversion funnel" : "完整转化漏斗"}</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "#333" }}>
+            <span>📥</span>
+            <span>{en ? "CSV data export" : "CSV 数据导出"}</span>
+          </div>
+        </div>
+        <div style={{ textAlign: "center", marginTop: 10, fontSize: 12, color: "#666" }}>
+          {en 
+            ? "Prove AI channel ROI to your team with real data" 
+            : "用真实数据向团队证明 AI 渠道的 ROI"}
+        </div>
+      </div>
       
       {/* Subscription expired/cancelled banner */}
       {isSubscriptionExpired && (

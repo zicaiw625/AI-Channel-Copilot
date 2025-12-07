@@ -27,9 +27,9 @@ export const BILLING_PLANS: Record<PlanId, PlanConfig> = {
     defaultTrialDays: 0,
     status: "live",
     includes: [
-      { en: "AI channel detection & basic stats (last 7 days)", zh: "AI 渠道识别 & 基础统计（最近 7 天）" },
-      { en: "Single store / Single user", zh: "单店铺 / 单用户" },
-      { en: "No LTV, repurchase rate or advanced metrics", zh: "不显示 LTV、复购率等深度指标" },
+      { en: "Basic AI channel detection (last 7 days)", zh: "基础 AI 渠道识别（最近 7 天）" },
+      { en: "AI GMV & order count overview", zh: "AI GMV & 订单数概览" },
+      { en: "Limited: No evidence chain / funnel / export", zh: "限制：无证据链 / 漏斗 / 导出" },
     ],
   },
   pro: {
@@ -42,10 +42,12 @@ export const BILLING_PLANS: Record<PlanId, PlanConfig> = {
     defaultTrialDays: 14,
     status: "live",
     includes: [
-      { en: "Full history AI orders & GMV analysis", zh: "全量历史 AI 订单 & GMV 分析" },
-      { en: "AOV / New customer rate / Refund rate / Basic LTV", zh: "AOV / 新客占比 / 退款率 / 基础 LTV" },
-      { en: "Copilot Q&A", zh: "Copilot 问答" },
-      { en: "llms.txt Generator", zh: "llms.txt 生成器" },
+      { en: "🔍 Why AI? Evidence chain for every order", zh: "🔍 证据链：每笔订单的归因解释" },
+      { en: "📊 Full funnel: Visit → Cart → Checkout → Order", zh: "📊 完整漏斗：访问→加购→结账→订单" },
+      { en: "📈 90-day history + AOV / LTV / repurchase", zh: "📈 90 天历史 + AOV / LTV / 复购率" },
+      { en: "📥 CSV export: orders / products / customers", zh: "📥 CSV 导出：订单 / 产品 / 客户" },
+      { en: "🤖 Copilot Q&A + llms.txt generator", zh: "🤖 Copilot 问答 + llms.txt 生成" },
+      { en: "🚀 AI Optimization suggestions", zh: "🚀 AI 优化建议" },
     ],
   },
   growth: {

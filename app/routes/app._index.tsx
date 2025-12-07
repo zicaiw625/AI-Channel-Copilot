@@ -30,6 +30,8 @@ import {
   ChannelBreakdown, 
   TrendChart,
   WhyAI,
+  LowSampleNotice,
+  UpgradePrompt,
   type Lang,
   type TrendScope,
   type JobSnapshot,
@@ -354,26 +356,7 @@ export default function Index() {
     navigate({ search: `?${params.toString()}` });
   };
   
-  const UpgradeOverlay = () => (
-     <div style={{
-         position: "absolute",
-         top: 0, left: 0, right: 0, bottom: 0,
-         background: "rgba(255,255,255,0.7)",
-         backdropFilter: "blur(2px)",
-         display: "flex",
-         alignItems: "center",
-         justifyContent: "center",
-         zIndex: 10
-     }}>
-         <div style={{ background: "white", padding: 20, borderRadius: 8, boxShadow: "0 2px 10px rgba(0,0,0,0.1)", textAlign: "center" }}>
-             <h3>{uiLanguage === "English" ? "Pro Feature" : "Pro 功能"}</h3>
-             <p>{uiLanguage === "English" ? "Upgrade to see detailed LTV and product analysis." : "升级以查看 LTV 与产品详情。"}</p>
-             <Link to="/app/onboarding?step=plan_selection" className={styles.primaryButton}>
-                 {uiLanguage === "English" ? "Upgrade" : "去升级"}
-             </Link>
-         </div>
-     </div>
-  );
+  // 使用新的 UpgradePrompt 组件替代原有的 UpgradeOverlay
 
   return (
     <s-page heading={uiLanguage === "English" ? "AI Discovery & Attribution" : "AI 渠道基础仪表盘"}>
@@ -614,9 +597,13 @@ export default function Index() {
           formatters={{ fmtCurrency, fmtNumber, fmtPercent, fmtTime }} 
         />
         {isLowSample && (
-          <div className={styles.lowSampleNotice}>
-            {uiLanguage === "English" ? `Sample < ${LOW_SAMPLE_THRESHOLD}, metrics for reference only; extend range for more stable trends.` : `样本 < ${LOW_SAMPLE_THRESHOLD}，所有指标仅供参考；延长时间范围后可获得更稳定的趋势。`}
-          </div>
+          <LowSampleNotice
+            sampleCount={overview.aiOrders}
+            threshold={LOW_SAMPLE_THRESHOLD}
+            lang={lang}
+            variant="banner"
+            showTips={overview.aiOrders < LOW_SAMPLE_THRESHOLD / 2}
+          />
         )}
 
         <div className={styles.twoCol}>
@@ -628,7 +615,7 @@ export default function Index() {
           />
 
           <div className={styles.card} style={{ position: "relative" }}>
-             {!canViewFull && <UpgradeOverlay />}
+             {!canViewFull && <UpgradePrompt lang={lang} feature="ltv" variant="overlay" />}
              <div style={!canViewFull ? { filter: "blur(4px)", pointerEvents: "none" } : {}}>
             <div className={styles.sectionHeader}>
               <div>
@@ -636,11 +623,16 @@ export default function Index() {
                 <h3 className={styles.sectionTitle}>{uiLanguage === "English" ? "Overall vs AI Channels" : "整体 vs 各 AI 渠道"}</h3>
               </div>
               {isLowSample ? (
-                <span className={styles.smallBadge}>
-                  {uiLanguage === "English" ? `Sample < ${LOW_SAMPLE_THRESHOLD} · interpret with caution` : `样本 < ${LOW_SAMPLE_THRESHOLD} · 解读时请谨慎`}
-                </span>
+                <LowSampleNotice
+                  sampleCount={overview.aiOrders}
+                  threshold={LOW_SAMPLE_THRESHOLD}
+                  lang={lang}
+                  variant="inline"
+                />
               ) : (
-                <span className={styles.smallBadge}>{uiLanguage === "English" ? `Sample >= ${LOW_SAMPLE_THRESHOLD}` : `样本 >= ${LOW_SAMPLE_THRESHOLD}`}</span>
+                <span className={styles.smallBadge} style={{ background: "#e6f7ed", color: "#2e7d32" }}>
+                  {uiLanguage === "English" ? `${overview.aiOrders} AI orders · reliable` : `${overview.aiOrders} 笔 AI 订单 · 数据可靠`}
+                </span>
               )}
             </div>
             <div className={styles.tableWrap}>
@@ -683,7 +675,7 @@ export default function Index() {
 
         <div className={styles.twoCol}>
           <div className={styles.card} style={{ position: "relative" }}>
-             {!canViewFull && <UpgradeOverlay />}
+             {!canViewFull && <UpgradePrompt lang={lang} feature="ltv" variant="overlay" />}
              <div style={!canViewFull ? { filter: "blur(4px)", pointerEvents: "none" } : {}}>
             <div className={styles.sectionHeader}>
               <div>
@@ -738,7 +730,7 @@ export default function Index() {
           />
 
         <div className={styles.card} style={{ position: "relative" }}>
-             {!canViewFull && <UpgradeOverlay />}
+             {!canViewFull && <UpgradePrompt lang={lang} feature="products" variant="overlay" />}
              <div style={!canViewFull ? { filter: "blur(4px)", pointerEvents: "none" } : {}}>
             <div className={styles.sectionHeader}>
               <div>

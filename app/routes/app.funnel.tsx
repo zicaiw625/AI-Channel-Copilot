@@ -9,6 +9,7 @@ import { getFunnelData, type FunnelMetrics } from "../lib/funnelService.server";
 import { useUILanguage } from "../lib/useUILanguage";
 import styles from "../styles/app.dashboard.module.css";
 import { channelList, timeRanges, type TimeRangeKey } from "../lib/aiData";
+import { AIConversionPath, type PathStage } from "../components/dashboard";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
@@ -465,6 +466,34 @@ export default function FunnelAnalysis() {
             aiRate={funnelData.conversionRates.aiVisitToOrder}
             language={uiLanguage}
             isEstimated={funnelData.isEstimated.visits}
+          />
+        </div>
+
+        {/* AI 转化路径可视化 */}
+        <div className={styles.card} style={{ marginBottom: 24 }}>
+          <div className={styles.sectionHeader}>
+            <div>
+              <p className={styles.sectionLabel}>{isEnglish ? "Conversion Path" : "转化路径"}</p>
+              <h3 className={styles.sectionTitle}>
+                {isEnglish ? "AI Channel Journey" : "AI 渠道转化旅程"}
+              </h3>
+            </div>
+            <span className={styles.badge} style={{ background: "#f0f4ff", color: "#635bff" }}>
+              {isEnglish ? "AI vs Overall" : "AI vs 全站"}
+            </span>
+          </div>
+          <AIConversionPath
+            stages={funnelData.overall.map((stage): PathStage => ({
+              id: stage.stage,
+              label: stage.label,
+              count: stage.count,
+              value: stage.value,
+              aiCount: funnelData.aiChannels.find(s => s.stage === stage.stage)?.count || 0,
+              aiValue: funnelData.aiChannels.find(s => s.stage === stage.stage)?.value || 0,
+            }))}
+            lang={uiLanguage as "English" | "中文"}
+            currency={_currency}
+            isEstimated={funnelData.isEstimated.visits || funnelData.isEstimated.carts}
           />
         </div>
 

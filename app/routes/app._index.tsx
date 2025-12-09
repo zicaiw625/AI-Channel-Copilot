@@ -557,6 +557,9 @@ export default function Index() {
                 <Link to="/app/copilot" className={styles.secondaryButton}>
                   {uiLanguage === "English" ? "Copilot Q&A" : "Copilot 分析问答"}
                 </Link>
+                <Link to="/app/utm-wizard" className={styles.secondaryButton} style={{ background: "#fff7e6", border: "1px solid #ffd591", color: "#d46b08" }}>
+                  {uiLanguage === "English" ? "🔗 UTM Setup" : "🔗 UTM 设置向导"}
+                </Link>
                 <a
                   className={styles.secondaryButton}
                   href={canViewFull ? `/api/export/orders?range=${range}&from=${encodeURIComponent(dateRange.fromParam || "")}&to=${encodeURIComponent(dateRange.toParam || "")}` : "#"}

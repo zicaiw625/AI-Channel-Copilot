@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type MouseEvent } from "react";
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { Link, useLoaderData, useNavigate, useSearchParams } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
@@ -48,6 +48,121 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     language,
     shopDomain,
   };
+};
+
+/**
+ * 一键复制按钮组件
+ */
+const CopyButton = ({ 
+  text, 
+  isEnglish,
+  size = "normal",
+}: { 
+  text: string; 
+  isEnglish: boolean;
+  size?: "small" | "normal";
+}) => {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = useCallback(async (e: MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Fallback for older browsers
+      const textarea = document.createElement("textarea");
+      textarea.value = text;
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      document.body.removeChild(textarea);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  }, [text]);
+
+  const padding = size === "small" ? "4px 8px" : "6px 12px";
+  const fontSize = size === "small" ? 11 : 12;
+
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      style={{
+        padding,
+        fontSize,
+        fontWeight: 500,
+        background: copied ? "#52c41a" : "#fff",
+        color: copied ? "#fff" : "#333",
+        border: copied ? "1px solid #52c41a" : "1px solid #d9d9d9",
+        borderRadius: 4,
+        cursor: "pointer",
+        transition: "all 0.2s",
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 4,
+      }}
+    >
+      {copied ? "✓" : "📋"}
+      {copied 
+        ? (isEnglish ? "Copied!" : "已复制！") 
+        : (isEnglish ? "Copy" : "复制")}
+    </button>
+  );
+};
+
+/**
+ * 代码片段区块组件 - 带复制按钮
+ */
+const CodeSnippetBlock = ({ 
+  code, 
+  isEnglish 
+}: { 
+  code: string; 
+  isEnglish: boolean;
+}) => {
+  return (
+    <div style={{ marginTop: 12 }}>
+      <div style={{ 
+        display: "flex", 
+        justifyContent: "space-between", 
+        alignItems: "center",
+        marginBottom: 8,
+      }}>
+        <strong style={{ fontSize: 14 }}>
+          {isEnglish ? "Code Example:" : "代码示例："}
+        </strong>
+        <CopyButton text={code} isEnglish={isEnglish} size="small" />
+      </div>
+      <pre
+        style={{
+          background: "#f4f6f8",
+          padding: 12,
+          borderRadius: 4,
+          overflow: "auto",
+          fontSize: 12,
+          margin: 0,
+          position: "relative",
+        }}
+      >
+        {code}
+      </pre>
+      <p style={{ 
+        margin: "8px 0 0", 
+        fontSize: 11, 
+        color: "#888",
+        display: "flex",
+        alignItems: "center",
+        gap: 4,
+      }}>
+        💡 {isEnglish 
+          ? "Copy this code and add it to your theme or product pages." 
+          : "复制此代码并添加到您的主题或产品页面中。"}
+      </p>
+    </div>
+  );
 };
 
 const ScoreGauge = ({ score, label }: { score: number; label: string }) => {
@@ -189,21 +304,10 @@ const SuggestionCard = ({
             <p style={{ margin: "4px 0 0", fontSize: 14, color: "#555" }}>{suggestion.action}</p>
           </div>
           {suggestion.codeSnippet && (
-            <div>
-              <strong style={{ fontSize: 14 }}>{isEnglish ? "Code Example:" : "代码示例："}</strong>
-              <pre
-                style={{
-                  background: "#f4f6f8",
-                  padding: 12,
-                  borderRadius: 4,
-                  overflow: "auto",
-                  fontSize: 12,
-                  marginTop: 4,
-                }}
-              >
-                {suggestion.codeSnippet}
-              </pre>
-            </div>
+            <CodeSnippetBlock 
+              code={suggestion.codeSnippet} 
+              isEnglish={isEnglish} 
+            />
           )}
           {suggestion.affectedProducts && suggestion.affectedProducts.length > 0 && (
             <div style={{ marginTop: 12 }}>
@@ -540,6 +644,19 @@ export default function AIOptimization() {
                 : "将这些 FAQ 添加到产品页面，帮助 AI 助手回答客户问题。"}
             </p>
             
+            {/* 一键复制全部 FAQ */}
+            <div style={{ marginBottom: 16 }}>
+              <CopyButton 
+                text={report.suggestedFAQs.map(faq => 
+                  `Q: ${faq.question}\nA: ${faq.suggestedAnswer}`
+                ).join("\n\n")} 
+                isEnglish={isEnglish} 
+              />
+              <span style={{ marginLeft: 8, fontSize: 12, color: "#637381" }}>
+                {isEnglish ? "Copy all FAQs" : "复制全部 FAQ"}
+              </span>
+            </div>
+            
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               {report.suggestedFAQs.map((faq, index) => (
                 <div
@@ -548,9 +665,21 @@ export default function AIOptimization() {
                     background: "#f4f6f8",
                     borderRadius: 8,
                     padding: 16,
+                    position: "relative",
                   }}
                 >
-                  <p style={{ margin: "0 0 8px", fontWeight: 600, color: "#212b36" }}>
+                  <div style={{ 
+                    position: "absolute", 
+                    top: 12, 
+                    right: 12,
+                  }}>
+                    <CopyButton 
+                      text={`Q: ${faq.question}\nA: ${faq.suggestedAnswer}`} 
+                      isEnglish={isEnglish}
+                      size="small"
+                    />
+                  </div>
+                  <p style={{ margin: "0 0 8px", fontWeight: 600, color: "#212b36", paddingRight: 80 }}>
                     Q: {faq.question}
                   </p>
                   <p style={{ margin: 0, color: "#555" }}>

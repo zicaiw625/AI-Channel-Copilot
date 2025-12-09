@@ -190,6 +190,153 @@ export function KPICards({ overview, lang, formatters }: KPICardsProps) {
       
       {/* 低样本量数据收集提示 */}
       <DataCollectionHint lang={lang} aiOrders={aiOrders} />
+      
+      {/* 可检测覆盖率提示 */}
+      <DetectionCoverageCard overview={overview} lang={lang} formatters={formatters} />
     </>
+  );
+}
+
+/**
+ * 可检测覆盖率卡片
+ * 显示有多少订单可以被检测到来源，并引导用户使用 UTM 向导
+ */
+function DetectionCoverageCard({ 
+  overview, 
+  lang, 
+  formatters 
+}: { 
+  overview: DashboardOverview; 
+  lang: Lang; 
+  formatters: FormatHelpers;
+}) {
+  const { fmtPercent, fmtNumber } = formatters;
+  const isEnglish = lang === "English";
+  
+  const coverage = overview.detectionCoverage ?? 0;
+  const utmCoverage = overview.utmCoverage ?? 0;
+  const referrerCoverage = overview.referrerCoverage ?? 0;
+  const totalOrders = overview.totalOrders;
+  
+  // 如果没有订单数据，不显示
+  if (totalOrders === 0) return null;
+  
+  // 确定覆盖率状态
+  const isLowCoverage = coverage < 0.3;
+  const isMediumCoverage = coverage >= 0.3 && coverage < 0.7;
+  const isHighCoverage = coverage >= 0.7;
+  
+  const statusColor = isLowCoverage ? "#de3618" : isMediumCoverage ? "#f4a623" : "#50b83c";
+  const statusBg = isLowCoverage ? "#fef3f3" : isMediumCoverage ? "#fffbe6" : "#f6ffed";
+  const statusBorder = isLowCoverage ? "#ffccc7" : isMediumCoverage ? "#ffe58f" : "#b7eb8f";
+  
+  return (
+    <div
+      style={{
+        marginTop: 16,
+        padding: "16px 20px",
+        background: statusBg,
+        border: `1px solid ${statusBorder}`,
+        borderRadius: 8,
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16 }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+            <span style={{ fontSize: 20 }}>
+              {isLowCoverage ? "⚠️" : isMediumCoverage ? "📊" : "✅"}
+            </span>
+            <div>
+              <span style={{ fontWeight: 600, color: "#212b36", fontSize: 15 }}>
+                {isEnglish ? "AI Detection Coverage" : "AI 检测覆盖率"}
+              </span>
+              <span style={{ 
+                marginLeft: 8,
+                padding: "2px 8px",
+                background: statusColor,
+                color: "#fff",
+                borderRadius: 4,
+                fontSize: 12,
+                fontWeight: 600,
+              }}>
+                {fmtPercent(coverage)}
+              </span>
+            </div>
+          </div>
+          
+          <p style={{ margin: "0 0 12px", color: "#637381", fontSize: 13, lineHeight: 1.5 }}>
+            {isEnglish
+              ? `${fmtNumber(overview.detectableOrders ?? 0)} of ${fmtNumber(totalOrders)} orders have referrer or UTM data for AI attribution.`
+              : `${fmtNumber(overview.detectableOrders ?? 0)} / ${fmtNumber(totalOrders)} 笔订单有 referrer 或 UTM 数据可用于 AI 归因。`}
+            {isLowCoverage && (
+              <strong style={{ color: statusColor }}>
+                {" "}
+                {isEnglish 
+                  ? "Low coverage means AI traffic may be underreported." 
+                  : "覆盖率过低意味着 AI 流量可能被低估。"}
+              </strong>
+            )}
+          </p>
+          
+          {/* 覆盖率细分 */}
+          <div style={{ display: "flex", gap: 16, marginBottom: 12 }}>
+            <div style={{ 
+              display: "flex", 
+              alignItems: "center", 
+              gap: 6,
+              padding: "4px 10px",
+              background: "rgba(255,255,255,0.8)",
+              borderRadius: 4,
+              fontSize: 12,
+            }}>
+              <span style={{ color: "#635bff" }}>🔗</span>
+              <span>UTM: <strong>{fmtPercent(utmCoverage)}</strong></span>
+            </div>
+            <div style={{ 
+              display: "flex", 
+              alignItems: "center", 
+              gap: 6,
+              padding: "4px 10px",
+              background: "rgba(255,255,255,0.8)",
+              borderRadius: 4,
+              fontSize: 12,
+            }}>
+              <span style={{ color: "#00a2ff" }}>🌐</span>
+              <span>Referrer: <strong>{fmtPercent(referrerCoverage)}</strong></span>
+            </div>
+          </div>
+          
+          {isLowCoverage && (
+            <p style={{ margin: 0, fontSize: 12, color: "#666" }}>
+              {isEnglish
+                ? "💡 Tip: Use the UTM Setup Wizard to generate trackable links for AI assistants."
+                : "💡 提示：使用 UTM 设置向导为 AI 助手生成可追踪的链接。"}
+            </p>
+          )}
+        </div>
+        
+        {/* 行动按钮 */}
+        {isLowCoverage && (
+          <a
+            href="/app/utm-wizard"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "10px 16px",
+              background: "#008060",
+              color: "#fff",
+              borderRadius: 6,
+              fontSize: 13,
+              fontWeight: 600,
+              textDecoration: "none",
+              whiteSpace: "nowrap",
+            }}
+          >
+            🔗 {isEnglish ? "Setup UTM Links" : "设置 UTM 链接"}
+          </a>
+        )}
+      </div>
+    </div>
   );
 }

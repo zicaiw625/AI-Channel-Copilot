@@ -113,6 +113,13 @@ export interface DashboardOverview {
   aiNewCustomers: number;
   aiNewCustomerRate: number;
   lastSyncedAt: string;
+  // 可检测覆盖率指标
+  detectionCoverage?: number;
+  utmCoverage?: number;
+  referrerCoverage?: number;
+  detectableOrders?: number;
+  ordersWithUtm?: number;
+  ordersWithReferrer?: number;
 }
 
 export interface FormatHelpers {

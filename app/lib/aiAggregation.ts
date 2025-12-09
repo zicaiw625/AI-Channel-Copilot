@@ -147,6 +147,24 @@ export const buildOverview = (
   const aiOrdersCount = ai.orders;
   const totalOrdersCount = overall.orders;
 
+  // 计算可检测覆盖率：有 referrer 或 UTM 信息的订单比例
+  let detectableOrders = 0;
+  let ordersWithUtm = 0;
+  let ordersWithReferrer = 0;
+  
+  ordersInRange.forEach((order) => {
+    const hasReferrer = Boolean(order.referrer && order.referrer !== "—" && order.referrer !== "");
+    const hasUtm = Boolean(order.utmSource || order.utmMedium);
+    
+    if (hasReferrer) ordersWithReferrer++;
+    if (hasUtm) ordersWithUtm++;
+    if (hasReferrer || hasUtm) detectableOrders++;
+  });
+
+  const detectionCoverage = totalOrdersCount > 0 ? detectableOrders / totalOrdersCount : 0;
+  const utmCoverage = totalOrdersCount > 0 ? ordersWithUtm / totalOrdersCount : 0;
+  const referrerCoverage = totalOrdersCount > 0 ? ordersWithReferrer / totalOrdersCount : 0;
+
   return {
     totalGMV: overall.gmv,
     netGMV: overall.netGmv,
@@ -161,6 +179,13 @@ export const buildOverview = (
     totalNewCustomers: overall.newCustomers,
     lastSyncedAt: new Date().toISOString(),
     currency,
+    // 新增：可检测覆盖率指标
+    detectionCoverage,
+    utmCoverage,
+    referrerCoverage,
+    detectableOrders,
+    ordersWithUtm,
+    ordersWithReferrer,
   };
 };
 

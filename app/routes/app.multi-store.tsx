@@ -7,7 +7,7 @@ import { authenticate } from "../shopify.server";
 import { getSettings } from "../lib/settings.server";
 import { useUILanguage } from "../lib/useUILanguage";
 import styles from "../styles/app.dashboard.module.css";
-import { requireFeature, FEATURES } from "../lib/access.server";
+import { hasFeature, FEATURES } from "../lib/access.server";
 import { OrdersRepository } from "../lib/repositories/orders.repository";
 import { resolveDateRange } from "../lib/aiData";
 import { logger } from "../lib/logger.server";
@@ -49,11 +49,25 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
   const shopDomain = session.shop;
   
-  // 检查 Growth 权限
-  await requireFeature(shopDomain, FEATURES.MULTI_STORE);
+  // 检查 Growth 权限（不阻止访问，但显示升级提示）
+  const isGrowth = await hasFeature(shopDomain, FEATURES.MULTI_STORE);
   
   const settings = await getSettings(shopDomain);
   const language = settings.languages?.[0] || "中文";
+
+  // 如果不是 Growth 用户，提前返回空数据
+  if (!isGrowth) {
+    return {
+      language,
+      shopDomain,
+      isGrowth,
+      data: {
+        stores: [],
+        totals: { totalOrders: 0, totalGMV: 0, aiOrders: 0, aiGMV: 0, aiShare: 0 },
+        linkedStores: [],
+      } as MultiStoreData,
+    };
+  }
 
   // 查找同一用户的所有店铺（基于 Session 表中的 email 或 userId）
   let linkedShops: string[] = [shopDomain];
@@ -148,6 +162,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   return {
     language,
     shopDomain,
+    isGrowth,
     data: {
       stores: storeSnapshots,
       totals,
@@ -431,8 +446,111 @@ function AddStorePrompt({ en }: { en: boolean }) {
 // Main Component
 // ============================================================================
 
+function UpgradePrompt({ en }: { en: boolean }) {
+  return (
+    <div
+      style={{
+        background: "linear-gradient(135deg, #f6ffed 0%, #e6f7ed 100%)",
+        border: "1px solid #b7eb8f",
+        borderRadius: 16,
+        padding: 48,
+        textAlign: "center",
+        maxWidth: 600,
+        margin: "40px auto",
+      }}
+    >
+      <div style={{ fontSize: 64, marginBottom: 20 }}>🏪</div>
+      <h2 style={{ 
+        fontSize: 28, 
+        fontWeight: 700, 
+        color: "#212b36", 
+        marginBottom: 12,
+        margin: "0 0 12px",
+      }}>
+        {en ? "Multi-Store Overview" : "多店铺汇总"}
+      </h2>
+      <p style={{ 
+        fontSize: 16, 
+        color: "#637381", 
+        marginBottom: 24,
+        lineHeight: 1.6,
+      }}>
+        {en
+          ? "Aggregate and compare data across all your Shopify stores in one dashboard. See combined AI attribution, GMV, and performance metrics."
+          : "在一个仪表盘中汇总和对比您所有 Shopify 店铺的数据。查看合并的 AI 归因、GMV 和表现指标。"}
+      </p>
+      
+      <div style={{
+        display: "flex",
+        gap: 12,
+        justifyContent: "center",
+        flexWrap: "wrap",
+        marginBottom: 24,
+      }}>
+        {[
+          { icon: "📊", text: en ? "Combined Analytics" : "合并分析" },
+          { icon: "🔄", text: en ? "Cross-Store Comparison" : "跨店对比" },
+          { icon: "🤖", text: en ? "AI Attribution Summary" : "AI 归因汇总" },
+        ].map((feature) => (
+          <div
+            key={feature.text}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "8px 16px",
+              background: "#fff",
+              borderRadius: 20,
+              fontSize: 13,
+              color: "#212b36",
+              border: "1px solid #e0e0e0",
+            }}
+          >
+            <span>{feature.icon}</span>
+            <span>{feature.text}</span>
+          </div>
+        ))}
+      </div>
+      
+      <div style={{
+        background: "#fff",
+        border: "1px solid #b7eb8f",
+        borderRadius: 12,
+        padding: 20,
+        marginBottom: 24,
+      }}>
+        <div style={{ fontSize: 13, color: "#389e0d", fontWeight: 600, marginBottom: 8 }}>
+          ✨ {en ? "Growth Plan Feature" : "Growth 版专属功能"}
+        </div>
+        <div style={{ fontSize: 14, color: "#637381" }}>
+          {en
+            ? "Upgrade to Growth to unlock multi-store management and more advanced features."
+            : "升级到 Growth 版解锁多店铺管理和更多高级功能。"}
+        </div>
+      </div>
+      
+      <Link
+        to="/app/billing"
+        style={{
+          display: "inline-block",
+          padding: "14px 32px",
+          background: "linear-gradient(135deg, #52c41a 0%, #389e0d 100%)",
+          color: "#fff",
+          borderRadius: 8,
+          fontSize: 16,
+          fontWeight: 600,
+          textDecoration: "none",
+          boxShadow: "0 4px 12px rgba(82, 196, 26, 0.3)",
+        }}
+      >
+        {en ? "Upgrade to Growth →" : "升级到 Growth →"}
+      </Link>
+    </div>
+  );
+}
+
 export default function MultiStore() {
-  const { language, shopDomain, data } = useLoaderData<typeof loader>();
+  const { language, shopDomain, isGrowth, data } = useLoaderData<typeof loader>();
   const uiLanguage = useUILanguage(language);
   const en = uiLanguage === "English";
 
@@ -446,6 +564,24 @@ export default function MultiStore() {
       }).format(amount);
     };
   }, [en]);
+
+  // 如果不是 Growth 用户，显示升级提示
+  if (!isGrowth) {
+    return (
+      <s-page heading={en ? "Multi-Store Overview" : "多店铺汇总"}>
+        <div className={styles.page}>
+          {/* 顶部导航 */}
+          <div style={{ marginBottom: 16, display: "flex", gap: 12 }}>
+            <Link to="/app" className={styles.secondaryButton}>
+              ← {en ? "Back to Dashboard" : "返回仪表盘"}
+            </Link>
+          </div>
+          
+          <UpgradePrompt en={en} />
+        </div>
+      </s-page>
+    );
+  }
 
   return (
     <s-page heading={en ? "Multi-Store Overview" : "多店铺汇总"}>

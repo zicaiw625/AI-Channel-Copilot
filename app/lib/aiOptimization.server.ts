@@ -27,8 +27,8 @@ export interface OptimizationSuggestion {
   id: string;
   category: OptimizationCategory;
   priority: OptimizationPriority;
-  title: string;
-  description: string;
+  title: { en: string; zh: string };
+  description: { en: string; zh: string };
   impact: string;
   action: string;
   codeSnippet?: string;
@@ -426,15 +426,14 @@ function generateFAQSuggestions(
 }
 
 /**
- * 生成优化建议
+ * 生成优化建议（双语版本）
  */
 function generateSuggestions(
   products: ProductAIPerformance[],
-  language: string,
+  _language: string,
   hasLlmsTxtEnabled: boolean = false,
 ): OptimizationSuggestion[] {
   const suggestions: OptimizationSuggestion[] = [];
-  const isEnglish = language === "English";
   
   // 检查产品信息完整度（作为 Schema 标记的前提条件）
   const missingSchema = products.filter(p => p.schemaMarkupStatus === "missing").length;
@@ -445,16 +444,16 @@ function generateSuggestions(
       id: "schema-missing",
       category: "schema_markup",
       priority: "high",
-      title: isEnglish ? "Add Product Schema Markup" : "添加产品 Schema 标记",
-      description: isEnglish
-        ? `${missingSchema} products lack complete information needed for structured data markup, reducing their visibility to AI assistants.`
-        : `${missingSchema} 个产品缺少结构化数据标记所需的完整信息，这会降低 AI 助手的识别能力。`,
-      impact: isEnglish
-        ? "Products with complete schema markup may improve AI discoverability. Actual impact varies by platform and product category."
-        : "拥有完整 Schema 标记的产品可能提升 AI 发现率。实际效果因平台和产品类别而异。",
-      action: isEnglish
-        ? "Add JSON-LD Product schema to your product pages. Include name, description, price, availability, and images."
-        : "在产品页面添加 JSON-LD Product schema，包含名称、描述、价格、库存状态和图片。",
+      title: {
+        en: "Add Product Schema Markup",
+        zh: "添加产品 Schema 标记",
+      },
+      description: {
+        en: `${missingSchema} products lack complete information needed for structured data markup, reducing their visibility to AI assistants.`,
+        zh: `${missingSchema} 个产品缺少结构化数据标记所需的完整信息，这会降低 AI 助手的识别能力。`,
+      },
+      impact: "Products with complete schema markup may improve AI discoverability.",
+      action: "Add JSON-LD Product schema to your product pages.",
       codeSnippet: `<script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -471,7 +470,7 @@ function generateSuggestions(
 }
 </script>`,
       affectedProducts: products.filter(p => p.schemaMarkupStatus === "missing").map(p => p.productId),
-      estimatedLift: isEnglish ? "+15-25% AI visibility" : "+15-25% AI 可见性",
+      estimatedLift: "+15-25% AI visibility",
     });
   }
   
@@ -480,18 +479,18 @@ function generateSuggestions(
       id: "schema-partial",
       category: "schema_markup",
       priority: "medium",
-      title: isEnglish ? "Complete Product Information" : "完善产品信息",
-      description: isEnglish
-        ? `${partialSchema} products have incomplete information. Adding missing fields will improve AI understanding.`
-        : `${partialSchema} 个产品的信息不完整。补充缺失字段可提升 AI 理解能力。`,
-      impact: isEnglish
-        ? "Complete product information helps AI provide more accurate product recommendations."
-        : "完整的产品信息帮助 AI 提供更准确的产品推荐。",
-      action: isEnglish
-        ? "Review and add missing fields like description, images, SEO title, and specifications."
-        : "检查并添加缺失字段，如描述、图片、SEO 标题和详细规格。",
+      title: {
+        en: "Complete Product Information",
+        zh: "完善产品信息",
+      },
+      description: {
+        en: `${partialSchema} products have incomplete information. Adding missing fields will improve AI understanding.`,
+        zh: `${partialSchema} 个产品的信息不完整。补充缺失字段可提升 AI 理解能力。`,
+      },
+      impact: "Complete product information helps AI provide more accurate recommendations.",
+      action: "Review and add missing fields like description, images, SEO title.",
       affectedProducts: products.filter(p => p.schemaMarkupStatus === "partial").map(p => p.productId),
-      estimatedLift: isEnglish ? "+10-15% AI visibility" : "+10-15% AI 可见性",
+      estimatedLift: "+10-15% AI visibility",
     });
   }
   
@@ -502,18 +501,18 @@ function generateSuggestions(
       id: "content-short-desc",
       category: "content_quality",
       priority: "high",
-      title: isEnglish ? "Expand Product Descriptions" : "扩展产品描述",
-      description: isEnglish
-        ? `${shortDescriptions} products have descriptions under 100 characters. Longer, detailed descriptions help AI understand and recommend products.`
-        : `${shortDescriptions} 个产品的描述少于 100 字符。更长、更详细的描述有助于 AI 理解和推荐产品。`,
-      impact: isEnglish
-        ? "Products with rich descriptions (200+ words) provide more context for AI platforms to understand and recommend."
-        : "拥有丰富描述（200+ 词）的产品为 AI 平台提供更多上下文，有助于理解和推荐。",
-      action: isEnglish
-        ? "Add detailed product descriptions including features, benefits, use cases, and specifications."
-        : "添加详细的产品描述，包括功能、优势、使用场景和规格。",
+      title: {
+        en: "Expand Product Descriptions",
+        zh: "扩展产品描述",
+      },
+      description: {
+        en: `${shortDescriptions} products have descriptions under 100 characters. Longer, detailed descriptions help AI understand and recommend products.`,
+        zh: `${shortDescriptions} 个产品的描述少于 100 字符。更长、更详细的描述有助于 AI 理解和推荐产品。`,
+      },
+      impact: "Products with rich descriptions provide more context for AI platforms.",
+      action: "Add detailed product descriptions including features, benefits, and specifications.",
       affectedProducts: products.filter(p => p.descriptionLength < 100).map(p => p.productId),
-      estimatedLift: isEnglish ? "+30-50% AI recommendations" : "+30-50% AI 推荐率",
+      estimatedLift: "+30-50% AI recommendations",
     });
   }
   
@@ -523,17 +522,17 @@ function generateSuggestions(
       id: "faq-coverage",
       category: "faq_coverage",
       priority: "medium",
-      title: isEnglish ? "Add FAQ Section" : "添加 FAQ 板块",
-      description: isEnglish
-        ? "FAQ content helps AI assistants answer customer questions about your products directly."
-        : "FAQ 内容帮助 AI 助手直接回答客户关于产品的问题。",
-      impact: isEnglish
-        ? "Stores with comprehensive FAQs can improve AI-referred traffic for product queries. Results depend on product category and AI platform usage."
-        : "拥有完善 FAQ 的店铺可能提升产品查询的 AI 引荐流量。实际效果取决于产品类别和 AI 平台使用情况。",
-      action: isEnglish
-        ? "Create FAQ pages for top-selling products covering pricing, shipping, returns, and product features."
-        : "为热销产品创建 FAQ 页面，涵盖价格、发货、退换货和产品特点。",
-      estimatedLift: isEnglish ? "+20-40% AI traffic" : "+20-40% AI 流量",
+      title: {
+        en: "Add FAQ Section",
+        zh: "添加 FAQ 板块",
+      },
+      description: {
+        en: "FAQ content helps AI assistants answer customer questions about your products directly.",
+        zh: "FAQ 内容帮助 AI 助手直接回答客户关于产品的问题。",
+      },
+      impact: "Comprehensive FAQs can improve AI-referred traffic for product queries.",
+      action: "Create FAQ pages covering pricing, shipping, returns, and product features.",
+      estimatedLift: "+20-40% AI traffic",
     });
   }
   
@@ -543,17 +542,17 @@ function generateSuggestions(
       id: "llms-txt-optimization",
       category: "ai_visibility",
       priority: "high",
-      title: isEnglish ? "Optimize llms.txt Configuration" : "优化 llms.txt 配置",
-      description: isEnglish
-        ? "Your llms.txt file guides AI crawlers. Ensure it highlights your best-performing AI products."
-        : "您的 llms.txt 文件指引 AI 爬虫。确保它突出展示您表现最好的 AI 产品。",
-      impact: isEnglish
-        ? "Properly configured llms.txt can increase AI crawler efficiency and product discovery."
-        : "正确配置的 llms.txt 可以提高 AI 爬虫效率和产品发现率。",
-      action: isEnglish
-        ? "Enable all content types in llms.txt settings and ensure top AI GMV products are prominently listed."
-        : "在 llms.txt 设置中启用所有内容类型，并确保 AI GMV 最高的产品被优先列出。",
-      estimatedLift: isEnglish ? "+10-20% AI discovery" : "+10-20% AI 发现率",
+      title: {
+        en: "Optimize llms.txt Configuration",
+        zh: "优化 llms.txt 配置",
+      },
+      description: {
+        en: "Your llms.txt file guides AI crawlers. Ensure it highlights your best-performing AI products.",
+        zh: "您的 llms.txt 文件指引 AI 爬虫。确保它突出展示您表现最好的 AI 产品。",
+      },
+      impact: "Properly configured llms.txt can increase AI crawler efficiency.",
+      action: "Enable all content types in llms.txt settings.",
+      estimatedLift: "+10-20% AI discovery",
     });
   }
   

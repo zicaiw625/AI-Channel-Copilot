@@ -773,10 +773,10 @@ export default function AIVisibility() {
                   }}
                 >
                   <div style={{ fontWeight: 500, fontSize: 14, marginBottom: 4 }}>
-                    {suggestion.title}
+                    {en ? suggestion.title.en : suggestion.title.zh}
                   </div>
                   <div style={{ fontSize: 13, color: "#637381" }}>
-                    {suggestion.description}
+                    {en ? suggestion.description.en : suggestion.description.zh}
                   </div>
                 </div>
               ))}

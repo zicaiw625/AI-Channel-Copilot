@@ -270,10 +270,10 @@ const SuggestionCard = ({
             </span>
           </div>
           <h4 style={{ margin: "0 0 8px", fontSize: 16, fontWeight: 600 }}>
-            {suggestion.title}
+            {isEnglish ? suggestion.title.en : suggestion.title.zh}
           </h4>
           <p style={{ margin: 0, fontSize: 14, color: "#555" }}>
-            {suggestion.description}
+            {isEnglish ? suggestion.description.en : suggestion.description.zh}
           </p>
         </div>
         {suggestion.estimatedLift && (

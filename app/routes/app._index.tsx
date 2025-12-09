@@ -560,6 +560,18 @@ export default function Index() {
                 <Link to="/app/utm-wizard" className={styles.secondaryButton} style={{ background: "#fff7e6", border: "1px solid #ffd591", color: "#d46b08" }}>
                   {uiLanguage === "English" ? "🔗 UTM Setup" : "🔗 UTM 设置向导"}
                 </Link>
+                <Link to="/app/multi-store" className={styles.secondaryButton} style={{ background: "#f6ffed", border: "1px solid #b7eb8f", color: "#389e0d" }}>
+                  {uiLanguage === "English" ? "🏪 Multi-Store" : "🏪 多店铺汇总"}
+                </Link>
+                <Link to="/app/ai-visibility" className={styles.secondaryButton} style={{ background: "#f0f4ff", border: "1px solid #adc6ff", color: "#2f54eb" }}>
+                  {uiLanguage === "English" ? "🚀 AI Visibility Suite" : "🚀 AI 可见性套件"}
+                </Link>
+                <Link to="/app/webhook-export" className={styles.secondaryButton} style={{ background: "#fff0f6", border: "1px solid #ffadd2", color: "#c41d7f" }}>
+                  {uiLanguage === "English" ? "🔌 Webhook Export" : "🔌 Webhook 导出"}
+                </Link>
+                <Link to="/app/team" className={styles.secondaryButton} style={{ background: "#f9f0ff", border: "1px solid #d3adf7", color: "#722ed1" }}>
+                  {uiLanguage === "English" ? "👥 Team" : "👥 团队"}
+                </Link>
                 <a
                   className={styles.secondaryButton}
                   href={canViewFull ? `/api/export/orders?range=${range}&from=${encodeURIComponent(dateRange.fromParam || "")}&to=${encodeURIComponent(dateRange.toParam || "")}` : "#"}

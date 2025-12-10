@@ -152,7 +152,7 @@ export const pruneHistoricalData = async (shopDomain: string, months: number) =>
     // 分批删除无订单关联的过期客户
     const deletedCustomers = await deleteOrphanCustomersInBatches(shopDomain, cutoff);
     
-    // 清理漏斗相关数据（含 PII：Checkout.email 等）
+    // 清理漏斗相关数据（Checkout 仅存 hasEmail 布尔值，无 PII）
     const [checkoutResult, sessionResult, eventResult] = await Promise.all([
       prisma.checkout.deleteMany({
         where: { shopDomain, createdAt: { lt: cutoff } },

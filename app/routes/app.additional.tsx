@@ -204,7 +204,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       });
       const aiOrders = orders.filter((order) => order.aiSource);
 
-      if (merged.tagging.writeOrderTags || merged.tagging.writeCustomerTags) {
+      // ⚠️ 2025-12-10: 仅支持订单标签写回，客户标签功能已下线（需要 write_customers 权限）
+      if (merged.tagging.writeOrderTags) {
         await applyAiTags(admin, aiOrders, merged, { shopDomain, intent: "settings-tagging" });
       }
       const result = await persistOrders(shopDomain, orders);
@@ -762,7 +763,7 @@ export default function SettingsAndExport() {
                       { method: "post", encType: "application/x-www-form-urlencoded" },
                     )
                   }
-                  disabled={!tagging.writeOrderTags && !tagging.writeCustomerTags}
+                  disabled={!tagging.writeOrderTags}
                   data-action="settings-tag-write"
                 >
                   {t(language as Lang, "btn_write_tags_now")}

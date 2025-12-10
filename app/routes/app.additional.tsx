@@ -784,6 +784,7 @@ export default function SettingsAndExport() {
                 </div>
               </div>
             </div>
+            {/* 客户标签写回功能已下线 - 需要 write_customers 权限，当前应用未申请此权限
             <div className={styles.checkboxRow}>
               <input
                 type="checkbox"
@@ -797,6 +798,7 @@ export default function SettingsAndExport() {
                 <div className={styles.ruleMeta}>{language === "English" ? "Example: " : "示例："}{tagging.customerTag}</div>
               </div>
             </div>
+            */}
             <div className={styles.alert}>{t(language as Lang, "tagging_enable_alert")}</div>
             <label className={styles.stackField}>
               <span className={styles.fieldLabel}>{language === "English" ? "Order tag prefix" : "订单标签前缀"}</span>
@@ -808,6 +810,7 @@ export default function SettingsAndExport() {
                 }
               />
             </label>
+            {/* 客户标签配置已下线 - 需要 write_customers 权限
             <label className={styles.stackField}>
               <span className={styles.fieldLabel}>{language === "English" ? "Customer tag" : "客户标签"}</span>
               <input
@@ -818,6 +821,7 @@ export default function SettingsAndExport() {
                 }
               />
             </label>
+            */}
             <p className={styles.helpText}>{language === "English" ? "Tags are off by default; when enabled, they write to Shopify orders/customers for filtering/export." : "标签默认关闭；开启后会回写到 Shopify 订单/客户，便于在后台过滤或导出。"}</p>
           </div>
 

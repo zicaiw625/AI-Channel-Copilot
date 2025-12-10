@@ -100,12 +100,15 @@ export const applyAiTags = async (
       }
     }
 
-    if (settings.tagging.writeCustomerTags && order.customerId) {
-      if (!seenCustomers.has(order.customerId)) {
-        customerTagTargets.push({ id: order.customerId, tags: [customerTag] });
-        seenCustomers.add(order.customerId);
-      }
-    }
+    // ⚠️ 2025-12-10: 客户标签写回功能已下线
+    // 需要 write_customers 权限，当前应用未申请此权限
+    // 保留代码结构以便未来重新启用
+    // if (settings.tagging.writeCustomerTags && order.customerId) {
+    //   if (!seenCustomers.has(order.customerId)) {
+    //     customerTagTargets.push({ id: order.customerId, tags: [customerTag] });
+    //     seenCustomers.add(order.customerId);
+    //   }
+    // }
   }
 
   let orderResult: { successes: number; failures: { id: string; error: string }[] } | null = null;
@@ -129,4 +132,4 @@ export const applyAiTags = async (
       customerFailures: customerResult?.failures.length || 0,
     },
   );
-  }
+};

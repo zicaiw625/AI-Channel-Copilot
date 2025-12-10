@@ -42,7 +42,7 @@
 - AI 渠道识别：预置 referrer + UTM 规则，支持自定义域名/utm_source/utm_medium。
 - 仪表盘：AI GMV / 订单 / 新客、AOV、复购率，对比 Overall 与各渠道；展示数据更新时间与管道状态。
 - 调试视图：最近订单的 referrer / UTM / 解析结果，便于核验规则。
-- 写回与导出：可选的订单/客户标签写回，订单与产品榜单 CSV 导出。
+- 写回与导出：可选的订单标签写回，订单与产品榜单 CSV 导出。
 
 ### 新增功能（v0.2）
 
@@ -98,7 +98,7 @@
 - **传输加密提示**：生产连接缺少 SSL 时会抛错，非生产会输出警告日志；请在基础设施层确保 TLS 与磁盘加密已开启并记录到变更审计。
 
 ## 安全与免责声明
-- 标签写回默认关闭；启用后会修改 Shopify 订单/客户标签，若店铺存在基于标签的自动化流程，请先在测试店验证。
+- 标签写回默认关闭；启用后会修改 Shopify 订单标签，若店铺存在基于标签的自动化流程，请先在测试店验证。
 - AI 渠道识别基于 referrer/UTM/tag，无法覆盖隐藏来源或站内曝光，所有数值均为保守估计。
 
 ## 代码质量与架构优化（v0.2+）
@@ -156,7 +156,7 @@
 ### 环境变量说明
 - `SHOPIFY_API_KEY` / `SHOPIFY_API_SECRET`：从 Shopify Partners 获取
 - `SHOPIFY_APP_URL`：Render 站点完整 HTTPS URL
-- `SCOPES`：例如 `read_orders,read_customers,read_products,write_orders,write_customers`
+- `SCOPES`：例如 `read_orders,read_customers,read_products,write_orders,read_checkouts`
 - `DATABASE_URL`：由 Render 数据库自动注入
 - 可选：`DEFAULT_RANGE_KEY=30d`、`MAX_BACKFILL_ORDERS=1000`、`MAX_BACKFILL_DAYS=90`、`MAX_BACKFILL_DURATION_MS=5000`、`BACKFILL_TAGGING_BATCH_SIZE=25`、`DATA_RETENTION_MONTHS=6`
 

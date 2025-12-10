@@ -979,21 +979,21 @@ export default function AIVisibility() {
               </Link>
             </div>
             
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div className={styles.suggestionList} role="list" aria-label={en ? "Optimization suggestions" : "优化建议列表"}>
               {report.suggestions.slice(0, 3).map((suggestion) => (
                 <div
                   key={suggestion.id}
-                  style={{
-                    padding: 12,
-                    background: suggestion.priority === "high" ? "#fef3f3" : "#f9fafb",
-                    borderRadius: 6,
-                    borderLeft: `3px solid ${suggestion.priority === "high" ? "#de3618" : "#008060"}`,
-                  }}
+                  role="listitem"
+                  aria-label={en ? suggestion.title.en : suggestion.title.zh}
+                  className={`${styles.suggestionCard} ${suggestion.priority === "high" ? styles.suggestionCardHigh : ""}`}
                 >
-                  <div style={{ fontWeight: 500, fontSize: 14, marginBottom: 4 }}>
+                  <div className={styles.suggestionTitle}>
+                    {suggestion.priority === "high" && (
+                      <span className={styles.suggestionPriorityIcon} aria-label={en ? "High priority" : "高优先级"}>⚠️</span>
+                    )}
                     {en ? suggestion.title.en : suggestion.title.zh}
                   </div>
-                  <div style={{ fontSize: 13, color: "#637381" }}>
+                  <div className={styles.suggestionDescription}>
                     {en ? suggestion.description.en : suggestion.description.zh}
                   </div>
                 </div>

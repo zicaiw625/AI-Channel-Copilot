@@ -658,3 +658,54 @@ details.statusBlock > summary {
   border-color: #635bff;
   box-shadow: 0 0 0 2px rgba(99, 91, 255, 0.15);
 }
+
+/* ============================================================================
+ * Suggestion Cards - 优化建议卡片
+ * ============================================================================ */
+
+.suggestionList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.suggestionCard {
+  padding: 12px;
+  background: #f9fafb;
+  border-radius: 6px;
+  border-left: 3px solid #008060;
+  transition: background-color 0.15s ease;
+}
+
+.suggestionCard:hover {
+  background: #f3f4f6;
+}
+
+.suggestionCardHigh {
+  background: #fef3f3;
+  border-left-color: #de3618;
+}
+
+.suggestionCardHigh:hover {
+  background: #fee2e2;
+}
+
+.suggestionTitle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+  font-size: 14px;
+  margin-bottom: 4px;
+  color: #0b1324;
+}
+
+.suggestionPriorityIcon {
+  flex-shrink: 0;
+}
+
+.suggestionDescription {
+  font-size: 13px;
+  color: #637381;
+  line-height: 1.4;
+}

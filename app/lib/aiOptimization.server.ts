@@ -485,7 +485,10 @@ function productNodeToPerformance(
 function analyzeContentReadiness(product: ProductNode): "complete" | "partial" | "missing" {
   const hasDescription = Boolean(product.description?.trim());
   const hasImages = product.images.edges.length > 0;
-  const hasPrice = product.variants.edges.length > 0;
+  // 检查是否有有效价格（价格必须大于 0）
+  const hasPrice = product.variants.edges.some(
+    v => v.node.price && parseFloat(v.node.price) > 0
+  );
   const hasSEO = Boolean(product.seo?.title || product.seo?.description);
   
   const score = [hasDescription, hasImages, hasPrice, hasSEO].filter(Boolean).length;
@@ -638,6 +641,7 @@ function generateSuggestions(
   products: ProductAIPerformance[],
   language: string,
   hasLlmsTxtEnabled: boolean = false,
+  hasFAQContent: boolean = false,
 ): OptimizationSuggestion[] {
   const suggestions: OptimizationSuggestion[] = [];
   const isEnglish = language === "English";
@@ -742,8 +746,8 @@ function generateSuggestions(
     });
   }
   
-  // FAQ 覆盖建议 - 只有当有产品数据时才显示
-  if (products.length > 0) {
+  // FAQ 覆盖建议 - 只有当有产品数据且用户尚未添加 FAQ 内容时才显示
+  if (products.length > 0 && !hasFAQContent) {
     suggestions.push({
       id: "faq-coverage",
       category: "faq_coverage",
@@ -1057,10 +1061,7 @@ export async function generateAIOptimizationReport(
     exposurePrefs?.exposeBlogs
   );
   
-  // 生成建议（基于用于评分的产品）
-  const suggestions = generateSuggestions(productsForScoring, language, hasLlmsTxtEnabled);
-  
-  // 生成 FAQ 建议
+  // 生成 FAQ 建议（先生成 FAQ，然后用于判断是否需要显示 FAQ 建议）
   // 如果有 AI 订单数据，使用 AI 产品；否则使用店铺产品
   const topProductNodes = hasAIOrderData
     ? products
@@ -1069,6 +1070,11 @@ export async function generateAIOptimizationReport(
         .filter((p): p is ProductNode => p !== undefined)
     : fallbackProductNodes.slice(0, 5);
   const suggestedFAQs = generateFAQSuggestions(topProductNodes, language);
+  
+  // 生成建议（基于用于评分的产品）
+  // hasFAQContent: 如果已生成 FAQ 建议，说明有足够的产品信息来支持 FAQ
+  const hasFAQContent = suggestedFAQs.length > 0;
+  const suggestions = generateSuggestions(productsForScoring, language, hasLlmsTxtEnabled, hasFAQContent);
   
   // llms.txt 增强建议
   const isEnglish = language === "English";

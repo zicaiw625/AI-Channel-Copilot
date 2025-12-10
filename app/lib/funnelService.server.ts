@@ -233,6 +233,8 @@ export interface FunnelData {
     checkouts: number;
     orders: number;
     aiVisits: number;
+    aiCarts: number;
+    aiCheckouts: number;
     aiOrders: number;
   }[];
   
@@ -495,7 +497,8 @@ export async function getFunnelData(
   const timezone = options.timezone || "UTC";
   const language = options.language || "中文";
   const isEnglish = language === "English";
-  const range = resolveDateRange(rangeKey, new Date());
+  // 修复：传递时区参数确保日期范围计算正确
+  const range = resolveDateRange(rangeKey, new Date(), undefined, undefined, timezone);
   
   // 解析估算配置
   const estimationConfig = typeof options.estimationConfig === "string"
@@ -603,7 +606,9 @@ export async function getFunnelData(
   const { checkoutToOrderRate, visitsPerCheckout, visitsPerOrder, cartsPerCheckout, cartsPerOrder } = estimationConfig;
   
   // 判断是否有真实的 checkout 数据
-  // 修复：即使 checkout 数量为 0，只要曾经启用过 webhook 就认为有数据
+  // 注意：当 checkout webhook 启用但期间内没有结账时，totalCheckoutsStarted 为 0
+  // 此时我们仍然认为没有 checkout 数据，使用估算值
+  // 未来可以通过检查 ShopSettings 中的 webhook 配置状态来更精确判断
   const hasCheckoutData = totalCheckoutsStarted > 0;
   
   // 判断是否应该使用估算（没有真实数据但有订单）
@@ -912,6 +917,7 @@ function buildTrendDataFromAggregates(
     checkouts: number;
     orders: number;
     aiVisits: number;
+    aiCarts: number;
     aiCheckouts: number;
     aiOrders: number;
   }>();
@@ -926,6 +932,7 @@ function buildTrendDataFromAggregates(
       checkouts: 0,
       orders: 0,
       aiVisits: 0,
+      aiCarts: 0,
       aiCheckouts: 0,
       aiOrders: 0,
     });
@@ -959,9 +966,14 @@ function buildTrendDataFromAggregates(
       day.carts = Math.round(Math.max(effectiveCheckouts * cartsPerCheckout, day.orders * cartsPerOrder));
       day.visits = Math.round(Math.max(effectiveCheckouts * visitsPerCheckout, day.orders * visitsPerOrder));
       
+      // 计算 AI 渠道的估算数据
       const effectiveAiCheckouts = day.aiCheckouts || (day.aiOrders > 0 ? Math.round(day.aiOrders / checkoutToOrderRate) : 0);
       day.aiVisits = day.aiOrders > 0 || day.aiCheckouts > 0
         ? Math.round(Math.max(effectiveAiCheckouts * visitsPerCheckout, day.aiOrders * visitsPerOrder))
+        : 0;
+      // 修复：计算 AI 加购数
+      day.aiCarts = day.aiOrders > 0 || day.aiCheckouts > 0
+        ? Math.round(Math.max(effectiveAiCheckouts * cartsPerCheckout, day.aiOrders * cartsPerOrder))
         : 0;
     }
   }

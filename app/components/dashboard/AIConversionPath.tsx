@@ -321,6 +321,8 @@ export const AIConversionPath = ({
               stage={stage}
               lang={lang}
               currency={currency}
+              // visit/add_to_cart/cart 阶段的数据是估算的（当 isEstimated=true 时）
+              // checkout_started 和 order_created 使用真实数据（除非整体启用了估算模式）
               isEstimated={isEstimated && (stage.id === "visit" || stage.id === "add_to_cart" || stage.id === "cart")}
             />
             {index < stages.length - 1 && (

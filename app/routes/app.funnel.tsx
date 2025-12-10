@@ -769,27 +769,30 @@ export default function FunnelAnalysis() {
                 </tr>
               </thead>
               <tbody>
-                {channelList.map(channel => {
-                  const data = funnelData.byChannel[channel];
-                  if (!data || data.every(s => s.count === 0)) return null;
-                  
-                  const visits = data.find(s => s.stage === "visit")?.count || 0;
-                  const checkouts = data.find(s => s.stage === "checkout_started")?.count || 0;
-                  const orders = data.find(s => s.stage === "order_created")?.count || 0;
-                  const gmv = data.find(s => s.stage === "order_created")?.value || 0;
-                  const cvr = checkouts > 0 ? orders / checkouts : 0;
-                  
-                  return (
-                    <tr key={channel}>
-                      <td className={styles.cellLabel}>{channel}</td>
-                      <td>{visits.toLocaleString()}</td>
-                      <td>{checkouts.toLocaleString()}</td>
-                      <td>{orders.toLocaleString()}</td>
-                      <td>${gmv.toLocaleString()}</td>
-                      <td>{(cvr * 100).toFixed(1)}%</td>
-                    </tr>
-                  );
-                })}
+                {channelList
+                  .filter(channel => {
+                    const data = funnelData.byChannel[channel];
+                    return data && !data.every(s => s.count === 0);
+                  })
+                  .map(channel => {
+                    const data = funnelData.byChannel[channel];
+                    const visits = data.find(s => s.stage === "visit")?.count || 0;
+                    const checkouts = data.find(s => s.stage === "checkout_started")?.count || 0;
+                    const orders = data.find(s => s.stage === "order_created")?.count || 0;
+                    const gmv = data.find(s => s.stage === "order_created")?.value || 0;
+                    const cvr = checkouts > 0 ? orders / checkouts : 0;
+                    
+                    return (
+                      <tr key={channel}>
+                        <td className={styles.cellLabel}>{channel}</td>
+                        <td>{visits.toLocaleString()}</td>
+                        <td>{checkouts.toLocaleString()}</td>
+                        <td>{orders.toLocaleString()}</td>
+                        <td>${gmv.toLocaleString()}</td>
+                        <td>{(cvr * 100).toFixed(1)}%</td>
+                      </tr>
+                    );
+                  })}
               </tbody>
             </table>
           </div>

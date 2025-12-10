@@ -434,19 +434,106 @@ export function getClientIp(request: Request): string {
 }
 
 /**
- * 简单的 IP 地址格式验证
+ * 完整的 IP 地址格式验证
+ * 支持 IPv4 和完整 IPv6 格式（包括压缩形式）
  */
 function isValidIp(ip: string): boolean {
+  if (!ip || typeof ip !== 'string') return false;
+  
+  const trimmed = ip.trim();
+  
   // IPv4 格式验证
-  const ipv4Regex = /^(\d{1,3}\.){3}\d{1,3}$/;
-  if (ipv4Regex.test(ip)) {
-    const parts = ip.split('.').map(Number);
-    return parts.every(p => p >= 0 && p <= 255);
+  if (isValidIPv4(trimmed)) return true;
+  
+  // IPv6 格式验证
+  if (isValidIPv6(trimmed)) return true;
+  
+  return false;
+}
+
+/**
+ * IPv4 地址验证
+ */
+function isValidIPv4(ip: string): boolean {
+  const ipv4Regex = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
+  const match = ip.match(ipv4Regex);
+  if (!match) return false;
+  
+  // 验证每个部分在 0-255 范围内，且没有前导零（除了单独的 0）
+  for (let i = 1; i <= 4; i++) {
+    const part = match[i];
+    const num = parseInt(part, 10);
+    if (num < 0 || num > 255) return false;
+    // 检查前导零：'01' 不合法，但 '0' 合法
+    if (part.length > 1 && part.startsWith('0')) return false;
   }
   
-  // IPv6 格式验证（简化版）
-  const ipv6Regex = /^([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$|^::$|^::1$/;
-  return ipv6Regex.test(ip);
+  return true;
+}
+
+/**
+ * IPv6 地址验证
+ * 支持完整格式和压缩格式（::）
+ */
+function isValidIPv6(ip: string): boolean {
+  // 处理 IPv4-mapped IPv6 地址 (::ffff:192.168.1.1)
+  const ipv4MappedMatch = ip.match(/^(.*):(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/);
+  if (ipv4MappedMatch) {
+    const ipv6Part = ipv4MappedMatch[1];
+    const ipv4Part = ipv4MappedMatch[2];
+    // 验证 IPv4 部分
+    if (!isValidIPv4(ipv4Part)) return false;
+    // 继续验证 IPv6 部分（以 : 结尾）
+    return isValidIPv6Prefix(ipv6Part + ':');
+  }
+  
+  return isValidIPv6Prefix(ip);
+}
+
+/**
+ * 验证纯 IPv6 地址（不含 IPv4 部分）
+ */
+function isValidIPv6Prefix(ip: string): boolean {
+  // 检查是否包含非法字符
+  if (!/^[0-9a-fA-F:]+$/.test(ip)) return false;
+  
+  // 处理压缩形式 ::
+  const doubleColonCount = (ip.match(/::/g) || []).length;
+  if (doubleColonCount > 1) return false; // 最多一个 ::
+  
+  // 分割并验证
+  if (doubleColonCount === 1) {
+    // 有压缩形式
+    const parts = ip.split('::');
+    const left = parts[0] ? parts[0].split(':').filter(Boolean) : [];
+    const right = parts[1] ? parts[1].split(':').filter(Boolean) : [];
+    
+    // 总共不能超过 8 组
+    if (left.length + right.length > 7) return false;
+    
+    // 验证每个部分
+    for (const part of [...left, ...right]) {
+      if (!isValidIPv6Part(part)) return false;
+    }
+  } else {
+    // 无压缩形式，必须正好 8 组
+    const parts = ip.split(':');
+    if (parts.length !== 8) return false;
+    
+    for (const part of parts) {
+      if (!isValidIPv6Part(part)) return false;
+    }
+  }
+  
+  return true;
+}
+
+/**
+ * 验证单个 IPv6 组（1-4 个十六进制字符）
+ */
+function isValidIPv6Part(part: string): boolean {
+  if (!part || part.length > 4) return false;
+  return /^[0-9a-fA-F]{1,4}$/.test(part);
 }
 
 /**

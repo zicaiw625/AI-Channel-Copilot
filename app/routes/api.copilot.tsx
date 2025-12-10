@@ -55,15 +55,40 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   const contentType = request.headers.get("content-type") || "";
   let payload: Record<string, unknown> = {};
+  
   if (contentType.includes("application/json")) {
     try {
       payload = await request.json();
-    } catch {
-      payload = {};
+      // 验证解析结果是对象
+      if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+        return Response.json(
+          { ok: false, message: "Invalid JSON: expected an object" },
+          { status: 400 }
+        );
+      }
+    } catch (error) {
+      // 不再静默失败，返回明确的错误响应
+      return Response.json(
+        { ok: false, message: "Invalid JSON body: failed to parse request" },
+        { status: 400 }
+      );
+    }
+  } else if (contentType.includes("multipart/form-data") || contentType.includes("application/x-www-form-urlencoded")) {
+    try {
+      const form = await request.formData();
+      payload = Object.fromEntries(Array.from(form.entries()));
+    } catch (error) {
+      return Response.json(
+        { ok: false, message: "Invalid form data: failed to parse request" },
+        { status: 400 }
+      );
     }
   } else {
-    const form = await request.formData();
-    payload = Object.fromEntries(Array.from(form.entries()));
+    // 不支持的 Content-Type
+    return Response.json(
+      { ok: false, message: "Unsupported Content-Type. Use application/json or form data." },
+      { status: 415 }
+    );
   }
 
   const allowedIntents = new Set(["ai_performance", "ai_vs_all_aov", "ai_top_products"]);

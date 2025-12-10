@@ -33,6 +33,82 @@ export const CurrencySchema = z.string()
   .regex(/^[A-Z]{3}$/, 'Currency must be 3 uppercase letters');
 
 // ============================================================================
+// Detection Signals Schema (用于订单 AI 归因证据链)
+// ============================================================================
+
+/**
+ * 置信度等级
+ */
+export const ConfidenceLevelSchema = z.enum(['high', 'medium', 'low']);
+
+/**
+ * 检测信号类型
+ */
+export const DetectionSignalTypeSchema = z.enum([
+  'referrer',
+  'utm_source', 
+  'utm_medium',
+  'note_attribute',
+  'tag',
+  'bing_copilot'
+]);
+
+/**
+ * 单个检测信号结构
+ */
+export const DetectionSignalSchema = z.object({
+  type: DetectionSignalTypeSchema,
+  source: z.string().max(500),
+  matched: z.string().max(255),
+  confidence: z.number().int().min(0).max(100),
+  isPrimary: z.boolean(),
+});
+
+/**
+ * 检测信号数组（存储在 Order.detectionSignals 字段）
+ */
+export const DetectionSignalsArraySchema = z.array(DetectionSignalSchema).max(20);
+
+/**
+ * 验证并解析 detectionSignals JSON
+ * 用于从数据库读取时验证数据完整性
+ */
+export function parseDetectionSignals(value: unknown): z.infer<typeof DetectionSignalsArraySchema> | null {
+  if (!value) return null;
+  
+  // 如果是字符串，尝试解析为 JSON
+  let parsed = value;
+  if (typeof value === 'string') {
+    try {
+      parsed = JSON.parse(value);
+    } catch {
+      return null;
+    }
+  }
+  
+  // 验证结构
+  const result = DetectionSignalsArraySchema.safeParse(parsed);
+  if (result.success) {
+    return result.data;
+  }
+  
+  // 验证失败时返回 null，允许旧数据格式兼容
+  return null;
+}
+
+/**
+ * 安全地序列化 detectionSignals 用于存储
+ */
+export function serializeDetectionSignals(
+  signals: z.infer<typeof DetectionSignalsArraySchema> | undefined | null
+): string[] | null {
+  if (!signals || signals.length === 0) return null;
+  
+  // 验证后返回简化的字符串数组（向后兼容）
+  return signals.map(s => `${s.type}:${s.source}→${s.matched}(${s.confidence}%)`);
+}
+
+// ============================================================================
 // API 请求 Schema
 // ============================================================================
 

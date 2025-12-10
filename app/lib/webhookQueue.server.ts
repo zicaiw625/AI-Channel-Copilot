@@ -245,13 +245,64 @@ const updateJobStatus = async (
 
 // removed unused global processing loop in favor of per-shop processing
 
-const handlers = new Map<string, WebhookJob["run"]>();
+/**
+ * LRU Handler Cache
+ * 使用时间戳追踪最后使用时间，实现真正的 LRU 淘汰策略
+ */
+type HandlerEntry = {
+  handler: WebhookJob["run"];
+  lastUsedAt: number;
+};
 
+const handlers = new Map<string, HandlerEntry>();
+
+/**
+ * 注册 webhook handler（带 LRU 追踪）
+ */
 export const registerWebhookHandler = (
   intent: string,
   handler: WebhookJob["run"],
 ) => {
-  handlers.set(intent, handler);
+  handlers.set(intent, {
+    handler,
+    lastUsedAt: Date.now(),
+  });
+};
+
+/**
+ * 获取 handler 并更新 LRU 时间戳
+ */
+const getHandler = (intent: string): WebhookJob["run"] | undefined => {
+  const entry = handlers.get(intent);
+  if (entry) {
+    // 更新最后使用时间
+    entry.lastUsedAt = Date.now();
+    return entry.handler;
+  }
+  return undefined;
+};
+
+/**
+ * 真正的 LRU 淘汰：删除最不常用的 handler
+ * 保留最近使用的 handler，删除最久未使用的
+ */
+const evictLRUHandlers = (targetSize: number) => {
+  if (handlers.size <= targetSize) return;
+  
+  // 按最后使用时间排序
+  const entries = Array.from(handlers.entries())
+    .sort((a, b) => a[1].lastUsedAt - b[1].lastUsedAt);
+  
+  // 删除最久未使用的，直到达到目标大小
+  const toDelete = handlers.size - targetSize;
+  for (let i = 0; i < toDelete && i < entries.length; i++) {
+    handlers.delete(entries[i][0]);
+  }
+  
+  logger.debug("[webhook] LRU eviction completed", {
+    deleted: toDelete,
+    remaining: handlers.size,
+  });
 };
 
 /**
@@ -307,17 +358,27 @@ export const enqueueWebhookJob = async (job: WebhookJob) => {
     return;
   }
 
-  // 注册 handler（限制 handlers Map 大小）
+  // 注册 handler（带 LRU 淘汰策略）
   if (!handlers.has(job.intent)) {
+    // 如果达到容量限制，使用 LRU 策略淘汰旧 handler
     if (handlers.size >= MAX_HANDLERS) {
-      logger.warn("[webhook] handlers map at capacity, clearing old entries", { 
-        size: handlers.size 
+      logger.warn("[webhook] handlers map at capacity, evicting LRU entries", { 
+        size: handlers.size,
+        maxHandlers: MAX_HANDLERS,
       });
-      // 清理一半的 handlers（简单的 LRU 替代）
-      const keysToDelete = Array.from(handlers.keys()).slice(0, Math.floor(MAX_HANDLERS / 2));
-      keysToDelete.forEach(k => handlers.delete(k));
+      // 保留 70% 的 handler（删除最久未使用的 30%）
+      evictLRUHandlers(Math.floor(MAX_HANDLERS * 0.7));
     }
-    handlers.set(job.intent, job.run);
+    handlers.set(job.intent, {
+      handler: job.run,
+      lastUsedAt: Date.now(),
+    });
+  } else {
+    // 更新已存在 handler 的最后使用时间
+    const entry = handlers.get(job.intent);
+    if (entry) {
+      entry.lastUsedAt = Date.now();
+    }
   }
 
   // 使用 try-catch 处理唯一约束冲突，而不是先查询
@@ -377,7 +438,7 @@ export const enqueueWebhookJob = async (job: WebhookJob) => {
     });
   }
 
-  void processWebhookQueueForShop(job.shopDomain, handlers);
+  void processWebhookQueueForShop(job.shopDomain);
 };
 
 export const getWebhookQueueSize = async () =>
@@ -439,10 +500,11 @@ export const checkWebhookDuplicate = async (
 
 /**
  * 处理指定店铺的 Webhook 队列
+ * 使用模块级 handlers Map，无需外部传入
  */
 export const processWebhookQueueForShop = async (
   shopDomain: string,
-  handlers: Map<string, WebhookJob["run"]>,
+  _handlers?: Map<string, WebhookJob["run"]>, // 保留参数签名兼容性，但不再使用
   recursiveDepth = 0,
 ) => {
   if (!shopDomain) return;
@@ -489,7 +551,8 @@ export const processWebhookQueueForShop = async (
 
         activeJobCount++;
         const startedAt = Date.now();
-        const handler = handlers.get(job.intent);
+        // 使用 getHandler 获取 handler 并更新 LRU 时间戳
+        const handler = getHandler(job.intent);
         const context: LogContext = {
           shopDomain: job.shopDomain,
           jobId: job.id,
@@ -582,7 +645,7 @@ export const processWebhookQueueForShop = async (
       
       const timer = setTimeout(() => {
         scheduledTimers.delete(key);
-        void processWebhookQueueForShop(shopDomain, handlers, recursiveDepth + 1);
+        void processWebhookQueueForShop(shopDomain, undefined, recursiveDepth + 1);
       }, dynamicDelay);
       
       scheduledTimers.set(key, timer);

@@ -224,7 +224,7 @@ function DetectionCoverageCard({
   // 确定覆盖率状态
   const isLowCoverage = coverage < 0.3;
   const isMediumCoverage = coverage >= 0.3 && coverage < 0.7;
-  const _isHighCoverage = coverage >= 0.7; // 保留用于未来扩展
+  const isHighCoverage = coverage >= 0.7;
   
   const statusColor = isLowCoverage ? "#de3618" : isMediumCoverage ? "#f4a623" : "#50b83c";
   const statusBg = isLowCoverage ? "#fef3f3" : isMediumCoverage ? "#fffbe6" : "#f6ffed";
@@ -274,6 +274,14 @@ function DetectionCoverageCard({
                 {isEnglish 
                   ? "Low coverage means AI traffic may be underreported." 
                   : "覆盖率过低意味着 AI 流量可能被低估。"}
+              </strong>
+            )}
+            {isHighCoverage && (
+              <strong style={{ color: statusColor }}>
+                {" "}
+                {isEnglish 
+                  ? "Excellent coverage! AI attribution data is reliable." 
+                  : "覆盖率优秀！AI 归因数据可靠。"}
               </strong>
             )}
           </p>

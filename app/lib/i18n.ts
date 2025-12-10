@@ -95,6 +95,73 @@ const dict: Record<string, { zh: string; en: string }> = {
   badge_ui_only: { zh: "仅影响 UI", en: "UI Only" },
   badge_analysis: { zh: "适合二次分析", en: "For Analysis" },
   badge_monitor: { zh: "监控", en: "Monitor" },
+  
+  // 覆盖率相关
+  detection_coverage: { zh: "AI 检测覆盖率", en: "AI Detection Coverage" },
+  coverage_low_warning: { zh: "覆盖率过低意味着 AI 流量可能被低估。", en: "Low coverage means AI traffic may be underreported." },
+  coverage_high_success: { zh: "覆盖率优秀！AI 归因数据可靠。", en: "Excellent coverage! AI attribution data is reliable." },
+  setup_utm_links: { zh: "设置 UTM 链接", en: "Setup UTM Links" },
+  
+  // 低样本量提示
+  low_sample_warning: { zh: "样本量较小，指标仅供参考", en: "Sample size is small. Metrics are for reference only." },
+  very_low_sample_warning: { zh: "AI 订单极少，数据不具统计意义", en: "Very few AI orders. Data is not statistically reliable." },
+  no_ai_orders_detected: { zh: "尚未检测到 AI 渠道订单", en: "No AI orders detected yet" },
+  only_n_ai_orders: { zh: "仅检测到 {n} 笔 AI 订单", en: "Only {n} AI order(s) detected" },
+  ai_data_collection_hint: { zh: "AI 渠道指标需要更多数据才具有参考价值。", en: "AI channel metrics require more data to be meaningful." },
+  extend_date_range_tip: { zh: "建议延长时间范围或在「设置」中检查归因规则。", en: "Try extending the date range or checking your attribution rules in Settings." },
+  
+  // 通用操作
+  apply: { zh: "应用", en: "Apply" },
+  cancel: { zh: "取消", en: "Cancel" },
+  confirm: { zh: "确认", en: "Confirm" },
+  loading: { zh: "加载中...", en: "Loading..." },
+  refresh: { zh: "刷新", en: "Refresh" },
+  download: { zh: "下载", en: "Download" },
+  upload: { zh: "上传", en: "Upload" },
+  
+  // 时间范围
+  last_7_days: { zh: "最近 7 天", en: "Last 7 days" },
+  last_30_days: { zh: "最近 30 天", en: "Last 30 days" },
+  last_90_days: { zh: "最近 90 天", en: "Last 90 days" },
+  custom_range: { zh: "自定义", en: "Custom" },
+  from_date: { zh: "开始日期", en: "From" },
+  to_date: { zh: "结束日期", en: "To" },
+  apply_custom: { zh: "应用自定义", en: "Apply Custom" },
+  
+  // 计费相关
+  free_plan: { zh: "免费版", en: "Free Plan" },
+  pro_plan: { zh: "专业版", en: "Pro Plan" },
+  growth_plan: { zh: "增长版", en: "Growth Plan" },
+  upgrade_to_pro: { zh: "升级到 Pro 版", en: "Upgrade to Pro" },
+  trial_days_left: { zh: "试用剩余 {n} 天", en: "{n} day(s) trial left" },
+  dev_store_env: { zh: "开发店环境", en: "Development store" },
+  
+  // 错误信息
+  error_generic: { zh: "发生错误，请稍后重试", en: "An error occurred. Please try again later." },
+  error_network: { zh: "网络错误，请检查连接", en: "Network error. Please check your connection." },
+  error_unauthorized: { zh: "未授权，请重新登录", en: "Unauthorized. Please log in again." },
+  error_rate_limit: { zh: "请求过于频繁，请稍后重试", en: "Too many requests. Please try again later." },
+  
+  // Dashboard 新增
+  overall: { zh: "整体", en: "Overall" },
+  ai_channels: { zh: "AI 渠道", en: "AI Channels" },
+  non_ai: { zh: "非 AI / 未识别", en: "Non-AI / Unattributed" },
+  awaiting_data: { zh: "等待数据", en: "Awaiting data" },
+  all: { zh: "全部", en: "All" },
+  filter_by: { zh: "按...过滤", en: "Filter by..." },
+  
+  // Backfill 相关
+  backfill_in_background: { zh: "后台补拉", en: "Backfill in background" },
+  backfilling: { zh: "后台补拉中...", en: "Backfilling..." },
+  backfill_triggered: { zh: "已触发后台任务", en: "Background task triggered" },
+  backfill_in_flight: { zh: "已有补拉在进行中，稍后刷新", en: "A backfill is already running; refresh later" },
+  
+  // Webhook 相关
+  webhook_status: { zh: "Webhook 状态", en: "Webhook Status" },
+  pending: { zh: "待处理", en: "Pending" },
+  processing: { zh: "处理中", en: "Processing" },
+  completed: { zh: "已完成", en: "Completed" },
+  failed: { zh: "失败", en: "Failed" },
 };
 
 export const t = (language: Lang, key: keyof typeof dict) => {

@@ -18,7 +18,7 @@ services:
       - key: SHOPIFY_APP_URL
         value: https://ai-channel-copilot.onrender.com
       - key: SCOPES
-        value: read_orders,read_customers,read_products,write_orders,read_checkouts
+        value: read_orders,read_customers,read_products,write_orders,write_customers
       - key: ENABLE_LOGIN_FORM
         value: false
       - key: BILLING_PLAN_NAME

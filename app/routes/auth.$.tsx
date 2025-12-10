@@ -40,10 +40,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       throw new Response(null, { status: 302, headers: { Location: next.toString() } });
     }
   } catch (error) {
-    // 重新抛出 Response 对象（包括重定向）
-    if (error instanceof Response) {
-      throw error;
-    }
     logger.warn("[auth] loader encountered error", undefined, { message: (error as Error).message });
   }
 

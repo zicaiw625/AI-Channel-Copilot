@@ -514,10 +514,9 @@ ${safeJsonString}
   );
 }
 
-// 生成唯一 ID
-let faqIdCounter = 0;
+// 生成唯一 ID（避免使用模块级计数器，防止 SSR hydration 问题）
 function generateFaqId() {
-  return `faq-${Date.now()}-${++faqIdCounter}`;
+  return `faq-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
 function FAQGenerator({ en }: { en: boolean }) {

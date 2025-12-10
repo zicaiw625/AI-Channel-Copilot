@@ -5,8 +5,8 @@ vi.mock('../app/db.server', () => ({
   default: {
     orderProduct: {
       findMany: vi.fn().mockResolvedValue([
-        { url: 'https://shop.example.com/products/a', price: 100, quantity: 2 },
-        { url: 'https://shop.example.com/products/b', price: 50, quantity: 1 },
+        { productId: 'gid://shopify/Product/1', title: 'Product A', url: 'https://shop.example.com/products/a', price: 100, quantity: 2 },
+        { productId: 'gid://shopify/Product/2', title: 'Product B', url: 'https://shop.example.com/products/b', price: 50, quantity: 1 },
       ]),
     },
   },

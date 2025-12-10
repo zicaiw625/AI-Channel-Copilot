@@ -23,7 +23,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   }
 
   // 速率限制：使用 EXPORT 规则（5 次/5 分钟）防止滥用
-  await enforceRateLimit(`llms-preview:${shopDomain}`, RateLimitRules.EXPORT);
+  try {
+    await enforceRateLimit(`llms-preview:${shopDomain}`, RateLimitRules.EXPORT);
+  } catch (error) {
+    if (error instanceof Response) {
+      return error;
+    }
+    throw error;
+  }
 
   const allowed = await hasFeature(shopDomain, FEATURES.EXPORTS);
   if (!allowed) {

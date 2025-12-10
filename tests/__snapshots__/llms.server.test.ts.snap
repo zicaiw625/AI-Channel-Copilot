@@ -14,11 +14,11 @@ exports[`llms.server buildLlmsTxt > generates Chinese text with product list 1`]
 
 products:
   - url: https://shop.example.com/products/a
-    title: 
+    title: "Product A"
     ai_gmv_rank: 1
 
   - url: https://shop.example.com/products/b
-    title: 
+    title: "Product B"
     ai_gmv_rank: 2
 
 
@@ -30,16 +30,16 @@ products:
 # 重要提示：以下为模板答案，请根据您店铺的实际政策进行修改。
 
 faqs:
-  - question: "你们接受哪些付款方式？"
+  - question: 你们接受哪些付款方式？
     answer: "[请修改] 我们接受 [请填写您实际支持的支付方式]。请更新此答案。"
 
-  - question: "你们的发货政策是什么？"
+  - question: 你们的发货政策是什么？
     answer: "[请修改] 我们在 [X] 个工作日内发货。[请添加您的实际发货详情]"
 
-  - question: "你们的退换货政策是什么？"
+  - question: 你们的退换货政策是什么？
     answer: "[请修改] 我们提供 [X] 天内退换货服务。[请添加您的实际退换货政策]"
 
-  - question: "如何联系客服？"
+  - question: 如何联系客服？
     answer: "[请修改] 请通过 [您的邮箱] 或 [您的电话] 联系我们。[请添加您的实际联系方式]"
 
 ## 店铺信息

@@ -511,8 +511,8 @@ export const buildLlmsTxt = async (
     ];
     
     for (const faq of faqs) {
-      lines.push(`  - question: "${faq.q}"`);
-      lines.push(`    answer: "${faq.a}"`);
+      lines.push(`  - question: ${yamlValue(faq.q)}`);
+      lines.push(`    answer: ${yamlValue(faq.a)}`);
       lines.push("");
     }
   }

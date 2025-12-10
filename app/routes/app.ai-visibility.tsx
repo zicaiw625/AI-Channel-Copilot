@@ -320,6 +320,7 @@ ${safeJsonString}
             placeholder={en ? "Enter product name" : "输入产品名称"}
             style={{
               width: "100%",
+              boxSizing: "border-box",
               padding: "8px 12px",
               border: `1px solid ${!productName.trim() ? "#ffc58b" : "#c4cdd5"}`,
               borderRadius: 4,
@@ -382,6 +383,7 @@ ${safeJsonString}
             placeholder={en ? "e.g., ABC-12345" : "例如：ABC-12345"}
             style={{
               width: "100%",
+              boxSizing: "border-box",
               padding: "8px 12px",
               border: "1px solid #c4cdd5",
               borderRadius: 4,
@@ -400,6 +402,7 @@ ${safeJsonString}
             placeholder={`${shopInfo.url}/products/...`}
             style={{
               width: "100%",
+              boxSizing: "border-box",
               padding: "8px 12px",
               border: `1px solid ${productUrl && !isUrlValid ? "#de3618" : "#c4cdd5"}`,
               borderRadius: 4,
@@ -425,6 +428,7 @@ ${safeJsonString}
           placeholder={en ? "https://cdn.shopify.com/..." : "https://cdn.shopify.com/..."}
           style={{
             width: "100%",
+            boxSizing: "border-box",
             padding: "8px 12px",
             border: `1px solid ${productImage && !isImageUrlValid ? "#de3618" : "#c4cdd5"}`,
             borderRadius: 4,
@@ -449,6 +453,7 @@ ${safeJsonString}
           rows={3}
           style={{
             width: "100%",
+            boxSizing: "border-box",
             padding: "8px 12px",
             border: "1px solid #c4cdd5",
             borderRadius: 4,
@@ -594,6 +599,7 @@ ${JSON.stringify(schema, null, 2)}
               placeholder={en ? "What is your return policy?" : "你们的退货政策是什么？"}
               style={{
                 width: "100%",
+                boxSizing: "border-box",
                 padding: "8px 12px",
                 border: "1px solid #c4cdd5",
                 borderRadius: 4,
@@ -612,6 +618,7 @@ ${JSON.stringify(schema, null, 2)}
               rows={2}
               style={{
                 width: "100%",
+                boxSizing: "border-box",
                 padding: "8px 12px",
                 border: "1px solid #c4cdd5",
                 borderRadius: 4,
@@ -717,6 +724,7 @@ function LlmsTxtGenerator({ shopInfo, en }: { shopInfo: { name: string; url: str
           rows={3}
           style={{
             width: "100%",
+            boxSizing: "border-box",
             padding: "8px 12px",
             border: "1px solid #c4cdd5",
             borderRadius: 4,

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type MouseEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { Link, useLoaderData, useNavigate, useSearchParams } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
@@ -55,13 +55,27 @@ const CopyButton = ({
   size?: "small" | "normal";
 }) => {
   const [copied, setCopied] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // 清理 timer 防止内存泄漏
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+      }
+    };
+  }, []);
 
   const handleCopy = useCallback(async (e: MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
+    // 清理之前的 timer
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+    }
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      timerRef.current = setTimeout(() => setCopied(false), 2000);
     } catch {
       // Fallback for older browsers
       const textarea = document.createElement("textarea");
@@ -71,7 +85,7 @@ const CopyButton = ({
       document.execCommand("copy");
       document.body.removeChild(textarea);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      timerRef.current = setTimeout(() => setCopied(false), 2000);
     }
   }, [text]);
 
@@ -353,7 +367,9 @@ export default function AIOptimization() {
         navigate(`/app/optimization?lang=${encodeURIComponent(uiLanguage)}`, { replace: true });
       }
     }
-  }, [uiLanguage, language, navigate, searchParams]);
+    // 注意：故意只依赖 uiLanguage 和 language，避免 navigate/searchParams 变化触发重复执行
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [uiLanguage, language]);
   
   // 使用后端返回的语言来保证 UI 和数据内容一致
   const isEnglish = language === "English";

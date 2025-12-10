@@ -684,6 +684,8 @@ export async function generateAIOptimizationReport(
   const exposurePrefs = options.exposurePreferences;
   
   // 获取 AI 渠道的产品数据
+  // 限制最大返回数量，防止大数据量导致 OOM
+  const MAX_ORDER_PRODUCTS = 10000;
   const orderProducts = await prisma.orderProduct.findMany({
     where: {
       order: {
@@ -705,6 +707,12 @@ export async function generateAIOptimizationReport(
           aiSource: true,
           totalPrice: true,
         },
+      },
+    },
+    take: MAX_ORDER_PRODUCTS,
+    orderBy: {
+      order: {
+        createdAt: "desc",
       },
     },
   });

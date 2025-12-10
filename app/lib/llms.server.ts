@@ -314,9 +314,13 @@ export const buildLlmsTxt = async (
     lines.push("");
     
     // Get product data with titles
+    // 限制最大返回数量，防止大数据量导致性能问题
+    const MAX_PRODUCT_ROWS = 5000;
     const rows = await prisma.orderProduct.findMany({
       where: { order: { shopDomain, aiSource: { not: null }, createdAt: { gte: range.start, lte: range.end } } },
       select: { productId: true, title: true, url: true, price: true, quantity: true },
+      take: MAX_PRODUCT_ROWS,
+      orderBy: { order: { createdAt: "desc" } },
     });
     
     const agg = new Map<string, { productId: string; title: string; url: string; gmv: number }>();

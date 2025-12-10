@@ -264,9 +264,9 @@ export const WhyAI = ({
             </div>
             {matches.length > 0 ? (
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                {matches.map((match, i) => (
+                {matches.map((match) => (
                   <div
-                    key={i}
+                    key={`${match.type}-${match.value}`}
                     style={{
                       display: "flex",
                       alignItems: "center",

@@ -101,7 +101,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 // Components
 // ============================================================================
 
-function CopyButton({ text, en, label }: { text: string; en: boolean; label?: string }) {
+function CopyButton({ text, en, label, disabled }: { text: string; en: boolean; label?: string; disabled?: boolean }) {
   const [copied, setCopied] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -115,6 +115,7 @@ function CopyButton({ text, en, label }: { text: string; en: boolean; label?: st
   }, []);
 
   const handleCopy = useCallback(async () => {
+    if (disabled) return;
     // 清理之前的 timer
     if (timerRef.current) {
       clearTimeout(timerRef.current);
@@ -133,24 +134,26 @@ function CopyButton({ text, en, label }: { text: string; en: boolean; label?: st
       setCopied(true);
       timerRef.current = setTimeout(() => setCopied(false), 2000);
     }
-  }, [text]);
+  }, [text, disabled]);
 
   return (
     <button
       type="button"
       onClick={handleCopy}
+      disabled={disabled}
       style={{
         padding: "8px 16px",
-        background: copied ? "#52c41a" : "#008060",
+        background: disabled ? "#919eab" : (copied ? "#52c41a" : "#008060"),
         color: "#fff",
         border: "none",
         borderRadius: 4,
-        cursor: "pointer",
+        cursor: disabled ? "not-allowed" : "pointer",
         fontSize: 13,
         fontWeight: 500,
         display: "inline-flex",
         alignItems: "center",
         gap: 6,
+        opacity: disabled ? 0.6 : 1,
       }}
     >
       {copied ? "✓" : "📋"}
@@ -159,6 +162,24 @@ function CopyButton({ text, en, label }: { text: string; en: boolean; label?: st
         : (label || (en ? "Copy Code" : "复制代码"))}
     </button>
   );
+}
+
+// URL 验证函数
+function isValidUrl(url: string): boolean {
+  if (!url.trim()) return true; // 可选字段，空值有效
+  try {
+    new URL(url);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// 价格验证函数
+function isValidPrice(price: string): boolean {
+  if (!price.trim()) return false;
+  const num = parseFloat(price);
+  return !isNaN(num) && num > 0;
 }
 
 function SchemaGenerator({
@@ -177,19 +198,37 @@ function SchemaGenerator({
   const [productUrl, setProductUrl] = useState("");
   const [productImage, setProductImage] = useState("");
 
-  // 检查是否填写了必填字段
-  const isValid = productName.trim() && productPrice.trim();
+  // 检查是否填写了必填字段，并验证价格格式
+  const isPriceValid = isValidPrice(productPrice);
+  const isUrlValid = isValidUrl(productUrl);
+  const isImageUrlValid = isValidUrl(productImage);
+  const isValid = productName.trim() && isPriceValid && isUrlValid && isImageUrlValid;
 
   const schemaCode = useMemo(() => {
-    if (!isValid) {
+    if (!productName.trim() || !isPriceValid) {
       return en 
-        ? "// Please fill in Product Name and Price to generate valid schema"
-        : "// 请填写产品名称和价格以生成有效的 Schema";
+        ? "// Please fill in Product Name and a valid Price to generate valid schema"
+        : "// 请填写产品名称和有效价格以生成有效的 Schema";
     }
+
+    if (!isUrlValid) {
+      return en
+        ? "// Please enter a valid Product URL"
+        : "// 请输入有效的产品链接";
+    }
+
+    if (!isImageUrlValid) {
+      return en
+        ? "// Please enter a valid Image URL"
+        : "// 请输入有效的图片链接";
+    }
+
+    const productUrlValue = productUrl || `${shopInfo.url}/products/your-product-handle`;
 
     const schema: Record<string, unknown> = {
       "@context": "https://schema.org",
       "@type": "Product",
+      "@id": `${productUrlValue}#product`,
       name: productName,
       brand: {
         "@type": "Brand",
@@ -200,8 +239,12 @@ function SchemaGenerator({
         price: productPrice,
         priceCurrency: productCurrency,
         availability: `https://schema.org/${productAvailability}`,
-        url: productUrl || `${shopInfo.url}/products/your-product-handle`,
+        url: productUrlValue,
         itemCondition: "https://schema.org/NewCondition",
+        seller: {
+          "@type": "Organization",
+          name: shopInfo.name,
+        },
       },
     };
 
@@ -213,18 +256,45 @@ function SchemaGenerator({
       schema.sku = productSku;
     }
     if (productImage.trim()) {
-      schema.image = productImage;
+      // image 使用数组格式以支持多图
+      schema.image = [productImage];
     }
 
+    // 转义 </script> 以防止 XSS 注入
+    const safeJsonString = JSON.stringify(schema, null, 2)
+      .replace(/<\/script/gi, "<\\/script");
+
     return `<script type="application/ld+json">
-${JSON.stringify(schema, null, 2)}
+${safeJsonString}
 </script>`;
-  }, [productName, productDescription, productPrice, productCurrency, productAvailability, productSku, productUrl, productImage, shopInfo, isValid, en]);
+  }, [productName, productDescription, productPrice, productCurrency, productAvailability, productSku, productUrl, productImage, shopInfo, isPriceValid, isUrlValid, isImageUrlValid]);
+
+  // 计算验证错误信息
+  const getValidationMessage = () => {
+    if (!productName.trim()) {
+      return en ? "Product Name is required" : "产品名称为必填项";
+    }
+    if (!productPrice.trim()) {
+      return en ? "Price is required" : "价格为必填项";
+    }
+    if (!isPriceValid) {
+      return en ? "Please enter a valid price (positive number)" : "请输入有效价格（正数）";
+    }
+    if (!isUrlValid) {
+      return en ? "Please enter a valid Product URL" : "请输入有效的产品链接";
+    }
+    if (!isImageUrlValid) {
+      return en ? "Please enter a valid Image URL" : "请输入有效的图片链接";
+    }
+    return null;
+  };
+
+  const validationMessage = getValidationMessage();
 
   return (
     <div>
       {/* 必填字段提示 */}
-      {!isValid && (
+      {validationMessage && (
         <div style={{ 
           marginBottom: 16, 
           padding: 12, 
@@ -234,7 +304,7 @@ ${JSON.stringify(schema, null, 2)}
           fontSize: 13,
           color: "#d46b08",
         }}>
-          ⚠️ {en ? "Product Name and Price are required to generate valid Schema" : "产品名称和价格为必填项，才能生成有效的 Schema"}
+          ⚠️ {validationMessage}
         </div>
       )}
 
@@ -270,7 +340,7 @@ ${JSON.stringify(schema, null, 2)}
               style={{
                 flex: 1,
                 padding: "8px 12px",
-                border: `1px solid ${!productPrice.trim() ? "#ffc58b" : "#c4cdd5"}`,
+                border: `1px solid ${!productPrice.trim() || (productPrice.trim() && !isPriceValid) ? "#ffc58b" : "#c4cdd5"}`,
                 borderRadius: 4,
                 fontSize: 14,
               }}
@@ -292,6 +362,11 @@ ${JSON.stringify(schema, null, 2)}
               <option value="JPY">JPY</option>
             </select>
           </div>
+          {productPrice.trim() && !isPriceValid && (
+            <span style={{ fontSize: 12, color: "#de3618", marginTop: 4, display: "block" }}>
+              {en ? "Enter a valid positive number" : "请输入有效的正数"}
+            </span>
+          )}
         </div>
       </div>
 
@@ -326,11 +401,16 @@ ${JSON.stringify(schema, null, 2)}
             style={{
               width: "100%",
               padding: "8px 12px",
-              border: "1px solid #c4cdd5",
+              border: `1px solid ${productUrl && !isUrlValid ? "#de3618" : "#c4cdd5"}`,
               borderRadius: 4,
               fontSize: 14,
             }}
           />
+          {productUrl && !isUrlValid && (
+            <span style={{ fontSize: 12, color: "#de3618", marginTop: 4, display: "block" }}>
+              {en ? "Enter a valid URL" : "请输入有效的链接"}
+            </span>
+          )}
         </div>
       </div>
       
@@ -346,11 +426,16 @@ ${JSON.stringify(schema, null, 2)}
           style={{
             width: "100%",
             padding: "8px 12px",
-            border: "1px solid #c4cdd5",
+            border: `1px solid ${productImage && !isImageUrlValid ? "#de3618" : "#c4cdd5"}`,
             borderRadius: 4,
             fontSize: 14,
           }}
         />
+        {productImage && !isImageUrlValid && (
+          <span style={{ fontSize: 12, color: "#de3618", marginTop: 4, display: "block" }}>
+            {en ? "Enter a valid URL" : "请输入有效的链接"}
+          </span>
+        )}
       </div>
 
       <div style={{ marginBottom: 16 }}>
@@ -395,7 +480,7 @@ ${JSON.stringify(schema, null, 2)}
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
         <span style={{ fontSize: 14, fontWeight: 600 }}>{en ? "Generated Schema Code" : "生成的 Schema 代码"}</span>
-        <CopyButton text={schemaCode} en={en} />
+        <CopyButton text={schemaCode} en={en} disabled={!isValid} />
       </div>
       <pre
         style={{
@@ -416,7 +501,7 @@ ${JSON.stringify(schema, null, 2)}
         <ol style={{ margin: "8px 0 0", paddingLeft: 20 }}>
           <li>{en ? "Copy the code above" : "复制上面的代码"}</li>
           <li>{en ? "Go to Shopify Admin → Online Store → Themes → Edit code" : "进入 Shopify 后台 → 在线商店 → 主题 → 编辑代码"}</li>
-          <li>{en ? "Open product.liquid or product-template.liquid" : "打开 product.liquid 或 product-template.liquid"}</li>
+          <li>{en ? "Open main-product.liquid (OS 2.0) or product.liquid (legacy)" : "打开 main-product.liquid（OS 2.0 主题）或 product.liquid（旧版主题）"}</li>
           <li>{en ? "Paste the code before </head> or at the end of the file" : "将代码粘贴到 </head> 之前或文件末尾"}</li>
         </ol>
       </div>
@@ -713,12 +798,15 @@ function LlmsTxtGenerator({ shopInfo, en }: { shopInfo: { name: string; url: str
 // Main Component
 // ============================================================================
 
+// Tab 类型定义
+type TabId = "schema" | "faq" | "llmstxt";
+
 export default function AIVisibility() {
   const { language, isGrowth, shopInfo, report } = useLoaderData<typeof loader>();
   const uiLanguage = useUILanguage(language);
   const en = uiLanguage === "English";
 
-  const [activeTab, setActiveTab] = useState<"schema" | "faq" | "llmstxt">("schema");
+  const [activeTab, setActiveTab] = useState<TabId>("schema");
 
   return (
     <s-page heading={en ? "AI Visibility Suite" : "AI 可见性套件"}>
@@ -785,15 +873,15 @@ export default function AIVisibility() {
           padding: 4,
           borderRadius: 8,
         }}>
-          {[
-            { id: "schema", label: en ? "🏷️ Product Schema" : "🏷️ 产品 Schema", icon: "🏷️" },
-            { id: "faq", label: en ? "❓ FAQ Schema" : "❓ FAQ Schema", icon: "❓" },
-            { id: "llmstxt", label: "📝 llms.txt", icon: "📝" },
-          ].map((tab) => (
+          {([
+            { id: "schema" as const, label: en ? "🏷️ Product Schema" : "🏷️ 产品 Schema" },
+            { id: "faq" as const, label: en ? "❓ FAQ Schema" : "❓ FAQ Schema" },
+            { id: "llmstxt" as const, label: "📝 llms.txt" },
+          ] satisfies { id: TabId; label: string }[]).map((tab) => (
             <button
               key={tab.id}
               type="button"
-              onClick={() => setActiveTab(tab.id as any)}
+              onClick={() => setActiveTab(tab.id)}
               style={{
                 padding: "12px 20px",
                 border: "none",

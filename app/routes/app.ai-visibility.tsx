@@ -159,37 +159,75 @@ function SchemaGenerator({
   const [productPrice, setProductPrice] = useState("");
   const [productCurrency, setProductCurrency] = useState("USD");
   const [productAvailability, setProductAvailability] = useState("InStock");
+  const [productSku, setProductSku] = useState("");
+  const [productUrl, setProductUrl] = useState("");
+  const [productImage, setProductImage] = useState("");
+
+  // 检查是否填写了必填字段
+  const isValid = productName.trim() && productPrice.trim();
 
   const schemaCode = useMemo(() => {
-    const schema = {
+    if (!isValid) {
+      return en 
+        ? "// Please fill in Product Name and Price to generate valid schema"
+        : "// 请填写产品名称和价格以生成有效的 Schema";
+    }
+
+    const schema: Record<string, unknown> = {
       "@context": "https://schema.org",
       "@type": "Product",
-      name: productName || "Your Product Name",
-      description: productDescription || "Your product description",
+      name: productName,
       brand: {
         "@type": "Brand",
         name: shopInfo.name,
       },
       offers: {
         "@type": "Offer",
-        price: productPrice || "0.00",
+        price: productPrice,
         priceCurrency: productCurrency,
         availability: `https://schema.org/${productAvailability}`,
-        url: shopInfo.url,
+        url: productUrl || `${shopInfo.url}/products/your-product-handle`,
+        itemCondition: "https://schema.org/NewCondition",
       },
     };
+
+    // 可选字段：仅在有值时添加
+    if (productDescription.trim()) {
+      schema.description = productDescription;
+    }
+    if (productSku.trim()) {
+      schema.sku = productSku;
+    }
+    if (productImage.trim()) {
+      schema.image = productImage;
+    }
 
     return `<script type="application/ld+json">
 ${JSON.stringify(schema, null, 2)}
 </script>`;
-  }, [productName, productDescription, productPrice, productCurrency, productAvailability, shopInfo]);
+  }, [productName, productDescription, productPrice, productCurrency, productAvailability, productSku, productUrl, productImage, shopInfo, isValid, en]);
 
   return (
     <div>
+      {/* 必填字段提示 */}
+      {!isValid && (
+        <div style={{ 
+          marginBottom: 16, 
+          padding: 12, 
+          background: "#fff7e6", 
+          border: "1px solid #ffd591",
+          borderRadius: 6, 
+          fontSize: 13,
+          color: "#d46b08",
+        }}>
+          ⚠️ {en ? "Product Name and Price are required to generate valid Schema" : "产品名称和价格为必填项，才能生成有效的 Schema"}
+        </div>
+      )}
+
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
         <div>
           <label style={{ display: "block", marginBottom: 6, fontSize: 13, fontWeight: 500 }}>
-            {en ? "Product Name" : "产品名称"}
+            {en ? "Product Name" : "产品名称"} <span style={{ color: "#de3618" }}>*</span>
           </label>
           <input
             type="text"
@@ -199,7 +237,7 @@ ${JSON.stringify(schema, null, 2)}
             style={{
               width: "100%",
               padding: "8px 12px",
-              border: "1px solid #c4cdd5",
+              border: `1px solid ${!productName.trim() ? "#ffc58b" : "#c4cdd5"}`,
               borderRadius: 4,
               fontSize: 14,
             }}
@@ -207,7 +245,7 @@ ${JSON.stringify(schema, null, 2)}
         </div>
         <div>
           <label style={{ display: "block", marginBottom: 6, fontSize: 13, fontWeight: 500 }}>
-            {en ? "Price" : "价格"}
+            {en ? "Price" : "价格"} <span style={{ color: "#de3618" }}>*</span>
           </label>
           <div style={{ display: "flex", gap: 8 }}>
             <input
@@ -218,7 +256,7 @@ ${JSON.stringify(schema, null, 2)}
               style={{
                 flex: 1,
                 padding: "8px 12px",
-                border: "1px solid #c4cdd5",
+                border: `1px solid ${!productPrice.trim() ? "#ffc58b" : "#c4cdd5"}`,
                 borderRadius: 4,
                 fontSize: 14,
               }}
@@ -242,10 +280,68 @@ ${JSON.stringify(schema, null, 2)}
           </div>
         </div>
       </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+        <div>
+          <label style={{ display: "block", marginBottom: 6, fontSize: 13, fontWeight: 500 }}>
+            {en ? "SKU (optional)" : "SKU（可选）"}
+          </label>
+          <input
+            type="text"
+            value={productSku}
+            onChange={(e) => setProductSku(e.target.value)}
+            placeholder={en ? "e.g., ABC-12345" : "例如：ABC-12345"}
+            style={{
+              width: "100%",
+              padding: "8px 12px",
+              border: "1px solid #c4cdd5",
+              borderRadius: 4,
+              fontSize: 14,
+            }}
+          />
+        </div>
+        <div>
+          <label style={{ display: "block", marginBottom: 6, fontSize: 13, fontWeight: 500 }}>
+            {en ? "Product URL (optional)" : "产品链接（可选）"}
+          </label>
+          <input
+            type="text"
+            value={productUrl}
+            onChange={(e) => setProductUrl(e.target.value)}
+            placeholder={`${shopInfo.url}/products/...`}
+            style={{
+              width: "100%",
+              padding: "8px 12px",
+              border: "1px solid #c4cdd5",
+              borderRadius: 4,
+              fontSize: 14,
+            }}
+          />
+        </div>
+      </div>
       
       <div style={{ marginBottom: 16 }}>
         <label style={{ display: "block", marginBottom: 6, fontSize: 13, fontWeight: 500 }}>
-          {en ? "Description" : "描述"}
+          {en ? "Product Image URL (optional)" : "产品图片链接（可选）"}
+        </label>
+        <input
+          type="text"
+          value={productImage}
+          onChange={(e) => setProductImage(e.target.value)}
+          placeholder={en ? "https://cdn.shopify.com/..." : "https://cdn.shopify.com/..."}
+          style={{
+            width: "100%",
+            padding: "8px 12px",
+            border: "1px solid #c4cdd5",
+            borderRadius: 4,
+            fontSize: 14,
+          }}
+        />
+      </div>
+
+      <div style={{ marginBottom: 16 }}>
+        <label style={{ display: "block", marginBottom: 6, fontSize: 13, fontWeight: 500 }}>
+          {en ? "Description (optional)" : "描述（可选）"}
         </label>
         <textarea
           value={productDescription}

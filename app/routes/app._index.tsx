@@ -64,10 +64,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     }
   }
 
-  // Only call billing functions if shopDomain is valid
-  const plan = shopDomain ? await getEffectivePlan(shopDomain) : "none";
+  const plan = await getEffectivePlan(shopDomain);
   const isFreePlan = plan === "free";
-  const canViewFull = shopDomain ? await hasFeature(shopDomain, FEATURES.DASHBOARD_FULL) : false;
+  const canViewFull = await hasFeature(shopDomain, FEATURES.DASHBOARD_FULL);
 
   // Enforce 7d limit for Free plan
   const defaultRangeKey: TimeRangeKey = isFreePlan ? "7d" : DEFAULT_RANGE_KEY;

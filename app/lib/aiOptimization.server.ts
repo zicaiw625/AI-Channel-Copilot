@@ -458,18 +458,18 @@ function generateSuggestions(
 {
   "@context": "https://schema.org",
   "@type": "Product",
-  "name": "{{ product.title }}",
-  "description": "{{ product.description | strip_html | escape }}",
-  "image": [{% for image in product.images %}"{{ image | img_url: 'large' }}"{% unless forloop.last %},{% endunless %}{% endfor %}],
-  "sku": "{{ product.selected_or_first_available_variant.sku }}",
+  "name": {{ product.title | json }},
+  "description": {{ product.description | strip_html | json }},
+  "image": [{% for image in product.images %}"{{ image | image_url: width: 1024 }}"{% unless forloop.last %},{% endunless %}{% endfor %}],
+  "sku": {{ product.selected_or_first_available_variant.sku | json }},
   "brand": {
     "@type": "Brand",
-    "name": "{{ product.vendor }}"
+    "name": {{ product.vendor | json }}
   },
   "offers": {
     "@type": "Offer",
     "url": "{{ shop.url }}{{ product.url }}",
-    "price": "{{ product.price | divided_by: 100.0 }}",
+    "price": "{{ product.price | money_without_currency | remove: ',' }}",
     "priceCurrency": "{{ shop.currency }}",
     "availability": "{% if product.available %}https://schema.org/InStock{% else %}https://schema.org/OutOfStock{% endif %}",
     "itemCondition": "https://schema.org/NewCondition"

@@ -563,7 +563,7 @@ ${JSON.stringify(schema, null, 2)}
   );
 }
 
-function LlmsTxtGenerator({ shopInfo, en }: { shopInfo: any; en: boolean }) {
+function LlmsTxtGenerator({ shopInfo, en }: { shopInfo: { name: string; url: string; description: string; logo: string }; en: boolean }) {
   const [includeProducts, setIncludeProducts] = useState(true);
   const [includeCollections, setIncludeCollections] = useState(true);
   const [includeBlogs, setIncludeBlogs] = useState(false);

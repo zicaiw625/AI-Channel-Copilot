@@ -24,9 +24,12 @@ export interface AIConversionPathProps {
 
 const stageIcons: Record<string, string> = {
   visit: "👀",
-  cart: "🛒",
-  checkout: "💳",
-  order: "✅",
+  add_to_cart: "🛒",
+  cart: "🛒", // 兼容旧格式
+  checkout_started: "💳",
+  checkout: "💳", // 兼容旧格式
+  order_created: "✅",
+  order: "✅", // 兼容旧格式
 };
 
 /**
@@ -317,7 +320,7 @@ export const AIConversionPath = ({
               stage={stage}
               lang={lang}
               currency={currency}
-              isEstimated={isEstimated && (stage.id === "visit" || stage.id === "cart")}
+              isEstimated={isEstimated && (stage.id === "visit" || stage.id === "add_to_cart" || stage.id === "cart")}
             />
             {index < stages.length - 1 && (
               <ConversionArrow

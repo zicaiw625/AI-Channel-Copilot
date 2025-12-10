@@ -28,6 +28,18 @@ function safeParseFloat(value: string | undefined | null, fallback = 0): number 
 }
 
 /**
+ * 安全解析日期，处理无效输入
+ * @param value - 要解析的日期字符串
+ * @param fallback - 解析失败时的默认值（默认为当前时间）
+ */
+function safeParseDate(value: string | undefined | null, fallback?: Date): Date {
+  if (!value || typeof value !== "string") return fallback ?? new Date();
+  const parsed = new Date(value);
+  // 检查是否为有效日期
+  return Number.isFinite(parsed.getTime()) ? parsed : (fallback ?? new Date());
+}
+
+/**
  * 格式化日期为 YYYY-MM-DD 格式（时区感知）
  */
 function formatDateWithTimezone(date: Date, timezone: string = "UTC"): string {
@@ -157,10 +169,6 @@ function validateEstimationConfig(
   return config;
 }
 
-// 兼容性：保留旧常量名（但使用新的默认配置）
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const _FUNNEL_ESTIMATION_CONFIG = DEFAULT_FUNNEL_ESTIMATION_CONFIG;
-
 // ============================================================================
 // Types
 // ============================================================================
@@ -169,7 +177,6 @@ export type FunnelStage =
   | "visit"           // 访问/会话开始
   | "add_to_cart"     // 加购
   | "checkout_started"// 发起结账
-  | "checkout_completed" // 完成结账
   | "order_created";  // 订单创建
 
 export interface FunnelMetrics {
@@ -337,7 +344,7 @@ export async function processCheckoutCreate(
         cartToken: payload.cart_token || null,
         email: payload.email || null,
         customerId: payload.customer?.id?.toString() || null,
-        createdAt: new Date(payload.created_at),
+        createdAt: safeParseDate(payload.created_at),
         totalPrice,
         subtotalPrice,
         currency: payload.currency || "USD",
@@ -406,8 +413,8 @@ export async function processCheckoutUpdate(
         cartToken: payload.cart_token || null,
         email: payload.email || null,
         customerId: payload.customer?.id?.toString() || null,
-        createdAt: new Date(payload.created_at),
-        completedAt: payload.completed_at ? new Date(payload.completed_at) : null,
+        createdAt: safeParseDate(payload.created_at),
+        completedAt: payload.completed_at ? safeParseDate(payload.completed_at) : null,
         totalPrice,
         subtotalPrice,
         currency: payload.currency || "USD",
@@ -421,7 +428,7 @@ export async function processCheckoutUpdate(
       },
       update: {
         updatedAt: new Date(),
-        completedAt: payload.completed_at ? new Date(payload.completed_at) : undefined,
+        completedAt: payload.completed_at ? safeParseDate(payload.completed_at) : undefined,
         totalPrice,
         subtotalPrice,
         status: isCompleted ? "completed" : undefined,

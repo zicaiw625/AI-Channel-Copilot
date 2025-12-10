@@ -42,10 +42,11 @@ const formatNumber = (num: number): string => {
 };
 
 /**
- * 格式化货币
+ * 格式化货币（根据语言选择 locale）
  */
-const formatCurrency = (value: number, currency: string = "USD"): string => {
-  return new Intl.NumberFormat("en-US", {
+const formatCurrency = (value: number, currency: string = "USD", lang: Lang = "English"): string => {
+  const locale = lang === "English" ? "en-US" : "zh-CN";
+  return new Intl.NumberFormat(locale, {
     style: "currency",
     currency,
     minimumFractionDigits: 0,
@@ -167,11 +168,11 @@ const StageNode = ({
             }}
           >
             <div style={{ fontSize: 11, color: "#637381" }}>
-              {formatCurrency(stage.value, currency)}
+              {formatCurrency(stage.value, currency, lang)}
             </div>
             {stage.aiValue !== undefined && stage.aiValue > 0 && (
               <div style={{ fontSize: 11, color: "#635bff", fontWeight: 500 }}>
-                AI: {formatCurrency(stage.aiValue, currency)}
+                AI: {formatCurrency(stage.aiValue, currency, lang)}
               </div>
             )}
           </div>

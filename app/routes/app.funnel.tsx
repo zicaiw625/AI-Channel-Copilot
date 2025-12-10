@@ -41,7 +41,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
 // 判断漏斗阶段是否为估算数据
 const isEstimatedStage = (stage: string): boolean => {
-  return stage === "visit" || stage === "add_to_cart" || stage === "page_view";
+  return stage === "visit" || stage === "add_to_cart";
 };
 
 // 漏斗可视化组件
@@ -283,7 +283,7 @@ const ConversionCard = ({
 };
 
 export default function FunnelAnalysis() {
-  const { funnelData, language, rangeKey, shopDomain: _shopDomain, currency: _currency } = useLoaderData<typeof loader>();
+  const { funnelData, language, rangeKey, shopDomain: _shopDomain, currency } = useLoaderData<typeof loader>();
   const uiLanguage = useUILanguage(language);
   const isEnglish = uiLanguage === "English";
   const navigate = useNavigate();
@@ -523,8 +523,8 @@ export default function FunnelAnalysis() {
               aiCount: funnelData.aiChannels.find(s => s.stage === stage.stage)?.count || 0,
               aiValue: funnelData.aiChannels.find(s => s.stage === stage.stage)?.value || 0,
             }))}
-            lang={uiLanguage as "English" | "中文"}
-            currency={_currency}
+            lang={uiLanguage === "English" ? "English" : "中文"}
+            currency={currency}
             isEstimated={funnelData.isEstimated.visits || funnelData.isEstimated.carts}
           />
         </div>

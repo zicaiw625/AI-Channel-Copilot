@@ -616,17 +616,11 @@ export async function getFunnelData(
     : shouldEstimateCheckouts
       ? Math.round(totalOrders / checkoutToOrderRate)
       : 0;
-  const effectiveCheckoutsCompleted = hasCheckoutData 
-    ? totalCheckoutsCompleted 
-    : totalOrders;
   const effectiveAiCheckoutsStarted = hasCheckoutData 
     ? aiCheckoutsStarted 
     : shouldEstimateAiCheckouts
       ? Math.round(aiOrders / checkoutToOrderRate)
       : 0;
-  const effectiveAiCheckoutsCompleted = hasCheckoutData 
-    ? aiCheckoutsCompleted 
-    : aiOrders;
   
   // 估算访问和加购数据
   // 修复：确保当 checkouts 和 orders 都为 0 时，估算值也为 0
@@ -655,7 +649,6 @@ export async function getFunnelData(
     visits: number,
     carts: number,
     checkoutsStarted: number,
-    _checkoutsCompleted: number,
     ordersCount: number,
     gmv: number,
   ): FunnelMetrics[] => {
@@ -701,7 +694,6 @@ export async function getFunnelData(
     Math.round(estimatedVisits),
     Math.round(estimatedCarts),
     effectiveCheckoutsStarted,
-    effectiveCheckoutsCompleted,
     totalOrders,
     totalOrderGMV,
   );
@@ -711,7 +703,6 @@ export async function getFunnelData(
     Math.round(estimatedAiVisits),
     Math.round(estimatedAiCarts),
     effectiveAiCheckoutsStarted,
-    effectiveAiCheckoutsCompleted,
     aiOrders,
     aiOrderGMV,
   );
@@ -741,7 +732,6 @@ export async function getFunnelData(
       Math.round(channelVisits),
       Math.round(channelCarts),
       channelCheckoutsStarted,
-      stats.completedCheckouts,
       stats.orders,
       stats.gmv,
     );

@@ -113,6 +113,13 @@ export default function Copilot() {
   return (
     <s-page heading={language === "English" ? "Copilot Q&A (v0.2 Experimental)" : "Copilot 分析问答（v0.2 实验）"}>
       <div className={styles.page}>
+        {/* 顶部导航 */}
+        <div style={{ marginBottom: 16, display: "flex", gap: 12 }}>
+          <Link to="/app" className={styles.secondaryButton}>
+            ← {language === "English" ? "Back to Dashboard" : "返回仪表盘"}
+          </Link>
+        </div>
+
         <div className={styles.lede}>
           <h1>{language === "English" ? "Quick Q&A based on fixed intents" : "基于固定意图的快捷问答"}</h1>
           <p>{language === "English" ? "This page uses fixed templates to generate natural language from aggregated JSON without asking the model to compute numbers. Prefer quick buttons for best results." : "本页采用固定模板，直接从聚合 JSON 中生成自然语言解读，不会让模型自行计算数字。推荐优先使用下方快捷按钮以获得更稳定结果。"}</p>

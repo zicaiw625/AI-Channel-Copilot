@@ -1,13 +1,13 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import type { HeadersFunction, LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
-import { Link, useLoaderData, useFetcher } from "react-router";
+import { Link, useLoaderData } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 
 import { authenticate } from "../shopify.server";
 import { getSettings } from "../lib/settings.server";
 import { useUILanguage } from "../lib/useUILanguage";
 import styles from "../styles/app.dashboard.module.css";
-import { requireFeature, FEATURES, hasFeature } from "../lib/access.server";
+import { FEATURES, hasFeature } from "../lib/access.server";
 import { generateAIOptimizationReport } from "../lib/aiOptimization.server";
 import { logger } from "../lib/logger.server";
 
@@ -267,7 +267,7 @@ function SchemaGenerator({
     return `<script type="application/ld+json">
 ${safeJsonString}
 </script>`;
-  }, [productName, productDescription, productPrice, productCurrency, productAvailability, productSku, productUrl, productImage, shopInfo, isPriceValid, isUrlValid, isImageUrlValid]);
+  }, [productName, productDescription, productPrice, productCurrency, productAvailability, productSku, productUrl, productImage, shopInfo, isPriceValid, isUrlValid, isImageUrlValid, en]);
 
   // 计算验证错误信息
   const getValidationMessage = () => {

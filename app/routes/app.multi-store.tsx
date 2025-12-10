@@ -59,10 +59,12 @@ interface MultiStoreData {
 // Loader
 // ============================================================================
 
+import type { DateRange } from "../lib/aiTypes";
+
 // 获取单个店铺数据的辅助函数
 async function fetchStoreData(
   shop: string,
-  range: { start: Date; end: Date }
+  range: DateRange
 ): Promise<StoreSnapshot> {
   const [shopSettings, stats, lastOrder] = await Promise.all([
     getSettings(shop),

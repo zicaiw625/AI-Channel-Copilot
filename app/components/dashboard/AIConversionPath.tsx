@@ -190,15 +190,12 @@ const ConversionArrow = ({
   toCount,
   fromAi,
   toAi,
-  lang,
 }: {
   fromCount: number;
   toCount: number;
   fromAi: number;
   toAi: number;
-  lang: Lang;
 }) => {
-  const en = lang === "English";
   const overallRate = fromCount > 0 ? (toCount / fromCount) * 100 : 0;
   const aiRate = fromAi > 0 ? (toAi / fromAi) * 100 : 0;
   const diff = aiRate - overallRate;
@@ -331,7 +328,6 @@ export const AIConversionPath = ({
                 toCount={stages[index + 1].count}
                 fromAi={stage.aiCount}
                 toAi={stages[index + 1].aiCount}
-                lang={lang}
               />
             )}
           </div>

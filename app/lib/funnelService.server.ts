@@ -4,7 +4,7 @@
  */
 
 import prisma from "../db.server";
-import { resolveDateRange, type TimeRangeKey, type AIChannel, type AiDomainRule, type UtmSourceRule, AI_CHANNELS } from "./aiData";
+import { resolveDateRange, type TimeRangeKey, type AiDomainRule, type UtmSourceRule, AI_CHANNELS } from "./aiData";
 import { toPrismaAiSource, fromPrismaAiSource } from "./aiSourceMapper";
 import { detectAiFromFields } from "./aiAttribution";
 import { logger } from "./logger.server";
@@ -571,22 +571,22 @@ export async function getFunnelData(
   
   // 真实的结账数据统计
   let totalCheckoutsStarted = 0;
-  let totalCheckoutsCompleted = 0;
+  let _totalCheckoutsCompleted = 0; // 保留用于未来分析
   let aiCheckoutsStarted = 0;
-  let aiCheckoutsCompleted = 0;
+  let _aiCheckoutsCompleted = 0; // 保留用于未来分析
   
   for (const agg of checkoutAggBySource) {
     const count = agg._count._all;
     totalCheckoutsStarted += count;
     
     if (agg.status === "completed") {
-      totalCheckoutsCompleted += count;
+      _totalCheckoutsCompleted += count;
     }
     
     if (agg.aiSource) {
       aiCheckoutsStarted += count;
       if (agg.status === "completed") {
-        aiCheckoutsCompleted += count;
+        _aiCheckoutsCompleted += count;
       }
       
       // 更新渠道统计

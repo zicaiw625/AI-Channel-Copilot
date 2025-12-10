@@ -297,7 +297,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     try {
       // 获取订单数据
       const ordersRepo = new OrdersRepository();
-      const dateRange = resolveDateRange(range as "7d" | "30d" | "90d" | "1y");
+      // 验证并限制 range 为有效的 TimeRangeKey
+      const validRange = (["7d", "30d", "90d"] as const).includes(range as any) 
+        ? (range as "7d" | "30d" | "90d") 
+        : "30d";
+      const dateRange = resolveDateRange(validRange);
       const orders = await ordersRepo.findByShopAndDateRange(shopDomain, dateRange, {
         aiOnly: true,
         limit: MAX_EXPORT_ORDERS, // 使用常量保持一致
@@ -305,35 +309,38 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       
       const stats = await ordersRepo.getAggregateStats(shopDomain, dateRange);
       
+      // 定义导出数据结构
+      const exportData = {
+        range: validRange,
+        dateRange: {
+          start: dateRange.start.toISOString(),
+          end: dateRange.end.toISOString(),
+        },
+        summary: {
+          totalOrders: stats.total.orders,
+          totalGMV: stats.total.gmv,
+          aiOrders: stats.ai.orders,
+          aiGMV: stats.ai.gmv,
+          aiShare: stats.total.gmv > 0 ? (stats.ai.gmv / stats.total.gmv) * 100 : 0,
+        },
+        orders: orders.map(order => ({
+          id: order.id,
+          name: order.name,
+          createdAt: order.createdAt,
+          totalPrice: order.totalPrice,
+          currency: order.currency,
+          aiSource: order.aiSource,
+          referrer: order.referrer,
+          utmSource: order.utmSource,
+          utmMedium: order.utmMedium,
+        })),
+      };
+      
       const exportPayload: WebhookPayload = {
         event: "data_export",
         timestamp: new Date().toISOString(),
         shopDomain,
-        data: {
-          range,
-          dateRange: {
-            start: dateRange.start.toISOString(),
-            end: dateRange.end.toISOString(),
-          },
-          summary: {
-            totalOrders: stats.total.orders,
-            totalGMV: stats.total.gmv,
-            aiOrders: stats.ai.orders,
-            aiGMV: stats.ai.gmv,
-            aiShare: stats.total.gmv > 0 ? (stats.ai.gmv / stats.total.gmv) * 100 : 0,
-          },
-          orders: orders.map(order => ({
-            id: order.id,
-            name: order.name,
-            createdAt: order.createdAt,
-            totalPrice: order.totalPrice,
-            currency: order.currency,
-            aiSource: order.aiSource,
-            referrer: order.referrer,
-            utmSource: order.utmSource,
-            utmMedium: order.utmMedium,
-          })),
-        },
+        data: exportData,
       };
       
       const result = await sendWebhook(url, exportPayload, secret, "data_export");
@@ -360,7 +367,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         return Response.json({ 
           ok: true, 
           ordersExported: orders.length,
-          summary: exportPayload.data.summary,
+          summary: exportData.summary,
         });
       } else {
         logger.error("[webhook-export] Data export failed", { shopDomain, url, error: result.error });

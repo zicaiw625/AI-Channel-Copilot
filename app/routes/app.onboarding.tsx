@@ -1,5 +1,5 @@
 import type { HeadersFunction, LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
-import { useLoaderData, useSearchParams, useActionData, Form, Link } from "react-router";
+import { useLoaderData, useSearchParams, useActionData, Form } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import { requireEnv } from "../lib/env.server";
@@ -20,7 +20,7 @@ import { resolveDateRange } from "../lib/aiData";
 import { logger } from "../lib/logger.server";
 
 // 共享 UI 组件
-import { Banner, Card, StatCard, ProgressBar, PlanCard } from "../components/ui";
+import { Banner, PlanCard } from "../components/ui";
 
 // ============================================================================
 // Types

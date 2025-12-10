@@ -89,7 +89,7 @@ const CopyButton = ({
       textarea.value = text;
       document.body.appendChild(textarea);
       textarea.select();
-      document.execCommand("copy"); // eslint-disable-line @typescript-eslint/no-deprecated
+      document.execCommand("copy"); // Fallback for older browsers
       document.body.removeChild(textarea);
       setCopied(true);
       timerRef.current = setTimeout(() => setCopied(false), 2000);
@@ -748,7 +748,7 @@ export default function AIOptimization() {
             </div>
             
             <div className={styles.faqList}>
-              {report.suggestedFAQs.map((faq, index) => (
+              {report.suggestedFAQs.map((faq) => (
                 <div
                   key={`faq-${faq.basedOnProduct}-${faq.question.slice(0, 20)}`}
                   className={styles.faqCard}

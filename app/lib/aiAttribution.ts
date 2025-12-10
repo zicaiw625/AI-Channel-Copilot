@@ -216,8 +216,9 @@ const buildStructuredSignal = (
 
 /**
  * 🆕 根据置信度分数计算置信度等级
+ * 导出供外部模块使用
  */
-const getConfidenceLevel = (score: number): ConfidenceLevel => {
+export const getConfidenceLevel = (score: number): ConfidenceLevel => {
   if (score >= 80) return "high";
   if (score >= 50) return "medium";
   return "low";

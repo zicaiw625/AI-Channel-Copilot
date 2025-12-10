@@ -9,6 +9,7 @@ import { fromPrismaAiSource } from "./aiSourceMapper";
 import { logger } from "./logger.server";
 import type { AdminGraphqlClient } from "./graphqlSdk.server";
 import { createGraphqlSdk } from "./graphqlSdk.server";
+import { MAX_ORDER_PRODUCTS } from "./constants";
 
 // ============================================================================
 // Types
@@ -309,7 +310,11 @@ async function fetchRecentProducts(
 /**
  * 将 ProductNode 转换为 ProductAIPerformance（用于没有 AI 订单数据时）
  */
-function productNodeToPerformance(product: ProductNode, shopDomain: string): ProductAIPerformance {
+function productNodeToPerformance(
+  product: ProductNode, 
+  shopDomain: string, 
+  language: string = "中文"
+): ProductAIPerformance {
   const description = product.description || "";
   const hasDescription = Boolean(description.trim());
   const descriptionLength = description.length;
@@ -335,17 +340,22 @@ function productNodeToPerformance(product: ProductNode, shopDomain: string): Pro
     imageCount,
     hasSEOTitle,
     hasSEODescription,
-    schemaMarkupStatus: analyzeSchemaStatus(product),
-    suggestedImprovements: generateProductSuggestions(product),
+    schemaMarkupStatus: analyzeContentReadiness(product),
+    suggestedImprovements: generateProductSuggestions(product, language),
   };
 }
 
 /**
- * 分析产品的内容完整度
- * 注意：这不是检测页面上是否有 Schema 标记，而是检查产品信息是否完整
- * 完整的产品信息是添加 Schema 标记的前提条件
+ * 分析产品的内容完整度（用于评估 Schema 标记就绪状态）
+ * 
+ * 注意：此函数检查产品信息是否完整，而不是检测页面上是否已有 Schema 标记。
+ * 完整的产品信息是添加 Schema 标记的前提条件。
+ * 
+ * @returns "complete" - 产品信息完整，可以添加完整的 Schema 标记
+ * @returns "partial" - 产品信息部分完整，Schema 标记会缺少某些字段
+ * @returns "missing" - 产品信息严重不足，不建议添加 Schema 标记
  */
-function analyzeSchemaStatus(product: ProductNode): "complete" | "partial" | "missing" {
+function analyzeContentReadiness(product: ProductNode): "complete" | "partial" | "missing" {
   const hasDescription = Boolean(product.description?.trim());
   const hasImages = product.images.edges.length > 0;
   const hasPrice = product.variants.edges.length > 0;
@@ -359,36 +369,72 @@ function analyzeSchemaStatus(product: ProductNode): "complete" | "partial" | "mi
 }
 
 /**
- * 生成产品级改进建议
+ * 产品改进建议的双语文本
  */
-function generateProductSuggestions(product: ProductNode): string[] {
+const PRODUCT_SUGGESTION_TEXTS = {
+  noDescription: {
+    en: "Add product description to improve AI understanding",
+    zh: "添加产品描述以提高 AI 理解能力",
+  },
+  shortDescription: {
+    en: "Expand product description to at least 100 characters for richer context",
+    zh: "扩展产品描述至少 100 字以提供更丰富的上下文",
+  },
+  noImages: {
+    en: "Add product images",
+    zh: "添加产品图片",
+  },
+  missingAlt: {
+    en: (count: number) => `Add alt text to ${count} image${count > 1 ? "s" : ""}`,
+    zh: (count: number) => `为 ${count} 张图片添加 alt 文本`,
+  },
+  noSeoTitle: {
+    en: "Set SEO title to optimize AI search visibility",
+    zh: "设置 SEO 标题以优化 AI 搜索可见性",
+  },
+  noSeoDescription: {
+    en: "Set SEO description to improve AI recommendation probability",
+    zh: "设置 SEO 描述以提高 AI 推荐概率",
+  },
+  noProductType: {
+    en: "Set product type for better AI categorization",
+    zh: "设置产品类型以便 AI 更好地分类",
+  },
+} as const;
+
+/**
+ * 生成产品级改进建议（支持双语）
+ */
+function generateProductSuggestions(product: ProductNode, language: string = "中文"): string[] {
   const suggestions: string[] = [];
+  const isEnglish = language === "English";
+  const lang = isEnglish ? "en" : "zh";
   
   if (!product.description?.trim()) {
-    suggestions.push("添加产品描述以提高 AI 理解能力");
+    suggestions.push(PRODUCT_SUGGESTION_TEXTS.noDescription[lang]);
   } else if (product.description.length < 100) {
-    suggestions.push("扩展产品描述至少 100 字以提供更丰富的上下文");
+    suggestions.push(PRODUCT_SUGGESTION_TEXTS.shortDescription[lang]);
   }
   
   if (product.images.edges.length === 0) {
-    suggestions.push("添加产品图片");
+    suggestions.push(PRODUCT_SUGGESTION_TEXTS.noImages[lang]);
   } else {
     const missingAlt = product.images.edges.filter(e => !e.node.altText).length;
     if (missingAlt > 0) {
-      suggestions.push(`为 ${missingAlt} 张图片添加 alt 文本`);
+      suggestions.push(PRODUCT_SUGGESTION_TEXTS.missingAlt[lang](missingAlt));
     }
   }
   
   if (!product.seo?.title) {
-    suggestions.push("设置 SEO 标题以优化 AI 搜索可见性");
+    suggestions.push(PRODUCT_SUGGESTION_TEXTS.noSeoTitle[lang]);
   }
   
   if (!product.seo?.description) {
-    suggestions.push("设置 SEO 描述以提高 AI 推荐概率");
+    suggestions.push(PRODUCT_SUGGESTION_TEXTS.noSeoDescription[lang]);
   }
   
   if (!product.productType) {
-    suggestions.push("设置产品类型以便 AI 更好地分类");
+    suggestions.push(PRODUCT_SUGGESTION_TEXTS.noProductType[lang]);
   }
   
   return suggestions;
@@ -729,8 +775,7 @@ export async function generateAIOptimizationReport(
   const exposurePrefs = options.exposurePreferences;
   
   // 获取 AI 渠道的产品数据
-  // 限制最大返回数量，防止大数据量导致 OOM
-  const MAX_ORDER_PRODUCTS = 10000;
+  // 限制最大返回数量，防止大数据量导致 OOM（MAX_ORDER_PRODUCTS 从 constants.ts 导入）
   const orderProducts = await prisma.orderProduct.findMany({
     where: {
       order: {
@@ -845,8 +890,8 @@ export async function generateAIOptimizationReport(
         imageCount,
         hasSEOTitle,
         hasSEODescription,
-        schemaMarkupStatus: details ? analyzeSchemaStatus(details) : "missing",
-        suggestedImprovements: details ? generateProductSuggestions(details) : [],
+        schemaMarkupStatus: details ? analyzeContentReadiness(details) : "missing",
+        suggestedImprovements: details ? generateProductSuggestions(details, language) : [],
       };
     })
     .sort((a, b) => b.aiGMV - a.aiGMV);
@@ -859,7 +904,7 @@ export async function generateAIOptimizationReport(
   if (!hasAIOrderData && admin) {
     // 获取店铺最新的 20 个产品
     fallbackProductNodes = await fetchRecentProducts(admin, shopDomain, 20);
-    productsForScoring = fallbackProductNodes.map(p => productNodeToPerformance(p, shopDomain));
+    productsForScoring = fallbackProductNodes.map(p => productNodeToPerformance(p, shopDomain, language));
     logger.info("[aiOptimization] No AI order data, using recent products for scoring", { 
       shopDomain, 
       productCount: productsForScoring.length 

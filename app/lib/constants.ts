@@ -26,3 +26,6 @@ export const RETENTION_DELETE_BATCH_DELAY_MS = fromEnv("RETENTION_DELETE_BATCH_D
 // llms.txt 缓存相关常量
 export const LLMS_CACHE_TTL_MS = fromEnv("LLMS_CACHE_TTL_MS", 60 * 60 * 1000); // 默认 1 小时
 export const LLMS_CACHE_UPDATE_COOLDOWN_MS = fromEnv("LLMS_CACHE_UPDATE_COOLDOWN_MS", 5 * 60 * 1000); // 默认 5 分钟
+
+// AI 优化报告相关常量
+export const MAX_ORDER_PRODUCTS = fromEnv("MAX_ORDER_PRODUCTS", 10000); // 用于优化报告查询的最大订单产品数

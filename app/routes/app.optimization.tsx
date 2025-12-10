@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+// useRef is used for: timer cleanup in CopyButton, and storing latest searchParams/navigate refs
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { Link, useLoaderData, useNavigate, useSearchParams } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
@@ -77,12 +78,14 @@ const CopyButton = ({
       setCopied(true);
       timerRef.current = setTimeout(() => setCopied(false), 2000);
     } catch {
-      // Fallback for older browsers
+      // Fallback for older browsers that don't support navigator.clipboard API
+      // Note: document.execCommand("copy") is deprecated but kept for compatibility
+      // with older browsers (Safari < 13.1, IE, etc.)
       const textarea = document.createElement("textarea");
       textarea.value = text;
       document.body.appendChild(textarea);
       textarea.select();
-      document.execCommand("copy");
+      document.execCommand("copy"); // eslint-disable-line @typescript-eslint/no-deprecated
       document.body.removeChild(textarea);
       setCopied(true);
       timerRef.current = setTimeout(() => setCopied(false), 2000);
@@ -175,11 +178,12 @@ const CodeSnippetBlock = ({
   );
 };
 
-const ScoreGauge = ({ score, label }: { score: number; label: string }) => {
+const ScoreGauge = ({ score, label, id }: { score: number; label: string; id: string }) => {
   const color = score >= 70 ? "#50b83c" : score >= 40 ? "#f4a623" : "#de3618";
   const circumference = 2 * Math.PI * 45;
   const offset = circumference - (score / 100) * circumference;
-  const gaugeId = `gauge-${label.replace(/\s+/g, "-").toLowerCase()}`;
+  // 使用传入的英文 id 作为标识符，避免中文标签导致的 ID 问题
+  const gaugeId = `gauge-${id}`;
   
   return (
     <div style={{ textAlign: "center" }}>
@@ -376,16 +380,23 @@ export default function AIOptimization() {
   
   // 当 localStorage 中的语言与后端返回的语言不一致时，通过 URL 参数重新加载
   // 使用 URL 参数而非 cookie，避免 Shopify iframe 中的第三方 cookie 限制
+  // 使用 ref 存储最新的 searchParams 和 navigate，避免将它们加入依赖数组
+  const searchParamsRef = useRef(searchParams);
+  const navigateRef = useRef(navigate);
+  
+  useEffect(() => {
+    searchParamsRef.current = searchParams;
+    navigateRef.current = navigate;
+  }, [searchParams, navigate]);
+  
   useEffect(() => {
     if (uiLanguage !== language) {
       // 只有当 URL 中没有 lang 参数或参数值与 uiLanguage 不同时才导航
-      const currentLangParam = searchParams.get("lang");
+      const currentLangParam = searchParamsRef.current.get("lang");
       if (currentLangParam !== uiLanguage) {
-        navigate(`/app/optimization?lang=${encodeURIComponent(uiLanguage)}`, { replace: true });
+        navigateRef.current(`/app/optimization?lang=${encodeURIComponent(uiLanguage)}`, { replace: true });
       }
     }
-    // 注意：故意只依赖 uiLanguage 和 language，避免 navigate/searchParams 变化触发重复执行
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [uiLanguage, language]);
   
   // 使用后端返回的语言来保证 UI 和数据内容一致
@@ -439,22 +450,31 @@ export default function AIOptimization() {
             </div>
           </div>
           
-          <div style={{ display: "flex", justifyContent: "space-around", padding: "20px 0" }}>
+          <div style={{ display: "flex", justifyContent: "space-around", padding: "20px 0", flexWrap: "wrap", gap: "16px" }}>
             <ScoreGauge 
               score={report.overallScore} 
-              label={isEnglish ? "Overall" : "总分"} 
+              label={isEnglish ? "Overall" : "总分"}
+              id="overall"
             />
             <ScoreGauge 
               score={report.scoreBreakdown.schemaMarkup} 
-              label={isEnglish ? "Schema Markup" : "结构化标记"} 
+              label={isEnglish ? "Schema Markup" : "结构化标记"}
+              id="schema-markup"
             />
             <ScoreGauge 
               score={report.scoreBreakdown.contentQuality} 
-              label={isEnglish ? "Content Quality" : "内容质量"} 
+              label={isEnglish ? "Content Quality" : "内容质量"}
+              id="content-quality"
+            />
+            <ScoreGauge 
+              score={report.scoreBreakdown.faqCoverage} 
+              label={isEnglish ? "FAQ Coverage" : "FAQ 覆盖"}
+              id="faq-coverage"
             />
             <ScoreGauge 
               score={report.scoreBreakdown.productCompleteness} 
-              label={isEnglish ? "Product Info" : "产品完整度"} 
+              label={isEnglish ? "Product Info" : "产品完整度"}
+              id="product-completeness"
             />
           </div>
           

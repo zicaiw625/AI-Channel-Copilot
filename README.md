@@ -156,7 +156,7 @@
 ### 环境变量说明
 - `SHOPIFY_API_KEY` / `SHOPIFY_API_SECRET`：从 Shopify Partners 获取
 - `SHOPIFY_APP_URL`：Render 站点完整 HTTPS URL
-- `SCOPES`：例如 `read_orders,read_customers,read_products,write_orders,write_customers`
+- `SCOPES`：例如 `read_orders,read_customers,read_products,write_orders,read_checkouts`
 - `DATABASE_URL`：由 Render 数据库自动注入
 - 可选：`DEFAULT_RANGE_KEY=30d`、`MAX_BACKFILL_ORDERS=1000`、`MAX_BACKFILL_DAYS=90`、`MAX_BACKFILL_DURATION_MS=5000`、`BACKFILL_TAGGING_BATCH_SIZE=25`、`DATA_RETENTION_MONTHS=6`
 

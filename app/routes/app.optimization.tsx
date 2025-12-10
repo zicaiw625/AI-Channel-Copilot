@@ -735,44 +735,35 @@ export default function AIOptimization() {
             </p>
             
             {/* 一键复制全部 FAQ */}
-            <div style={{ marginBottom: 16 }}>
+            <div className={styles.faqCopyAllWrapper}>
               <CopyButton 
                 text={report.suggestedFAQs.map(faq => 
                   `Q: ${faq.question}\nA: ${faq.suggestedAnswer}`
                 ).join("\n\n")} 
                 isEnglish={isEnglish} 
               />
-              <span style={{ marginLeft: 8, fontSize: 12, color: "#637381" }}>
+              <span className={styles.faqCopyAllLabel}>
                 {isEnglish ? "Copy all FAQs" : "复制全部 FAQ"}
               </span>
             </div>
             
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div className={styles.faqList}>
               {report.suggestedFAQs.map((faq, index) => (
                 <div
-                  key={`faq-${index}-${faq.basedOnProduct}`}
-                  style={{
-                    background: "#f4f6f8",
-                    borderRadius: 8,
-                    padding: 16,
-                    position: "relative",
-                  }}
+                  key={`faq-${faq.basedOnProduct}-${faq.question.slice(0, 20)}`}
+                  className={styles.faqCard}
                 >
-                  <div style={{ 
-                    position: "absolute", 
-                    top: 12, 
-                    right: 12,
-                  }}>
+                  <div className={styles.faqCopyButton}>
                     <CopyButton 
                       text={`Q: ${faq.question}\nA: ${faq.suggestedAnswer}`} 
                       isEnglish={isEnglish}
                       size="small"
                     />
                   </div>
-                  <p style={{ margin: "0 0 8px", fontWeight: 600, color: "#212b36", paddingRight: 80 }}>
+                  <p className={styles.faqQuestion}>
                     Q: {faq.question}
                   </p>
-                  <p style={{ margin: 0, color: "#555" }}>
+                  <p className={styles.faqAnswer}>
                     A: {faq.suggestedAnswer}
                   </p>
                 </div>

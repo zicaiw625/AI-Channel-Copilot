@@ -129,6 +129,12 @@ const PRODUCT_DETAILS_QUERY = `#graphql
               }
             }
           }
+          priceRange {
+            minVariantPrice {
+              amount
+              currencyCode
+            }
+          }
           productType
           vendor
           tags
@@ -170,6 +176,12 @@ const RECENT_PRODUCTS_QUERY = `#graphql
               }
             }
           }
+          priceRange {
+            minVariantPrice {
+              amount
+              currencyCode
+            }
+          }
           productType
           vendor
           tags
@@ -189,10 +201,125 @@ type ProductNode = {
   seo: { title: string | null; description: string | null } | null;
   images: { edges: { node: { url: string; altText: string | null } }[] };
   variants: { edges: { node: { price: string; sku: string | null } }[] };
+  priceRange?: {
+    minVariantPrice: {
+      amount: string;
+      currencyCode: string;
+    };
+  };
   productType: string | null;
   vendor: string | null;
   tags: string[];
 };
+
+// ============================================================================
+// Utility Functions
+// ============================================================================
+
+/**
+ * 货币符号映射表
+ */
+const CURRENCY_SYMBOLS: Record<string, string> = {
+  USD: "$",
+  EUR: "€",
+  GBP: "£",
+  JPY: "¥",
+  CNY: "¥",
+  CAD: "CA$",
+  AUD: "A$",
+  HKD: "HK$",
+  SGD: "S$",
+  KRW: "₩",
+  INR: "₹",
+  MXN: "MX$",
+  BRL: "R$",
+  TWD: "NT$",
+  THB: "฿",
+  VND: "₫",
+  MYR: "RM",
+  PHP: "₱",
+  IDR: "Rp",
+};
+
+/**
+ * 格式化价格，包含正确的货币符号和千位分隔符
+ */
+function formatPrice(amount: string | number, currencyCode: string): string {
+  const numAmount = typeof amount === "string" ? parseFloat(amount) : amount;
+  const symbol = CURRENCY_SYMBOLS[currencyCode] || currencyCode + " ";
+  
+  // 使用 Intl.NumberFormat 进行本地化格式化
+  try {
+    const formatted = new Intl.NumberFormat("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(numAmount);
+    return `${symbol}${formatted}`;
+  } catch {
+    // Fallback: 简单格式化
+    return `${symbol}${numAmount.toFixed(2)}`;
+  }
+}
+
+/**
+ * 智能截断文本，避免在单词或中文字符中间截断
+ * @param text 原始文本
+ * @param maxLength 最大长度
+ * @param isEnglish 是否为英文环境
+ * @returns 截断后的文本
+ */
+function smartTruncate(text: string, maxLength: number, isEnglish: boolean): string {
+  if (!text || text.length <= maxLength) {
+    return text;
+  }
+  
+  // 查找截断点
+  let truncateAt = maxLength;
+  
+  if (isEnglish) {
+    // 英文：在空格、标点处截断
+    const lastSpace = text.lastIndexOf(" ", maxLength);
+    const lastPunctuation = Math.max(
+      text.lastIndexOf(".", maxLength),
+      text.lastIndexOf(",", maxLength),
+      text.lastIndexOf("!", maxLength),
+      text.lastIndexOf("?", maxLength),
+    );
+    
+    // 优先选择标点位置，其次是空格位置
+    if (lastPunctuation > maxLength * 0.6) {
+      truncateAt = lastPunctuation + 1;
+    } else if (lastSpace > maxLength * 0.6) {
+      truncateAt = lastSpace;
+    }
+  } else {
+    // 中文：在标点符号处截断
+    const punctuations = ["。", "，", "！", "？", "；", "、", ".", ",", "!", "?"];
+    let bestPos = -1;
+    
+    for (const p of punctuations) {
+      const pos = text.lastIndexOf(p, maxLength);
+      if (pos > bestPos && pos > maxLength * 0.6) {
+        bestPos = pos;
+      }
+    }
+    
+    if (bestPos > 0) {
+      truncateAt = bestPos + 1;
+    }
+  }
+  
+  const truncated = text.slice(0, truncateAt).trim();
+  
+  // 如果截断后的文本和原文不同，添加省略号
+  if (truncated.length < text.length) {
+    // 移除末尾的标点（避免 "文字。..." 这种情况）
+    const cleanText = truncated.replace(/[.,!?。，！？；、\s]+$/, "");
+    return cleanText + "...";
+  }
+  
+  return truncated;
+}
 
 // ============================================================================
 // Core Functions
@@ -454,28 +581,37 @@ function generateFAQSuggestions(
   for (const product of products.slice(0, 5)) {
     // 基于产品生成常见问题
     const productName = product.title;
-    const price = product.variants.edges[0]?.node.price;
     
-    // 价格问题 - 基于实际产品数据
+    // 获取价格和货币信息
+    const priceInfo = product.priceRange?.minVariantPrice;
+    const price = priceInfo?.amount || product.variants.edges[0]?.node.price;
+    const currencyCode = priceInfo?.currencyCode || "USD";
+    
+    // 价格问题 - 基于实际产品数据，使用正确的货币格式
     if (price) {
+      const formattedPrice = formatPrice(price, currencyCode);
+      const descriptionSnippet = product.description 
+        ? smartTruncate(product.description, 100, isEnglish)
+        : "";
+      
       faqs.push({
         question: isEnglish 
           ? `What is the price of ${productName}?`
           : `${productName} 的价格是多少？`,
         suggestedAnswer: isEnglish
-          ? `${productName} is priced at $${price}. ${product.description?.slice(0, 100) || ""}`
-          : `${productName} 的价格是 $${price}。${product.description?.slice(0, 100) || ""}`,
+          ? `${productName} is priced at ${formattedPrice}.${descriptionSnippet ? ` ${descriptionSnippet}` : ""}`
+          : `${productName} 的价格是 ${formattedPrice}。${descriptionSnippet || ""}`,
         basedOnProduct: product.id,
       });
     }
     
-    // 产品特点问题 - 基于实际产品描述
+    // 产品特点问题 - 基于实际产品描述，使用智能截断
     if (product.description) {
       faqs.push({
         question: isEnglish
           ? `What are the key features of ${productName}?`
           : `${productName} 有什么特点？`,
-        suggestedAnswer: product.description.slice(0, 200),
+        suggestedAnswer: smartTruncate(product.description, 200, isEnglish),
         basedOnProduct: product.id,
       });
     }

@@ -5,6 +5,14 @@ import { getSettings, saveSettings } from "../lib/settings.server";
 import { logger } from "../lib/logger.server";
 import { OrdersRepository } from "../lib/repositories/orders.repository";
 import { resolveDateRange } from "../lib/aiData";
+import { enforceRateLimit, RateLimitRules } from "../lib/security/rateLimit.server";
+
+// ============================================================================
+// Constants
+// ============================================================================
+
+const WEBHOOK_TIMEOUT_MS = 30_000; // 30 秒超时
+const MAX_EXPORT_ORDERS = 100; // 最大导出订单数
 
 // ============================================================================
 // Types
@@ -24,7 +32,135 @@ interface WebhookPayload {
   event: string;
   timestamp: string;
   shopDomain: string;
-  data: any;
+  data: unknown;
+}
+
+// ============================================================================
+// Security Helpers
+// ============================================================================
+
+/**
+ * 验证 URL 是否安全（非私网地址且使用 HTTPS）
+ * 防止 SSRF 攻击
+ */
+function validateWebhookUrl(urlString: string): { valid: boolean; error?: string } {
+  try {
+    const url = new URL(urlString);
+    
+    // 强制 HTTPS 协议
+    if (url.protocol !== "https:") {
+      return { valid: false, error: "Only HTTPS URLs are allowed" };
+    }
+    
+    const hostname = url.hostname.toLowerCase();
+    
+    // 检查私网地址
+    const privatePatterns = [
+      /^localhost$/i,
+      /^127\./,
+      /^10\./,
+      /^192\.168\./,
+      /^172\.(1[6-9]|2[0-9]|3[0-1])\./,
+      /^0\./,
+      /^169\.254\./,  // Link-local
+      /^::1$/,
+      /^fc00:/i,
+      /^fe80:/i,
+      /^fd[0-9a-f]{2}:/i,
+      /\.local$/i,
+      /\.internal$/i,
+      /\.localhost$/i,
+    ];
+    
+    for (const pattern of privatePatterns) {
+      if (pattern.test(hostname)) {
+        return { valid: false, error: "Private network URLs are not allowed" };
+      }
+    }
+    
+    // 检查 URL 长度
+    if (urlString.length > 2000) {
+      return { valid: false, error: "URL is too long (max 2000 characters)" };
+    }
+    
+    return { valid: true };
+  } catch {
+    return { valid: false, error: "Invalid URL format" };
+  }
+}
+
+/**
+ * 使用 Web Crypto API 生成 HMAC-SHA256 签名
+ */
+async function generateSignature(payload: string, secret: string): Promise<string> {
+  if (!secret) return "";
+  
+  const encoder = new TextEncoder();
+  const keyData = encoder.encode(secret);
+  const messageData = encoder.encode(payload);
+  
+  const cryptoKey = await crypto.subtle.importKey(
+    "raw",
+    keyData,
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  
+  const signature = await crypto.subtle.sign("HMAC", cryptoKey, messageData);
+  const hashArray = Array.from(new Uint8Array(signature));
+  const hashHex = hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+  
+  return `sha256=${hashHex}`;
+}
+
+/**
+ * 发送 Webhook 请求（带超时控制）
+ */
+async function sendWebhook(
+  url: string,
+  payload: WebhookPayload,
+  secret: string,
+  event: string
+): Promise<{ ok: boolean; status?: number; error?: string }> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), WEBHOOK_TIMEOUT_MS);
+  
+  try {
+    const body = JSON.stringify(payload);
+    const signature = await generateSignature(body, secret);
+    
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-AICC-Event": event,
+        ...(signature && { "X-AICC-Signature": signature }),
+      },
+      body,
+      signal: controller.signal,
+    });
+    
+    if (!response.ok) {
+      return { 
+        ok: false, 
+        status: response.status, 
+        error: `HTTP ${response.status}: ${response.statusText}` 
+      };
+    }
+    
+    return { ok: true, status: response.status };
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      return { ok: false, error: "Request timed out (30s)" };
+    }
+    return { 
+      ok: false, 
+      error: error instanceof Error ? error.message : "Unknown error" 
+    };
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 // ============================================================================
@@ -63,28 +199,35 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   
   await requireFeature(shopDomain, FEATURES.MULTI_STORE); // Growth only
   
+  // 速率限制
+  await enforceRateLimit(`webhook-export:${shopDomain}`, RateLimitRules.EXPORT);
+  
   const formData = await request.formData();
   const intent = formData.get("intent");
   
   if (intent === "update_config") {
     const enabled = formData.get("enabled") === "true";
-    const url = formData.get("url") as string;
-    const secret = formData.get("secret") as string;
+    const url = (formData.get("url") as string)?.trim() || "";
+    const secret = (formData.get("secret") as string) || "";
     const events = (formData.get("events") as string || "").split(",").filter(Boolean);
     
-    // 验证 URL
+    // 验证 URL（如果启用且有 URL）
     if (enabled && url) {
-      try {
-        new URL(url);
-      } catch {
-        return Response.json({ ok: false, error: "Invalid URL format" }, { status: 400 });
+      const validation = validateWebhookUrl(url);
+      if (!validation.valid) {
+        return Response.json({ ok: false, error: validation.error }, { status: 400 });
       }
+    }
+    
+    // 验证 secret 长度
+    if (secret && secret.length > 256) {
+      return Response.json({ ok: false, error: "Secret is too long (max 256 characters)" }, { status: 400 });
     }
     
     const webhookConfig: WebhookConfig = {
       enabled,
-      url: url || "",
-      secret: secret || "",
+      url,
+      secret,
       events: events.length > 0 ? events : ["order.created", "daily_summary"],
     };
     
@@ -101,11 +244,17 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
   
   if (intent === "test_webhook") {
-    const url = formData.get("url") as string;
-    const secret = formData.get("secret") as string;
+    const url = (formData.get("url") as string)?.trim() || "";
+    const secret = (formData.get("secret") as string) || "";
     
     if (!url) {
       return Response.json({ ok: false, error: "URL is required" }, { status: 400 });
+    }
+    
+    // 验证 URL
+    const validation = validateWebhookUrl(url);
+    if (!validation.valid) {
+      return Response.json({ ok: false, error: validation.error }, { status: 400 });
     }
     
     // 发送测试 payload
@@ -119,49 +268,39 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       },
     };
     
-    try {
-      const response = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-AICC-Signature": generateSignature(JSON.stringify(testPayload), secret),
-          "X-AICC-Event": "test",
-        },
-        body: JSON.stringify(testPayload),
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-      
-      logger.info("[webhook-export] Test webhook sent", { shopDomain, url, status: response.status });
-      
-      return Response.json({ ok: true, status: response.status });
-    } catch (error) {
-      logger.error("[webhook-export] Test webhook failed", { shopDomain, url }, { error });
-      return Response.json({ 
-        ok: false, 
-        error: error instanceof Error ? error.message : "Failed to send webhook",
-      }, { status: 500 });
+    const result = await sendWebhook(url, testPayload, secret, "test");
+    
+    if (result.ok) {
+      logger.info("[webhook-export] Test webhook sent", { shopDomain, url, status: result.status });
+      return Response.json({ ok: true, status: result.status });
+    } else {
+      logger.error("[webhook-export] Test webhook failed", { shopDomain, url, error: result.error });
+      return Response.json({ ok: false, error: result.error }, { status: 500 });
     }
   }
   
   if (intent === "trigger_export") {
-    const url = formData.get("url") as string;
-    const secret = formData.get("secret") as string;
+    const url = (formData.get("url") as string)?.trim() || "";
+    const secret = (formData.get("secret") as string) || "";
     const range = (formData.get("range") as string) || "7d";
     
     if (!url) {
       return Response.json({ ok: false, error: "URL is required" }, { status: 400 });
     }
     
+    // 验证 URL
+    const validation = validateWebhookUrl(url);
+    if (!validation.valid) {
+      return Response.json({ ok: false, error: validation.error }, { status: 400 });
+    }
+    
     try {
       // 获取订单数据
       const ordersRepo = new OrdersRepository();
-      const dateRange = resolveDateRange(range as any);
+      const dateRange = resolveDateRange(range as "7d" | "30d" | "90d" | "1y");
       const orders = await ordersRepo.findByShopAndDateRange(shopDomain, dateRange, {
         aiOnly: true,
-        limit: 1000,
+        limit: MAX_EXPORT_ORDERS, // 使用常量保持一致
       });
       
       const stats = await ordersRepo.getAggregateStats(shopDomain, dateRange);
@@ -183,7 +322,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             aiGMV: stats.ai.gmv,
             aiShare: stats.total.gmv > 0 ? (stats.ai.gmv / stats.total.gmv) * 100 : 0,
           },
-          orders: orders.slice(0, 100).map(order => ({
+          orders: orders.map(order => ({
             id: order.id,
             name: order.name,
             createdAt: order.createdAt,
@@ -197,42 +336,36 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         },
       };
       
-      const response = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-AICC-Signature": generateSignature(JSON.stringify(exportPayload), secret),
-          "X-AICC-Event": "data_export",
-        },
-        body: JSON.stringify(exportPayload),
-      });
+      const result = await sendWebhook(url, exportPayload, secret, "data_export");
       
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-      
-      // 更新最后触发时间
+      // 更新状态
       const currentSettings = await getSettings(shopDomain);
       await saveSettings(shopDomain, {
         ...currentSettings,
         webhookExport: {
           ...(currentSettings as any).webhookExport,
           lastTriggeredAt: new Date().toISOString(),
-          lastStatus: "success",
+          lastStatus: result.ok ? "success" : "failed",
+          ...(result.ok ? {} : { lastError: result.error }),
         },
       } as any);
       
-      logger.info("[webhook-export] Data export sent", { 
-        shopDomain, 
-        url, 
-        ordersCount: orders.length,
-      });
-      
-      return Response.json({ 
-        ok: true, 
-        ordersExported: orders.length,
-        summary: exportPayload.data.summary,
-      });
+      if (result.ok) {
+        logger.info("[webhook-export] Data export sent", { 
+          shopDomain, 
+          url, 
+          ordersCount: orders.length,
+        });
+        
+        return Response.json({ 
+          ok: true, 
+          ordersExported: orders.length,
+          summary: exportPayload.data.summary,
+        });
+      } else {
+        logger.error("[webhook-export] Data export failed", { shopDomain, url, error: result.error });
+        return Response.json({ ok: false, error: result.error }, { status: 500 });
+      }
     } catch (error) {
       logger.error("[webhook-export] Data export failed", { shopDomain, url }, { error });
       
@@ -257,23 +390,3 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   
   return Response.json({ ok: false, error: "Unknown intent" }, { status: 400 });
 };
-
-// ============================================================================
-// Helpers
-// ============================================================================
-
-function generateSignature(payload: string, secret: string): string {
-  if (!secret) return "";
-  
-  // 简单的 HMAC-like 签名（实际应使用 crypto.createHmac）
-  // 由于 Edge runtime 限制，这里用简化版本
-  const encoder = new TextEncoder();
-  const data = encoder.encode(payload + secret);
-  let hash = 0;
-  for (let i = 0; i < data.length; i++) {
-    hash = ((hash << 5) - hash) + data[i];
-    hash |= 0;
-  }
-  return `sha256=${Math.abs(hash).toString(16)}`;
-}
-

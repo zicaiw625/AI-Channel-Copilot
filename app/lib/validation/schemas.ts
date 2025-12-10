@@ -230,6 +230,53 @@ export const SettingsUpdateSchema = z.object({
 });
 
 // ============================================================================
+// Webhook Export Schema
+// ============================================================================
+
+/**
+ * Webhook 事件类型
+ */
+export const WebhookEventSchema = z.enum([
+  'order.created',
+  'daily_summary', 
+  'weekly_report'
+]);
+
+/**
+ * Webhook 导出配置 Schema
+ */
+export const WebhookExportConfigSchema = z.object({
+  enabled: z.boolean().default(false),
+  url: z.string()
+    .max(2000, 'URL is too long (max 2000 characters)')
+    .refine(
+      (url) => {
+        if (!url) return true; // 空 URL 允许
+        try {
+          const parsed = new URL(url);
+          return parsed.protocol === 'https:';
+        } catch {
+          return false;
+        }
+      },
+      { message: 'Only valid HTTPS URLs are allowed' }
+    )
+    .optional()
+    .default(''),
+  secret: z.string()
+    .max(256, 'Secret is too long (max 256 characters)')
+    .optional()
+    .default(''),
+  events: z.array(WebhookEventSchema)
+    .default(['order.created', 'daily_summary']),
+  lastTriggeredAt: z.string().datetime().optional(),
+  lastStatus: z.enum(['success', 'failed']).optional(),
+  lastError: z.string().max(500).optional(),
+});
+
+export type WebhookExportConfig = z.infer<typeof WebhookExportConfigSchema>;
+
+// ============================================================================
 // Billing Schema
 // ============================================================================
 

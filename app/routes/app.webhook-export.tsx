@@ -81,11 +81,20 @@ export default function WebhookExport() {
   const [secret, setSecret] = useState(webhookConfig.secret);
   const [events, setEvents] = useState<string[]>(webhookConfig.events);
   const [exportRange, setExportRange] = useState("7d");
+  const [saveSuccess, setSaveSuccess] = useState(false);
   
-  // 同步配置变化
+  // 同步服务端配置更新到本地状态
   useEffect(() => {
-    if (configFetcher.data?.ok) {
-      // 配置保存成功
+    if (configFetcher.data?.ok && configFetcher.data?.config) {
+      const config = configFetcher.data.config;
+      setEnabled(config.enabled);
+      setUrl(config.url);
+      setSecret(config.secret);
+      setEvents(config.events);
+      setSaveSuccess(true);
+      // 3秒后清除成功提示
+      const timer = setTimeout(() => setSaveSuccess(false), 3000);
+      return () => clearTimeout(timer);
     }
   }, [configFetcher.data]);
 
@@ -234,15 +243,20 @@ export default function WebhookExport() {
               style={{
                 width: "100%",
                 padding: "10px 12px",
-                border: "1px solid #c4cdd5",
+                border: url && !url.startsWith("https://") ? "1px solid #ff4d4f" : "1px solid #c4cdd5",
                 borderRadius: 4,
                 fontSize: 14,
               }}
             />
+            {url && !url.startsWith("https://") && (
+              <p style={{ margin: "6px 0 0", fontSize: 12, color: "#ff4d4f" }}>
+                {en ? "⚠ Only HTTPS URLs are allowed for security" : "⚠ 出于安全考虑，仅支持 HTTPS 地址"}
+              </p>
+            )}
             <p style={{ margin: "6px 0 0", fontSize: 12, color: "#637381" }}>
               {en
-                ? "The URL where we'll send POST requests with your AI order data"
-                : "我们将向此地址发送包含 AI 订单数据的 POST 请求"}
+                ? "The HTTPS URL where we'll send POST requests with your AI order data"
+                : "我们将向此 HTTPS 地址发送包含 AI 订单数据的 POST 请求"}
             </p>
           </div>
 
@@ -357,7 +371,7 @@ export default function WebhookExport() {
             )}
           </div>
 
-          {configFetcher.data?.ok && (
+          {saveSuccess && (
             <div
               style={{
                 marginTop: 16,

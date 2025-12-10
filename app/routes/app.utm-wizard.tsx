@@ -112,13 +112,20 @@ function SourceCard({
   isSelected: boolean;
   onSelect: () => void;
 }) {
-  const fullUrl = useMemo(() => {
-    const url = new URL(productPath.startsWith("/") ? productPath : `/${productPath}`, storeUrl);
-    url.searchParams.set("utm_source", source.id);
-    url.searchParams.set("utm_medium", "ai_assistant");
-    url.searchParams.set("utm_campaign", "ai_referral");
-    return url.toString();
-  }, [storeUrl, productPath, source.id]);
+  const { fullUrl, error } = useMemo(() => {
+    try {
+      const url = new URL(
+        productPath.startsWith("/") ? productPath : `/${productPath}`,
+        storeUrl
+      );
+      url.searchParams.set("utm_source", source.id);
+      url.searchParams.set("utm_medium", "ai_assistant");
+      url.searchParams.set("utm_campaign", "ai_referral");
+      return { fullUrl: url.toString(), error: null };
+    } catch {
+      return { fullUrl: "", error: en ? "Invalid path" : "无效路径" };
+    }
+  }, [storeUrl, productPath, source.id, en]);
 
   return (
     <div
@@ -157,18 +164,33 @@ function SourceCard({
       
       {isSelected && (
         <div style={{ marginTop: 12 }}>
-          <div style={{ 
-            background: "#f4f6f8", 
-            padding: 12, 
-            borderRadius: 6, 
-            fontSize: 12,
-            wordBreak: "break-all",
-            fontFamily: "monospace",
-            marginBottom: 12,
-          }}>
-            {fullUrl}
-          </div>
-          <CopyButton text={fullUrl} en={en} />
+          {error ? (
+            <div style={{ 
+              background: "#fef3f3", 
+              padding: 12, 
+              borderRadius: 6, 
+              fontSize: 12,
+              color: "#dc2626",
+              marginBottom: 12,
+            }}>
+              ⚠️ {error}
+            </div>
+          ) : (
+            <>
+              <div style={{ 
+                background: "#f4f6f8", 
+                padding: 12, 
+                borderRadius: 6, 
+                fontSize: 12,
+                wordBreak: "break-all",
+                fontFamily: "monospace",
+                marginBottom: 12,
+              }}>
+                {fullUrl}
+              </div>
+              <CopyButton text={fullUrl} en={en} />
+            </>
+          )}
         </div>
       )}
     </div>
@@ -276,6 +298,8 @@ function DetectionField({
   );
 }
 
+type AISourceId = typeof AI_SOURCES[number]["id"];
+
 function BulkGenerator({
   storeUrl,
   en,
@@ -284,26 +308,41 @@ function BulkGenerator({
   en: boolean;
 }) {
   const [paths, setPaths] = useState("/products/example-product");
-  const [selectedSources, setSelectedSources] = useState<string[]>(["chatgpt", "perplexity"]);
+  const [selectedSources, setSelectedSources] = useState<AISourceId[]>(["chatgpt", "perplexity"]);
 
-  const generatedLinks = useMemo(() => {
+  const { generatedLinks, errorPaths } = useMemo(() => {
     const pathList = paths.split("\n").filter(p => p.trim());
     const links: string[] = [];
+    const errors: string[] = [];
     
     for (const path of pathList) {
       for (const sourceId of selectedSources) {
         const source = AI_SOURCES.find(s => s.id === sourceId);
         if (!source) continue;
         
-        const url = new URL(path.trim().startsWith("/") ? path.trim() : `/${path.trim()}`, storeUrl);
-        url.searchParams.set("utm_source", source.id);
-        url.searchParams.set("utm_medium", "ai_assistant");
-        url.searchParams.set("utm_campaign", "ai_referral");
-        links.push(`${source.name}: ${url.toString()}`);
+        try {
+          const trimmedPath = path.trim();
+          const url = new URL(
+            trimmedPath.startsWith("/") ? trimmedPath : `/${trimmedPath}`,
+            storeUrl
+          );
+          url.searchParams.set("utm_source", source.id);
+          url.searchParams.set("utm_medium", "ai_assistant");
+          url.searchParams.set("utm_campaign", "ai_referral");
+          links.push(`${source.name}: ${url.toString()}`);
+        } catch {
+          // 记录无效路径，只记录一次
+          if (!errors.includes(path.trim())) {
+            errors.push(path.trim());
+          }
+        }
       }
     }
     
-    return links.join("\n");
+    return {
+      generatedLinks: links.join("\n"),
+      errorPaths: errors,
+    };
   }, [paths, selectedSources, storeUrl]);
 
   return (
@@ -333,10 +372,11 @@ function BulkGenerator({
         <label style={{ display: "block", marginBottom: 8, fontWeight: 500, fontSize: 14 }}>
           {en ? "AI Sources" : "AI 来源"}
         </label>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }} role="group" aria-label={en ? "Select AI sources" : "选择 AI 来源"}>
           {AI_SOURCES.map((source) => (
             <label
               key={source.id}
+              htmlFor={`bulk-source-${source.id}`}
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -351,6 +391,7 @@ function BulkGenerator({
               }}
             >
               <input
+                id={`bulk-source-${source.id}`}
                 type="checkbox"
                 checked={selectedSources.includes(source.id)}
                 onChange={(e) => {
@@ -361,14 +402,51 @@ function BulkGenerator({
                   }
                 }}
                 style={{ display: "none" }}
+                aria-label={source.name}
               />
-              <span>{source.icon}</span>
+              <span aria-hidden="true">{source.icon}</span>
               <span style={{ fontSize: 13 }}>{source.name}</span>
             </label>
           ))}
         </div>
       </div>
       
+      {/* 错误提示 */}
+      {errorPaths.length > 0 && (
+        <div style={{
+          marginBottom: 16,
+          padding: 12,
+          background: "#fef3f3",
+          border: "1px solid #fecaca",
+          borderRadius: 6,
+          color: "#dc2626",
+          fontSize: 13,
+        }}>
+          <strong>⚠️ {en ? "Invalid paths:" : "无效路径："}</strong>
+          <ul style={{ margin: "8px 0 0", paddingLeft: 20 }}>
+            {errorPaths.map((p, i) => (
+              <li key={i}>{p}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* 空状态提示 */}
+      {selectedSources.length === 0 && (
+        <div style={{
+          marginBottom: 16,
+          padding: 12,
+          background: "#fff7ed",
+          border: "1px solid #fed7aa",
+          borderRadius: 6,
+          color: "#c2410c",
+          fontSize: 13,
+          textAlign: "center",
+        }}>
+          {en ? "Please select at least one AI source" : "请至少选择一个 AI 来源"}
+        </div>
+      )}
+
       {generatedLinks && (
         <div>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
@@ -380,6 +458,7 @@ function BulkGenerator({
           <textarea
             value={generatedLinks}
             readOnly
+            aria-label={en ? "Generated links output" : "生成的链接输出"}
             style={{
               width: "100%",
               minHeight: 150,

@@ -125,16 +125,16 @@ export default function App() {
         
         {(plan === "pro" || plan === "growth") && trialDaysLeft !== null && trialDaysLeft > 0 && (
           <span style={{ 
-            color: "#5c6ac4",
+            color: plan === "growth" ? "#389e0d" : "#5c6ac4",
             fontWeight: 500,
-            background: '#f4f5fa',
+            background: plan === "growth" ? "#f6ffed" : "#f4f5fa",
             padding: '2px 8px',
             borderRadius: '4px',
-            border: '1px solid #e1e3e5'
+            border: `1px solid ${plan === "growth" ? "#b7eb8f" : "#e1e3e5"}`
           }}>
             {uiLanguage === "English" 
-              ? `✨ Enjoying Pro · ${trialDaysLeft} day${trialDaysLeft === 1 ? '' : 's'} trial left` 
-              : `✨ 正在体验 Pro · 试用剩余 ${trialDaysLeft} 天`}
+              ? `✨ Enjoying ${plan === "growth" ? "Growth" : "Pro"} · ${trialDaysLeft} day${trialDaysLeft === 1 ? '' : 's'} trial left` 
+              : `✨ 正在体验 ${plan === "growth" ? "Growth" : "Pro"} · 试用剩余 ${trialDaysLeft} 天`}
           </span>
         )}
         

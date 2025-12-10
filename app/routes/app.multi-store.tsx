@@ -151,7 +151,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const storeResults = await Promise.allSettled(
     linkedShops.map(shop => fetchStoreData(shop, range))
   );
-
+      
   // 处理结果，区分成功和失败
   const storeSnapshots: StoreSnapshot[] = storeResults.map((result, index) => {
     const shop = linkedShops[index];
@@ -204,7 +204,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       });
     }
   }
-  
+
   // 计算每个货币组的 AI 占比
   const totalsByCurrency = Array.from(currencyMap.values()).map(group => ({
     ...group,

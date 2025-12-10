@@ -686,6 +686,7 @@ export async function generateAIOptimizationReport(
       },
     },
     select: {
+      orderId: true,  // 添加 orderId 用于正确去重
       productId: true,
       title: true,
       handle: true,
@@ -712,10 +713,12 @@ export async function generateAIOptimizationReport(
     channels: Map<string, number>;
   }>();
   
-  const seenOrders = new Set<string>();
+  // 使用 orderId + productId 组合来正确去重（同一订单中可能有多个相同产品行项）
+  const seenOrderProducts = new Set<string>();
   
   for (const op of orderProducts) {
-    const orderKey = `${op.order.totalPrice}-${op.order.aiSource}`;
+    // 使用真正的订单 ID 进行去重，而不是 totalPrice + aiSource
+    const orderProductKey = `${op.orderId}-${op.productId}`;
     
     if (!productAgg.has(op.productId)) {
       productAgg.set(op.productId, {
@@ -732,9 +735,10 @@ export async function generateAIOptimizationReport(
     const agg = productAgg.get(op.productId)!;
     agg.aiGMV += op.price * op.quantity;
     
-    if (!seenOrders.has(`${op.productId}-${orderKey}`)) {
+    // 同一订单的同一产品只计算一次订单数
+    if (!seenOrderProducts.has(orderProductKey)) {
       agg.aiOrders += 1;
-      seenOrders.add(`${op.productId}-${orderKey}`);
+      seenOrderProducts.add(orderProductKey);
     }
     
     const channel = fromPrismaAiSource(op.order.aiSource);

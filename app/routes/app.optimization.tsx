@@ -10,17 +10,9 @@ import { useUILanguage } from "../lib/useUILanguage";
 import styles from "../styles/app.dashboard.module.css";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  let admin, session;
-  
-  try {
-    const auth = await authenticate.admin(request);
-    admin = auth.admin;
-    session = auth.session;
-  } catch {
-    // Handle auth failure
-  }
+  const { admin, session } = await authenticate.admin(request);
 
-  const shopDomain = session?.shop || "";
+  const shopDomain = session.shop;
   const settings = await getSettings(shopDomain);
   
   // 优先从 URL 参数读取语言（最可靠的方式，避免 cookie 在 iframe 中的问题）

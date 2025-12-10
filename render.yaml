@@ -18,7 +18,8 @@ services:
       - key: SHOPIFY_APP_URL
         value: https://ai-channel-copilot.onrender.com
       - key: SCOPES
-        value: read_orders,read_customers,read_products,write_orders,write_customers
+        # 2025-12-10: 移除 write_customers，与 shopify.app.toml 保持一致
+        value: read_orders,read_customers,read_products,write_orders,read_checkouts
       - key: ENABLE_LOGIN_FORM
         value: false
       - key: BILLING_PLAN_NAME

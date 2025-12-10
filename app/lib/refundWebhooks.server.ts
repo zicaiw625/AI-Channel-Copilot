@@ -55,7 +55,16 @@ export const handleRefundWebhook = async (request: Request) => {
     const orderGid = extractOrderGidFromRefund(webhookPayload);
 
     if (!orderGid) {
-      logger.warn("[webhook] missing order_id in refund payload", { shopDomain: shop, payload: JSON.stringify(webhookPayload).slice(0, 200) });
+      // 仅记录安全的诊断字段，不打印原始 payload 以避免隐私泄露
+      const refundId = typeof webhookPayload.id === "number" || typeof webhookPayload.id === "string" 
+        ? String(webhookPayload.id) 
+        : "unknown";
+      logger.warn("[webhook] missing order_id in refund payload", { 
+        shopDomain: shop, 
+        refundId,
+        hasOrderId: "order_id" in webhookPayload,
+        hasAdminGid: "admin_graphql_api_order_id" in webhookPayload,
+      });
       return new Response("Missing order_id in refund payload", { status: 400 });
     }
 

@@ -21,7 +21,6 @@ interface TeamMember {
   lastName: string | null;
   isOwner: boolean;
   locale: string | null;
-  lastAccessAt: string;
 }
 
 // ============================================================================
@@ -36,6 +35,30 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const settings = await getSettings(shopDomain);
   const language = settings.languages?.[0] || "中文";
 
+  // 获取店铺信息
+  let shopName = shopDomain.replace(".myshopify.com", "");
+  try {
+    if (admin) {
+      const response = await admin.graphql(`query { shop { name } }`);
+      const data = await response.json();
+      shopName = data?.data?.shop?.name || shopName;
+    }
+  } catch (e) {
+    logger.debug("[team] Failed to fetch shop name", { shopDomain }, { error: e });
+  }
+
+  // 非 Growth 用户跳过团队成员查询
+  if (!isGrowth) {
+    return {
+      language,
+      shopDomain,
+      shopName,
+      isGrowth,
+      teamMembers: [] as TeamMember[],
+      currentUserEmail: session.onlineAccessInfo?.associated_user?.email || null,
+    };
+  }
+
   // 获取当前店铺的所有 session（代表访问过应用的用户）
   let teamMembers: TeamMember[] = [];
   
@@ -43,6 +66,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const sessions = await prisma.session.findMany({
       where: { shop: shopDomain },
       orderBy: { expires: "desc" },
+      take: 100, // 限制查询数量，避免性能问题
       select: {
         id: true,
         email: true,
@@ -50,11 +74,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         lastName: true,
         accountOwner: true,
         locale: true,
-        expires: true,
       },
     });
     
-    // 去重并格式化
+    // 去重并格式化（基于 email 去重）
     const seen = new Set<string>();
     teamMembers = sessions
       .filter(s => {
@@ -70,22 +93,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         lastName: s.lastName,
         isOwner: s.accountOwner,
         locale: s.locale,
-        lastAccessAt: s.expires?.toISOString() || new Date().toISOString(),
       }));
   } catch (e) {
     logger.warn("[team] Failed to fetch team members", { shopDomain }, { error: e });
-  }
-
-  // 获取店铺信息
-  let shopName = shopDomain.replace(".myshopify.com", "");
-  try {
-    if (admin) {
-      const response = await admin.graphql(`query { shop { name } }`);
-      const data = await response.json();
-      shopName = data?.data?.shop?.name || shopName;
-    }
-  } catch (e) {
-    // Ignore
   }
 
   return {
@@ -118,6 +128,8 @@ function MemberCard({
 
   return (
     <div
+      role="listitem"
+      aria-label={`${en ? "Team member" : "团队成员"}: ${member.email || ""}`}
       style={{
         display: "flex",
         alignItems: "center",
@@ -142,13 +154,14 @@ function MemberCard({
           fontSize: 16,
           fontWeight: 600,
         }}
+        aria-hidden="true"
       >
         {initials}
       </div>
       
       {/* Info */}
       <div style={{ flex: 1 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           <span style={{ fontWeight: 600, fontSize: 15, color: "#212b36" }}>
             {member.firstName && member.lastName
               ? `${member.firstName} ${member.lastName}`
@@ -185,16 +198,6 @@ function MemberCard({
         </div>
         <div style={{ fontSize: 13, color: "#637381", marginTop: 2 }}>
           {member.email}
-        </div>
-      </div>
-      
-      {/* Last Access */}
-      <div style={{ textAlign: "right" }}>
-        <div style={{ fontSize: 12, color: "#919eab" }}>
-          {en ? "Last access" : "最后访问"}
-        </div>
-        <div style={{ fontSize: 13, color: "#637381" }}>
-          {new Date(member.lastAccessAt).toLocaleDateString()}
         </div>
       </div>
     </div>
@@ -322,7 +325,7 @@ export default function Team() {
                 <MemberCard
                   key={member.id}
                   member={member}
-                  isCurrent={member.email === currentUserEmail}
+                  isCurrent={member.email != null && member.email === currentUserEmail}
                   en={en}
                 />
               ))
@@ -386,7 +389,7 @@ export default function Team() {
 
           <div style={{ marginTop: 20 }}>
             <a
-              href={`https://${shopDomain}/admin/settings/account`}
+              href={`https://${shopDomain}/admin/settings/account/users`}
               target="_blank"
               rel="noreferrer"
               style={{

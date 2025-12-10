@@ -70,7 +70,7 @@ api_version = "2025-10"
 # - write_orders: 订单标签写回 (可选，用户可控)
 #
 # ⚠️ 2025-12-09 审计：write_customers 已移除，仅操作本地数据库不需要此权限
-scopes = "read_orders,read_customers,read_products,write_orders,read_checkouts,write_customers"
+scopes = "read_orders,read_customers,read_products,write_orders,read_checkouts"
 
 [auth]
 redirect_urls = [

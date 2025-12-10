@@ -514,13 +514,19 @@ ${safeJsonString}
   );
 }
 
+// 生成唯一 ID
+let faqIdCounter = 0;
+function generateFaqId() {
+  return `faq-${Date.now()}-${++faqIdCounter}`;
+}
+
 function FAQGenerator({ en }: { en: boolean }) {
   const [faqs, setFaqs] = useState([
-    { question: "", answer: "" },
+    { id: generateFaqId(), question: "", answer: "" },
   ]);
 
   const addFaq = () => {
-    setFaqs([...faqs, { question: "", answer: "" }]);
+    setFaqs([...faqs, { id: generateFaqId(), question: "", answer: "" }]);
   };
 
   const removeFaq = (index: number) => {
@@ -533,8 +539,11 @@ function FAQGenerator({ en }: { en: boolean }) {
     setFaqs(newFaqs);
   };
 
+  // 计算有效的 FAQ（问题和答案都填写）
+  const validFaqs = useMemo(() => faqs.filter(f => f.question.trim() && f.answer.trim()), [faqs]);
+  const isValid = validFaqs.length > 0;
+
   const faqSchemaCode = useMemo(() => {
-    const validFaqs = faqs.filter(f => f.question && f.answer);
     if (validFaqs.length === 0) {
       return en ? "// Add FAQs above to generate code" : "// 在上方添加 FAQ 以生成代码";
     }
@@ -552,16 +561,20 @@ function FAQGenerator({ en }: { en: boolean }) {
       })),
     };
 
+    // 转义 </script> 以防止 XSS 注入
+    const safeJsonString = JSON.stringify(schema, null, 2)
+      .replace(/<\/script/gi, "<\\/script");
+
     return `<script type="application/ld+json">
-${JSON.stringify(schema, null, 2)}
+${safeJsonString}
 </script>`;
-  }, [faqs, en]);
+  }, [validFaqs, en]);
 
   return (
     <div>
       {faqs.map((faq, index) => (
         <div
-          key={index}
+          key={faq.id}
           style={{
             marginBottom: 16,
             padding: 16,
@@ -650,7 +663,7 @@ ${JSON.stringify(schema, null, 2)}
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
         <span style={{ fontSize: 14, fontWeight: 600 }}>{en ? "Generated FAQ Schema" : "生成的 FAQ Schema"}</span>
-        <CopyButton text={faqSchemaCode} en={en} />
+        <CopyButton text={faqSchemaCode} en={en} disabled={!isValid} />
       </div>
       <pre
         style={{

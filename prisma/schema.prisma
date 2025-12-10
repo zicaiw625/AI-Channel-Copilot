@@ -282,7 +282,7 @@ model Checkout {
   // Shopify checkout 信息
   token           String?
   cartToken       String?
-  email           String?
+  hasEmail        Boolean   @default(false)  // 仅标记是否有邮箱，不存储实际 PII
   customerId      String?
   
   // 时间节点

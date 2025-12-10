@@ -336,7 +336,7 @@ export async function processCheckoutCreate(
     const subtotalPrice = payload.subtotal_price ? safeParseFloat(payload.subtotal_price) : null;
     const lineItemsCount = payload.line_items?.reduce((sum, item) => sum + (item.quantity || 0), 0) || 0;
     
-    // 写入数据库
+    // 写入数据库（不存储 email PII，仅标记是否有邮箱）
     await prisma.checkout.upsert({
       where: { id: payload.id },
       create: {
@@ -344,7 +344,7 @@ export async function processCheckoutCreate(
         shopDomain,
         token: payload.token || null,
         cartToken: payload.cart_token || null,
-        email: payload.email || null,
+        hasEmail: Boolean(payload.email),
         customerId: payload.customer?.id?.toString() || null,
         createdAt: safeParseDate(payload.created_at),
         totalPrice,
@@ -405,7 +405,7 @@ export async function processCheckoutUpdate(
     // 这避免了后续非 AI 访问覆盖掉最初的 AI 归因
     const shouldUpdateAttribution = !existingCheckout?.aiSource && attribution.aiSource;
     
-    // 更新数据库
+    // 更新数据库（不存储 email PII，仅标记是否有邮箱）
     await prisma.checkout.upsert({
       where: { id: payload.id },
       create: {
@@ -413,7 +413,7 @@ export async function processCheckoutUpdate(
         shopDomain,
         token: payload.token || null,
         cartToken: payload.cart_token || null,
-        email: payload.email || null,
+        hasEmail: Boolean(payload.email),
         customerId: payload.customer?.id?.toString() || null,
         createdAt: safeParseDate(payload.created_at),
         completedAt: payload.completed_at ? safeParseDate(payload.completed_at) : null,
@@ -435,6 +435,8 @@ export async function processCheckoutUpdate(
         subtotalPrice,
         status: isCompleted ? "completed" : undefined,
         lineItemsCount,
+        // 更新 hasEmail 状态（如果之前为 false 且现在有 email）
+        hasEmail: Boolean(payload.email) || undefined,
         // 仅在没有现有归因且有新归因时更新归因信息
         ...(shouldUpdateAttribution && {
           aiSource: attribution.aiSource,

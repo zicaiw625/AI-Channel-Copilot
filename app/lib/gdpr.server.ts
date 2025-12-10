@@ -67,9 +67,22 @@ export const wipeShopData = async (shopDomain: string) => {
 
   try {
     await prisma.$transaction(async (tx) => {
+      // 漏斗相关数据（含 PII）
+      await tx.funnelEvent.deleteMany({ where: { shopDomain } });
+      await tx.checkout.deleteMany({ where: { shopDomain } });
+      await tx.visitorSession.deleteMany({ where: { shopDomain } });
+      
+      // 订单相关数据
       await tx.orderProduct.deleteMany({ where: { order: { shopDomain } } });
       await tx.order.deleteMany({ where: { shopDomain } });
       await tx.customer.deleteMany({ where: { shopDomain } });
+      
+      // 任务队列数据
+      await tx.webhookJob.deleteMany({ where: { shopDomain } });
+      await tx.backfillJob.deleteMany({ where: { shopDomain } });
+      
+      // 店铺配置与计费状态
+      await tx.shopBillingState.deleteMany({ where: { shopDomain } });
       await tx.shopSettings.deleteMany({ where: { shopDomain } });
       await tx.session.deleteMany({ where: { shop: shopDomain } });
     });
@@ -97,6 +110,17 @@ export const redactCustomerRecords = async (
       }
 
       if (customerIds.length) {
+        // 漏斗相关数据（含 PII）
+        await tx.funnelEvent.deleteMany({
+          where: { shopDomain, customerId: { in: customerIds } },
+        });
+        await tx.checkout.deleteMany({
+          where: { shopDomain, customerId: { in: customerIds } },
+        });
+        await tx.visitorSession.deleteMany({
+          where: { shopDomain, customerId: { in: customerIds } },
+        });
+        
         // First, delete OrderProducts for orders belonging to these customers
         // to avoid foreign key constraint violations
         await tx.orderProduct.deleteMany({

@@ -140,7 +140,7 @@ const deleteOrphanCustomersInBatches = async (
 };
 
 export const pruneHistoricalData = async (shopDomain: string, months: number) => {
-  if (!shopDomain) return { deletedOrders: 0, deletedCustomers: 0, cutoff: null };
+  if (!shopDomain) return { deletedOrders: 0, deletedCustomers: 0, deletedCheckouts: 0, deletedSessions: 0, deletedEvents: 0, cutoff: null };
 
   const cutoff = computeCutoff(months);
   const startTime = Date.now();
@@ -151,6 +151,23 @@ export const pruneHistoricalData = async (shopDomain: string, months: number) =>
     
     // 分批删除无订单关联的过期客户
     const deletedCustomers = await deleteOrphanCustomersInBatches(shopDomain, cutoff);
+    
+    // 清理漏斗相关数据（含 PII：Checkout.email 等）
+    const [checkoutResult, sessionResult, eventResult] = await Promise.all([
+      prisma.checkout.deleteMany({
+        where: { shopDomain, createdAt: { lt: cutoff } },
+      }),
+      prisma.visitorSession.deleteMany({
+        where: { shopDomain, createdAt: { lt: cutoff } },
+      }),
+      prisma.funnelEvent.deleteMany({
+        where: { shopDomain, createdAt: { lt: cutoff } },
+      }),
+    ]);
+    
+    const deletedCheckouts = checkoutResult.count;
+    const deletedSessions = sessionResult.count;
+    const deletedEvents = eventResult.count;
 
     await markActivity(shopDomain, { lastCleanupAt: new Date() });
 
@@ -163,11 +180,14 @@ export const pruneHistoricalData = async (shopDomain: string, months: number) =>
       retentionMonths: months,
       deletedOrders,
       deletedCustomers,
+      deletedCheckouts,
+      deletedSessions,
+      deletedEvents,
       elapsedMs,
       jobType: "retention",
     });
 
-    return { cutoff, deletedOrders, deletedCustomers };
+    return { cutoff, deletedOrders, deletedCustomers, deletedCheckouts, deletedSessions, deletedEvents };
   } catch (error) {
     logger.warn("[retention] cleanup skipped (table or connection issue)", { 
       platform, 
@@ -175,7 +195,7 @@ export const pruneHistoricalData = async (shopDomain: string, months: number) =>
     }, { 
       message: (error as Error).message 
     });
-    return { cutoff, deletedOrders: 0, deletedCustomers: 0 };
+    return { cutoff, deletedOrders: 0, deletedCustomers: 0, deletedCheckouts: 0, deletedSessions: 0, deletedEvents: 0 };
   }
 };
 

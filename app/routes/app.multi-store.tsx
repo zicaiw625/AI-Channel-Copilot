@@ -8,7 +8,7 @@ import { getSettings } from "../lib/settings.server";
 import { useUILanguage } from "../lib/useUILanguage";
 import styles from "../styles/app.dashboard.module.css";
 import { hasFeature, FEATURES } from "../lib/access.server";
-import { OrdersRepository } from "../lib/repositories/orders.repository";
+import { ordersRepository } from "../lib/repositories/orders.repository";
 import { resolveDateRange } from "../lib/aiData";
 import { logger } from "../lib/logger.server";
 import prisma from "../db.server";
@@ -27,23 +27,66 @@ interface StoreSnapshot {
   aiShare: number;
   currency: string;
   lastOrderAt: string | null;
+  loadError?: boolean; // 标记是否加载失败
+}
+
+// 按货币分组的汇总数据
+interface CurrencyTotals {
+  currency: string;
+  totalOrders: number;
+  totalGMV: number;
+  aiOrders: number;
+  aiGMV: number;
+  aiShare: number;
+  storeCount: number;
 }
 
 interface MultiStoreData {
   stores: StoreSnapshot[];
-  totals: {
+  // 按货币分组的汇总，而非简单相加
+  totalsByCurrency: CurrencyTotals[];
+  // 总订单数（可以跨货币相加）
+  aggregateOrders: {
     totalOrders: number;
-    totalGMV: number;
     aiOrders: number;
-    aiGMV: number;
-    aiShare: number;
   };
   linkedStores: string[];
+  storeCount: number;
+  errorCount: number; // 加载失败的店铺数
 }
 
 // ============================================================================
 // Loader
 // ============================================================================
+
+// 获取单个店铺数据的辅助函数
+async function fetchStoreData(
+  shop: string,
+  range: { start: Date; end: Date }
+): Promise<StoreSnapshot> {
+  const [shopSettings, stats, lastOrder] = await Promise.all([
+    getSettings(shop),
+    ordersRepository.getAggregateStats(shop, range),
+    prisma.order.findFirst({
+      where: { shopDomain: shop },
+      orderBy: { createdAt: "desc" },
+      select: { createdAt: true },
+    }),
+  ]);
+
+  return {
+    shopDomain: shop,
+    displayName: shop.replace(".myshopify.com", ""),
+    totalOrders: stats.total.orders,
+    totalGMV: stats.total.gmv,
+    aiOrders: stats.ai.orders,
+    aiGMV: stats.ai.gmv,
+    aiShare: stats.total.gmv > 0 ? (stats.ai.gmv / stats.total.gmv) * 100 : 0,
+    currency: shopSettings.primaryCurrency || "USD",
+    lastOrderAt: lastOrder?.createdAt.toISOString() || null,
+    loadError: false,
+  };
+}
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
@@ -63,13 +106,16 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       isGrowth,
       data: {
         stores: [],
-        totals: { totalOrders: 0, totalGMV: 0, aiOrders: 0, aiGMV: 0, aiShare: 0 },
+        totalsByCurrency: [],
+        aggregateOrders: { totalOrders: 0, aiOrders: 0 },
         linkedStores: [],
+        storeCount: 0,
+        errorCount: 0,
       } as MultiStoreData,
     };
   }
 
-  // 查找同一用户的所有店铺（基于 Session 表中的 email 或 userId）
+  // 查找同一用户的所有店铺（基于 Session 表中的 email）
   let linkedShops: string[] = [shopDomain];
   
   try {
@@ -99,39 +145,23 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     logger.warn("[multi-store] Failed to find linked shops", { shopDomain }, { error: e });
   }
 
-  // 获取所有关联店铺的数据
-  const ordersRepo = new OrdersRepository();
+  // 【优化】并行获取所有关联店铺的数据
   const range = resolveDateRange("30d");
   
-  const storeSnapshots: StoreSnapshot[] = [];
-  
-  for (const shop of linkedShops) {
-    try {
-      const shopSettings = await getSettings(shop);
-      const stats = await ordersRepo.getAggregateStats(shop, range);
-      
-      // 获取最近订单时间
-      const lastOrder = await prisma.order.findFirst({
-        where: { shopDomain: shop },
-        orderBy: { createdAt: "desc" },
-        select: { createdAt: true },
-      });
-      
-      storeSnapshots.push({
-        shopDomain: shop,
-        displayName: shop.replace(".myshopify.com", ""),
-        totalOrders: stats.total.orders,
-        totalGMV: stats.total.gmv,
-        aiOrders: stats.ai.orders,
-        aiGMV: stats.ai.gmv,
-        aiShare: stats.total.gmv > 0 ? (stats.ai.gmv / stats.total.gmv) * 100 : 0,
-        currency: shopSettings.primaryCurrency || "USD",
-        lastOrderAt: lastOrder?.createdAt.toISOString() || null,
-      });
-    } catch (e) {
-      logger.warn("[multi-store] Failed to load shop data", { shop }, { error: e });
-      // 添加一个空的快照
-      storeSnapshots.push({
+  const storeResults = await Promise.allSettled(
+    linkedShops.map(shop => fetchStoreData(shop, range))
+  );
+
+  // 处理结果，区分成功和失败
+  const storeSnapshots: StoreSnapshot[] = storeResults.map((result, index) => {
+    const shop = linkedShops[index];
+    
+    if (result.status === "fulfilled") {
+      return result.value;
+    } else {
+      // 记录错误，返回带错误标记的空快照
+      logger.warn("[multi-store] Failed to load shop data", { shop }, { error: result.reason });
+      return {
         shopDomain: shop,
         displayName: shop.replace(".myshopify.com", ""),
         totalOrders: 0,
@@ -141,23 +171,54 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         aiShare: 0,
         currency: "USD",
         lastOrderAt: null,
+        loadError: true,
+      };
+    }
+  });
+
+  // 统计加载失败的店铺数
+  const errorCount = storeSnapshots.filter(s => s.loadError).length;
+  
+  // 【修复】按货币分组计算汇总，而非简单相加不同货币
+  const currencyMap = new Map<string, CurrencyTotals>();
+  
+  for (const store of storeSnapshots) {
+    if (store.loadError) continue; // 跳过加载失败的店铺
+    
+    const existing = currencyMap.get(store.currency);
+    if (existing) {
+      existing.totalOrders += store.totalOrders;
+      existing.totalGMV += store.totalGMV;
+      existing.aiOrders += store.aiOrders;
+      existing.aiGMV += store.aiGMV;
+      existing.storeCount += 1;
+    } else {
+      currencyMap.set(store.currency, {
+        currency: store.currency,
+        totalOrders: store.totalOrders,
+        totalGMV: store.totalGMV,
+        aiOrders: store.aiOrders,
+        aiGMV: store.aiGMV,
+        aiShare: 0,
+        storeCount: 1,
       });
     }
   }
-
-  // 计算总计
-  const totals = storeSnapshots.reduce(
-    (acc, store) => ({
-      totalOrders: acc.totalOrders + store.totalOrders,
-      totalGMV: acc.totalGMV + store.totalGMV,
-      aiOrders: acc.aiOrders + store.aiOrders,
-      aiGMV: acc.aiGMV + store.aiGMV,
-      aiShare: 0, // 将在后面计算
-    }),
-    { totalOrders: 0, totalGMV: 0, aiOrders: 0, aiGMV: 0, aiShare: 0 }
-  );
   
-  totals.aiShare = totals.totalGMV > 0 ? (totals.aiGMV / totals.totalGMV) * 100 : 0;
+  // 计算每个货币组的 AI 占比
+  const totalsByCurrency = Array.from(currencyMap.values()).map(group => ({
+    ...group,
+    aiShare: group.totalGMV > 0 ? (group.aiGMV / group.totalGMV) * 100 : 0,
+  }));
+  
+  // 按 GMV 降序排序
+  totalsByCurrency.sort((a, b) => b.totalGMV - a.totalGMV);
+
+  // 订单数可以跨货币相加
+  const aggregateOrders = {
+    totalOrders: storeSnapshots.filter(s => !s.loadError).reduce((sum, s) => sum + s.totalOrders, 0),
+    aiOrders: storeSnapshots.filter(s => !s.loadError).reduce((sum, s) => sum + s.aiOrders, 0),
+  };
 
   return {
     language,
@@ -165,8 +226,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     isGrowth,
     data: {
       stores: storeSnapshots,
-      totals,
+      totalsByCurrency,
+      aggregateOrders,
       linkedStores: linkedShops,
+      storeCount: storeSnapshots.filter(s => !s.loadError).length,
+      errorCount,
     } as MultiStoreData,
   };
 };
@@ -186,6 +250,65 @@ function StoreCard({
   formatCurrency: (amount: number, currency: string) => string;
   isCurrent: boolean;
 }) {
+  // 加载失败状态
+  if (store.loadError) {
+    return (
+      <div
+        style={{
+          background: "#fff2f0",
+          border: "1px solid #ffccc7",
+          borderRadius: 12,
+          padding: 20,
+          position: "relative",
+        }}
+      >
+        {isCurrent && (
+          <span
+            style={{
+              position: "absolute",
+              top: 12,
+              right: 12,
+              background: "#52c41a",
+              color: "#fff",
+              padding: "2px 8px",
+              borderRadius: 12,
+              fontSize: 11,
+              fontWeight: 500,
+            }}
+          >
+            {en ? "Current" : "当前"}
+          </span>
+        )}
+        
+        <div style={{ marginBottom: 16 }}>
+          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: "#212b36" }}>
+            {store.displayName}
+          </h3>
+          <p style={{ margin: "4px 0 0", fontSize: 12, color: "#919eab" }}>
+            {store.shopDomain}
+          </p>
+        </div>
+        
+        <div
+          style={{
+            padding: 16,
+            background: "rgba(255, 77, 79, 0.1)",
+            borderRadius: 8,
+            textAlign: "center",
+          }}
+        >
+          <span style={{ fontSize: 24, display: "block", marginBottom: 8 }}>⚠️</span>
+          <p style={{ margin: 0, fontSize: 13, color: "#a8071a" }}>
+            {en ? "Failed to load store data" : "店铺数据加载失败"}
+          </p>
+          <p style={{ margin: "8px 0 0", fontSize: 12, color: "#ff7875" }}>
+            {en ? "Please try refreshing the page" : "请尝试刷新页面"}
+          </p>
+        </div>
+      </div>
+    );
+  }
+  
   return (
     <div
       style={{
@@ -302,16 +425,28 @@ function MetricBox({
 }
 
 function TotalsSummary({
-  totals,
+  totalsByCurrency,
+  aggregateOrders,
   storeCount,
+  errorCount,
   en,
   formatCurrency,
 }: {
-  totals: MultiStoreData["totals"];
+  totalsByCurrency: CurrencyTotals[];
+  aggregateOrders: { totalOrders: number; aiOrders: number };
   storeCount: number;
+  errorCount: number;
   en: boolean;
-  formatCurrency: (amount: number) => string;
+  formatCurrency: (amount: number, currency: string) => string;
 }) {
+  // 计算综合 AI 占比（基于所有货币的订单数）
+  const overallAiShare = aggregateOrders.totalOrders > 0 
+    ? (aggregateOrders.aiOrders / aggregateOrders.totalOrders) * 100 
+    : 0;
+  
+  // 取主要货币（GMV 最高的）用于显示
+  const primaryCurrency = totalsByCurrency[0];
+  
   return (
     <div
       style={{
@@ -340,20 +475,20 @@ function TotalsSummary({
         <SummaryCard
           icon="💰"
           label={en ? "Total GMV" : "总 GMV"}
-          value={formatCurrency(totals.totalGMV)}
-          subValue={`${totals.totalOrders} ${en ? "orders" : "订单"}`}
+          value={primaryCurrency ? formatCurrency(primaryCurrency.totalGMV, primaryCurrency.currency) : formatCurrency(0, "USD")}
+          subValue={`${aggregateOrders.totalOrders} ${en ? "orders" : "订单"}`}
         />
         <SummaryCard
           icon="🤖"
           label={en ? "AI GMV" : "AI GMV"}
-          value={formatCurrency(totals.aiGMV)}
-          subValue={`${totals.aiOrders} ${en ? "orders" : "订单"}`}
+          value={primaryCurrency ? formatCurrency(primaryCurrency.aiGMV, primaryCurrency.currency) : formatCurrency(0, "USD")}
+          subValue={`${aggregateOrders.aiOrders} ${en ? "orders" : "订单"}`}
           highlight
         />
         <SummaryCard
           icon="📊"
           label={en ? "AI Share" : "AI 占比"}
-          value={`${totals.aiShare.toFixed(1)}%`}
+          value={`${overallAiShare.toFixed(1)}%`}
           subValue={en ? "of total GMV" : "占总 GMV"}
         />
         <SummaryCard
@@ -363,6 +498,57 @@ function TotalsSummary({
           subValue={en ? "connected" : "已连接"}
         />
       </div>
+      
+      {/* 如果有多种货币，显示分货币汇总 */}
+      {totalsByCurrency.length > 1 && (
+        <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid #91caff" }}>
+          <p style={{ margin: "0 0 12px", fontSize: 12, color: "#637381", fontWeight: 500 }}>
+            {en ? "Breakdown by Currency" : "按货币分组"}
+          </p>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+            {totalsByCurrency.map((group) => (
+              <div
+                key={group.currency}
+                style={{
+                  background: "rgba(255, 255, 255, 0.7)",
+                  padding: "8px 12px",
+                  borderRadius: 8,
+                  fontSize: 13,
+                }}
+              >
+                <span style={{ fontWeight: 600, color: "#212b36" }}>
+                  {formatCurrency(group.totalGMV, group.currency)}
+                </span>
+                <span style={{ color: "#637381", marginLeft: 6 }}>
+                  ({group.storeCount} {en ? (group.storeCount === 1 ? "store" : "stores") : "店铺"})
+                </span>
+                <span style={{ color: "#635bff", marginLeft: 8, fontWeight: 500 }}>
+                  AI: {group.aiShare.toFixed(1)}%
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      
+      {/* 错误提示 */}
+      {errorCount > 0 && (
+        <div
+          style={{
+            marginTop: 16,
+            padding: "8px 12px",
+            background: "#fff2f0",
+            border: "1px solid #ffccc7",
+            borderRadius: 6,
+            fontSize: 13,
+            color: "#a8071a",
+          }}
+        >
+          ⚠️ {en 
+            ? `${errorCount} store${errorCount > 1 ? "s" : ""} failed to load data`
+            : `${errorCount} 个店铺数据加载失败`}
+        </div>
+      )}
     </div>
   );
 }
@@ -614,10 +800,12 @@ export default function MultiStore() {
 
         {/* 汇总概览 */}
         <TotalsSummary
-          totals={data.totals}
-          storeCount={data.stores.length}
+          totalsByCurrency={data.totalsByCurrency}
+          aggregateOrders={data.aggregateOrders}
+          storeCount={data.storeCount}
+          errorCount={data.errorCount}
           en={en}
-          formatCurrency={(amount) => formatCurrency(amount, "USD")}
+          formatCurrency={formatCurrency}
         />
 
         {/* 店铺列表 */}
@@ -630,7 +818,7 @@ export default function MultiStore() {
               </h3>
             </div>
             <span className={styles.badge}>
-              {data.stores.length} {en ? (data.stores.length === 1 ? "store" : "stores") : "个店铺"}
+              {data.linkedStores.length} {en ? (data.linkedStores.length === 1 ? "store" : "stores") : "个店铺"}
             </span>
           </div>
 

@@ -92,10 +92,16 @@ const CopyButton = ({
   const padding = size === "small" ? "4px 8px" : "6px 12px";
   const fontSize = size === "small" ? 11 : 12;
 
+  const buttonLabel = copied 
+    ? (isEnglish ? "Copied!" : "已复制！") 
+    : (isEnglish ? "Copy" : "复制");
+
   return (
     <button
       type="button"
       onClick={handleCopy}
+      aria-label={isEnglish ? "Copy to clipboard" : "复制到剪贴板"}
+      aria-live="polite"
       style={{
         padding,
         fontSize,
@@ -111,10 +117,8 @@ const CopyButton = ({
         gap: 4,
       }}
     >
-      {copied ? "✓" : "📋"}
-      {copied 
-        ? (isEnglish ? "Copied!" : "已复制！") 
-        : (isEnglish ? "Copy" : "复制")}
+      <span aria-hidden="true">{copied ? "✓" : "📋"}</span>
+      {buttonLabel}
     </button>
   );
 };
@@ -175,10 +179,18 @@ const ScoreGauge = ({ score, label }: { score: number; label: string }) => {
   const color = score >= 70 ? "#50b83c" : score >= 40 ? "#f4a623" : "#de3618";
   const circumference = 2 * Math.PI * 45;
   const offset = circumference - (score / 100) * circumference;
+  const gaugeId = `gauge-${label.replace(/\s+/g, "-").toLowerCase()}`;
   
   return (
     <div style={{ textAlign: "center" }}>
-      <svg width="120" height="120" viewBox="0 0 120 120">
+      <svg 
+        width="120" 
+        height="120" 
+        viewBox="0 0 120 120"
+        role="img"
+        aria-labelledby={gaugeId}
+      >
+        <title id={gaugeId}>{label}: {score}/100</title>
         <circle
           cx="60"
           cy="60"
@@ -208,6 +220,7 @@ const ScoreGauge = ({ score, label }: { score: number; label: string }) => {
           fontSize="24"
           fontWeight="bold"
           fill={color}
+          aria-hidden="true"
         >
           {score}
         </text>
@@ -331,6 +344,10 @@ const SuggestionCard = ({
       <button
         type="button"
         onClick={onToggle}
+        aria-expanded={expanded}
+        aria-label={expanded 
+          ? (isEnglish ? "Collapse details" : "收起详情")
+          : (isEnglish ? "Expand details" : "展开详情")}
         style={{
           marginTop: 12,
           background: "transparent",
@@ -666,9 +683,9 @@ export default function AIOptimization() {
             </div>
             
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {report.suggestedFAQs.map((faq, index) => (
+              {report.suggestedFAQs.map((faq) => (
                 <div
-                  key={index}
+                  key={`faq-${faq.basedOnProduct}-${faq.question.slice(0, 30)}`}
                   style={{
                     background: "#f4f6f8",
                     borderRadius: 8,

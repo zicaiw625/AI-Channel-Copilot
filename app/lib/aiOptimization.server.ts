@@ -199,6 +199,7 @@ type ProductNode = {
 
 /**
  * 获取产品详细信息（用于优化分析）
+ * 支持分页获取，避免超过 50 个产品时丢失数据
  */
 export async function fetchProductDetails(
   admin: AdminGraphqlClient,
@@ -209,38 +210,61 @@ export async function fetchProductDetails(
   
   if (!productIds.length) return productMap;
 
-  try {
-    const sdk = createGraphqlSdk(admin, shopDomain);
-    // Convert GID format to query format
-    const queryStr = productIds
-      .map(id => {
-        const numericId = id.replace(/^gid:\/\/shopify\/Product\//, "");
-        return `id:${numericId}`;
-      })
-      .join(" OR ");
+  const BATCH_SIZE = 50;
+  const sdk = createGraphqlSdk(admin, shopDomain);
+
+  // 分批获取产品详情，避免单次请求超过 GraphQL 限制
+  for (let i = 0; i < productIds.length; i += BATCH_SIZE) {
+    const batchIds = productIds.slice(i, i + BATCH_SIZE);
     
-    const response = await sdk.request(
-      "productsForOptimization",
-      PRODUCT_DETAILS_QUERY,
-      { first: Math.min(productIds.length, 50), query: queryStr }
-    );
-    
-    if (!response.ok) {
-      logger.warn("[aiOptimization] Failed to fetch products", { shopDomain, status: response.status });
-      return productMap;
+    try {
+      // Convert GID format to query format
+      const queryStr = batchIds
+        .map(id => {
+          const numericId = id.replace(/^gid:\/\/shopify\/Product\//, "");
+          return `id:${numericId}`;
+        })
+        .join(" OR ");
+      
+      const response = await sdk.request(
+        "productsForOptimization",
+        PRODUCT_DETAILS_QUERY,
+        { first: batchIds.length, query: queryStr }
+      );
+      
+      if (!response.ok) {
+        logger.warn("[aiOptimization] Failed to fetch products batch", { 
+          shopDomain, 
+          status: response.status,
+          batchIndex: i / BATCH_SIZE,
+        });
+        continue; // 继续处理下一批，不要因为一批失败就停止
+      }
+      
+      const json = await response.json() as {
+        data?: { products?: { edges: { node: ProductNode }[] } };
+      };
+      
+      const products = json.data?.products?.edges || [];
+      for (const { node } of products) {
+        productMap.set(node.id, node);
+      }
+    } catch (error) {
+      logger.error("[aiOptimization] Error fetching products batch", { 
+        shopDomain,
+        batchIndex: i / BATCH_SIZE,
+      }, {
+        error: (error as Error).message,
+      });
+      // 继续处理下一批
     }
-    
-    const json = await response.json() as {
-      data?: { products?: { edges: { node: ProductNode }[] } };
-    };
-    
-    const products = json.data?.products?.edges || [];
-    for (const { node } of products) {
-      productMap.set(node.id, node);
-    }
-  } catch (error) {
-    logger.error("[aiOptimization] Error fetching products", { shopDomain }, {
-      error: (error as Error).message,
+  }
+  
+  if (productMap.size < productIds.length) {
+    logger.info("[aiOptimization] Some products not found", {
+      shopDomain,
+      requested: productIds.length,
+      found: productMap.size,
     });
   }
   
@@ -430,10 +454,11 @@ function generateFAQSuggestions(
  */
 function generateSuggestions(
   products: ProductAIPerformance[],
-  _language: string,
+  language: string,
   hasLlmsTxtEnabled: boolean = false,
 ): OptimizationSuggestion[] {
   const suggestions: OptimizationSuggestion[] = [];
+  const isEnglish = language === "English";
   
   // 检查产品信息完整度（作为 Schema 标记的前提条件）
   const missingSchema = products.filter(p => p.schemaMarkupStatus === "missing").length;
@@ -452,8 +477,12 @@ function generateSuggestions(
         en: `${missingSchema} products lack complete information needed for structured data markup, reducing their visibility to AI assistants.`,
         zh: `${missingSchema} 个产品缺少结构化数据标记所需的完整信息，这会降低 AI 助手的识别能力。`,
       },
-      impact: "Products with complete schema markup may improve AI discoverability.",
-      action: "Add JSON-LD Product schema to your product pages.",
+      impact: isEnglish 
+        ? "Products with complete schema markup may improve AI discoverability."
+        : "完整的 Schema 标记可以提升产品在 AI 中的可发现性。",
+      action: isEnglish
+        ? "Add JSON-LD Product schema to your product pages."
+        : "将 JSON-LD 产品 Schema 添加到您的产品页面。",
       codeSnippet: `<script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -494,8 +523,12 @@ function generateSuggestions(
         en: `${partialSchema} products have incomplete information. Adding missing fields will improve AI understanding.`,
         zh: `${partialSchema} 个产品的信息不完整。补充缺失字段可提升 AI 理解能力。`,
       },
-      impact: "Complete product information helps AI provide more accurate recommendations.",
-      action: "Review and add missing fields like description, images, SEO title.",
+      impact: isEnglish
+        ? "Complete product information helps AI provide more accurate recommendations."
+        : "完整的产品信息有助于 AI 提供更准确的推荐。",
+      action: isEnglish
+        ? "Review and add missing fields like description, images, SEO title."
+        : "检查并补充缺失的字段，如描述、图片、SEO 标题。",
       affectedProducts: products.filter(p => p.schemaMarkupStatus === "partial").map(p => p.productId),
       estimatedLift: "+10-15% AI visibility",
     });
@@ -516,8 +549,12 @@ function generateSuggestions(
         en: `${shortDescriptions} products have descriptions under 100 characters. Longer, detailed descriptions help AI understand and recommend products.`,
         zh: `${shortDescriptions} 个产品的描述少于 100 字符。更长、更详细的描述有助于 AI 理解和推荐产品。`,
       },
-      impact: "Products with rich descriptions provide more context for AI platforms.",
-      action: "Add detailed product descriptions including features, benefits, and specifications.",
+      impact: isEnglish
+        ? "Products with rich descriptions provide more context for AI platforms."
+        : "丰富的产品描述为 AI 平台提供更多上下文信息。",
+      action: isEnglish
+        ? "Add detailed product descriptions including features, benefits, and specifications."
+        : "添加详细的产品描述，包括功能、优势和规格。",
       affectedProducts: products.filter(p => p.descriptionLength < 100).map(p => p.productId),
       estimatedLift: "+30-50% AI recommendations",
     });
@@ -537,8 +574,12 @@ function generateSuggestions(
         en: "FAQ content helps AI assistants answer customer questions about your products directly.",
         zh: "FAQ 内容帮助 AI 助手直接回答客户关于产品的问题。",
       },
-      impact: "Comprehensive FAQs can improve AI-referred traffic for product queries.",
-      action: "Create FAQ pages covering pricing, shipping, returns, and product features.",
+      impact: isEnglish
+        ? "Comprehensive FAQs can improve AI-referred traffic for product queries."
+        : "全面的 FAQ 可以提升产品查询的 AI 引荐流量。",
+      action: isEnglish
+        ? "Create FAQ pages covering pricing, shipping, returns, and product features."
+        : "创建涵盖定价、发货、退货和产品特性的 FAQ 页面。",
       estimatedLift: "+20-40% AI traffic",
     });
   }
@@ -557,8 +598,12 @@ function generateSuggestions(
         en: "Your llms.txt file guides AI crawlers. Ensure it highlights your best-performing AI products.",
         zh: "您的 llms.txt 文件指引 AI 爬虫。确保它突出展示您表现最好的 AI 产品。",
       },
-      impact: "Properly configured llms.txt can increase AI crawler efficiency.",
-      action: "Enable all content types in llms.txt settings.",
+      impact: isEnglish
+        ? "Properly configured llms.txt can increase AI crawler efficiency."
+        : "正确配置的 llms.txt 可以提高 AI 爬虫的效率。",
+      action: isEnglish
+        ? "Enable all content types in llms.txt settings."
+        : "在 llms.txt 设置中启用所有内容类型。",
       estimatedLift: "+10-20% AI discovery",
     });
   }

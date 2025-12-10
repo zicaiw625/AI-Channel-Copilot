@@ -67,6 +67,11 @@ const updateExpiredTrialState = async (
 };
 
 export async function getEffectivePlan(shopDomain: string): Promise<PlanTier> {
+  // 空 shopDomain 直接返回 none，避免无效的数据库查询
+  if (!shopDomain || shopDomain.trim() === "") {
+    return "none";
+  }
+  
   const state = await getBillingState(shopDomain);
   if (!state) return "none";
 
@@ -118,6 +123,11 @@ export async function getEffectivePlan(shopDomain: string): Promise<PlanTier> {
 }
 
 export async function hasFeature(shopDomain: string, feature: string): Promise<boolean> {
+  // 空 shopDomain 直接返回 false
+  if (!shopDomain || shopDomain.trim() === "") {
+    return false;
+  }
+  
   const plan = await getEffectivePlan(shopDomain);
   
   switch (feature) {

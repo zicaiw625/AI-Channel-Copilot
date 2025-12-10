@@ -646,6 +646,12 @@ export const calculateRemainingTrialDays = async (
 ): Promise<number> => {
   const plan = getPlanConfig(planId);
   if (!plan.trialSupported) return 0;
+  
+  // 空 shopDomain 返回默认试用天数
+  if (!shopDomain || shopDomain.trim() === "") {
+    return plan.defaultTrialDays;
+  }
+  
   const state = await getBillingState(shopDomain);
   if (!state) return plan.defaultTrialDays;
 

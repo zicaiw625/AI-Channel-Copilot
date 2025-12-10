@@ -510,9 +510,13 @@ export default function Onboarding() {
         )}
       </div>
 
-      {/* 计划卡片 */}
-      <div style={{ display: "flex", gap: 20, justifyContent: "center", flexWrap: "wrap" }}>
-        {(plans ?? []).map((plan: PlanWithTrial) => {
+      {/* 计划卡片 - Free 和 Pro 并排，Growth 全宽 */}
+      {(() => {
+        const freePlan = (plans ?? []).find((p: PlanWithTrial) => p.id === "free");
+        const proPlan = (plans ?? []).find((p: PlanWithTrial) => p.id === "pro");
+        const growthPlan = (plans ?? []).find((p: PlanWithTrial) => p.id === "growth");
+        
+        const renderPlanCard = (plan: PlanWithTrial, isWide = false) => {
           const isFree = plan.id === "free";
           const recommended = plan.id === PRIMARY_BILLABLE_PLAN_ID;
           const disabled = plan.status !== "live";
@@ -527,6 +531,91 @@ export default function Onboarding() {
           const buttonLabel = plan.status === "coming_soon"
             ? (en ? "Coming soon" : "敬请期待")
             : en ? `Choose ${plan.name}` : `选择 ${plan.name}`;
+
+          if (isWide) {
+            // Growth 卡片 - 全宽样式
+            return (
+              <div
+                key={plan.id}
+                style={{
+                  width: "100%",
+                  maxWidth: 700,
+                  margin: "0 auto",
+                  border: "1px solid #b7eb8f",
+                  borderRadius: 8,
+                  padding: 24,
+                  background: "#fff",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: 18, color: "#212b36" }}>{plan.name}</h3>
+                    <p style={{ color: "#637381", margin: "8px 0 0" }}>
+                      {en ? plan.includes[0].en : plan.includes[0].zh}
+                    </p>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: 28, fontWeight: "bold" }}>
+                      {priceLabel}
+                      <span style={{ fontSize: 14, fontWeight: "normal", color: "#637381" }}>
+                        &nbsp;/ {en ? "mo" : "月"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                
+                <ul
+                  style={{
+                    listStyle: "none",
+                    padding: 0,
+                    margin: "12px 0 16px",
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+                    gap: "8px 24px",
+                    lineHeight: 1.6,
+                  }}
+                >
+                  {plan.includes.map((f, idx) => (
+                    <li key={idx}>✓ {en ? f.en : f.zh}</li>
+                  ))}
+                </ul>
+                
+                <Form method="post" replace>
+                  <input type="hidden" name="intent" value="select_plan" />
+                  <input type="hidden" name="planId" value={plan.id} />
+                  <input type="hidden" name="shop" value={shopDomain} />
+                  <button
+                    type="submit"
+                    disabled={disabled}
+                    data-action="onboarding-select-plan"
+                    data-plan-id={plan.id}
+                    aria-label={disabled
+                      ? (en ? "Disabled" : "不可用")
+                      : (en ? `Choose ${plan.name}` : `选择 ${plan.name}`)}
+                    style={{
+                      width: "100%",
+                      padding: 12,
+                      background: "#389e0d",
+                      color: "#fff",
+                      border: "none",
+                      borderRadius: 4,
+                      cursor: disabled ? "not-allowed" : "pointer",
+                      fontWeight: 600,
+                      boxShadow: "0 2px 5px rgba(0,0,0,0.1)",
+                    }}
+                  >
+                    {buttonLabel}
+                  </button>
+                </Form>
+                
+                {trialLabel && (
+                  <div style={{ textAlign: "center", fontSize: 12, color: "#637381", marginTop: 8 }}>
+                    {trialLabel}
+                  </div>
+                )}
+              </div>
+            );
+          }
 
           return (
             <PlanCard
@@ -572,8 +661,21 @@ export default function Onboarding() {
               </Form>
             </PlanCard>
           );
-        })}
-      </div>
+        };
+        
+        return (
+          <>
+            {/* Free 和 Pro 并排 */}
+            <div style={{ display: "flex", gap: 20, justifyContent: "center", flexWrap: "wrap", marginBottom: 20 }}>
+              {freePlan && renderPlanCard(freePlan)}
+              {proPlan && renderPlanCard(proPlan)}
+            </div>
+            
+            {/* Growth 全宽 */}
+            {growthPlan && renderPlanCard(growthPlan, true)}
+          </>
+        );
+      })()}
     </section>
   );
 }

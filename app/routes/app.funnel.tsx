@@ -8,7 +8,7 @@ import { getSettings } from "../lib/settings.server";
 import { getFunnelData, type FunnelMetrics } from "../lib/funnelService.server";
 import { useUILanguage } from "../lib/useUILanguage";
 import styles from "../styles/app.dashboard.module.css";
-import { channelList, timeRanges, type TimeRangeKey } from "../lib/aiData";
+import { AI_CHANNELS, timeRanges, type TimeRangeKey } from "../lib/aiData";
 import { AIConversionPath, type PathStage } from "../components/dashboard";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -552,7 +552,7 @@ export default function FunnelAnalysis() {
               >
                 <option value="all">{isEnglish ? "All Traffic" : "全部流量"}</option>
                 <option value="ai">{isEnglish ? "AI Channels (Total)" : "AI 渠道（汇总）"}</option>
-                {channelList.map(channel => (
+                {AI_CHANNELS.map(channel => (
                   <option key={channel} value={channel}>{channel}</option>
                 ))}
               </select>
@@ -757,7 +757,10 @@ export default function FunnelAnalysis() {
           </div>
           
           <div className={styles.tableWrap}>
-            <table className={styles.table}>
+            <table 
+              className={styles.table}
+              aria-label={isEnglish ? "AI channel performance comparison" : "AI 渠道表现对比"}
+            >
               <thead>
                 <tr>
                   <th>{isEnglish ? "Channel" : "渠道"}</th>
@@ -765,22 +768,43 @@ export default function FunnelAnalysis() {
                   <th>{isEnglish ? "Checkouts" : "结账"}</th>
                   <th>{isEnglish ? "Orders" : "订单"}</th>
                   <th>{isEnglish ? "GMV" : "GMV"}</th>
-                  <th>{isEnglish ? "Checkout CVR" : "结账转化率"}</th>
+                  <th>{isEnglish ? "Order CVR" : "订单转化率"}</th>
                 </tr>
               </thead>
               <tbody>
-                {channelList
-                  .filter(channel => {
+                {(() => {
+                  const filteredChannels = AI_CHANNELS.filter(channel => {
                     const data = funnelData.byChannel[channel];
                     return data && !data.every(s => s.count === 0);
-                  })
-                  .map(channel => {
+                  });
+                  
+                  if (filteredChannels.length === 0) {
+                    return (
+                      <tr>
+                        <td 
+                          colSpan={6} 
+                          style={{ textAlign: "center", color: "#637381", padding: 24 }}
+                        >
+                          {isEnglish ? "No AI channel data yet" : "暂无 AI 渠道数据"}
+                        </td>
+                      </tr>
+                    );
+                  }
+                  
+                  return filteredChannels.map(channel => {
                     const data = funnelData.byChannel[channel];
                     const visits = data.find(s => s.stage === "visit")?.count || 0;
                     const checkouts = data.find(s => s.stage === "checkout_started")?.count || 0;
                     const orders = data.find(s => s.stage === "order_created")?.count || 0;
                     const gmv = data.find(s => s.stage === "order_created")?.value || 0;
-                    const cvr = checkouts > 0 ? orders / checkouts : 0;
+                    const orderCvr = checkouts > 0 ? orders / checkouts : 0;
+                    
+                    const formattedGmv = new Intl.NumberFormat(isEnglish ? "en-US" : "zh-CN", {
+                      style: "currency",
+                      currency,
+                      minimumFractionDigits: 0,
+                      maximumFractionDigits: 0,
+                    }).format(gmv);
                     
                     return (
                       <tr key={channel}>
@@ -788,11 +812,12 @@ export default function FunnelAnalysis() {
                         <td>{visits.toLocaleString()}</td>
                         <td>{checkouts.toLocaleString()}</td>
                         <td>{orders.toLocaleString()}</td>
-                        <td>${gmv.toLocaleString()}</td>
-                        <td>{(cvr * 100).toFixed(1)}%</td>
+                        <td>{formattedGmv}</td>
+                        <td>{(orderCvr * 100).toFixed(1)}%</td>
                       </tr>
                     );
-                  })}
+                  });
+                })()}
               </tbody>
             </table>
           </div>

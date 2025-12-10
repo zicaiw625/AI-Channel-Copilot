@@ -4,7 +4,7 @@
  */
 
 import prisma from "../db.server";
-import { resolveDateRange, type TimeRangeKey, type AIChannel, type AiDomainRule, type UtmSourceRule } from "./aiData";
+import { resolveDateRange, type TimeRangeKey, type AIChannel, type AiDomainRule, type UtmSourceRule, AI_CHANNELS } from "./aiData";
 import { toPrismaAiSource, fromPrismaAiSource } from "./aiSourceMapper";
 import { detectAiFromFields } from "./aiAttribution";
 import { logger } from "./logger.server";
@@ -714,9 +714,8 @@ export async function getFunnelData(
   
   // 按渠道细分（使用预先计算的统计数据，避免重复遍历）
   const byChannel: Record<string, FunnelMetrics[]> = {};
-  const channels: AIChannel[] = ["ChatGPT", "Perplexity", "Gemini", "Copilot", "Other-AI"];
   
-  for (const channel of channels) {
+  for (const channel of AI_CHANNELS) {
     const stats = channelOrderStats.get(channel) || { orders: 0, gmv: 0, checkouts: 0, completedCheckouts: 0 };
     
     // 使用真实的 checkout 数据，或基于配置的估算系数

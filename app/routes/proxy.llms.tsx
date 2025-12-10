@@ -153,19 +153,21 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     }
 
     // Generate llms.txt content (without admin client, collections/blogs will be limited)
+    // Note: This fallback content may be incomplete. Full content requires cache refresh from admin context.
     const text = await buildLlmsTxt(shopDomain, settings, {
       range: "30d",
       topN: 20,
       admin: undefined, // No admin access in proxy context
     });
 
-    logger.info("[proxy.llms] Served generated llms.txt (no cache)", { shopDomain });
+    logger.info("[proxy.llms] Served generated llms.txt (no cache, limited content)", { shopDomain });
 
     return new Response(text, {
       headers: {
         "Content-Type": "text/plain; charset=utf-8",
-        "Cache-Control": "public, max-age=3600",
+        "Cache-Control": "public, max-age=1800", // Shorter TTL for incomplete content
         "X-Cache": "MISS",
+        "X-Content-Status": "partial", // Indicate content may be incomplete without admin access
       },
     });
   } catch (error) {

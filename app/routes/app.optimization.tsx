@@ -801,23 +801,69 @@ export default function AIOptimization() {
                   style={{
                     width: `${report.llmsEnhancements.currentCoverage}%`,
                     height: "100%",
-                    background: "#50b83c",
-                    transition: "width 0.3s ease",
+                    background: report.llmsEnhancements.currentCoverage === 0 
+                      ? "#e0e0e0" // 0% 时保持灰色，警告信息已在下方显示
+                      : report.llmsEnhancements.currentCoverage < 50 
+                        ? "#f4a623" 
+                        : "#50b83c",
+                    transition: "width 0.3s ease, background 0.3s ease",
                   }}
                 />
               </div>
-              <span style={{ fontWeight: 600 }}>{report.llmsEnhancements.currentCoverage}%</span>
+              <span style={{ 
+                fontWeight: 600,
+                color: report.llmsEnhancements.currentCoverage === 0 
+                  ? "#de3618" 
+                  : report.llmsEnhancements.currentCoverage < 50 
+                    ? "#8a6116" 
+                    : "#2e7d32",
+              }}>
+                {report.llmsEnhancements.currentCoverage}%
+              </span>
             </div>
+            {report.llmsEnhancements.currentCoverage === 0 && (
+              <p style={{ 
+                margin: "8px 0 0", 
+                padding: "8px 12px",
+                background: "#fef3f3", 
+                borderRadius: 4,
+                fontSize: 13, 
+                color: "#de3618",
+                border: "1px solid #fad1cf",
+              }}>
+                ⚠️ {isEnglish 
+                  ? "No content exposed to AI crawlers. Enable at least one option below to improve AI visibility." 
+                  : "当前未向 AI 爬虫暴露任何内容。启用以下至少一个选项以提升 AI 可见性。"}
+              </p>
+            )}
           </div>
           
-          <div style={{ marginBottom: 16 }}>
-            <strong>{isEnglish ? "Recommended Actions:" : "推荐操作："}</strong>
-            <ul style={{ margin: "8px 0", paddingLeft: 20 }}>
-              {report.llmsEnhancements.categoryRecommendations.map((rec, i) => (
-                <li key={i} style={{ marginBottom: 4, color: "#555" }}>{rec}</li>
-              ))}
-            </ul>
-          </div>
+          {report.llmsEnhancements.categoryRecommendations.length > 0 && (
+            <div style={{ marginBottom: 16 }}>
+              <strong>{isEnglish ? "Recommended Actions:" : "推荐操作："}</strong>
+              <ul style={{ margin: "8px 0", paddingLeft: 20 }}>
+                {report.llmsEnhancements.categoryRecommendations.map((rec, i) => (
+                  <li key={i} style={{ marginBottom: 4, color: "#555" }}>{rec}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          
+          {report.llmsEnhancements.currentCoverage === 100 && (
+            <p style={{ 
+              margin: "0 0 16px", 
+              padding: "8px 12px",
+              background: "#e6f7ed", 
+              borderRadius: 4,
+              fontSize: 13, 
+              color: "#2e7d32",
+              border: "1px solid #b7e4c7",
+            }}>
+              ✓ {isEnglish 
+                ? "All content types are enabled. Your store is fully optimized for AI crawling." 
+                : "所有内容类型已启用，您的店铺已完全优化以供 AI 抓取。"}
+            </p>
+          )}
           
           <Link to="/app/additional" className={styles.primaryButton}>
             {isEnglish ? "Configure llms.txt Settings" : "配置 llms.txt 设置"}

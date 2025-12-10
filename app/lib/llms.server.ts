@@ -6,11 +6,26 @@ import { getPlatform } from "./runtime.server";
 import { LLMS_CACHE_TTL_MS, LLMS_CACHE_UPDATE_COOLDOWN_MS } from "./constants";
 
 /**
+ * YAML 特殊字符检测正则表达式
+ * YAML 特殊字符：: # ' " \ | > [ ] { } ! & * ? @ ` , -（在开头）以及空白字符
+ */
+const YAML_SPECIAL_CHARS = /[:"'#|>[\]{}!&*?,\\`@\s]/;
+const YAML_LEADING_SPECIAL = /^[-?]/;
+
+/**
+ * 检查字符串是否需要用引号包裹
+ */
+const needsYamlQuotes = (str: string): boolean => {
+  return YAML_SPECIAL_CHARS.test(str) || YAML_LEADING_SPECIAL.test(str);
+};
+
+/**
  * YAML 字符串转义辅助函数
  * 处理 YAML 格式中的特殊字符，避免解析错误
+ * @returns { escaped: string; needsQuotes: boolean } 转义后的字符串和是否需要引号
  */
-const escapeYamlString = (str: string): string => {
-  if (!str) return "";
+const escapeYamlString = (str: string): { escaped: string; needsQuotes: boolean } => {
+  if (!str) return { escaped: "", needsQuotes: false };
   
   let escaped = str
     // 移除控制字符（除了常规空白）
@@ -22,12 +37,7 @@ const escapeYamlString = (str: string): string => {
     .replace(/\s+/g, " ")
     .trim();
   
-  // 检查是否需要用双引号包裹
-  // YAML 特殊字符：: # ' " \ | > [ ] { } ! & * ? @ ` , -（在开头）
-  const needsQuotes = /[:"'#|>[\]{}!&*?,\\`@]/.test(escaped) ||
-                      /^[-?]/.test(escaped) ||
-                      /^\s/.test(escaped) ||
-                      /\s$/.test(escaped);
+  const needsQuotes = needsYamlQuotes(escaped);
   
   if (needsQuotes) {
     // 转义反斜杠和双引号
@@ -36,7 +46,7 @@ const escapeYamlString = (str: string): string => {
       .replace(/"/g, '\\"');
   }
   
-  return escaped;
+  return { escaped, needsQuotes };
 };
 
 /**
@@ -44,10 +54,7 @@ const escapeYamlString = (str: string): string => {
  * 自动处理需要引号包裹的情况
  */
 const yamlValue = (value: string): string => {
-  const escaped = escapeYamlString(value);
-  // 如果包含特殊字符或以特殊字符开头，需要引号
-  const needsQuotes = /[:"'#|>[\]{}!&*?,\\`@\s]/.test(escaped) ||
-                      /^[-?]/.test(escaped);
+  const { escaped, needsQuotes } = escapeYamlString(value);
   return needsQuotes ? `"${escaped}"` : escaped;
 };
 
@@ -402,11 +409,20 @@ export const buildLlmsTxt = async (
   }
   lines.push("");
 
+  // === Fetch collections and articles in parallel for better performance ===
+  const [collections, articles] = await Promise.all([
+    settings.exposurePreferences.exposeCollections && admin
+      ? fetchCollections(admin, shopDomain, topN)
+      : Promise.resolve([]),
+    settings.exposurePreferences.exposeBlogs && admin
+      ? fetchArticles(admin, shopDomain, topN)
+      : Promise.resolve([]),
+  ]);
+
   // === Collections Section ===
   if (settings.exposurePreferences.exposeCollections) {
     lines.push(isEnglish ? "## Collections" : "## 产品集合");
     if (admin) {
-      const collections = await fetchCollections(admin, shopDomain, topN);
       if (collections.length > 0) {
         lines.push("collections:");
         collections.forEach(({ url, title }) => {
@@ -434,7 +450,6 @@ export const buildLlmsTxt = async (
   if (settings.exposurePreferences.exposeBlogs) {
     lines.push(isEnglish ? "## Blog & Content" : "## 博客与内容");
     if (admin) {
-      const articles = await fetchArticles(admin, shopDomain, topN);
       if (articles.length > 0) {
         lines.push("articles:");
         articles.forEach(({ url, title }) => {

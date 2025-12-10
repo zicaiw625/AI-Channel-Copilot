@@ -33,8 +33,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const settings = await getSettings(shopDomain);
   
   // Allow overriding language from query param (for preview to match UI selection)
+  // Only accept valid language values to ensure type safety
   const langParam = url.searchParams.get("lang");
-  const settingsWithLang = langParam 
+  const validLanguages = ["English", "中文"] as const;
+  const isValidLang = langParam && validLanguages.includes(langParam as typeof validLanguages[number]);
+  const settingsWithLang = isValidLang
     ? { ...settings, languages: [langParam, ...(settings.languages || []).filter((l: string) => l !== langParam)] }
     : settings;
   

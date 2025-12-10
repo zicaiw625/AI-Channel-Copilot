@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import type { ActionFunctionArgs, HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { useFetcher, useLoaderData, useNavigate, useLocation } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
@@ -1352,6 +1352,13 @@ function LlmsPreview({ language, canExport, lastSavedAt }: { language: string; c
   const shopify = useAppBridge();
   const fetcher = useFetcher<{ ok: boolean; text: string }>();
   const [copied, setCopied] = useState(false);
+  
+  // Store fetcher.load in a ref to avoid dependency issues
+  // fetcher.load is stable but the fetcher object itself changes on each render
+  const fetcherLoadRef = useRef(fetcher.load);
+  useEffect(() => {
+    fetcherLoadRef.current = fetcher.load;
+  }, [fetcher.load]);
 
   const handleDownload = useCallback(async (e: React.MouseEvent<HTMLAnchorElement>, url: string, fallbackFilename: string) => {
     e.preventDefault();
@@ -1373,9 +1380,8 @@ function LlmsPreview({ language, canExport, lastSavedAt }: { language: string; c
     // Only load if user has export permission to avoid 403 errors
     if (canExport) {
       // Pass current language to API to ensure preview matches UI language selection
-      fetcher.load(`/api/llms-txt-preview?ts=${Date.now()}&lang=${encodeURIComponent(language)}`);
+      fetcherLoadRef.current(`/api/llms-txt-preview?ts=${Date.now()}&lang=${encodeURIComponent(language)}`);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [language, canExport, lastSavedAt]);
 
   const upgradeMessage = language === "English" 

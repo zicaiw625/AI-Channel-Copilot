@@ -292,10 +292,11 @@ export default function FunnelAnalysis() {
   const [selectedChannel, setSelectedChannel] = useState<string>("all");
   
   const maxCount = useMemo(() => {
-    return Math.max(
+    const counts = [
       ...funnelData.overall.map(s => s.count),
       ...funnelData.aiChannels.map(s => s.count),
-    );
+    ];
+    return counts.length > 0 ? Math.max(...counts) : 0;
   }, [funnelData]);
   
   const selectedFunnel = useMemo(() => {
@@ -547,6 +548,7 @@ export default function FunnelAnalysis() {
                 value={selectedChannel}
                 onChange={(e) => setSelectedChannel(e.target.value)}
                 className={styles.select}
+                aria-label={isEnglish ? "Select traffic channel" : "选择流量渠道"}
               >
                 <option value="all">{isEnglish ? "All Traffic" : "全部流量"}</option>
                 <option value="ai">{isEnglish ? "AI Channels (Total)" : "AI 渠道（汇总）"}</option>
@@ -573,6 +575,21 @@ export default function FunnelAnalysis() {
                   {isEnglish ? "Where Customers Drop Off" : "客户流失节点"}
                 </h3>
               </div>
+              {(funnelData.isEstimated.visits || funnelData.isEstimated.carts) && (
+                <span 
+                  style={{ 
+                    fontSize: 10, 
+                    padding: "2px 6px", 
+                    background: "#fff7e6", 
+                    color: "#d46b08",
+                    borderRadius: 4,
+                    border: "1px solid #ffd591",
+                  }}
+                  title={isEnglish ? "Based on estimated data" : "基于估算数据"}
+                >
+                  {isEnglish ? "Est." : "估算"}
+                </span>
+              )}
             </div>
             
             {maxCount === 0 ? (
@@ -594,21 +611,21 @@ export default function FunnelAnalysis() {
                       {isEnglish ? "Cart Abandonment" : "加购放弃率"}
                     </span>
                     <span style={{ color: "#de3618", fontWeight: 600 }}>
-                      {(funnelData.abandonment.cartAbandonment * 100).toFixed(1)}%
+                      {(Math.min(Math.max(funnelData.abandonment.cartAbandonment, 0), 1) * 100).toFixed(1)}%
                     </span>
                   </div>
                   <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                     <div style={{ flex: 1, height: 8, background: "#f4f6f8", borderRadius: 4, overflow: "hidden" }}>
                       <div
                         style={{
-                          width: `${funnelData.abandonment.cartAbandonment * 100}%`,
+                          width: `${Math.min(Math.max(funnelData.abandonment.cartAbandonment, 0), 1) * 100}%`,
                           height: "100%",
                           background: "#de3618",
                         }}
                       />
                     </div>
-                    <span style={{ fontSize: 12, color: "#635bff" }}>
-                      AI: {(funnelData.abandonment.aiCartAbandonment * 100).toFixed(1)}%
+                    <span style={{ fontSize: 12, color: "#635bff", whiteSpace: "nowrap" }}>
+                      AI: {(Math.min(Math.max(funnelData.abandonment.aiCartAbandonment, 0), 1) * 100).toFixed(1)}%
                     </span>
                   </div>
                 </div>
@@ -620,21 +637,21 @@ export default function FunnelAnalysis() {
                       {isEnglish ? "Checkout Abandonment" : "结账放弃率"}
                     </span>
                     <span style={{ color: "#f4a623", fontWeight: 600 }}>
-                      {(funnelData.abandonment.checkoutAbandonment * 100).toFixed(1)}%
+                      {(Math.min(Math.max(funnelData.abandonment.checkoutAbandonment, 0), 1) * 100).toFixed(1)}%
                     </span>
                   </div>
                   <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                     <div style={{ flex: 1, height: 8, background: "#f4f6f8", borderRadius: 4, overflow: "hidden" }}>
                       <div
                         style={{
-                          width: `${funnelData.abandonment.checkoutAbandonment * 100}%`,
+                          width: `${Math.min(Math.max(funnelData.abandonment.checkoutAbandonment, 0), 1) * 100}%`,
                           height: "100%",
                           background: "#f4a623",
                         }}
                       />
                     </div>
-                    <span style={{ fontSize: 12, color: "#635bff" }}>
-                      AI: {(funnelData.abandonment.aiCheckoutAbandonment * 100).toFixed(1)}%
+                    <span style={{ fontSize: 12, color: "#635bff", whiteSpace: "nowrap" }}>
+                      AI: {(Math.min(Math.max(funnelData.abandonment.aiCheckoutAbandonment, 0), 1) * 100).toFixed(1)}%
                     </span>
                   </div>
                 </div>
@@ -646,17 +663,22 @@ export default function FunnelAnalysis() {
                       {isEnglish ? "Total Abandonment" : "总体流失率"}
                     </span>
                     <span style={{ color: "#637381", fontWeight: 600 }}>
-                      {(funnelData.abandonment.totalAbandonment * 100).toFixed(1)}%
+                      {(Math.min(Math.max(funnelData.abandonment.totalAbandonment, 0), 1) * 100).toFixed(1)}%
                     </span>
                   </div>
-                  <div style={{ height: 8, background: "#f4f6f8", borderRadius: 4, overflow: "hidden" }}>
-                    <div
-                      style={{
-                        width: `${funnelData.abandonment.totalAbandonment * 100}%`,
-                        height: "100%",
-                        background: "#637381",
-                      }}
-                    />
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <div style={{ flex: 1, height: 8, background: "#f4f6f8", borderRadius: 4, overflow: "hidden" }}>
+                      <div
+                        style={{
+                          width: `${Math.min(Math.max(funnelData.abandonment.totalAbandonment, 0), 1) * 100}%`,
+                          height: "100%",
+                          background: "#637381",
+                        }}
+                      />
+                    </div>
+                    <span style={{ fontSize: 12, color: "#635bff", whiteSpace: "nowrap" }}>
+                      AI: {(Math.min(Math.max(1 - funnelData.conversionRates.aiVisitToOrder, 0), 1) * 100).toFixed(1)}%
+                    </span>
                   </div>
                 </div>
               </div>

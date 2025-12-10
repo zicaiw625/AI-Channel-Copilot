@@ -633,3 +633,28 @@ details.statusBlock > summary {
   font-size: 12px;
   color: #637381;
 }
+
+/* ============================================================================
+   Select Dropdown Styles
+   ============================================================================ */
+
+.select {
+  padding: 0.45rem 0.8rem;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  font-size: 0.95rem;
+  color: #374151;
+  cursor: pointer;
+  min-width: 140px;
+}
+
+.select:hover {
+  border-color: #d1d5db;
+}
+
+.select:focus {
+  outline: none;
+  border-color: #635bff;
+  box-shadow: 0 0 0 2px rgba(99, 91, 255, 0.15);
+}

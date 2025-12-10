@@ -29,6 +29,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   
   // 优先级：URL 参数 > cookie > 数据库设置
   const language = urlLanguage || cookieLanguage || settings.languages?.[0] || "中文";
+  
+  // 获取店铺货币设置
+  const currency = settings.primaryCurrency || "USD";
 
   const report = await generateAIOptimizationReport(shopDomain, admin, {
     range: "30d",
@@ -40,6 +43,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     report,
     language,
     shopDomain,
+    currency,
   };
 };
 
@@ -370,8 +374,68 @@ const SuggestionCard = ({
   );
 };
 
+/**
+ * 状态配置映射 - 避免嵌套三元运算符
+ */
+const STATUS_CONFIG = {
+  complete: { 
+    bg: "#e6f7ed", 
+    color: "#2e7d32", 
+    label: { en: "Complete", zh: "完整" } 
+  },
+  partial: { 
+    bg: "#fff8e5", 
+    color: "#8a6116", 
+    label: { en: "Partial", zh: "部分" } 
+  },
+  missing: { 
+    bg: "#fef3f3", 
+    color: "#de3618", 
+    label: { en: "Missing", zh: "缺失" } 
+  },
+} as const;
+
+/**
+ * 格式化货币显示
+ */
+const formatCurrency = (amount: number, currency: string, isEnglish: boolean): string => {
+  return new Intl.NumberFormat(isEnglish ? "en-US" : "zh-CN", {
+    style: "currency",
+    currency,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amount);
+};
+
+/**
+ * 状态标签组件 - 复用 schemaMarkupStatus 显示逻辑
+ */
+const StatusBadge = ({ 
+  status, 
+  isEnglish 
+}: { 
+  status: "complete" | "partial" | "missing"; 
+  isEnglish: boolean;
+}) => {
+  const config = STATUS_CONFIG[status] || STATUS_CONFIG.missing;
+  
+  return (
+    <span
+      style={{
+        padding: "2px 8px",
+        borderRadius: 4,
+        fontSize: 12,
+        background: config.bg,
+        color: config.color,
+      }}
+    >
+      {isEnglish ? config.label.en : config.label.zh}
+    </span>
+  );
+};
+
 export default function AIOptimization() {
-  const { report, language, shopDomain: _shopDomain } = useLoaderData<typeof loader>();
+  const { report, language, shopDomain: _shopDomain, currency } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   
@@ -587,52 +651,41 @@ export default function AIOptimization() {
           
           {report.topProducts.length > 0 ? (
             <div className={styles.tableWrap}>
-              <table className={styles.table}>
+              <table 
+                className={styles.table}
+                aria-label={isEnglish ? "Top AI-performing products" : "AI 渠道表现最佳产品"}
+              >
                 <thead>
                   <tr>
-                    <th>{isEnglish ? "Product" : "产品"}</th>
-                    <th>{isEnglish ? "AI GMV" : "AI GMV"}</th>
-                    <th>{isEnglish ? "AI Orders" : "AI 订单"}</th>
-                    <th>{isEnglish ? "Top Channel" : "主要渠道"}</th>
-                    <th>{isEnglish ? "Content Status" : "信息完整度"}</th>
-                    <th>{isEnglish ? "Improvements" : "改进项"}</th>
+                    <th scope="col">{isEnglish ? "Product" : "产品"}</th>
+                    <th scope="col">{isEnglish ? "AI GMV" : "AI GMV"}</th>
+                    <th scope="col">{isEnglish ? "AI Orders" : "AI 订单"}</th>
+                    <th scope="col">{isEnglish ? "Top Channel" : "主要渠道"}</th>
+                    <th scope="col">{isEnglish ? "Content Status" : "信息完整度"}</th>
+                    <th scope="col">{isEnglish ? "Improvements" : "改进项"}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {report.topProducts.map(product => (
                     <tr key={product.productId}>
                       <td className={styles.cellLabel}>
-                        <a href={product.url} target="_blank" rel="noreferrer" className={styles.link}>
+                        <a 
+                          href={product.url} 
+                          target="_blank" 
+                          rel="noopener noreferrer" 
+                          className={styles.link}
+                        >
                           {product.title}
                         </a>
                       </td>
-                      <td>${product.aiGMV.toFixed(2)}</td>
+                      <td>{formatCurrency(product.aiGMV, currency, isEnglish)}</td>
                       <td>{product.aiOrders}</td>
                       <td>{product.topChannel || "-"}</td>
                       <td>
-                        <span
-                          style={{
-                            padding: "2px 8px",
-                            borderRadius: 4,
-                            fontSize: 12,
-                            background: product.schemaMarkupStatus === "complete" 
-                              ? "#e6f7ed" 
-                              : product.schemaMarkupStatus === "partial"
-                                ? "#fff8e5"
-                                : "#fef3f3",
-                            color: product.schemaMarkupStatus === "complete"
-                              ? "#2e7d32"
-                              : product.schemaMarkupStatus === "partial"
-                                ? "#8a6116"
-                                : "#de3618",
-                          }}
-                        >
-                          {product.schemaMarkupStatus === "complete"
-                            ? (isEnglish ? "Complete" : "完整")
-                            : product.schemaMarkupStatus === "partial"
-                              ? (isEnglish ? "Partial" : "部分")
-                              : (isEnglish ? "Missing" : "缺失")}
-                        </span>
+                        <StatusBadge 
+                          status={product.schemaMarkupStatus} 
+                          isEnglish={isEnglish} 
+                        />
                       </td>
                       <td>
                         {product.suggestedImprovements.length > 0 
@@ -645,21 +698,13 @@ export default function AIOptimization() {
               </table>
             </div>
           ) : (
-            <div
-              style={{
-                textAlign: "center",
-                padding: "40px 20px",
-                background: "#f9fafb",
-                borderRadius: 8,
-                color: "#637381",
-              }}
-            >
-              <p style={{ margin: "0 0 8px", fontSize: 16 }}>
+            <div className={styles.emptyState}>
+              <p className={styles.emptyStateTitle}>
                 {isEnglish 
                   ? "No AI-attributed orders yet" 
                   : "暂无 AI 渠道订单数据"}
               </p>
-              <p style={{ margin: 0, fontSize: 14 }}>
+              <p className={styles.emptyStateDescription}>
                 {isEnglish
                   ? "Product analysis will appear once you receive orders from AI assistants like ChatGPT, Perplexity, etc."
                   : "当您收到来自 ChatGPT、Perplexity 等 AI 助手的订单后，产品分析将会显示在这里。"}
@@ -703,9 +748,9 @@ export default function AIOptimization() {
             </div>
             
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {report.suggestedFAQs.map((faq) => (
+              {report.suggestedFAQs.map((faq, index) => (
                 <div
-                  key={`faq-${faq.basedOnProduct}-${faq.question.slice(0, 30)}`}
+                  key={`faq-${index}-${faq.basedOnProduct}`}
                   style={{
                     background: "#f4f6f8",
                     borderRadius: 8,

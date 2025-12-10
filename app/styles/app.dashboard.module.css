@@ -518,6 +518,25 @@ details.statusBlock > summary {
   color: #0f172a;
 }
 
+/* Empty State - 空状态样式 */
+.emptyState {
+  text-align: center;
+  padding: 40px 20px;
+  background: #f9fafb;
+  border-radius: 8px;
+  color: #637381;
+}
+
+.emptyStateTitle {
+  margin: 0 0 8px;
+  font-size: 16px;
+}
+
+.emptyStateDescription {
+  margin: 0;
+  font-size: 14px;
+}
+
 /* ============================================================================
    Accessibility Utilities
    ============================================================================ */

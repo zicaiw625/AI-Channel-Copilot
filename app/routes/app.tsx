@@ -61,7 +61,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     if (!billingEnabled || demo || isDevShop) {
         plan = "pro"; // Treat as Pro for dev/demo
         canViewFullDashboard = true;
-    } else if (!skipBilling) {
+    } else if (!skipBilling && shopDomain) {
+        // Only call billing functions if shopDomain is valid
         plan = await getEffectivePlan(shopDomain);
         canViewFullDashboard = await hasFeature(shopDomain, FEATURES.DASHBOARD_FULL);
         trialDaysLeft = await calculateRemainingTrialDays(shopDomain);

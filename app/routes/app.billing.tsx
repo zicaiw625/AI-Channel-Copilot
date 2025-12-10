@@ -48,19 +48,22 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     }
   }
   
-  const planTier = await getEffectivePlan(shopDomain);
-  const trialEntries = await Promise.all(
-    (Object.keys(BILLING_PLANS) as PlanId[]).map(async (planId) => {
-      const plan = BILLING_PLANS[planId];
-      const remaining = plan.trialSupported ? await calculateRemainingTrialDays(shopDomain, planId) : 0;
-      return [planId, remaining] as const;
-    }),
-  );
+  // Only call billing functions if shopDomain is valid
+  const planTier = shopDomain ? await getEffectivePlan(shopDomain) : "none" as PlanTier;
+  const trialEntries = shopDomain 
+    ? await Promise.all(
+        (Object.keys(BILLING_PLANS) as PlanId[]).map(async (planId) => {
+          const plan = BILLING_PLANS[planId];
+          const remaining = plan.trialSupported ? await calculateRemainingTrialDays(shopDomain, planId) : 0;
+          return [planId, remaining] as const;
+        }),
+      )
+    : (Object.keys(BILLING_PLANS) as PlanId[]).map((planId) => [planId, 0] as const);
   const trialMap = Object.fromEntries(trialEntries) as Record<PlanId, number>;
   const language = settings.languages[0] || "中文";
   
-  // Get billing state for trial end date
-  const billingState = await getBillingState(shopDomain);
+  // Get billing state for trial end date (only if shopDomain is valid)
+  const billingState = shopDomain ? await getBillingState(shopDomain) : null;
   const trialEndDate = billingState?.lastTrialEndAt?.toISOString() || null;
   const isTrialing = billingState?.billingState?.includes("TRIALING") || false;
   

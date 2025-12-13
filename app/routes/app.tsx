@@ -121,6 +121,19 @@ export default function App() {
   const { apiKey, language, plan, trialDaysLeft, isDevShop, hasMissingScopes, missingScopes, reauthorizeUrl } = useLoaderData<typeof loader>();
   const uiLanguage = useUILanguage(language);
 
+  // 处理重新授权 - 嵌入式应用需要使用 App Bridge 进行重定向
+  const handleReauthorize = () => {
+    if (reauthorizeUrl) {
+      // 对于嵌入式应用，需要跳出 iframe 进行 OAuth 授权
+      // 使用 window.top 来确保整个页面重定向
+      if (window.top) {
+        window.top.location.href = reauthorizeUrl;
+      } else {
+        window.location.href = reauthorizeUrl;
+      }
+    }
+  };
+
   return (
     <AppProvider embedded apiKey={apiKey}>
       <NavMenu>
@@ -154,20 +167,21 @@ export default function App() {
             </div>
           </div>
           {reauthorizeUrl && (
-            <a
-              href={reauthorizeUrl}
+            <button
+              onClick={handleReauthorize}
               style={{
                 background: '#cf1322',
                 color: 'white',
                 padding: '8px 16px',
                 borderRadius: '4px',
-                textDecoration: 'none',
+                border: 'none',
                 fontWeight: 500,
                 whiteSpace: 'nowrap',
+                cursor: 'pointer',
               }}
             >
               {uiLanguage === "English" ? "Grant Permissions" : "授权权限"}
-            </a>
+            </button>
           )}
         </div>
       )}

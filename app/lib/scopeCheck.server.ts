@@ -97,9 +97,17 @@ export const getConfiguredScopes = (): string[] => {
 
 /**
  * 生成重新授权 URL
- * 使用 Shopify SDK 的标准授权流程
+ * 使用 Shopify 的 OAuth 授权流程
+ * 
+ * 对于嵌入式应用，需要通过 Shopify Admin 的 OAuth 端点来重新授权
  */
 export const buildReauthorizeUrl = (shopDomain: string): string => {
-  // 直接返回 /auth 路径，让 Shopify SDK 处理授权流程
-  return `/auth?shop=${encodeURIComponent(shopDomain)}`;
+  // 使用 Shopify Admin 的标准 OAuth 授权 URL
+  // 这会触发完整的 OAuth 流程，包括权限确认页面
+  const clientId = process.env.SHOPIFY_API_KEY;
+  const redirectUri = `${process.env.SHOPIFY_APP_URL}/auth/callback`;
+  const scopes = process.env.SCOPES || "read_orders,read_customers,read_products,write_orders,read_checkouts";
+  
+  // Shopify OAuth 授权 URL
+  return `https://${shopDomain}/admin/oauth/authorize?client_id=${clientId}&scope=${encodeURIComponent(scopes)}&redirect_uri=${encodeURIComponent(redirectUri)}`;
 };

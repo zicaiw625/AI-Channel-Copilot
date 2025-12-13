@@ -1,6 +1,10 @@
 /**
  * Orders Repository
  * 数据访问层 - 封装所有订单相关的数据库操作
+ * 
+ * 错误处理策略：
+ * - 查询操作：找不到时返回 null，数据库错误抛出 DatabaseError
+ * - 写入操作：验证失败抛出 ValidationError，其他错误抛出 DatabaseError
  */
 
 import prisma from '../../db.server';
@@ -9,6 +13,7 @@ import type { DateRange, OrderRecord } from '../aiTypes';
 import { toPrismaAiSource } from '../aiSourceMapper';
 import { logger } from '../logger.server';
 import { metrics, recordDbMetrics } from '../metrics/collector';
+import { DatabaseError, ValidationError } from '../errors';
 import {
   mapOrderToRecord,
   type OrderWithProducts,
@@ -63,8 +68,12 @@ export class OrdersRepository {
       return mapped;
     } catch (error) {
       recordDbMetrics(operation, 'Order', Date.now() - startTime, false);
-      logger.error('[OrdersRepository] Query failed', { shopDomain, operation }, { error });
-      throw error;
+      logger.error('[orders.repository] Query failed', { shopDomain, operation }, { error });
+      throw new DatabaseError('Failed to query orders by date range', {
+        shopDomain,
+        operation,
+        range: range.label,
+      });
     }
   }
 
@@ -92,7 +101,8 @@ export class OrdersRepository {
       return count;
     } catch (error) {
       recordDbMetrics('countAIOrders', 'Order', Date.now() - startTime, false);
-      throw error;
+      logger.error('[orders.repository] countAIOrders failed', { shopDomain }, { error });
+      throw new DatabaseError('Failed to count AI orders', { shopDomain, range: range.label });
     }
   }
 
@@ -154,12 +164,14 @@ export class OrdersRepository {
       };
     } catch (error) {
       recordDbMetrics('getAggregateStats', 'Order', Date.now() - startTime, false);
-      throw error;
+      logger.error('[orders.repository] getAggregateStats failed', { shopDomain }, { error });
+      throw new DatabaseError('Failed to get aggregate stats', { shopDomain, range: range.label });
     }
   }
 
   /**
    * 根据 ID 查询订单
+   * 找不到返回 null，数据库错误抛出 DatabaseError
    */
   async findById(orderId: string): Promise<OrderRecord | null> {
     const startTime = Date.now();
@@ -175,30 +187,137 @@ export class OrdersRepository {
       return order ? this.mapToOrderRecord(order) : null;
     } catch (error) {
       recordDbMetrics('findById', 'Order', Date.now() - startTime, false);
-      throw error;
+      logger.error('[orders.repository] findById failed', { orderId }, { error });
+      throw new DatabaseError('Failed to find order by ID', { orderId });
     }
   }
 
   /**
    * 批量创建或更新订单
+   * 【优化】使用批量事务提升性能，避免逐条 upsert
+   * 【修复】解决 N+1 查询问题，批量预查询 shopDomain
    */
-  async upsertMany(orders: OrderRecord[]): Promise<number> {
+  async upsertMany(orders: OrderRecord[], shopDomain?: string): Promise<number> {
+    if (!orders.length) return 0;
+    
     const startTime = Date.now();
+    const BATCH_SIZE = 50; // 每批处理 50 条，平衡性能和事务大小
     let successCount = 0;
 
     try {
-      for (const order of orders) {
-        await this.upsert(order);
-        successCount++;
+      // 分批处理
+      for (let i = 0; i < orders.length; i += BATCH_SIZE) {
+        const batch = orders.slice(i, i + BATCH_SIZE);
+        
+        // 使用事务批量处理
+        await prisma.$transaction(async (tx) => {
+          // 【修复 N+1】批量预查询所有需要 shopDomain 的订单
+          let shopDomainMap = new Map<string, string>();
+          if (!shopDomain) {
+            const orderIds = batch.map(order => order.id);
+            const existingOrders = await tx.order.findMany({
+              where: { id: { in: orderIds } },
+              select: { id: true, shopDomain: true },
+            });
+            shopDomainMap = new Map(existingOrders.map(o => [o.id, o.shopDomain]));
+          }
+
+          for (const order of batch) {
+            const prismaAiSource = toPrismaAiSource(order.aiSource);
+            
+            // 获取 shopDomain：优先使用传入的，否则从预查询结果获取
+            const effectiveShopDomain = shopDomain || shopDomainMap.get(order.id) || '';
+            
+            if (!effectiveShopDomain) {
+              logger.warn('[orders.repository] Skipping order without shopDomain', { orderId: order.id });
+              continue;
+            }
+
+            // 验证 signals 是否为有效的 JSON 数组
+            const validatedSignals = Array.isArray(order.signals) ? order.signals : [];
+
+            await tx.order.upsert({
+              where: { id: order.id },
+              update: {
+                name: order.name,
+                totalPrice: order.totalPrice,
+                currency: order.currency,
+                subtotalPrice: order.subtotalPrice,
+                refundTotal: order.refundTotal,
+                aiSource: prismaAiSource,
+                detection: order.detection,
+                detectionSignals: validatedSignals as Prisma.InputJsonValue,
+                referrer: order.referrer,
+                landingPage: order.landingPage,
+                utmSource: order.utmSource,
+                utmMedium: order.utmMedium,
+                sourceName: order.sourceName,
+                customerId: order.customerId,
+                isNewCustomer: order.isNewCustomer,
+                updatedAt: new Date(),
+              },
+              create: {
+                id: order.id,
+                shopDomain: effectiveShopDomain,
+                name: order.name,
+                createdAt: new Date(order.createdAt),
+                totalPrice: order.totalPrice,
+                currency: order.currency,
+                subtotalPrice: order.subtotalPrice,
+                refundTotal: order.refundTotal,
+                aiSource: prismaAiSource,
+                detection: order.detection,
+                detectionSignals: validatedSignals as Prisma.InputJsonValue,
+                referrer: order.referrer,
+                landingPage: order.landingPage,
+                utmSource: order.utmSource,
+                utmMedium: order.utmMedium,
+                sourceName: order.sourceName,
+                customerId: order.customerId,
+                isNewCustomer: order.isNewCustomer,
+              },
+            });
+
+            // 【修复一致性】产品处理：无论是否有产品都先删除旧的
+            await tx.orderProduct.deleteMany({ where: { orderId: order.id } });
+            
+            // 如果有新产品则创建
+            if (order.products && order.products.length > 0) {
+              await tx.orderProduct.createMany({
+                data: order.products.map((p) => ({
+                  orderId: order.id,
+                  productId: p.id,
+                  title: p.title,
+                  handle: p.handle,
+                  url: p.url,
+                  price: p.price,
+                  currency: p.currency,
+                  quantity: p.quantity,
+                })),
+              });
+            }
+            
+            successCount++;
+          }
+        }, {
+          timeout: 30000, // 30 秒超时
+        });
       }
 
       recordDbMetrics('upsertMany', 'Order', Date.now() - startTime, true);
       metrics.increment('orders.upserted', successCount);
 
+      logger.info('[orders.repository] Batch upsert completed', {
+        total: orders.length,
+        success: successCount,
+        batches: Math.ceil(orders.length / BATCH_SIZE),
+        durationMs: Date.now() - startTime,
+      });
+
       return successCount;
     } catch (error) {
       recordDbMetrics('upsertMany', 'Order', Date.now() - startTime, false);
-      logger.error('[OrdersRepository] Batch upsert failed', { 
+      logger.error('[orders.repository] Batch upsert failed', { 
         total: orders.length, 
         success: successCount 
       }, { error });
@@ -229,14 +348,20 @@ export class OrdersRepository {
         effectiveShopDomain = existing?.shopDomain || '';
       }
 
-      // 如果仍然没有 shopDomain，抛出错误而不是创建无效记录
+      // 如果仍然没有 shopDomain，抛出验证错误而不是创建无效记录
       if (!effectiveShopDomain) {
-        const errorMsg = `Cannot upsert order ${order.id}: shopDomain is required but not provided and order does not exist`;
-        logger.error('[OrdersRepository] shopDomain validation failed', { orderId: order.id });
-        throw new Error(errorMsg);
+        logger.error('[orders.repository] shopDomain validation failed', { orderId: order.id });
+        throw new ValidationError(
+          'shopDomain is required but not provided and order does not exist',
+          'shopDomain',
+          order.id
+        );
       }
 
-      // 【修复】使用事务确保订单和产品更新的原子性
+      // 验证 signals 是否为有效的 JSON 数组
+      const validatedSignals = Array.isArray(order.signals) ? order.signals : [];
+
+      // 使用事务确保订单和产品更新的原子性
       await prisma.$transaction(async (tx) => {
         await tx.order.upsert({
           where: { id: order.id },
@@ -248,7 +373,7 @@ export class OrdersRepository {
             refundTotal: order.refundTotal,
             aiSource: prismaAiSource,
             detection: order.detection,
-            detectionSignals: order.signals as Prisma.InputJsonValue,
+            detectionSignals: validatedSignals as Prisma.InputJsonValue,
             referrer: order.referrer,
             landingPage: order.landingPage,
             utmSource: order.utmSource,
@@ -269,7 +394,7 @@ export class OrdersRepository {
             refundTotal: order.refundTotal,
             aiSource: prismaAiSource,
             detection: order.detection,
-            detectionSignals: order.signals as Prisma.InputJsonValue,
+            detectionSignals: validatedSignals as Prisma.InputJsonValue,
             referrer: order.referrer,
             landingPage: order.landingPage,
             utmSource: order.utmSource,
@@ -281,13 +406,13 @@ export class OrdersRepository {
         });
 
         // 处理 OrderProducts（在同一事务内）
-        if (order.products && order.products.length > 0) {
-          // 删除旧的 products
-          await tx.orderProduct.deleteMany({
-            where: { orderId: order.id },
-          });
+        // 始终先删除旧产品，保持与 upsertMany 的一致性
+        await tx.orderProduct.deleteMany({
+          where: { orderId: order.id },
+        });
 
-          // 创建新的 products
+        // 如果有新产品则创建
+        if (order.products && order.products.length > 0) {
           await tx.orderProduct.createMany({
             data: order.products.map((p) => ({
               orderId: order.id,
@@ -299,11 +424,6 @@ export class OrdersRepository {
               currency: p.currency,
               quantity: p.quantity,
             })),
-          });
-        } else {
-          // 如果没有产品，也需要清理可能存在的旧产品记录
-          await tx.orderProduct.deleteMany({
-            where: { orderId: order.id },
           });
         }
       });
@@ -336,7 +456,7 @@ export class OrdersRepository {
       return lastOrder?.createdAt ?? null;
     } catch (error) {
       recordDbMetrics('getLastOrderAt', 'Order', Date.now() - startTime, false);
-      logger.error('[OrdersRepository] getLastOrderAt failed', { shopDomain }, { error });
+      logger.error('[orders.repository] getLastOrderAt failed', { shopDomain }, { error });
       return null;
     }
   }
@@ -358,7 +478,7 @@ export class OrdersRepository {
       recordDbMetrics('deleteOlderThan', 'Order', Date.now() - startTime, true);
       metrics.increment('orders.deleted', result.count, { shopDomain });
 
-      logger.info('[OrdersRepository] Deleted old orders', {
+      logger.info('[orders.repository] Deleted old orders', {
         shopDomain,
         count: result.count,
         beforeDate: beforeDate.toISOString(),
@@ -367,7 +487,11 @@ export class OrdersRepository {
       return result.count;
     } catch (error) {
       recordDbMetrics('deleteOlderThan', 'Order', Date.now() - startTime, false);
-      throw error;
+      logger.error('[orders.repository] deleteOlderThan failed', { shopDomain, beforeDate }, { error });
+      throw new DatabaseError('Failed to delete old orders', { 
+        shopDomain, 
+        beforeDate: beforeDate.toISOString() 
+      });
     }
   }
 

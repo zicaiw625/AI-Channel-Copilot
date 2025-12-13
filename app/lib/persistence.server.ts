@@ -4,19 +4,17 @@ import { type DateRange, type OrderRecord } from "./aiData";
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 import { getPlatform, isDemoMode } from "./runtime.server";
 import { 
-  MAX_DASHBOARD_ORDERS, 
   MAX_DETECTION_LENGTH, 
   PERSISTENCE_BATCH_SIZE,
   PERSISTENCE_TRANSACTION_TIMEOUT_MS 
 } from "./constants";
 import { getSettings } from "./settings.server";
 import { toPrismaAiSource } from "./aiSourceMapper";
-import { validateOrderData } from "./orderService.server";
+import { validateOrderData, loadOrdersFromDb as loadOrdersFromDbService } from "./orderService.server";
 import { DatabaseError, ValidationError } from "./errors";
 import { logger } from "./logger.server";
 import { toZonedDate } from "./dateUtils";
 import {
-  mapOrderToRecord,
   type CustomerState,
   mapCustomerToState,
   createInitialCustomerState,
@@ -354,8 +352,10 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
         {
           // 事务超时配置，避免长时间占用数据库连接
           timeout: PERSISTENCE_TRANSACTION_TIMEOUT_MS,
-          // 使用可序列化隔离级别确保数据一致性
-          isolationLevel: "Serializable",
+          // 使用 RepeatableRead 隔离级别，平衡一致性和性能
+          // 注：已通过 groupOrdersByCustomer 在内存中按客户分组处理，
+          // 避免了同一客户订单的竞态条件，无需 Serializable
+          isolationLevel: "RepeatableRead",
         }
       );
 
@@ -393,63 +393,12 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
   }
 };
 
-export const loadOrdersFromDb = async (
-  shopDomain: string,
-  range: DateRange,
-): Promise<{ orders: OrderRecord[]; clamped: boolean }> => {
-  if (!shopDomain || isDemoMode()) return { orders: [], clamped: false };
-
-  try {
-    // 使用 limit + 1 策略判断是否截断，避免额外的 COUNT 查询
-    const orders = await prisma.order.findMany({
-      where: {
-        shopDomain,
-        createdAt: {
-          gte: range.start,
-          lte: range.end,
-        },
-      },
-      take: MAX_DASHBOARD_ORDERS + 1,
-      orderBy: { createdAt: "desc" },
-      include: { products: true },
-    });
-
-    const clamped = orders.length > MAX_DASHBOARD_ORDERS;
-    if (clamped) {
-      orders.pop(); // 移除多余的一条记录
-    }
-
-    // 【优化】使用共享的 mapper 函数
-    const orderRecords = orders.map((order) =>
-      mapOrderToRecord(order, { includeProducts: true, subtotalFallback: "totalPrice" })
-    );
-
-    logger.info("[persistence] Loaded orders from database", {
-      shopDomain,
-      dateRange: range.label,
-      loadedCount: orderRecords.length,
-      clamped,
-    });
-
-    return { orders: orderRecords, clamped };
-  } catch (error) {
-    if (tableMissing(error)) {
-      logger.warn("[persistence] Database tables not available for order loading", { shopDomain });
-      return { orders: [], clamped: false };
-    }
-
-    logger.error("[persistence] Failed to load orders", {
-      shopDomain,
-      range: range.label,
-      error: error instanceof Error ? error.message : String(error),
-    });
-
-    throw new DatabaseError("Failed to load orders from database", {
-      shopDomain,
-      range: range.label,
-    });
-  }
-};
+/**
+ * 从数据库加载订单
+ * @deprecated 请直接从 orderService.server 导入 loadOrdersFromDb
+ * 为保持向后兼容，此处重新导出
+ */
+export const loadOrdersFromDb = loadOrdersFromDbService;
 
 export const loadCustomersByIdsLegacy = async (
   shopDomain: string,

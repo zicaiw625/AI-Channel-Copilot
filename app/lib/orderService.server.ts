@@ -86,7 +86,7 @@ export const loadOrdersFromDb = async (
       };
     });
 
-    logger.info("[orderService] Loaded orders from database", {
+    logger.info("[order.service] Loaded orders from database", {
       shopDomain,
       dateRange: dateRange.label,
       loadedCount: orderRecords.length,
@@ -95,7 +95,7 @@ export const loadOrdersFromDb = async (
 
     return { orders: orderRecords, clamped };
   } catch (error) {
-    logger.error("[orderService] Failed to load orders", {
+    logger.error("[order.service] Failed to load orders", {
       shopDomain,
       dateRange: dateRange.label,
       limit,
@@ -156,10 +156,10 @@ export const getOrderStats = async (
       total: totalStats,
     };
   } catch (error) {
-    logger.error("[orderService] Failed to get order stats", {
+    logger.error("[order.service] Failed to get order stats", {
       shopDomain,
       dateRange: dateRange.label,
-    });
+    }, { error: error instanceof Error ? error.message : String(error) });
 
     throw new DatabaseError("Failed to get order statistics", {
       shopDomain,

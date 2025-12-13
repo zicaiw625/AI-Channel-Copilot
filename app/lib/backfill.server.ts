@@ -38,6 +38,11 @@ type BackfillDependencies = {
     | null;
 };
 
+/**
+ * 本地处理标志
+ * 注：此标志仅在单实例内有效，用于避免不必要的 advisory lock 请求
+ * 多实例部署时，真正的并发控制依赖 withAdvisoryLockSimple
+ */
 let processing = false;
 
 const dequeue = async (where: Prisma.BackfillJobWhereInput = {}) =>
@@ -83,11 +88,17 @@ const processQueue = async (
   ) => Promise<BackfillDependencies>,
   where: Prisma.BackfillJobWhereInput = {},
 ) => {
-  if (processing) return;
+  // 快速返回：本地实例已在处理中
+  if (processing) {
+    logger.debug('[backfill] Skipped: local instance already processing');
+    return;
+  }
   processing = true;
 
   try {
+    // 使用 advisory lock 确保跨实例的排他执行
     await withAdvisoryLockSimple(1002, async () => {
+      logger.info('[backfill] Acquired advisory lock, starting queue processing');
       for (;;) {
         const job = await dequeue(where);
         if (!job) break;

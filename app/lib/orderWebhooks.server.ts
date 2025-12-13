@@ -7,6 +7,8 @@ import { getPlatform, isDemoMode } from "./runtime.server";
 import { enqueueWebhookJob, getWebhookQueueSize, registerWebhookHandler, checkWebhookDuplicate } from "./webhookQueue.server";
 import { logger } from "./logger.server";
 import { enforceRateLimit, RateLimitRules, buildRateLimitKey } from "./security/rateLimit.server";
+import { WEBHOOK_TAGGING_THRESHOLD_MS } from "./constants";
+import type { AdminGraphqlClient } from "./graphqlSdk.server";
 
 const WEBHOOK_STATUS_TITLE = "orders/create webhook";
 
@@ -204,11 +206,12 @@ export const handleOrderWebhook = async (request: Request, expectedTopic: string
           );
         } finally {
           const elapsed = Date.now() - taggingStart;
-          if (elapsed > 4500) {
+          if (elapsed > WEBHOOK_TAGGING_THRESHOLD_MS) {
             logger.warn("[webhook] tagging exceeded threshold", {
               platform,
               shop: jobShopDomain,
               elapsedMs: elapsed,
+              thresholdMs: WEBHOOK_TAGGING_THRESHOLD_MS,
               topic,
             });
           }
@@ -263,6 +266,45 @@ export const handleOrderWebhook = async (request: Request, expectedTopic: string
   }
 };
 
+/**
+ * 类型守卫：检查对象是否具有 graphql 方法
+ */
+const isAdminClient = (obj: unknown): obj is AdminGraphqlClient => {
+  return (
+    obj !== null &&
+    typeof obj === "object" &&
+    "graphql" in obj &&
+    typeof (obj as Record<string, unknown>).graphql === "function"
+  );
+};
+
+/**
+ * 类型守卫：检查对象是否具有 admin 属性且 admin 具有 graphql 方法
+ */
+const hasAdminProperty = (obj: unknown): obj is { admin: AdminGraphqlClient } => {
+  return (
+    obj !== null &&
+    typeof obj === "object" &&
+    "admin" in obj &&
+    isAdminClient((obj as Record<string, unknown>).admin)
+  );
+};
+
+/**
+ * 从 unauthenticated.admin 的返回值中提取 AdminGraphqlClient
+ */
+const extractAdminClient = (unauthResult: unknown): AdminGraphqlClient | null => {
+  // 直接返回的是 AdminGraphqlClient
+  if (isAdminClient(unauthResult)) {
+    return unauthResult;
+  }
+  // 返回的是包含 admin 属性的对象
+  if (hasAdminProperty(unauthResult)) {
+    return unauthResult.admin;
+  }
+  return null;
+};
+
 export const registerDefaultOrderWebhookHandlers = () => {
   const intents = ["orders/create", "orders/updated"] as const;
   intents.forEach((intent) => {
@@ -278,17 +320,10 @@ export const registerDefaultOrderWebhookHandlers = () => {
       }
 
       const settings = await getSettings(jobShopDomain);
-      let admin: {
-        graphql: (query: string, options: { variables?: Record<string, unknown> }) => Promise<Response>;
-      } | null = null;
+      let admin: AdminGraphqlClient | null = null;
       try {
         const unauthResult = await unauthenticated.admin(jobShopDomain);
-        // 尝试直接使用返回值，或者从返回值中获取 admin
-        if (unauthResult && typeof (unauthResult as any).graphql === "function") {
-          admin = unauthResult as any;
-        } else if (unauthResult && typeof (unauthResult as any).admin?.graphql === "function") {
-          admin = (unauthResult as any).admin;
-        }
+        admin = extractAdminClient(unauthResult);
       } catch {
         admin = null;
       }

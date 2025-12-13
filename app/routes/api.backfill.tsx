@@ -52,6 +52,36 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const dateRange = resolveDateRange(rangeKey, new Date(), from, to, timezone);
 
   const existing = await describeBackfill(shopDomain);
+  
+  // 如果有已存在的 queued 作业，直接处理它
+  if (existing && existing.status === "queued") {
+    logger.info("[api.backfill] processing existing queued job", { shopDomain, jobId: existing.id });
+    void processBackfillQueue(
+      async () => {
+        let resolvedAdmin: { graphql: (query: string, options: { variables?: Record<string, unknown> }) => Promise<Response> } | null = null;
+        try {
+          const unauthResult = await unauthenticated.admin(shopDomain);
+          if (unauthResult && typeof (unauthResult as any).graphql === "function") {
+            resolvedAdmin = unauthResult as any;
+          } else if (unauthResult && typeof (unauthResult as any).admin?.graphql === "function") {
+            resolvedAdmin = (unauthResult as any).admin;
+          }
+        } catch (err) {
+          logger.warn("[api.backfill] unauthenticated.admin failed", { shopDomain, error: (err as Error).message });
+        }
+        return { admin: resolvedAdmin, settings };
+      },
+      { shopDomain },
+    );
+    return Response.json({
+      ok: true,
+      queued: true,
+      reason: "processing-existing",
+      startedAt: existing.startedAt,
+      range: existing.range,
+    });
+  }
+  
   if (existing) {
     return Response.json({
       ok: true,

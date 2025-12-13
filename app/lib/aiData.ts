@@ -554,9 +554,16 @@ export const mapShopifyOrderToRecord = (
       };
     }) || [];
 
-  const isNewCustomer =
+  // 【修复】更准确的新客户判断逻辑
+  // - numberOfOrders === 1 表示这是客户的第一笔订单（新客户）
+  // - numberOfOrders > 1 表示老客户
+  // - 如果 customer 为空或 numberOfOrders 不可用，默认为 true（保守估计）
+  //   后续在 persistence.server.ts 中会基于 Customer 表记录重新计算
+  // 注意：Shopify API 可能因权限问题不返回 customer 数据，
+  //       真正的新客户判断应基于本地 Customer 表的 orderCount
+  const isNewCustomerFromApi =
     !order.customer || typeof order.customer.numberOfOrders !== "number"
-      ? true
+      ? true  // API 数据不可用时的临时值，后续会被重新计算
       : order.customer.numberOfOrders <= 1;
 
   return {
@@ -575,7 +582,7 @@ export const mapShopifyOrderToRecord = (
     sourceName: order.sourceName || undefined,
     tags: order.tags || [],
     customerId: order.customer?.id ?? null,
-    isNewCustomer,
+    isNewCustomer: isNewCustomerFromApi,
     products,
     detection: truncatedDetection,
     signals,

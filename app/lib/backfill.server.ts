@@ -163,7 +163,16 @@ const processQueue = async (
     const pending = await prisma.backfillJob.count({ where: { status: "queued", ...where } });
     if (pending) {
       logger.debug('[backfill] Found pending jobs after processing, scheduling next run', { pending });
-      void processQueue(resolveDependencies, where);
+      // 【修复】使用 setImmediate 延迟执行，并添加错误处理
+      // 避免使用 void 忽略 Promise，防止错误被静默丢弃
+      setImmediate(() => {
+        processQueue(resolveDependencies, where).catch((err) => {
+          logger.error('[backfill] Recursive queue processing failed', {
+            error: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+          });
+        });
+      });
     }
   } else {
     logger.debug('[backfill] Skipped: lock held by another process', { reason: lockInfo.reason });

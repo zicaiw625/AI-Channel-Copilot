@@ -184,8 +184,11 @@ class TTLCache<K, V> {
   }
 
   set(key: K, value: V): void {
-    // 清理过期条目
-    this.cleanup();
+    // 【优化】使用概率清理策略，避免每次 set 都触发全量清理
+    // 只有 5% 的概率触发清理，减少高并发写入时的性能开销
+    if (Math.random() < 0.05) {
+      this.cleanup();
+    }
     
     // 如果达到最大容量，删除最旧的条目
     if (this.cache.size >= this.maxSize) {
@@ -538,12 +541,13 @@ const fetchOrdersPage = async (
       return fetchOrdersPage(admin, query, after, context, downgradeRetryCount + 1);
     }
     
+    // 【优化】在日志中记录完整错误信息，只在抛出的异常中截断
     logger.error("[backfill] orders page fetch failed", {
       platform,
       shopDomain,
       queryLevel,
       ...logContext,
-    }, { status: response.status, body: text.slice(0, 200) });
+    }, { status: response.status, body: text.slice(0, 500), bodyLength: text.length });
     throw new Error(`Orders query failed: ${response.status} - ${text.slice(0, 200)}`);
   }
 
@@ -624,15 +628,20 @@ export const fetchOrdersForRange = async (
     throw new Error("Invalid date range: start and end dates are required");
   }
   
-  if (range.start > range.end) {
+  // 【修复】创建新的日期变量，避免修改传入的 range 对象（防止可变参数副作用）
+  let effectiveRangeStart = range.start;
+  let effectiveRangeEnd = range.end;
+  
+  if (effectiveRangeStart > effectiveRangeEnd) {
     logger.warn("[backfill] Invalid date range: start > end, swapping dates", {
       platform,
       shopDomain: context?.shopDomain,
-      originalStart: range.start.toISOString(),
-      originalEnd: range.end.toISOString(),
+      originalStart: effectiveRangeStart.toISOString(),
+      originalEnd: effectiveRangeEnd.toISOString(),
     });
     // 自动交换日期，而不是抛出错误（更宽容的处理）
-    [range.start, range.end] = [range.end, range.start];
+    // 使用临时变量交换，不修改原始 range 对象
+    [effectiveRangeStart, effectiveRangeEnd] = [effectiveRangeEnd, effectiveRangeStart];
   }
 
   const maxOrders = options?.maxOrders ?? MAX_BACKFILL_ORDERS;
@@ -640,14 +649,15 @@ export const fetchOrdersForRange = async (
   const lowerBound = new Date();
   lowerBound.setUTCDate(lowerBound.getUTCDate() - MAX_BACKFILL_DAYS);
   lowerBound.setUTCHours(0, 0, 0, 0);
-  const effectiveStart = range.start < lowerBound ? lowerBound : range.start;
-  const clamped = range.start < lowerBound;
+  const effectiveStart = effectiveRangeStart < lowerBound ? lowerBound : effectiveRangeStart;
+  const clamped = effectiveRangeStart < lowerBound;
   
   // 格式化日期为 ISO 格式但不含毫秒，并加引号（符合 Shopify search syntax）
+  // 注意：Shopify 搜索语法不支持毫秒精度，需要移除 .000 部分
   const formatDateForSearch = (date: Date): string => {
     return date.toISOString().replace(/\.\d{3}Z$/, 'Z');
   };
-  const search = `created_at:>="${formatDateForSearch(effectiveStart)}" created_at:<="${formatDateForSearch(range.end)}"`;
+  const search = `created_at:>="${formatDateForSearch(effectiveStart)}" created_at:<="${formatDateForSearch(effectiveRangeEnd)}"`;
   const records: OrderRecord[] = [];
 
   let after: string | undefined;
@@ -661,10 +671,10 @@ export const fetchOrdersForRange = async (
     platform,
     shopDomain: context?.shopDomain,
     intent: context?.intent,
-    range: context?.rangeLabel || `${effectiveStart.toISOString()} to ${range.end.toISOString()}`,
+    range: context?.rangeLabel || `${effectiveStart.toISOString()} to ${effectiveRangeEnd.toISOString()}`,
     searchQuery: search,
     effectiveStart: effectiveStart.toISOString(),
-    effectiveEnd: range.end.toISOString(),
+    effectiveEnd: effectiveRangeEnd.toISOString(),
     jobType: "backfill",
   });
   try {
@@ -679,6 +689,21 @@ export const fetchOrdersForRange = async (
       if (!page) break;
 
       page.edges.forEach(({ node }) => {
+        // 【修复】检查 lineItems 是否可能被截断
+        // GraphQL 查询限制为 first: 50，如果返回恰好 50 条，可能有更多被截断
+        const lineItemCount = node.lineItems?.edges?.length ?? 0;
+        if (lineItemCount >= 50) {
+          logger.warn("[backfill] Order lineItems may be truncated", {
+            platform,
+            shopDomain: context?.shopDomain,
+            orderId: node.id,
+            orderName: node.name,
+            lineItemCount,
+            maxLineItems: 50,
+            jobType: "backfill",
+          });
+        }
+
         const record = mapShopifyOrderToRecord(node, settings);
         records.push(record);
         if (!record.aiSource || record.aiSource === "Other-AI") {
@@ -720,7 +745,7 @@ export const fetchOrdersForRange = async (
       return {
         orders: [],
         start: effectiveStart,
-        end: range.end,
+        end: effectiveRangeEnd,
         clamped,
         pageCount: 0,
         hitPageLimit: false,
@@ -735,7 +760,7 @@ export const fetchOrdersForRange = async (
     platform,
     shopDomain: context?.shopDomain,
     intent: context?.intent,
-    range: context?.rangeLabel || `${effectiveStart.toISOString()} to ${range.end.toISOString()}`,
+    range: context?.rangeLabel || `${effectiveStart.toISOString()} to ${effectiveRangeEnd.toISOString()}`,
     orders: records.length,
     pages: guard,
     clamped,
@@ -750,7 +775,7 @@ export const fetchOrdersForRange = async (
   return {
     orders: records,
     start: effectiveStart,
-    end: range.end,
+    end: effectiveRangeEnd,
     clamped,
     pageCount: guard,
     hitPageLimit,
@@ -847,12 +872,13 @@ export const fetchOrderById = async (
       return fetchOrderById(admin, id, settings, context, downgradeRetryCount + 1);
     }
     
+    // 【优化】在日志中记录更完整的错误信息
     logger.error("[webhook] order fetch failed", { 
       platform, 
       shopDomain, 
       queryLevel,
       ...logContext,
-    }, { status: response.status, body: text.slice(0, 200) });
+    }, { status: response.status, body: text.slice(0, 500), bodyLength: text.length });
     return null;
   }
 

@@ -128,6 +128,24 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
             const createdAt = new Date(order.createdAt);
             const detection = (order.detection || "").slice(0, MAX_DETECTION_LENGTH);
 
+            // 【修复】基于 Customer 表记录重新计算 isNewCustomer
+            // 这比依赖 Shopify API 返回的值更准确，因为：
+            // 1. API 可能因权限问题不返回 customer 数据
+            // 2. 我们自己的 Customer 表记录更准确
+            let computedIsNewCustomer = order.isNewCustomer; // 默认使用 API 返回的值
+            if (order.customerId) {
+              const customerState = customerStateMap.get(order.customerId);
+              if (customerState) {
+                // 如果已有客户记录，基于 orderCount 判断
+                // orderCount === 0 表示这是该客户的第一笔订单
+                computedIsNewCustomer = customerState.orderCount === 0;
+              }
+              // 如果没有客户记录，说明这是新客户的第一笔订单
+              else {
+                computedIsNewCustomer = true;
+              }
+            }
+
             const orderData: Prisma.OrderUpsertArgs["create"] = {
               id: order.id,
               shopDomain,
@@ -146,7 +164,7 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
               utmMedium: order.utmMedium,
               sourceName: order.sourceName,
               customerId: order.customerId ?? null,
-              isNewCustomer: order.isNewCustomer,
+              isNewCustomer: computedIsNewCustomer,
               detectionSignals: order.signals as unknown as Prisma.InputJsonValue,
               createdAtLocal: toZonedDate(createdAt, timeZone),
             };
@@ -277,10 +295,14 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
                   ? existingOrder.totalPrice
                   : 0;
 
-              // 订单计数：如果是更新现有订单，保持计数不变；否则 +1
+              // 【修复】订单计数逻辑：
+              // - 如果是更新现有订单（订单 ID 已存在），保持当前计数不变
+              // - 如果是新订单，计数 +1
+              // 注意：之前的 Math.max(current.orderCount, 1) 逻辑有问题，
+              // 因为当 orderCount 为 0 时会被错误地设为 1
               const nextOrderCount: number = existingOrder
-                ? Math.max(current.orderCount, 1)
-                : current.orderCount + 1;
+                ? current.orderCount  // 更新订单：保持不变
+                : current.orderCount + 1;  // 新订单：+1
 
               // 总消费：减去旧订单金额，加上新订单金额
               const nextTotal: number =

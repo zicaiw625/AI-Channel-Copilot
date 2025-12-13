@@ -4,7 +4,7 @@
  */
 
 import prisma from "../db.server";
-import type { DateRange, OrderRecord, SettingsDefaults } from "./aiTypes";
+import type { DateRange, OrderRecord } from "./aiTypes";
 import { DatabaseError, ValidationError } from "./errors";
 import { logger } from "./logger.server";
 import { fromPrismaAiSource } from "./aiSourceMapper";
@@ -114,8 +114,7 @@ export const loadOrdersFromDb = async (
  */
 export const getOrderStats = async (
   shopDomain: string,
-  dateRange: DateRange,
-  _settings: SettingsDefaults
+  dateRange: DateRange
 ) => {
   try {
     const whereClause = {

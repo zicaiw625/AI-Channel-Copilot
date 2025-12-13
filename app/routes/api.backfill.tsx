@@ -3,7 +3,7 @@ import type { ActionFunctionArgs } from "react-router";
 import { resolveDateRange, type TimeRangeKey } from "../lib/aiData";
 import { describeBackfill, processBackfillQueue, startBackfill } from "../lib/backfill.server";
 import { getSettings } from "../lib/settings.server";
-import { authenticate } from "../shopify.server";
+import { authenticate, unauthenticated } from "../shopify.server";
 import { DEFAULT_RANGE_KEY, MAX_BACKFILL_DURATION_MS, MAX_BACKFILL_ORDERS } from "../lib/constants";
 import { isDemoMode } from "../lib/runtime.server";
 import { enforceRateLimit, RateLimitRules } from "../lib/security/rateLimit.server";
@@ -67,7 +67,25 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   });
 
   void processBackfillQueue(
-    async () => ({ admin, settings }),
+    async () => {
+      // 在异步回调中重新获取 admin 客户端，因为原始请求上下文可能已失效
+      let client: unknown = null;
+      try {
+        client = await unauthenticated.admin(shopDomain);
+      } catch {
+        client = null;
+      }
+
+      type GraphqlCapableClient = {
+        graphql: (query: string, options: { variables?: Record<string, unknown> }) => Promise<Response>;
+      };
+
+      const hasGraphql = (candidate: unknown): candidate is GraphqlCapableClient =>
+        typeof candidate === "object" && candidate !== null && typeof (candidate as GraphqlCapableClient).graphql === "function";
+
+      const resolvedAdmin = hasGraphql(client) ? client : null;
+      return { admin: resolvedAdmin, settings };
+    },
     { shopDomain },
   );
 

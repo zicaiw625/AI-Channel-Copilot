@@ -1,6 +1,6 @@
 
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
-import { authenticate } from "../shopify.server";
+import { authenticate, unauthenticated } from "../shopify.server";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { getSettings } from "../lib/settings.server";
 import { resolveDateRange } from "../lib/aiData";
@@ -30,7 +30,28 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           maxDurationMs: MAX_BACKFILL_DURATION_MS,
         });
         if (queued.queued) {
-          void processBackfillQueue(async () => ({ admin, settings }), { shopDomain });
+          void processBackfillQueue(
+            async () => {
+              // 在异步回调中重新获取 admin 客户端，因为原始请求上下文可能已失效
+              let client: unknown = null;
+              try {
+                client = await unauthenticated.admin(shopDomain);
+              } catch {
+                client = null;
+              }
+
+              type GraphqlCapableClient = {
+                graphql: (query: string, options: { variables?: Record<string, unknown> }) => Promise<Response>;
+              };
+
+              const hasGraphql = (candidate: unknown): candidate is GraphqlCapableClient =>
+                typeof candidate === "object" && candidate !== null && typeof (candidate as GraphqlCapableClient).graphql === "function";
+
+              const resolvedAdmin = hasGraphql(client) ? client : null;
+              return { admin: resolvedAdmin, settings };
+            },
+            { shopDomain },
+          );
         }
       }
 

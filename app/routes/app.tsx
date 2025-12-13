@@ -5,12 +5,16 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { AppProvider } from "@shopify/shopify-app-react-router/react";
 import { NavMenu } from "@shopify/app-bridge-react";
 
-import { authenticate } from "../shopify.server";
+import { authenticate, unauthenticated } from "../shopify.server";
 import { readAppFlags, requireEnv } from "../lib/env.server";
 import { getSettings, syncShopPreferences } from "../lib/settings.server";
 import { logger } from "../lib/logger.server";
 import { detectAndPersistDevShop, shouldSkipBillingForPath, calculateRemainingTrialDays } from "../lib/billing.server";
 import { getEffectivePlan, FEATURES, hasFeature, type PlanTier } from "../lib/access.server";
+import { startBackfill, processBackfillQueue } from "../lib/backfill.server";
+import { resolveDateRange } from "../lib/aiData";
+import { BACKFILL_COOLDOWN_MINUTES, MAX_BACKFILL_DURATION_MS, MAX_BACKFILL_ORDERS } from "../lib/constants";
+import { ensureWebhooks } from "../lib/webhooks.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { demoMode, enableBilling } = readAppFlags();
@@ -42,6 +46,55 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     } catch (e) {
       // If syncShopPreferences fails, log but continue with default settings
       logger.warn("[app] syncShopPreferences failed", { shopDomain }, { error: (e as Error).message });
+    }
+    
+    // 确保 webhooks 已注册（每次都检查，SDK 会自动处理幂等性）
+    try {
+      await ensureWebhooks(session as Parameters<typeof ensureWebhooks>[0]);
+    } catch (e) {
+      logger.warn("[app] ensureWebhooks failed", { shopDomain }, { error: (e as Error).message });
+    }
+    
+    // 首次安装时自动触发 backfill（检查 lastBackfillAt 为空）
+    const now = new Date();
+    const lastBackfillAt = settings.lastBackfillAt ? new Date(settings.lastBackfillAt) : null;
+    const withinCooldown = lastBackfillAt && now.getTime() - lastBackfillAt.getTime() < BACKFILL_COOLDOWN_MINUTES * 60 * 1000;
+    
+    if (!withinCooldown && !lastBackfillAt) {
+      logger.info("[app] First install detected, triggering initial backfill", { shopDomain });
+      const calculationTimezone = settings.timezones[0] || "UTC";
+      const range = resolveDateRange("90d", new Date(), undefined, undefined, calculationTimezone);
+      
+      try {
+        const queued = await startBackfill(shopDomain, range, {
+          maxOrders: MAX_BACKFILL_ORDERS,
+          maxDurationMs: MAX_BACKFILL_DURATION_MS,
+        });
+        
+        if (queued.queued) {
+          logger.info("[app] Initial backfill queued successfully", { shopDomain, range: range.label });
+          // 异步处理 backfill，不阻塞请求
+          void processBackfillQueue(
+            async () => {
+              let resolvedAdmin: { graphql: (query: string, options: { variables?: Record<string, unknown> }) => Promise<Response> } | null = null;
+              try {
+                const unauthResult = await unauthenticated.admin(shopDomain);
+                if (unauthResult && typeof (unauthResult as any).graphql === "function") {
+                  resolvedAdmin = unauthResult as any;
+                } else if (unauthResult && typeof (unauthResult as any).admin?.graphql === "function") {
+                  resolvedAdmin = (unauthResult as any).admin;
+                }
+              } catch (err) {
+                logger.warn("[app] unauthenticated.admin failed for backfill", { shopDomain, error: (err as Error).message });
+              }
+              return { admin: resolvedAdmin, settings };
+            },
+            { shopDomain },
+          );
+        }
+      } catch (e) {
+        logger.warn("[app] Failed to trigger initial backfill", { shopDomain }, { error: (e as Error).message });
+      }
     }
   }
 

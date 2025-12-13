@@ -8,8 +8,8 @@ import {
 } from "./constants";
 import { logger } from "./logger.server";
 
-// 订单查询的核心字段片段（不含 noteAttributes）
-const ORDER_CORE_FIELDS = `
+// 订单查询的核心字段片段（不含 noteAttributes，不含 customer）
+const ORDER_BASE_FIELDS = `
         id
         name
         createdAt
@@ -39,10 +39,6 @@ const ORDER_CORE_FIELDS = `
         }
         sourceName
         tags
-        customer {
-          id
-          numberOfOrders
-        }
         lineItems(first: 50) {
             edges {
               node {
@@ -67,6 +63,15 @@ const ORDER_CORE_FIELDS = `
               }
             }
           }
+`;
+
+// 完整核心字段（包含 customer，需要 Protected Customer Data 权限）
+const ORDER_CORE_FIELDS = `
+        ${ORDER_BASE_FIELDS}
+        customer {
+          id
+          numberOfOrders
+        }
 `;
 
 // 完整查询（包含 noteAttributes）
@@ -107,6 +112,23 @@ const ORDERS_QUERY_FALLBACK = `#graphql
   }
 `;
 
+// 最小化查询（不含 noteAttributes 和 customer，用于 PCD 未获批的情况）
+const ORDERS_QUERY_MINIMAL = `#graphql
+  query OrdersForAiDashboard($first: Int!, $after: String, $query: String!) {
+    orders(first: $first, after: $after, query: $query, reverse: true, sortKey: CREATED_AT) {
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+      edges {
+      node {
+        ${ORDER_BASE_FIELDS}
+        }
+      }
+    }
+  }
+`;
+
 const ORDER_QUERY = `#graphql
   query OrderForAiDashboard($id: ID!) {
     order(id: $id) {
@@ -124,6 +146,15 @@ const ORDER_QUERY_FALLBACK = `#graphql
   query OrderForAiDashboard($id: ID!) {
     order(id: $id) {
       ${ORDER_CORE_FIELDS}
+    }
+  }
+`;
+
+// 最小化单订单查询（不含 noteAttributes 和 customer）
+const ORDER_QUERY_MINIMAL = `#graphql
+  query OrderForAiDashboard($id: ID!) {
+    order(id: $id) {
+      ${ORDER_BASE_FIELDS}
     }
   }
 `;
@@ -192,31 +223,53 @@ class TTLCache<K, V> {
   }
 }
 
-// Track shops that need fallback queries (noteAttributes not available)
+// 查询降级级别：full -> fallback (no noteAttributes) -> minimal (no customer)
+type QueryLevel = "full" | "fallback" | "minimal";
+
+// Track shops that need fallback/minimal queries
 // Using TTL cache to prevent memory leaks and allow recovery if API changes
-const shopsFallbackOrders = new TTLCache<string, boolean>({ 
+const shopsQueryLevel = new TTLCache<string, QueryLevel>({ 
   maxSize: 1000, 
   ttlMs: 24 * 60 * 60 * 1000, // 24 小时后重试完整查询
 });
-const shopsFallbackSingleOrder = new TTLCache<string, boolean>({ 
+const shopsSingleQueryLevel = new TTLCache<string, QueryLevel>({ 
   maxSize: 1000, 
   ttlMs: 24 * 60 * 60 * 1000,
 });
 
+const getQueryLevel = (shopDomain: string | undefined, type: "orders" | "single"): QueryLevel => {
+  if (!shopDomain) return "full";
+  const level = type === "orders" 
+    ? shopsQueryLevel.get(shopDomain) 
+    : shopsSingleQueryLevel.get(shopDomain);
+  return level ?? "full";
+};
+
+const setQueryLevel = (shopDomain: string | undefined, type: "orders" | "single", level: QueryLevel): void => {
+  if (!shopDomain) return;
+  if (type === "orders") {
+    shopsQueryLevel.set(shopDomain, level);
+  } else {
+    shopsSingleQueryLevel.set(shopDomain, level);
+  }
+};
+
+// 向后兼容的辅助函数
 const shouldUseFallbackQuery = (shopDomain: string | undefined, type: "orders" | "single"): boolean => {
-  if (!shopDomain) return false;
-  return type === "orders" 
-    ? shopsFallbackOrders.has(shopDomain) 
-    : shopsFallbackSingleOrder.has(shopDomain);
+  const level = getQueryLevel(shopDomain, type);
+  return level === "fallback" || level === "minimal";
 };
 
 const markShopNeedsFallback = (shopDomain: string | undefined, type: "orders" | "single"): void => {
-  if (!shopDomain) return;
-  if (type === "orders") {
-    shopsFallbackOrders.set(shopDomain, true);
-  } else {
-    shopsFallbackSingleOrder.set(shopDomain, true);
+  const currentLevel = getQueryLevel(shopDomain, type);
+  // 只降级到 fallback，不跳过 minimal
+  if (currentLevel === "full") {
+    setQueryLevel(shopDomain, type, "fallback");
   }
+};
+
+const markShopNeedsMinimal = (shopDomain: string | undefined, type: "orders" | "single"): void => {
+  setQueryLevel(shopDomain, type, "minimal");
 };
 
 
@@ -229,13 +282,32 @@ const platform = getPlatform();
 const isNoteAttributesError = (errors: unknown): boolean => {
   if (!errors) return false;
   const errStr = typeof errors === "string" ? errors : JSON.stringify(errors);
-  // 检查多种可能的格式（包括不同的引号字符）
   const hasNoteAttributes = errStr.includes("noteAttributes");
   const hasDoesntExist = errStr.includes("doesn't exist") || 
-                         errStr.includes("doesn't exist") || // 特殊撇号
+                         errStr.includes("doesn't exist") || 
                          errStr.includes("does not exist") ||
                          errStr.toLowerCase().includes("field") && errStr.toLowerCase().includes("not exist");
   return hasNoteAttributes && hasDoesntExist;
+};
+
+// 检查是否是 customer 字段权限问题（Protected Customer Data）
+const isCustomerAccessError = (errors: unknown): boolean => {
+  if (!errors) return false;
+  const errStr = typeof errors === "string" ? errors : JSON.stringify(errors).toLowerCase();
+  return errStr.includes("customer") ||
+    errStr.includes("access denied") ||
+    errStr.includes("protected") ||
+    errStr.includes("permission") ||
+    errStr.includes("unauthorized");
+};
+
+// 根据查询级别选择查询
+const getOrdersQuery = (level: QueryLevel): string => {
+  switch (level) {
+    case "minimal": return ORDERS_QUERY_MINIMAL;
+    case "fallback": return ORDERS_QUERY_FALLBACK;
+    default: return ORDERS_QUERY;
+  }
 };
 
 const fetchOrdersPage = async (
@@ -247,50 +319,62 @@ const fetchOrdersPage = async (
   const sdk = createGraphqlSdk(admin, context.shopDomain);
   const shopDomain = context.shopDomain;
   
-  // 选择使用的查询（完整版或备用版）- per shop
-  const useFallback = shouldUseFallbackQuery(shopDomain, "orders");
-  const ordersQuery = useFallback ? ORDERS_QUERY_FALLBACK : ORDERS_QUERY;
+  // 选择使用的查询级别 - per shop
+  const queryLevel = getQueryLevel(shopDomain, "orders");
+  const ordersQuery = getOrdersQuery(queryLevel);
+  
+  logger.info("[backfill] fetching orders page", {
+    platform,
+    shopDomain: context?.shopDomain,
+    queryLevel,
+    intent: context?.intent,
+  });
   
   let response: Response;
   try {
     response = await sdk.request("orders query", ordersQuery, { first: 50, after, query }, { timeoutMs: DEFAULT_GRAPHQL_TIMEOUT_MS });
   } catch (error) {
-    // 检查是否是 noteAttributes 字段不存在的错误（可能在 HTTP 层面就失败了）
     const errMsg = (error as Error).message || "";
-    if (!useFallback && isNoteAttributesError(errMsg)) {
-      logger.warn("[backfill] noteAttributes field not available (HTTP error), switching to fallback query", {
-        platform,
-        shopDomain: context?.shopDomain,
-        jobType: "backfill",
-        intent: context?.intent,
-      });
+    
+    // 检查是否是 noteAttributes 字段错误
+    if (queryLevel === "full" && isNoteAttributesError(errMsg)) {
+      logger.warn("[backfill] noteAttributes not available, downgrading to fallback", { shopDomain, platform });
       markShopNeedsFallback(shopDomain, "orders");
-      // 使用备用查询重试
       return fetchOrdersPage(admin, query, after, context);
     }
+    
+    // 检查是否是 customer 字段权限问题
+    if (queryLevel !== "minimal" && isCustomerAccessError(errMsg)) {
+      logger.warn("[backfill] customer field access denied (PCD), downgrading to minimal", { shopDomain, platform, errorMsg: errMsg });
+      markShopNeedsMinimal(shopDomain, "orders");
+      return fetchOrdersPage(admin, query, after, context);
+    }
+    
     throw error;
   }
   
   if (!response.ok) {
     const text = await response.text();
-    // 检查是否是 noteAttributes 字段不存在的错误
-    if (!useFallback && isNoteAttributesError(text)) {
-      logger.warn("[backfill] noteAttributes field not available (non-200), switching to fallback query", {
-        platform,
-        shopDomain: context?.shopDomain,
-        jobType: "backfill",
-        intent: context?.intent,
-      });
+    
+    // 检查是否需要降级
+    if (queryLevel === "full" && isNoteAttributesError(text)) {
+      logger.warn("[backfill] noteAttributes not available (non-200), downgrading to fallback", { shopDomain, platform });
       markShopNeedsFallback(shopDomain, "orders");
       return fetchOrdersPage(admin, query, after, context);
     }
+    
+    if (queryLevel !== "minimal" && isCustomerAccessError(text)) {
+      logger.warn("[backfill] customer field access denied (PCD, non-200), downgrading to minimal", { shopDomain, platform });
+      markShopNeedsMinimal(shopDomain, "orders");
+      return fetchOrdersPage(admin, query, after, context);
+    }
+    
     logger.error("[backfill] orders page fetch failed", {
       platform,
       shopDomain: context?.shopDomain,
-      jobType: "backfill",
-      intent: context?.intent,
+      queryLevel,
     }, { status: response.status, body: text });
-    throw new Error(`Orders query failed: ${response.status}`);
+    throw new Error(`Orders query failed: ${response.status} - ${text.slice(0, 200)}`);
   }
 
   const json = (await response.json()) as {
@@ -304,27 +388,39 @@ const fetchOrdersPage = async (
   };
   
   if (json.errors) {
-    // 检查是否是 noteAttributes 字段不存在的错误
-    if (!useFallback && isNoteAttributesError(json.errors)) {
-      logger.warn("[backfill] noteAttributes field not available, switching to fallback query", {
-        platform,
-        shopDomain: context?.shopDomain,
-        jobType: "backfill",
-        intent: context?.intent,
-      });
+    // 提取错误详情
+    const errorMessages = Array.isArray(json.errors) 
+      ? json.errors.map((e: { message?: string }) => e.message || JSON.stringify(e)).join("; ")
+      : JSON.stringify(json.errors);
+    
+    // 检查是否需要降级到 fallback
+    if (queryLevel === "full" && isNoteAttributesError(json.errors)) {
+      logger.warn("[backfill] noteAttributes not available, downgrading to fallback", { shopDomain, platform });
       markShopNeedsFallback(shopDomain, "orders");
-      // 使用备用查询重试
       return fetchOrdersPage(admin, query, after, context);
     }
     
+    // 检查是否需要降级到 minimal（PCD 问题）
+    if (queryLevel !== "minimal" && isCustomerAccessError(json.errors)) {
+      logger.warn("[backfill] customer field access denied (PCD), downgrading to minimal", { 
+        shopDomain, 
+        platform, 
+        errorMessages,
+      });
+      markShopNeedsMinimal(shopDomain, "orders");
+      return fetchOrdersPage(admin, query, after, context);
+    }
+    
+    // 无法降级，抛出详细错误
     logger.error("[backfill] orders page GraphQL errors", {
       platform,
       shopDomain: context?.shopDomain,
-      jobType: "backfill",
-      intent: context?.intent,
-    }, { errors: json.errors });
-    throw new Error("Orders query returned GraphQL errors");
+      queryLevel,
+      errorMessages,
+    });
+    throw new Error(`Orders query failed: ${errorMessages}`);
   }
+  
   return json;
 };
 
@@ -376,7 +472,12 @@ export const fetchOrdersForRange = async (
   lowerBound.setUTCHours(0, 0, 0, 0);
   const effectiveStart = range.start < lowerBound ? lowerBound : range.start;
   const clamped = range.start < lowerBound;
-  const search = `created_at:>=${effectiveStart.toISOString()} created_at:<=${range.end.toISOString()}`;
+  
+  // 格式化日期为 ISO 格式但不含毫秒，并加引号（符合 Shopify search syntax）
+  const formatDateForSearch = (date: Date): string => {
+    return date.toISOString().replace(/\.\d{3}Z$/, 'Z');
+  };
+  const search = `created_at:>="${formatDateForSearch(effectiveStart)}" created_at:<="${formatDateForSearch(range.end)}"`;
   const records: OrderRecord[] = [];
 
   let after: string | undefined;
@@ -485,6 +586,15 @@ export const fetchOrdersForRange = async (
   };
 };
 
+// 根据查询级别选择单订单查询
+const getSingleOrderQuery = (level: QueryLevel): string => {
+  switch (level) {
+    case "minimal": return ORDER_QUERY_MINIMAL;
+    case "fallback": return ORDER_QUERY_FALLBACK;
+    default: return ORDER_QUERY;
+  }
+};
+
 export const fetchOrderById = async (
   admin: AdminGraphqlClient,
   id: string,
@@ -499,66 +609,79 @@ export const fetchOrderById = async (
   const shopDomain = context?.shopDomain;
   const sdk = createGraphqlSdk(admin, shopDomain);
   
-  // 选择使用的查询（完整版或备用版）- per shop
-  const useFallback = shouldUseFallbackQuery(shopDomain, "single");
-  const orderQuery = useFallback ? ORDER_QUERY_FALLBACK : ORDER_QUERY;
+  // 选择使用的查询级别 - per shop
+  const queryLevel = getQueryLevel(shopDomain, "single");
+  const orderQuery = getSingleOrderQuery(queryLevel);
   
   let response: Response;
   try {
     response = await sdk.request("order query", orderQuery, { id }, { timeoutMs: DEFAULT_GRAPHQL_TIMEOUT_MS });
   } catch (error) {
-    // 检查是否是 noteAttributes 字段不存在的错误
     const errMsg = (error as Error).message || "";
-    if (!useFallback && isNoteAttributesError(errMsg)) {
-      logger.warn("[webhook] noteAttributes field not available (HTTP error), switching to fallback query", {
-        platform,
-        id,
-        jobType: "webhook",
-        shopDomain,
-      });
+    
+    // 检查是否需要降级到 fallback
+    if (queryLevel === "full" && isNoteAttributesError(errMsg)) {
+      logger.warn("[webhook] noteAttributes not available, downgrading to fallback", { platform, id, shopDomain });
       markShopNeedsFallback(shopDomain, "single");
       return fetchOrderById(admin, id, settings, context);
     }
-    logger.error("[webhook] order fetch failed with exception", { platform, id, jobType: "webhook", shopDomain }, { error: errMsg });
+    
+    // 检查是否需要降级到 minimal（PCD 问题）
+    if (queryLevel !== "minimal" && isCustomerAccessError(errMsg)) {
+      logger.warn("[webhook] customer field access denied (PCD), downgrading to minimal", { platform, id, shopDomain, errorMsg: errMsg });
+      markShopNeedsMinimal(shopDomain, "single");
+      return fetchOrderById(admin, id, settings, context);
+    }
+    
+    logger.error("[webhook] order fetch failed with exception", { platform, id, jobType: "webhook", shopDomain, queryLevel }, { error: errMsg });
     return null;
   }
   
   if (!response.ok) {
     const text = await response.text();
-    // 检查是否是 noteAttributes 字段不存在的错误
-    if (!useFallback && isNoteAttributesError(text)) {
-      logger.warn("[webhook] noteAttributes field not available (non-200), switching to fallback query", {
-        platform,
-        id,
-        jobType: "webhook",
-        shopDomain,
-      });
+    
+    // 检查是否需要降级
+    if (queryLevel === "full" && isNoteAttributesError(text)) {
+      logger.warn("[webhook] noteAttributes not available (non-200), downgrading to fallback", { platform, id, shopDomain });
       markShopNeedsFallback(shopDomain, "single");
       return fetchOrderById(admin, id, settings, context);
     }
-    logger.error("[webhook] order fetch failed", { platform, id, jobType: "webhook", shopDomain }, { status: response.status, body: text });
+    
+    if (queryLevel !== "minimal" && isCustomerAccessError(text)) {
+      logger.warn("[webhook] customer field access denied (PCD, non-200), downgrading to minimal", { platform, id, shopDomain });
+      markShopNeedsMinimal(shopDomain, "single");
+      return fetchOrderById(admin, id, settings, context);
+    }
+    
+    logger.error("[webhook] order fetch failed", { platform, id, jobType: "webhook", shopDomain, queryLevel }, { status: response.status, body: text.slice(0, 200) });
     return null;
   }
 
   const json = (await response.json()) as { data?: { order?: ShopifyOrderNode | null }; errors?: unknown };
   
   if (json.errors) {
-    // 检查是否是 noteAttributes 字段不存在的错误
-    if (!useFallback && isNoteAttributesError(json.errors)) {
-      logger.warn("[webhook] noteAttributes field not available, switching to fallback query", {
-        platform,
-        id,
-        jobType: "webhook",
-        shopDomain,
-      });
+    const errorMessages = Array.isArray(json.errors) 
+      ? json.errors.map((e: { message?: string }) => e.message || JSON.stringify(e)).join("; ")
+      : JSON.stringify(json.errors);
+    
+    // 检查是否需要降级到 fallback
+    if (queryLevel === "full" && isNoteAttributesError(json.errors)) {
+      logger.warn("[webhook] noteAttributes not available, downgrading to fallback", { platform, id, shopDomain });
       markShopNeedsFallback(shopDomain, "single");
-      // 使用备用查询重试
       return fetchOrderById(admin, id, settings, context);
     }
     
-    logger.error("[webhook] order GraphQL errors", { platform, id, jobType: "webhook", shopDomain }, { errors: json.errors });
+    // 检查是否需要降级到 minimal（PCD 问题）
+    if (queryLevel !== "minimal" && isCustomerAccessError(json.errors)) {
+      logger.warn("[webhook] customer field access denied (PCD), downgrading to minimal", { platform, id, shopDomain, errorMessages });
+      markShopNeedsMinimal(shopDomain, "single");
+      return fetchOrderById(admin, id, settings, context);
+    }
+    
+    logger.error("[webhook] order GraphQL errors", { platform, id, jobType: "webhook", shopDomain, queryLevel, errorMessages });
     return null;
   }
+  
   if (!json.data?.order) return null;
 
   return mapShopifyOrderToRecord(json.data.order, settings);

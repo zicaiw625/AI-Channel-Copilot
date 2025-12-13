@@ -7,6 +7,7 @@ import { startBackfill, processBackfillQueue } from "./backfill.server";
 import { unauthenticated } from "../shopify.server";
 import { logger } from "./logger.server";
 import { readAppFlags } from "./env.server";
+import { getAdminClient } from "./adminClient.server";
 
 let initialized = false;
 
@@ -49,21 +50,15 @@ const runBackfillSweep = async () => {
 
         void processBackfillQueue(
           async () => {
-            let client: unknown = null;
-            try {
-              client = await unauthenticated.admin(shopDomain);
-            } catch {
-              client = null;
+            // 使用备用方案获取 admin client
+            const admin = await getAdminClient(
+              shopDomain,
+              async () => unauthenticated.admin(shopDomain)
+            );
+            
+            if (!admin) {
+              logger.warn("[scheduler] Could not resolve admin client", { shopDomain });
             }
-
-            type GraphqlCapableClient = {
-              graphql: (query: string, options: { variables?: Record<string, unknown> }) => Promise<Response>;
-            };
-
-            const hasGraphql = (candidate: unknown): candidate is GraphqlCapableClient =>
-              typeof candidate === "object" && candidate !== null && typeof (candidate as GraphqlCapableClient).graphql === "function";
-
-            const admin = hasGraphql(client) ? client : null;
             return { admin, settings };
           },
           { shopDomain },

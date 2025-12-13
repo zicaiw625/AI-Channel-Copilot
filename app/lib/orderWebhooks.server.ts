@@ -7,6 +7,7 @@ import { getPlatform, isDemoMode } from "./runtime.server";
 import { enqueueWebhookJob, getWebhookQueueSize, registerWebhookHandler, checkWebhookDuplicate } from "./webhookQueue.server";
 import { logger } from "./logger.server";
 import { enforceRateLimit, RateLimitRules, buildRateLimitKey } from "./security/rateLimit.server";
+import { getAdminClient } from "./adminClient.server";
 
 const WEBHOOK_STATUS_TITLE = "orders/create webhook";
 
@@ -278,21 +279,12 @@ export const registerDefaultOrderWebhookHandlers = () => {
       }
 
       const settings = await getSettings(jobShopDomain);
-      let client: unknown = null;
-      try {
-        client = await unauthenticated.admin(jobShopDomain);
-      } catch {
-        client = null;
-      }
-      const adminCandidate = (client as { graphql?: unknown }) || null;
-      const admin = adminCandidate && typeof adminCandidate.graphql === "function"
-        ? (adminCandidate as {
-            graphql: (
-              query: string,
-              options: { variables?: Record<string, unknown> }
-            ) => Promise<Response>;
-          })
-        : null;
+      
+      // 使用备用方案获取 admin client
+      const admin = await getAdminClient(
+        jobShopDomain,
+        async () => unauthenticated.admin(jobShopDomain)
+      );
 
       if (!admin) {
         logger.warn("[webhook] default handler admin unavailable", { shopDomain: jobShopDomain });

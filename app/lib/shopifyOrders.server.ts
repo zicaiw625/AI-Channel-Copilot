@@ -87,8 +87,8 @@ const ORDERS_QUERY = `#graphql
       edges {
       node {
         ${ORDER_CORE_FIELDS}
-        noteAttributes {
-          name
+        noteAttributes: customAttributes {
+          name: key
           value
         }
         }
@@ -135,8 +135,8 @@ const ORDER_QUERY = `#graphql
   query OrderForAiDashboard($id: ID!) {
     order(id: $id) {
       ${ORDER_CORE_FIELDS}
-      noteAttributes {
-        name
+      noteAttributes: customAttributes {
+        name: key
         value
       }
     }

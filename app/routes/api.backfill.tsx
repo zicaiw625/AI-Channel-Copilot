@@ -7,6 +7,7 @@ import { authenticate, unauthenticated } from "../shopify.server";
 import { DEFAULT_RANGE_KEY, MAX_BACKFILL_DURATION_MS, MAX_BACKFILL_ORDERS } from "../lib/constants";
 import { isDemoMode } from "../lib/runtime.server";
 import { enforceRateLimit, RateLimitRules } from "../lib/security/rateLimit.server";
+import { logger } from "../lib/logger.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   if (request.method !== "POST")
@@ -72,7 +73,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       let client: unknown = null;
       try {
         client = await unauthenticated.admin(shopDomain);
-      } catch {
+        logger.info("[api.backfill] unauthenticated.admin resolved", { shopDomain, hasClient: Boolean(client) });
+      } catch (err) {
+        logger.warn("[api.backfill] unauthenticated.admin failed", { shopDomain, error: (err as Error).message });
         client = null;
       }
 
@@ -84,6 +87,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         typeof candidate === "object" && candidate !== null && typeof (candidate as GraphqlCapableClient).graphql === "function";
 
       const resolvedAdmin = hasGraphql(client) ? client : null;
+      logger.info("[api.backfill] backfill dependencies resolved", { shopDomain, hasAdmin: Boolean(resolvedAdmin), hasSettings: Boolean(settings) });
       return { admin: resolvedAdmin, settings };
     },
     { shopDomain },

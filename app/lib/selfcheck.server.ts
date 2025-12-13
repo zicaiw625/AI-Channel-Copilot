@@ -8,7 +8,8 @@ export const runStartupSelfCheck = () => {
   if (ran) return;
   ran = true;
   try {
-    void readCriticalEnv();
+    const env = readCriticalEnv();
+    logger.info("[startup] SCOPES configured", { scopes: env.SCOPES.join(",") });
   } catch (error) {
     throw error as Error;
   }

@@ -4,7 +4,7 @@ import { fetchOrdersForRange } from "./shopifyOrders.server";
 import { markActivity, updatePipelineStatuses } from "./settings.server";
 import { persistOrders } from "./persistence.server";
 import prisma from "../db.server";
-import { withAdvisoryLockSimple } from "./locks.server";
+import { withAdvisoryLock } from "./locks.server";
 import { logger } from "./logger.server";
 import { MAX_BACKFILL_DURATION_MS, MAX_BACKFILL_ORDERS } from "./constants";
 
@@ -37,13 +37,6 @@ type BackfillDependencies = {
     | { graphql: (query: string, options: { variables?: Record<string, unknown> }) => Promise<Response> }
     | null;
 };
-
-/**
- * 本地处理标志
- * 注：此标志仅在单实例内有效，用于避免不必要的 advisory lock 请求
- * 多实例部署时，真正的并发控制依赖 withAdvisoryLockSimple
- */
-let processing = false;
 
 const dequeue = async (where: Prisma.BackfillJobWhereInput = {}) =>
   prisma.$transaction(async (tx) => {
@@ -88,20 +81,13 @@ const processQueue = async (
   ) => Promise<BackfillDependencies>,
   where: Prisma.BackfillJobWhereInput = {},
 ) => {
-  // 快速返回：本地实例已在处理中
-  if (processing) {
-    logger.debug('[backfill] Skipped: local instance already processing');
-    return;
-  }
-  processing = true;
-
-  try {
-    // 使用 advisory lock 确保跨实例的排他执行
-    await withAdvisoryLockSimple(1002, async () => {
-      logger.info('[backfill] Acquired advisory lock, starting queue processing');
-      for (;;) {
-        const job = await dequeue(where);
-        if (!job) break;
+  // 使用 advisory lock 确保跨实例的排他执行
+  // withAdvisoryLock 是非阻塞的，如果锁被其他实例持有会立即返回
+  const { lockInfo } = await withAdvisoryLock(1002, async () => {
+    logger.info('[backfill] Acquired advisory lock, starting queue processing');
+    for (;;) {
+      const job = await dequeue(where);
+      if (!job) break;
 
       const range: DateRange = {
         key: "custom",
@@ -169,11 +155,18 @@ const processQueue = async (
         );
       }
     }
-    });
-  } finally {
-    processing = false;
+  }, { fallbackOnError: false });
+
+  // 只有成功获取锁并完成处理后，才检查是否有新的待处理任务
+  // 避免在未获取锁时无限递归调用
+  if (lockInfo.acquired) {
     const pending = await prisma.backfillJob.count({ where: { status: "queued", ...where } });
-    if (pending) void processQueue(resolveDependencies, where);
+    if (pending) {
+      logger.debug('[backfill] Found pending jobs after processing, scheduling next run', { pending });
+      void processQueue(resolveDependencies, where);
+    }
+  } else {
+    logger.debug('[backfill] Skipped: lock held by another process', { reason: lockInfo.reason });
   }
 };
 

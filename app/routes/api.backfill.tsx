@@ -73,7 +73,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       let client: unknown = null;
       try {
         client = await unauthenticated.admin(shopDomain);
-        logger.info("[api.backfill] unauthenticated.admin resolved", { shopDomain, hasClient: Boolean(client) });
+        logger.info("[api.backfill] unauthenticated.admin resolved", { 
+          shopDomain, 
+          hasClient: Boolean(client),
+          clientType: typeof client,
+          clientKeys: client ? Object.keys(client as object) : [],
+        });
       } catch (err) {
         logger.warn("[api.backfill] unauthenticated.admin failed", { shopDomain, error: (err as Error).message });
         client = null;
@@ -87,7 +92,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         typeof candidate === "object" && candidate !== null && typeof (candidate as GraphqlCapableClient).graphql === "function";
 
       const resolvedAdmin = hasGraphql(client) ? client : null;
-      logger.info("[api.backfill] backfill dependencies resolved", { shopDomain, hasAdmin: Boolean(resolvedAdmin), hasSettings: Boolean(settings) });
+      logger.info("[api.backfill] backfill dependencies resolved", { 
+        shopDomain, 
+        hasAdmin: Boolean(resolvedAdmin), 
+        hasSettings: Boolean(settings),
+        hasGraphqlMethod: client ? typeof (client as any).graphql : 'no client',
+      });
       return { admin: resolvedAdmin, settings };
     },
     { shopDomain },

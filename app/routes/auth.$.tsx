@@ -33,33 +33,31 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           void processBackfillQueue(
             async () => {
               // 在异步回调中重新获取 admin 客户端，因为原始请求上下文可能已失效
-              let client: unknown = null;
+              let resolvedAdmin: { graphql: (query: string, options: { variables?: Record<string, unknown> }) => Promise<Response> } | null = null;
               try {
-                client = await unauthenticated.admin(shopDomain);
+                const unauthResult = await unauthenticated.admin(shopDomain);
                 logger.info("[auth] unauthenticated.admin resolved", { 
                   shopDomain, 
-                  hasClient: Boolean(client),
-                  clientType: typeof client,
-                  clientKeys: client ? Object.keys(client as object) : [],
+                  hasResult: Boolean(unauthResult),
+                  resultType: typeof unauthResult,
+                  resultKeys: unauthResult ? Object.keys(unauthResult as object) : [],
+                  hasGraphqlDirect: typeof (unauthResult as any)?.graphql,
                 });
+                
+                // 尝试直接使用返回值，或者从返回值中获取 admin
+                if (unauthResult && typeof (unauthResult as any).graphql === "function") {
+                  resolvedAdmin = unauthResult as any;
+                } else if (unauthResult && typeof (unauthResult as any).admin?.graphql === "function") {
+                  resolvedAdmin = (unauthResult as any).admin;
+                }
               } catch (err) {
                 logger.warn("[auth] unauthenticated.admin failed", { shopDomain, error: (err as Error).message });
-                client = null;
               }
 
-              type GraphqlCapableClient = {
-                graphql: (query: string, options: { variables?: Record<string, unknown> }) => Promise<Response>;
-              };
-
-              const hasGraphql = (candidate: unknown): candidate is GraphqlCapableClient =>
-                typeof candidate === "object" && candidate !== null && typeof (candidate as GraphqlCapableClient).graphql === "function";
-
-              const resolvedAdmin = hasGraphql(client) ? client : null;
               logger.info("[auth] backfill dependencies resolved", { 
                 shopDomain, 
                 hasAdmin: Boolean(resolvedAdmin), 
                 hasSettings: Boolean(settings),
-                hasGraphqlMethod: client ? typeof (client as any).graphql : 'no client',
               });
               return { admin: resolvedAdmin, settings };
             },

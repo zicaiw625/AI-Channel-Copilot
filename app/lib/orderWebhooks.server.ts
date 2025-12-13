@@ -278,21 +278,20 @@ export const registerDefaultOrderWebhookHandlers = () => {
       }
 
       const settings = await getSettings(jobShopDomain);
-      let client: unknown = null;
+      let admin: {
+        graphql: (query: string, options: { variables?: Record<string, unknown> }) => Promise<Response>;
+      } | null = null;
       try {
-        client = await unauthenticated.admin(jobShopDomain);
+        const unauthResult = await unauthenticated.admin(jobShopDomain);
+        // 尝试直接使用返回值，或者从返回值中获取 admin
+        if (unauthResult && typeof (unauthResult as any).graphql === "function") {
+          admin = unauthResult as any;
+        } else if (unauthResult && typeof (unauthResult as any).admin?.graphql === "function") {
+          admin = (unauthResult as any).admin;
+        }
       } catch {
-        client = null;
+        admin = null;
       }
-      const adminCandidate = (client as { graphql?: unknown }) || null;
-      const admin = adminCandidate && typeof adminCandidate.graphql === "function"
-        ? (adminCandidate as {
-            graphql: (
-              query: string,
-              options: { variables?: Record<string, unknown> }
-            ) => Promise<Response>;
-          })
-        : null;
 
       if (!admin) {
         logger.warn("[webhook] default handler admin unavailable", { shopDomain: jobShopDomain });

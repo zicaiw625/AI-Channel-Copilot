@@ -49,22 +49,19 @@ const runBackfillSweep = async () => {
 
         void processBackfillQueue(
           async () => {
-            let client: unknown = null;
+            let resolvedAdmin: { graphql: (query: string, options: { variables?: Record<string, unknown> }) => Promise<Response> } | null = null;
             try {
-              client = await unauthenticated.admin(shopDomain);
+              const unauthResult = await unauthenticated.admin(shopDomain);
+              // 尝试直接使用返回值，或者从返回值中获取 admin
+              if (unauthResult && typeof (unauthResult as any).graphql === "function") {
+                resolvedAdmin = unauthResult as any;
+              } else if (unauthResult && typeof (unauthResult as any).admin?.graphql === "function") {
+                resolvedAdmin = (unauthResult as any).admin;
+              }
             } catch {
-              client = null;
+              resolvedAdmin = null;
             }
-
-            type GraphqlCapableClient = {
-              graphql: (query: string, options: { variables?: Record<string, unknown> }) => Promise<Response>;
-            };
-
-            const hasGraphql = (candidate: unknown): candidate is GraphqlCapableClient =>
-              typeof candidate === "object" && candidate !== null && typeof (candidate as GraphqlCapableClient).graphql === "function";
-
-            const admin = hasGraphql(client) ? client : null;
-            return { admin, settings };
+            return { admin: resolvedAdmin, settings };
           },
           { shopDomain },
         );

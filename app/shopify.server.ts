@@ -13,6 +13,10 @@ import { runStartupSelfCheck } from "./lib/selfcheck.server";
 const { SHOPIFY_API_KEY: apiKey, SHOPIFY_API_SECRET: apiSecretKey, SHOPIFY_APP_URL: appUrl, SCOPES: scopes } =
   readCriticalEnv();
 
+// Debug: log scopes at startup
+console.log("[shopify.server] SCOPES from env:", JSON.stringify(scopes));
+console.log("[shopify.server] SCOPES includes read_orders:", scopes.includes("read_orders"));
+
 const resolveCustomShopDomains = () => {
   const customDomainsEnv = process.env.SHOP_CUSTOM_DOMAIN;
   if (!customDomainsEnv) return [] as string[];

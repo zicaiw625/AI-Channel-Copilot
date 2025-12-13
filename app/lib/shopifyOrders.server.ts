@@ -662,6 +662,9 @@ export const fetchOrdersForRange = async (
     shopDomain: context?.shopDomain,
     intent: context?.intent,
     range: context?.rangeLabel || `${effectiveStart.toISOString()} to ${range.end.toISOString()}`,
+    searchQuery: search,
+    effectiveStart: effectiveStart.toISOString(),
+    effectiveEnd: range.end.toISOString(),
     jobType: "backfill",
   });
   try {

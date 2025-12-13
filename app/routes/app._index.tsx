@@ -272,11 +272,14 @@ export default function Index() {
     };
   }, [jobFetcher]);
   const triggerBackfill = useCallback(() => {
+    // 补位始终使用当前 Dashboard 显示的预设范围（7d/30d/90d），不传递自定义日期
+    // 这确保补位查询的是"最近X天"（包含今天），而不是旧的自定义日期范围
+    const backfillRange = range === "custom" ? "7d" : range;
     backfillFetcher.submit(
-      { range, from: dateRange.fromParam || "", to: dateRange.toParam || "" },
+      { range: backfillRange },
       { method: "post", action: "/api/backfill" },
     );
-  }, [backfillFetcher, dateRange.fromParam, dateRange.toParam, range]);
+  }, [backfillFetcher, range]);
 
   const {
     overview,

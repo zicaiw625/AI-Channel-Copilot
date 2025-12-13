@@ -11,7 +11,6 @@ import { getSettings, syncShopPreferences } from "../lib/settings.server";
 import { logger } from "../lib/logger.server";
 import { detectAndPersistDevShop, shouldSkipBillingForPath, calculateRemainingTrialDays } from "../lib/billing.server";
 import { getEffectivePlan, FEATURES, hasFeature, type PlanTier } from "../lib/access.server";
-import { checkSessionScopes, buildReauthorizeUrl } from "../lib/scopeCheck.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { demoMode, enableBilling } = readAppFlags();
@@ -83,22 +82,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         }
     }
 
-    // 检查权限是否完整
-    const scopeCheck = shopDomain ? await checkSessionScopes(shopDomain) : null;
-    const hasMissingScopes = scopeCheck && !scopeCheck.hasRequiredScopes;
-    const reauthorizeUrl = hasMissingScopes ? buildReauthorizeUrl(shopDomain) : null;
-
     return {
       apiKey: requireEnv("SHOPIFY_API_KEY"),
       language: settings.languages[0] || "中文",
       plan,
       trialDaysLeft,
       isDevShop,
-      canViewFullDashboard,
-      // 权限检查结果
-      hasMissingScopes,
-      missingScopes: scopeCheck?.missingScopes || [],
-      reauthorizeUrl,
+      canViewFullDashboard
     };
   } catch (e) {
     if (e instanceof Response) throw e;
@@ -109,30 +99,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       plan: "none" as PlanTier,
       trialDaysLeft: null,
       isDevShop: false,
-      canViewFullDashboard: false,
-      hasMissingScopes: false,
-      missingScopes: [] as string[],
-      reauthorizeUrl: null,
+      canViewFullDashboard: false
     };
   }
 };
 
 export default function App() {
-  const { apiKey, language, plan, trialDaysLeft, isDevShop, hasMissingScopes, missingScopes, reauthorizeUrl } = useLoaderData<typeof loader>();
+  const { apiKey, language, plan, trialDaysLeft, isDevShop } = useLoaderData<typeof loader>();
   const uiLanguage = useUILanguage(language);
-
-  // 处理重新授权 - 嵌入式应用需要使用 App Bridge 进行重定向
-  const handleReauthorize = () => {
-    if (reauthorizeUrl) {
-      // 对于嵌入式应用，需要跳出 iframe 进行 OAuth 授权
-      // 使用 window.top 来确保整个页面重定向
-      if (window.top) {
-        window.top.location.href = reauthorizeUrl;
-      } else {
-        window.location.href = reauthorizeUrl;
-      }
-    }
-  };
 
   return (
     <AppProvider embedded apiKey={apiKey}>
@@ -141,50 +115,6 @@ export default function App() {
         <a href="/app/additional">{uiLanguage === "English" ? "Settings / Rules & Export" : "设置 / 规则 & 导出"}</a>
         <a href="/app/billing">{uiLanguage === "English" ? "Subscription" : "订阅管理"}</a>
       </NavMenu>
-
-      {/* 权限不足警告 - 最高优先级显示 */}
-      {hasMissingScopes && (
-        <div style={{
-          padding: '12px 16px',
-          background: '#fff1f0',
-          borderBottom: '1px solid #ffa39e',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '12px',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ fontSize: '18px' }}>⚠️</span>
-            <div>
-              <strong style={{ color: '#cf1322' }}>
-                {uiLanguage === "English" ? "Missing Required Permissions" : "缺少必需权限"}
-              </strong>
-              <p style={{ margin: '4px 0 0', fontSize: '13px', color: '#a8071a' }}>
-                {uiLanguage === "English" 
-                  ? `The app is missing these permissions: ${missingScopes.join(", ")}. Orders cannot be loaded without proper permissions.`
-                  : `应用缺少以下权限：${missingScopes.join(", ")}。没有正确权限，无法加载订单数据。`}
-              </p>
-            </div>
-          </div>
-          {reauthorizeUrl && (
-            <button
-              onClick={handleReauthorize}
-              style={{
-                background: '#cf1322',
-                color: 'white',
-                padding: '8px 16px',
-                borderRadius: '4px',
-                border: 'none',
-                fontWeight: 500,
-                whiteSpace: 'nowrap',
-                cursor: 'pointer',
-              }}
-            >
-              {uiLanguage === "English" ? "Grant Permissions" : "授权权限"}
-            </button>
-          )}
-        </div>
-      )}
 
       <div style={{ padding: '10px 16px', background: '#f1f2f3', borderBottom: '1px solid #dfe3e8', display: 'flex', alignItems: 'center', gap: '12px', fontSize: '13px' }}>
         {plan === "free" && (

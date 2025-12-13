@@ -18,48 +18,15 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       ? currentRaw.filter((value): value is string => typeof value === "string")
       : [];
 
-    if (current.length) {
-      const newScope = current.join(",");
-      
-      // 更新 webhook 认证返回的 session（可能是 online session）
-      if (session) {
-        await db.session.update({
-          where: { id: session.id },
-          data: { scope: newScope },
-        });
-        logger.info("[scopes_update] Updated webhook session", { 
-          shopDomain, 
-          sessionId: session.id,
-          newScope 
-        });
-      }
-
-      // 【重要】同时更新 offline session，确保后台任务能获取正确的权限
-      const offlineSessionId = `offline_${shopDomain}`;
-      try {
-        const offlineSession = await db.session.findUnique({
-          where: { id: offlineSessionId },
-        });
-
-        if (offlineSession) {
-          await db.session.update({
-            where: { id: offlineSessionId },
-            data: { scope: newScope },
-          });
-          logger.info("[scopes_update] Updated offline session", { 
-            shopDomain, 
-            sessionId: offlineSessionId,
-            oldScope: offlineSession.scope,
-            newScope 
-          });
-        }
-      } catch (offlineError) {
-        // 如果 offline session 不存在，忽略错误
-        logger.warn("[scopes_update] Could not update offline session", { 
-          shopDomain, 
-          offlineSessionId 
-        });
-      }
+    if (session && current.length) {
+      await db.session.update({
+        where: {
+          id: session.id,
+        },
+        data: {
+          scope: current.toString(),
+        },
+      });
     }
 
     return new Response();

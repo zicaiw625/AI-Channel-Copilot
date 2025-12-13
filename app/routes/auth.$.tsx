@@ -8,32 +8,20 @@ import { startBackfill, processBackfillQueue } from "../lib/backfill.server";
 import { BACKFILL_COOLDOWN_MINUTES, MAX_BACKFILL_DURATION_MS, MAX_BACKFILL_ORDERS } from "../lib/constants";
 import { ensureWebhooks } from "../lib/webhooks.server";
 import { logger } from "../lib/logger.server";
-import { getAdminClient } from "../lib/adminClient.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
 
-  if (session?.shop) {
-    const shopDomain = session.shop;
-
-    // 1. 注册 Webhooks（即使失败也继续）
-    try {
+  try {
+    if (session?.shop) {
       await ensureWebhooks(session as any);
-    } catch (error) {
-      // Webhook 注册失败不应该阻止用户使用应用
-      logger.error("[auth] Webhook registration failed", { shopDomain }, { 
-        error: (error as Error).message 
-      });
-    }
-    
-    // 2. 触发 Backfill（如果需要）
-    try {
+
+      const shopDomain = session.shop;
       const settings = await getSettings(shopDomain);
       const now = new Date();
       const lastBackfillAt = settings.lastBackfillAt ? new Date(settings.lastBackfillAt) : null;
       const withinCooldown =
         lastBackfillAt && now.getTime() - lastBackfillAt.getTime() < BACKFILL_COOLDOWN_MINUTES * 60 * 1000;
-      
       if (admin && !withinCooldown && !lastBackfillAt) {
         const calculationTimezone = settings.timezones[0] || "UTC";
         const range = resolveDateRange("90d", new Date(), undefined, undefined, calculationTimezone);
@@ -44,32 +32,36 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         if (queued.queued) {
           void processBackfillQueue(
             async () => {
-              // 使用备用方案获取 admin client
-              const resolvedAdmin = await getAdminClient(
-                shopDomain,
-                async () => unauthenticated.admin(shopDomain)
-              );
-              
-              if (!resolvedAdmin) {
-                logger.warn("[auth] Could not resolve admin client for backfill", { shopDomain });
+              // 在异步回调中重新获取 admin 客户端，因为原始请求上下文可能已失效
+              let client: unknown = null;
+              try {
+                client = await unauthenticated.admin(shopDomain);
+              } catch {
+                client = null;
               }
+
+              type GraphqlCapableClient = {
+                graphql: (query: string, options: { variables?: Record<string, unknown> }) => Promise<Response>;
+              };
+
+              const hasGraphql = (candidate: unknown): candidate is GraphqlCapableClient =>
+                typeof candidate === "object" && candidate !== null && typeof (candidate as GraphqlCapableClient).graphql === "function";
+
+              const resolvedAdmin = hasGraphql(client) ? client : null;
               return { admin: resolvedAdmin, settings };
             },
             { shopDomain },
           );
         }
       }
-    } catch (error) {
-      logger.error("[auth] Backfill trigger failed", { shopDomain }, { 
-        error: (error as Error).message 
-      });
-    }
 
-    // 3. 重定向到 onboarding
-    const url = new URL(request.url);
-    const next = new URL("/app/onboarding", url.origin);
-    next.search = url.search;
-    throw new Response(null, { status: 302, headers: { Location: next.toString() } });
+      const url = new URL(request.url);
+      const next = new URL("/app/onboarding", url.origin);
+      next.search = url.search;
+      throw new Response(null, { status: 302, headers: { Location: next.toString() } });
+    }
+  } catch (error) {
+    logger.warn("[auth] loader encountered error", undefined, { message: (error as Error).message });
   }
 
   return null;

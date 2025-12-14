@@ -796,6 +796,7 @@ export const requestSubscription = async (
   planId: PlanId,
   isTest: boolean,
   trialDays: number,
+  returnUrl: string,
 ) => {
   const plan = getPlanConfig(planId);
   if (plan.priceUsd <= 0) {
@@ -806,7 +807,7 @@ export const requestSubscription = async (
   const amount = plan.priceUsd;
   const currencyCode = cfg.billing.currencyCode;
   const interval = cfg.billing.interval;
-  const returnUrl = new URL("/app/billing/confirm", cfg.server.appUrl).toString();
+  // returnUrl 由调用方提供（应携带 shop/host 等上下文），避免确认页回跳后丢失 session
 
   const MUTATION = `#graphql
     mutation AppSubscriptionCreate($name: String!, $lineItems: [AppSubscriptionLineItemInput!]!, $returnUrl: URL!, $test: Boolean, $trialDays: Int) {

@@ -78,9 +78,9 @@ const validateShopDomain = (shopDomain: string, context: string): string | null 
   return shopDomain;
 };
 
-const toPlanId = (raw?: string | null): PlanId => {
+const toPlanId = (raw?: string | null): PlanId | null => {
   if (raw === "free" || raw === "pro" || raw === "growth") return raw;
-  return PRIMARY_BILLABLE_PLAN_ID;
+  return null;
 };
 
 const planStateKey = (planId: PlanId, suffix: "TRIALING" | "ACTIVE" | "EXPIRED" | "CANCELLED" | "NO_PLAN") =>

@@ -13,7 +13,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const result = await authenticate.admin(request);
   // 重要：某些 /auth/* 流程可能返回 Response（而不是抛出），必须直接返回
   if (result instanceof Response) {
-    throw result;
+    return result;
   }
   const { admin, session } = result;
 

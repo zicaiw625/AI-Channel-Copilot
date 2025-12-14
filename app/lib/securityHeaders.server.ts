@@ -5,10 +5,10 @@ const BASE_SECURITY_HEADERS: Record<string, string> = {
   "X-Content-Type-Options": "nosniff",
   "Referrer-Policy": "strict-origin-when-cross-origin",
   "X-XSS-Protection": "1; mode=block",
-  // X-Frame-Options for legacy browser support (CSP frame-ancestors is the modern approach)
-  // Note: ALLOW-FROM is deprecated, but we set SAMEORIGIN as fallback
-  // The primary protection comes from CSP frame-ancestors directive
-  "X-Frame-Options": "SAMEORIGIN",
+  // 重要：不要设置 X-Frame-Options
+  // Shopify Embedded App 运行在 admin.shopify.com 的 iframe 中。
+  // 若设置 SAMEORIGIN 会导致浏览器直接阻止嵌入，表现为白屏（尤其是 /auth/session-token 等中间页）。
+  // 点击劫持防护由 CSP 的 frame-ancestors 指令负责。
 };
 
 /**

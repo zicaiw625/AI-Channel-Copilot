@@ -724,6 +724,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         }, { status: 400 });
       }
 
+      // 关键：在创建订阅前刷新开发店标记，避免 dev store 误发 real charge（会在 approve 时被 Shopify 拒绝）
+      try {
+        await detectAndPersistDevShop(admin, shopDomain);
+      } catch (_e) {
+        // 忽略：后续 requestSubscription 内部也会做兜底判定
+      }
+
       const isTest = await computeIsTestMode(shopDomain);
       const trialDays = await calculateRemainingTrialDays(shopDomain, planId);
 

@@ -334,7 +334,10 @@ export const buildLlmsTxt = async (
     for (const r of rows) {
       const url = r.url || "";
       if (!url) continue;
-      const gmv = (r.price || 0) * (r.quantity || 0);
+      // Prisma Decimal 不能直接参与算术运算（TS2362），这里显式转为 number
+      const price = Number(r.price);
+      const qty = r.quantity ?? 0;
+      const gmv = (Number.isFinite(price) ? price : 0) * qty;
       const prev = agg.get(url);
       if (prev) {
         prev.gmv += gmv;

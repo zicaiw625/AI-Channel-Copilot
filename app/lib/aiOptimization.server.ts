@@ -978,7 +978,11 @@ export async function generateAIOptimizationReport(
     }
     
     const agg = productAgg.get(op.productId)!;
-    agg.aiGMV += op.price * op.quantity;
+    // Prisma Decimal 不能直接参与算术运算（TS2362），这里显式转为 number
+    const price = Number(op.price);
+    const qty = op.quantity || 0;
+    const lineAmount = (Number.isFinite(price) ? price : 0) * qty;
+    agg.aiGMV += lineAmount;
     
     // 同一订单的同一产品只计算一次订单数
     if (!seenOrderProducts.has(orderProductKey)) {
@@ -988,7 +992,7 @@ export async function generateAIOptimizationReport(
     
     const channel = fromPrismaAiSource(op.order.aiSource);
     if (channel) {
-      agg.channels.set(channel, (agg.channels.get(channel) || 0) + op.price * op.quantity);
+      agg.channels.set(channel, (agg.channels.get(channel) || 0) + lineAmount);
     }
   }
   

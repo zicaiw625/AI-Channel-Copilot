@@ -807,6 +807,24 @@ export const requestSubscription = async (
     throw new Error(`Plan ${planId} does not require a Shopify subscription.`);
   }
 
+  // 兜底：对 dev store 必须使用 test charge，否则在 Shopify approve 时会报
+  // “The shop cannot accept the provided charge.”
+  // 上层 action 可能因缓存/异常导致 isTest 误判，这里强制再算一次更稳。
+  let effectiveIsTest = isTest;
+  if (!effectiveIsTest) {
+    try {
+      await detectAndPersistDevShop(admin, shopDomain);
+      effectiveIsTest = await computeIsTestMode(shopDomain);
+    } catch (e) {
+      logger.warn("[billing] Failed to re-evaluate test mode, using provided flag", {
+        shopDomain,
+        planId,
+        isTestProvided: isTest,
+        error: (e as Error).message,
+      });
+    }
+  }
+
   const cfg = getAppConfig();
   const amount = plan.priceUsd;
   const currencyCode = cfg.billing.currencyCode;
@@ -853,7 +871,7 @@ export const requestSubscription = async (
       },
     ],
     returnUrl,
-    test: isTest,
+    test: effectiveIsTest,
     trialDays: plan.trialSupported ? Math.max(trialDays, 0) : 0,
   });
 

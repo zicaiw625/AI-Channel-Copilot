@@ -539,6 +539,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         await activateFreePlan(shopDomain);
         return Response.json({ ok: true });
       }
+
+      // 关键：在创建订阅前刷新开发店标记，避免 dev store 误发 real charge（会在 approve 时被 Shopify 拒绝）
+      try {
+        await detectAndPersistDevShop(admin!, shopDomain);
+      } catch (_e) {
+        // 忽略：requestSubscription 内部也会做兜底判定
+      }
+
       const isTest = await computeIsTestMode(shopDomain);
       const currentState = await getBillingState(shopDomain);
       const isUpgradeFromPaid = currentState?.billingState?.includes("ACTIVE") && currentState?.billingPlan !== "free" && currentState?.billingPlan !== "NO_PLAN";

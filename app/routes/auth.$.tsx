@@ -10,6 +10,24 @@ import { ensureWebhooks } from "../lib/webhooks.server";
 import { logger } from "../lib/logger.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
+  const url = new URL(request.url);
+  const path = url.pathname.toLowerCase();
+
+  // 关键：Shopify embedded 的 /auth/session-token 交换页必须遵循 SDK 行为：
+  // - 直接返回 authenticate.admin 产生的 Response（通常包含前端脚本，用于刷新/交换令牌）
+  // - 不能执行自定义 redirect/backfill，否则会卡在 admin.shopify.com 的空白页
+  if (path.startsWith("/auth/session-token")) {
+    const result = await authenticate.admin(request);
+    if (result instanceof Response) return result;
+
+    // 兜底：若 SDK 返回的是对象（极少数情况），按 shopify-reload 指定目标跳转
+    const reload = url.searchParams.get("shopify-reload");
+    if (reload) {
+      throw new Response(null, { status: 302, headers: { Location: reload } });
+    }
+    return new Response(null, { status: 204 });
+  }
+
   const result = await authenticate.admin(request);
   // 重要：某些 /auth/* 流程可能返回 Response（而不是抛出），必须直接返回
   if (result instanceof Response) {

@@ -732,14 +732,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       }
 
       const isTest = await computeIsTestMode(shopDomain);
-      // 重要：若已在付费/试用订阅中（例如先 Pro 再 Growth），则不要再次提供 trialDays，
-      // 否则 Shopify approve 页面可能报 “The shop cannot accept the provided charge.”
-      const currentState = await getBillingState(shopDomain);
-      const hasExistingPaidOrTrial =
-        Boolean(currentState?.billingState?.includes("ACTIVE") || currentState?.billingState?.includes("TRIALING")) &&
-        currentState?.billingPlan !== "free" &&
-        currentState?.billingPlan !== "NO_PLAN";
-      const trialDays = hasExistingPaidOrTrial ? 0 : await calculateRemainingTrialDays(shopDomain, planId);
+      const trialDays = await calculateRemainingTrialDays(shopDomain, planId);
 
       const confirmationUrl = await requestSubscription(
         admin,

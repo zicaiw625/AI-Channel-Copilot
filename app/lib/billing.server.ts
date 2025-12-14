@@ -687,10 +687,7 @@ export const calculateRemainingTrialDays = async (
     return 0;
   }
 
-  // Shopify 的 trial 是按「店铺 + 应用」维度，而不是按 plan 维度：
-  // 一旦店铺曾经开始过付费订阅/试用（且当前不在进行中的 trial），就不应该再给任何付费 plan 新的试用期。
-  // 否则在“先 Pro 再 Growth（替换订阅）”场景下，Shopify approve 页面会直接拒绝 charge。
-  if (state.hasEverSubscribed && state.billingPlan !== "NO_PLAN" && state.billingPlan !== "free") {
+  if (state.hasEverSubscribed && toPlanId(state.billingPlan) === plan.id) {
     return 0;
   }
 
@@ -828,6 +825,37 @@ export const requestSubscription = async (
     }
   }
 
+  // 升级/切换计划时：如果店铺已经有我们应用的 ACTIVE/PENDING 订阅
+  // - 强制 trialDays=0（避免“已有订阅再试用”在 approve 阶段被拒绝）
+  // - 显式设置 replacementBehavior，确保 Shopify 用“替换订阅”的路径处理
+  let hasExistingActiveSubscription = false;
+  try {
+    const sdkProbe = createGraphqlSdk(admin, shopDomain);
+    const QUERY = `#graphql
+      query ActiveSubscriptionsForReplacement {
+        currentAppInstallation {
+          activeSubscriptions { id name status }
+        }
+      }
+    `;
+    const respProbe = await sdkProbe.request("activeSubscriptionsForReplacement", QUERY, {});
+    if (respProbe.ok) {
+      const json = (await respProbe.json()) as {
+        data?: { currentAppInstallation?: { activeSubscriptions?: { id: string; name: string; status: string }[] } };
+      };
+      const subs = json.data?.currentAppInstallation?.activeSubscriptions || [];
+      hasExistingActiveSubscription = subs.some((s) => {
+        const ours = resolvePlanByShopifyName(s.name);
+        if (!ours) return false;
+        const status = (s.status || "").toUpperCase();
+        // NOTE: Shopify sometimes returns PENDING during transitions
+        return status === "ACTIVE" || status === "PENDING";
+      });
+    }
+  } catch (_e) {
+    // ignore probe failures
+  }
+
   const cfg = getAppConfig();
   const amount = plan.priceUsd;
   const currencyCode = cfg.billing.currencyCode;
@@ -843,13 +871,21 @@ export const requestSubscription = async (
   const returnUrl = returnUrlUrl.toString();
 
   const MUTATION = `#graphql
-    mutation AppSubscriptionCreate($name: String!, $lineItems: [AppSubscriptionLineItemInput!]!, $returnUrl: URL!, $test: Boolean, $trialDays: Int) {
+    mutation AppSubscriptionCreate(
+      $name: String!,
+      $lineItems: [AppSubscriptionLineItemInput!]!,
+      $returnUrl: URL!,
+      $test: Boolean,
+      $trialDays: Int,
+      $replacementBehavior: AppSubscriptionReplacementBehavior
+    ) {
       appSubscriptionCreate(
         name: $name,
         lineItems: $lineItems,
         returnUrl: $returnUrl,
         test: $test,
-        trialDays: $trialDays
+        trialDays: $trialDays,
+        replacementBehavior: $replacementBehavior
       ) {
         userErrors { field message }
         confirmationUrl
@@ -858,6 +894,8 @@ export const requestSubscription = async (
     }
   `;
   const sdk = createGraphqlSdk(admin, shopDomain);
+  const effectiveTrialDays =
+    hasExistingActiveSubscription ? 0 : plan.trialSupported ? Math.max(trialDays, 0) : 0;
   const resp = await sdk.request("createSubscription", MUTATION, {
     name: plan.shopifyName,
     lineItems: [
@@ -875,7 +913,8 @@ export const requestSubscription = async (
     ],
     returnUrl,
     test: effectiveIsTest,
-    trialDays: plan.trialSupported ? Math.max(trialDays, 0) : 0,
+    trialDays: effectiveTrialDays,
+    replacementBehavior: hasExistingActiveSubscription ? "APPLY_IMMEDIATELY" : null,
   });
 
   if (!resp.ok) {

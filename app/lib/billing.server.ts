@@ -560,9 +560,16 @@ export const detectAndPersistDevShop = async (
   }
 
   const sdk = createGraphqlSdk(admin, shopDomain);
+  // 使用 partnerDevelopment 字段来可靠地判断开发店
+  // 参考: https://shopify.dev/docs/api/admin-graphql/latest/objects/ShopPlan
   const query = `#graphql
     query ShopPlanForBilling {
-      shop { plan { displayName } }
+      shop {
+        plan {
+          partnerDevelopment
+          displayName
+        }
+      }
     }
   `;
   
@@ -585,9 +592,28 @@ export const detectAndPersistDevShop = async (
     if (existing && typeof existing.isDevShop === "boolean") return existing.isDevShop;
     return false;
   }
-  const json = (await response.json()) as { data?: { shop?: { plan?: { displayName?: string | null } } } };
-  const planName = json?.data?.shop?.plan?.displayName?.toLowerCase() || "";
-  const isDev = planName.includes("development") || planName.includes("trial") || planName.includes("affiliate");
+  
+  const json = (await response.json()) as { 
+    data?: { shop?: { plan?: { partnerDevelopment?: boolean; displayName?: string | null } } };
+    errors?: Array<{ message: string }>;
+  };
+  
+  // 检查 GraphQL 错误（HTTP 200 但 GraphQL 层面有错误）
+  if (json.errors?.length) {
+    logger.warn("detectAndPersistDevShop GraphQL errors", {
+      shopDomain,
+      errors: json.errors.map(e => e.message).join("; "),
+    });
+    if (existing && typeof existing.isDevShop === "boolean") return existing.isDevShop;
+    return false;
+  }
+  
+  const plan = json?.data?.shop?.plan;
+  // 优先使用 partnerDevelopment 字段（官方推荐，布尔值更可靠）
+  // 回退到 displayName 判断作为兜底
+  const isDev = plan?.partnerDevelopment === true || 
+    (plan?.displayName?.toLowerCase() || "").includes("development") ||
+    (plan?.displayName?.toLowerCase() || "").includes("affiliate");
   
   const updates: Partial<BillingState> = { isDevShop: isDev };
   if (!existing?.firstInstalledAt) {

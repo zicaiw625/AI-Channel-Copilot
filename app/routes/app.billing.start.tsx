@@ -2,7 +2,7 @@ import type { HeadersFunction, ActionFunctionArgs } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate, MONTHLY_PLAN } from "../shopify.server";
 import { requireEnv } from "../lib/env.server";
-import { computeIsTestMode } from "../lib/billing.server";
+import { computeIsTestMode, detectAndPersistDevShop } from "../lib/billing.server";
 import { isDemoMode } from "../lib/runtime.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -17,8 +17,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
   
   try {
-    const { billing, session } = await authenticate.admin(request);
+    const { admin, billing, session } = await authenticate.admin(request);
     const shopDomain = session?.shop || "";
+    
+    // 先检测并持久化开发店状态，确保 isTest 计算正确
+    await detectAndPersistDevShop(admin, shopDomain);
     const isTest = await computeIsTestMode(shopDomain);
     const appUrl = requireEnv("SHOPIFY_APP_URL");
     // Use MONTHLY_PLAN directly as the plan name for billing request

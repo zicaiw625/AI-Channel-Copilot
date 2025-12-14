@@ -547,6 +547,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       if (confirmationUrl) {
         const next = new URL("/app/redirect", new URL(request.url).origin);
         next.searchParams.set("to", confirmationUrl);
+        next.searchParams.set("shop", shopDomain);
+        if (returnUrlContext.host) next.searchParams.set("host", returnUrlContext.host);
+        if (returnUrlContext.embedded) next.searchParams.set("embedded", returnUrlContext.embedded);
+        if (returnUrlContext.locale) next.searchParams.set("locale", returnUrlContext.locale);
         throw new Response(null, { status: 302, headers: { Location: next.toString() } });
       }
       return Response.json({ ok: false, message: "Failed to create subscription. confirmationUrl is missing." });

@@ -739,6 +739,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       if (confirmationUrl) {
         const next = new URL("/app/redirect", new URL(request.url).origin);
         next.searchParams.set("to", confirmationUrl);
+        next.searchParams.set("shop", shopDomain);
+        const url = new URL(request.url);
+        const host = url.searchParams.get("host");
+        const embedded = url.searchParams.get("embedded");
+        const locale = url.searchParams.get("locale");
+        if (host) next.searchParams.set("host", host);
+        if (embedded) next.searchParams.set("embedded", embedded);
+        if (locale) next.searchParams.set("locale", locale);
         throw new Response(null, { status: 302, headers: { Location: next.toString() } });
       } else {
         return Response.json({

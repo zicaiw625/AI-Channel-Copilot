@@ -687,7 +687,10 @@ export const calculateRemainingTrialDays = async (
     return 0;
   }
 
-  if (state.hasEverSubscribed && toPlanId(state.billingPlan) === plan.id) {
+  // Shopify 的 trial 是按「店铺 + 应用」维度，而不是按 plan 维度：
+  // 一旦店铺曾经开始过付费订阅/试用（且当前不在进行中的 trial），就不应该再给任何付费 plan 新的试用期。
+  // 否则在“先 Pro 再 Growth（替换订阅）”场景下，Shopify approve 页面会直接拒绝 charge。
+  if (state.hasEverSubscribed && state.billingPlan !== "NO_PLAN" && state.billingPlan !== "free") {
     return 0;
   }
 
@@ -839,53 +842,14 @@ export const requestSubscription = async (
   if (returnUrlContext?.locale) returnUrlUrl.searchParams.set("locale", returnUrlContext.locale);
   const returnUrl = returnUrlUrl.toString();
 
-  // Shopify 同一时间只允许一个 active app subscription。
-  // “Pro -> Growth” 属于替换订阅：需要显式传 replacementBehavior，否则 approve 阶段可能被拒绝。
-  let replacementBehavior: "APPLY_IMMEDIATELY" | null = null;
-  let isReplacing = false;
-  try {
-    const activeQuery = `#graphql
-      query ActiveSubscriptionsForReplacement {
-        currentAppInstallation {
-          activeSubscriptions { name status }
-        }
-      }
-    `;
-    const sdkForActive = createGraphqlSdk(admin, shopDomain);
-    const activeResp = await sdkForActive.request("activeSubscriptionsForReplacement", activeQuery, {});
-    if (activeResp.ok) {
-      const json = (await activeResp.json()) as {
-        data?: { currentAppInstallation?: { activeSubscriptions?: { name: string; status: string }[] } };
-      };
-      const subs = json.data?.currentAppInstallation?.activeSubscriptions || [];
-      const existing = subs.find((s) => {
-        const p = resolvePlanByShopifyName(s.name);
-        return p && (s.status === "ACTIVE" || s.status === "PENDING");
-      });
-      const existingPlan = existing ? resolvePlanByShopifyName(existing.name) : null;
-      isReplacing = Boolean(existingPlan && existingPlan.id !== planId);
-      if (isReplacing) {
-        replacementBehavior = "APPLY_IMMEDIATELY";
-      }
-    }
-  } catch (e) {
-    // 读不到 activeSubscriptions 时不阻断；仍可继续创建，但可能影响替换行为
-    logger.warn("[billing] Failed to detect existing subscription for replacement", {
-      shopDomain,
-      planId,
-      error: (e as Error).message,
-    });
-  }
-
   const MUTATION = `#graphql
-    mutation AppSubscriptionCreate($name: String!, $lineItems: [AppSubscriptionLineItemInput!]!, $returnUrl: URL!, $test: Boolean, $trialDays: Int, $replacementBehavior: AppSubscriptionReplacementBehavior) {
+    mutation AppSubscriptionCreate($name: String!, $lineItems: [AppSubscriptionLineItemInput!]!, $returnUrl: URL!, $test: Boolean, $trialDays: Int) {
       appSubscriptionCreate(
         name: $name,
         lineItems: $lineItems,
         returnUrl: $returnUrl,
         test: $test,
-        trialDays: $trialDays,
-        replacementBehavior: $replacementBehavior
+        trialDays: $trialDays
       ) {
         userErrors { field message }
         confirmationUrl
@@ -911,9 +875,7 @@ export const requestSubscription = async (
     ],
     returnUrl,
     test: effectiveIsTest,
-    // 替换订阅时不要再给 trial，避免 Shopify 侧拒绝或产生不可预期的试用窗口
-    trialDays: isReplacing ? 0 : (plan.trialSupported ? Math.max(trialDays, 0) : 0),
-    replacementBehavior,
+    trialDays: plan.trialSupported ? Math.max(trialDays, 0) : 0,
   });
 
   if (!resp.ok) {

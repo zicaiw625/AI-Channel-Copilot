@@ -549,8 +549,15 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
       const isTest = await computeIsTestMode(shopDomain);
       const currentState = await getBillingState(shopDomain);
-      const isUpgradeFromPaid = currentState?.billingState?.includes("ACTIVE") && currentState?.billingPlan !== "free" && currentState?.billingPlan !== "NO_PLAN";
-      const trialDays = isUpgradeFromPaid ? 0 : await calculateRemainingTrialDays(shopDomain, planId);
+      // 重要：替换/升级订阅时不要再次提供 trialDays（Shopify trial 按 app/shop 计算）。
+      // 覆盖场景：
+      // - ACTIVE（已付费）
+      // - TRIALING（试用中）
+      const hasExistingPaidOrTrial =
+        Boolean(currentState?.billingState?.includes("ACTIVE") || currentState?.billingState?.includes("TRIALING")) &&
+        currentState?.billingPlan !== "free" &&
+        currentState?.billingPlan !== "NO_PLAN";
+      const trialDays = hasExistingPaidOrTrial ? 0 : await calculateRemainingTrialDays(shopDomain, planId);
       const confirmationUrl = await requestSubscription(admin!, shopDomain, planId, isTest, trialDays, returnUrlContext);
       if (confirmationUrl) {
         const next = new URL("/app/redirect", new URL(request.url).origin);

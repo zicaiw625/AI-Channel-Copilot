@@ -8,18 +8,10 @@ import { enforceRateLimit, RateLimitRules } from "../lib/security/rateLimit.serv
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const url = new URL(request.url);
-  let shopDomain = "";
-  let admin = null;
-  
-  try {
-    const auth = await authenticate.admin(request);
-    admin = auth.admin;
-    shopDomain = auth.session?.shop || url.searchParams.get("shop") || "";
-  } catch (authError) {
-    shopDomain = url.searchParams.get("shop") || "";
-    if (!shopDomain) {
-      return Response.json({ ok: false, message: "Unauthorized" }, { status: 401 });
-    }
+  const { admin, session } = await authenticate.admin(request);
+  const shopDomain = session?.shop || "";
+  if (!shopDomain) {
+    return Response.json({ ok: false, message: "Unauthorized" }, { status: 401 });
   }
 
   // 速率限制：使用 EXPORT 规则（5 次/5 分钟）防止滥用

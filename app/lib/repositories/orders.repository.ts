@@ -19,6 +19,28 @@ import {
   type OrderWithProducts,
 } from '../mappers/orderMapper';
 
+const toNumber = (value: unknown): number => {
+  if (value === null || value === undefined) return 0;
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  if (typeof value === "string") {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : 0;
+  }
+  if (value instanceof Prisma.Decimal) return value.toNumber();
+  const maybe = value as { toNumber?: () => number; toString?: () => string };
+  if (typeof maybe?.toNumber === "function") {
+    const n = maybe.toNumber();
+    return Number.isFinite(n) ? n : 0;
+  }
+  if (typeof maybe?.toString === "function") {
+    const n = Number(maybe.toString());
+    return Number.isFinite(n) ? n : 0;
+  }
+  return 0;
+};
+
+const roundMoney = (value: number): number => Math.round(value * 100) / 100;
+
 export class OrdersRepository {
   /**
    * 根据店铺和日期范围查询订单
@@ -152,12 +174,12 @@ export class OrdersRepository {
 
       return {
         total: {
-          gmv: (totalStats._sum[metric] as number) || 0,
+          gmv: toNumber(totalStats._sum[metric]),
           orders: totalStats._count._all,
           newCustomers: totalNewCustomers,
         },
         ai: {
-          gmv: (aiStats._sum[metric] as number) || 0,
+          gmv: toNumber(aiStats._sum[metric]),
           orders: aiStats._count._all,
           newCustomers: aiNewCustomers,
         },
@@ -240,10 +262,10 @@ export class OrdersRepository {
               where: { id: order.id },
               update: {
                 name: order.name,
-                totalPrice: order.totalPrice,
+                totalPrice: roundMoney(order.totalPrice),
                 currency: order.currency,
-                subtotalPrice: order.subtotalPrice,
-                refundTotal: order.refundTotal,
+                subtotalPrice: order.subtotalPrice === undefined ? undefined : roundMoney(order.subtotalPrice),
+                refundTotal: order.refundTotal === undefined ? undefined : roundMoney(order.refundTotal),
                 aiSource: prismaAiSource,
                 detection: order.detection,
                 detectionSignals: validatedSignals as Prisma.InputJsonValue,
@@ -261,10 +283,10 @@ export class OrdersRepository {
                 shopDomain: effectiveShopDomain,
                 name: order.name,
                 createdAt: new Date(order.createdAt),
-                totalPrice: order.totalPrice,
+                totalPrice: roundMoney(order.totalPrice),
                 currency: order.currency,
-                subtotalPrice: order.subtotalPrice,
-                refundTotal: order.refundTotal,
+                subtotalPrice: order.subtotalPrice === undefined ? undefined : roundMoney(order.subtotalPrice),
+                refundTotal: order.refundTotal === undefined ? undefined : roundMoney(order.refundTotal),
                 aiSource: prismaAiSource,
                 detection: order.detection,
                 detectionSignals: validatedSignals as Prisma.InputJsonValue,
@@ -290,7 +312,7 @@ export class OrdersRepository {
                   title: p.title,
                   handle: p.handle,
                   url: p.url,
-                  price: p.price,
+                  price: roundMoney(p.price),
                   currency: p.currency,
                   quantity: p.quantity,
                 })),
@@ -367,10 +389,10 @@ export class OrdersRepository {
           where: { id: order.id },
           update: {
             name: order.name,
-            totalPrice: order.totalPrice,
+            totalPrice: roundMoney(order.totalPrice),
             currency: order.currency,
-            subtotalPrice: order.subtotalPrice,
-            refundTotal: order.refundTotal,
+            subtotalPrice: order.subtotalPrice === undefined ? undefined : roundMoney(order.subtotalPrice),
+            refundTotal: order.refundTotal === undefined ? undefined : roundMoney(order.refundTotal),
             aiSource: prismaAiSource,
             detection: order.detection,
             detectionSignals: validatedSignals as Prisma.InputJsonValue,
@@ -388,10 +410,10 @@ export class OrdersRepository {
             shopDomain: effectiveShopDomain,
             name: order.name,
             createdAt: new Date(order.createdAt),
-            totalPrice: order.totalPrice,
+            totalPrice: roundMoney(order.totalPrice),
             currency: order.currency,
-            subtotalPrice: order.subtotalPrice,
-            refundTotal: order.refundTotal,
+            subtotalPrice: order.subtotalPrice === undefined ? undefined : roundMoney(order.subtotalPrice),
+            refundTotal: order.refundTotal === undefined ? undefined : roundMoney(order.refundTotal),
             aiSource: prismaAiSource,
             detection: order.detection,
             detectionSignals: validatedSignals as Prisma.InputJsonValue,
@@ -420,7 +442,7 @@ export class OrdersRepository {
               title: p.title,
               handle: p.handle,
               url: p.url,
-              price: p.price,
+              price: roundMoney(p.price),
               currency: p.currency,
               quantity: p.quantity,
             })),

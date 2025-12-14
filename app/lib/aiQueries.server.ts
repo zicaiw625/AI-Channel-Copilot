@@ -22,6 +22,26 @@ import { fromPrismaAiSource, toPrismaAiSource } from "./aiSourceMapper";
 import { startOfDay, formatDateOnly } from "./dateUtils";
 import { logger } from "./logger.server";
 
+const toNumber = (value: unknown): number => {
+  if (value === null || value === undefined) return 0;
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  if (typeof value === "string") {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : 0;
+  }
+  if (value instanceof Prisma.Decimal) return value.toNumber();
+  const maybe = value as { toNumber?: () => number; toString?: () => string };
+  if (typeof maybe?.toNumber === "function") {
+    const n = maybe.toNumber();
+    return Number.isFinite(n) ? n : 0;
+  }
+  if (typeof maybe?.toString === "function") {
+    const n = Number(maybe.toString());
+    return Number.isFinite(n) ? n : 0;
+  }
+  return 0;
+};
+
 type DashboardQueryOptions = {
   timezone?: string;
   allowDemo?: boolean;
@@ -31,9 +51,9 @@ type DashboardQueryOptions = {
 // 定义聚合结果的类型
 type OrderAggregateResult = {
   _sum: {
-    totalPrice: number | null;
-    subtotalPrice: number | null;
-    refundTotal: number | null;
+    totalPrice: unknown;
+    subtotalPrice: unknown;
+    refundTotal: unknown;
   };
   _count: {
     _all: number;
@@ -43,9 +63,9 @@ type OrderAggregateResult = {
 // 辅助函数：计算总值（类型安全版本）
 const getSum = (agg: OrderAggregateResult, metric: string): number => {
   if (metric === "subtotal_price") {
-    return agg._sum.subtotalPrice ?? 0;
+    return toNumber(agg._sum.subtotalPrice);
   }
-  return agg._sum.totalPrice ?? 0; // Default to current_total_price which maps to totalPrice in DB schema
+  return toNumber(agg._sum.totalPrice); // Default to current_total_price which maps to totalPrice in DB schema
 };
 
 /**
@@ -84,9 +104,9 @@ async function buildDashboardFromDb(
 
   const totalGMV = getSum(totalAgg, metric);
   // Bug Fix: 使用 Math.max 防止净 GMV 为负数（与内存模式保持一致）
-  const totalNetGMV = Math.max(0, totalGMV - (totalAgg._sum.refundTotal || 0));
+  const totalNetGMV = Math.max(0, totalGMV - toNumber(totalAgg._sum.refundTotal));
   const aiGMV = getSum(aiAgg, metric);
-  const aiNetGMV = Math.max(0, aiGMV - (aiAgg._sum.refundTotal || 0));
+  const aiNetGMV = Math.max(0, aiGMV - toNumber(aiAgg._sum.refundTotal));
 
   // 获取新客数（需要 GroupBy 或 Count with filter）
   const [totalNew, aiNew] = await Promise.all([
@@ -145,7 +165,7 @@ async function buildDashboardFromDb(
     if (!channelName || !channelMap.has(channelName)) return;
 
     const stat = channelMap.get(channelName)!;
-    const gmv = metric === "subtotal_price" ? (group._sum.subtotalPrice || 0) : (group._sum.totalPrice || 0);
+    const gmv = metric === "subtotal_price" ? toNumber(group._sum.subtotalPrice) : toNumber(group._sum.totalPrice);
     
     stat.gmv += gmv;
     stat.orders += group._count._all;
@@ -210,7 +230,7 @@ async function buildDashboardFromDb(
        }
        
        const entry = bucketMap.get(key)!;
-       const val = metric === "subtotal_price" ? (o.subtotalPrice || 0) : o.totalPrice;
+       const val = metric === "subtotal_price" ? toNumber(o.subtotalPrice) : toNumber(o.totalPrice);
        
        entry.overallGMV += val;
        entry.overallOrders += 1;
@@ -283,9 +303,9 @@ async function buildDashboardFromDb(
     // 计算分配比例 (Allocation)
     // 逻辑复用 aiAggregation: lineTotal / orderTotal
     const order = line.order;
-    const lineTotal = line.price * line.quantity;
-    const orderTotal = order.products.reduce((sum, l) => sum + l.price * l.quantity, 0);
-    const orderVal = metric === "subtotal_price" ? (order.subtotalPrice || 0) : order.totalPrice;
+    const lineTotal = toNumber(line.price) * line.quantity;
+    const orderTotal = order.products.reduce((sum, l) => sum + toNumber(l.price) * l.quantity, 0);
+    const orderVal = metric === "subtotal_price" ? toNumber(order.subtotalPrice) : toNumber(order.totalPrice);
     
     const share = orderTotal > 0 ? lineTotal / orderTotal : 0;
     const allocatedGmv = orderVal * share;
@@ -452,8 +472,8 @@ async function buildDashboardFromDb(
   // 根据实际 metric 在内存中排序并取 Top 8
   const topCustomerAgg = [...customerAggRaw]
     .sort((a, b) => {
-      const aVal = metric === "subtotal_price" ? (a._sum.subtotalPrice || 0) : (a._sum.totalPrice || 0);
-      const bVal = metric === "subtotal_price" ? (b._sum.subtotalPrice || 0) : (b._sum.totalPrice || 0);
+      const aVal = metric === "subtotal_price" ? toNumber(a._sum.subtotalPrice) : toNumber(a._sum.totalPrice);
+      const bVal = metric === "subtotal_price" ? toNumber(b._sum.subtotalPrice) : toNumber(b._sum.totalPrice);
       return bVal - aVal;
     })
     .slice(0, 8);
@@ -465,7 +485,7 @@ async function buildDashboardFromDb(
 
   const topCustomers: TopCustomerRow[] = topCustomerAgg.map(agg => {
     const cid = agg.customerId!;
-    const val = metric === "subtotal_price" ? (agg._sum.subtotalPrice || 0) : (agg._sum.totalPrice || 0);
+    const val = metric === "subtotal_price" ? toNumber(agg._sum.subtotalPrice) : toNumber(agg._sum.totalPrice);
     const cus = cusMap.get(cid);
     
     // 检查此客户在此时间段内是否有 AI 订单？
@@ -520,7 +540,7 @@ async function buildDashboardFromDb(
      id: o.id,
      name: o.name,
      createdAt: o.createdAt.toISOString(),
-     totalPrice: metric === "subtotal_price" ? (o.subtotalPrice || 0) : o.totalPrice,
+     totalPrice: metric === "subtotal_price" ? toNumber(o.subtotalPrice) : toNumber(o.totalPrice),
      currency: o.currency,
      aiSource: fromPrismaAiSource(o.aiSource),
      referrer: o.referrer || "",
@@ -548,10 +568,10 @@ async function buildDashboardFromDb(
     id: o.id,
     name: o.name,
     createdAt: o.createdAt.toISOString(),
-    totalPrice: o.totalPrice,
+    totalPrice: toNumber(o.totalPrice),
     currency: o.currency,
-    subtotalPrice: o.subtotalPrice ?? undefined,
-    refundTotal: o.refundTotal,
+    subtotalPrice: o.subtotalPrice === null ? undefined : toNumber(o.subtotalPrice),
+    refundTotal: toNumber(o.refundTotal),
     aiSource: fromPrismaAiSource(o.aiSource),
     detection: o.detection || "",
     signals: Array.isArray(o.detectionSignals) ? (o.detectionSignals as string[]) : [],
@@ -568,7 +588,7 @@ async function buildDashboardFromDb(
       title: p.title,
       handle: p.handle || "",
       url: p.url || "",
-      price: p.price,
+      price: toNumber(p.price),
       currency: p.currency,
       quantity: p.quantity,
     })),

@@ -38,6 +38,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     logger.error("app/scopes_update webhook failed", { shopDomain, topic }, {
       message: (error as Error).message,
     });
-    return new Response(undefined, { status: 500 });
+    // scopes_update 非关键链路：避免 Shopify 重试风暴
+    return new Response();
   }
 };

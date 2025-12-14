@@ -44,12 +44,14 @@ export const handleRefundWebhook = async (request: Request) => {
 
     if (topic !== "refunds/create") {
       logger.warn("[webhook] unexpected topic for refund handler", { shopDomain: shop, topic });
-      return new Response("Topic mismatch", { status: 400 });
+      // 不可恢复：返回 200 避免 Shopify 重试风暴
+      return new Response("Topic mismatch (ignored)", { status: 200 });
     }
 
     if (!admin || !shop) {
       logger.warn("[webhook] admin client unavailable for refund processing", { shopDomain: shop });
-      return new Response("Admin client unavailable", { status: 500 });
+      // 多发生于卸载后 session 被清理等场景，重试通常无意义；避免重试风暴
+      return new Response("Admin client unavailable (ignored)", { status: 200 });
     }
 
     const orderGid = extractOrderGidFromRefund(webhookPayload);
@@ -65,7 +67,8 @@ export const handleRefundWebhook = async (request: Request) => {
         hasOrderId: "order_id" in webhookPayload,
         hasAdminGid: "admin_graphql_api_order_id" in webhookPayload,
       });
-      return new Response("Missing order_id in refund payload", { status: 400 });
+      // 不可恢复：返回 200 避免 Shopify 重试
+      return new Response("Missing order_id (ignored)", { status: 200 });
     }
 
     const settings = await getSettings(shop);
@@ -77,7 +80,8 @@ export const handleRefundWebhook = async (request: Request) => {
 
     if (!record) {
       logger.warn("[webhook] order not found for refund", { shopDomain: shop, orderGid });
-      return new Response("Order not found", { status: 404 });
+      // 不可恢复：订单不存在/不可访问时不应触发重试风暴
+      return new Response("Order not found (ignored)", { status: 200 });
     }
 
     // Persist the updated order with new refund total

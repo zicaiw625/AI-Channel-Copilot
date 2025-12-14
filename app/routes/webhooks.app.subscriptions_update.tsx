@@ -70,7 +70,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const data = (payload || {}) as AppSubscriptionPayload;
   const subscription = data.app_subscription;
   if (!shopDomain || !subscription) {
-    return new Response(undefined, { status: 400 });
+    // 不可恢复：返回 200 避免 Shopify 重试风暴
+    return new Response();
   }
 
   const subscriptionId = subscription.admin_graphql_api_id || "";

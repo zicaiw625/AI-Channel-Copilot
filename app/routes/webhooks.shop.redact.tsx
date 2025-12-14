@@ -22,7 +22,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       typeof webhookPayload.shop_domain === "string" && webhookPayload.shop_domain
         ? webhookPayload.shop_domain
         : shop;
-    if (!shopDomain) return new Response(undefined, { status: 400 });
+    if (!shopDomain) {
+      // 不可恢复：返回 200 避免 Shopify 重试风暴
+      return new Response();
+    }
 
     await wipeShopData(shopDomain);
   } catch (error) {

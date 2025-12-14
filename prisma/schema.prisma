@@ -58,7 +58,7 @@ model Customer {
   firstOrderAt     DateTime?
   lastOrderAt      DateTime?
   orderCount       Int      @default(0)
-  totalSpent       Float    @default(0)
+  totalSpent       Decimal  @default(0) @db.Decimal(12, 2)
   firstAiOrderId   String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
@@ -80,10 +80,10 @@ model Order {
   platform        String    @default("shopify")
   name            String
   createdAt       DateTime
-  totalPrice      Float
+  totalPrice      Decimal   @db.Decimal(12, 2)
   currency        String   @default("USD")
-  subtotalPrice   Float?
-  refundTotal     Float    @default(0)
+  subtotalPrice   Decimal?  @db.Decimal(12, 2)
+  refundTotal     Decimal   @default(0) @db.Decimal(12, 2)
   aiSource        AiSource?
   detection       String?
   detectionSignals Json?
@@ -117,7 +117,7 @@ model OrderProduct {
   title      String
   handle     String?
   url        String?
-  price      Float
+  price      Decimal  @db.Decimal(12, 2)
   currency   String   @default("USD")
   quantity   Int
 
@@ -292,8 +292,8 @@ model Checkout {
   abandonedAt     DateTime?
   
   // 金额
-  totalPrice      Float     @default(0)
-  subtotalPrice   Float?
+  totalPrice      Decimal   @default(0) @db.Decimal(12, 2)
+  subtotalPrice   Decimal?  @db.Decimal(12, 2)
   currency        String    @default("USD")
   
   // 归因信息

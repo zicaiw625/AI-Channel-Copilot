@@ -98,7 +98,7 @@ export const handleOrderWebhook = async (request: Request, expectedTopic: string
     logger.info("[webhook] received", { shopDomain: shop, topic });
 
     // 应用速率限制（店铺级别）
-    // 注意：Shopify 会重试失败的 webhook，所以我们不抛出 429，而是记录警告
+    // 注意：Shopify 对非 2xx 会重试 webhook。这里仅做监控/降载，不通过 429 触发重试风暴。
     try {
       await enforceRateLimit(
         buildRateLimitKey("webhook", shop, topic),
@@ -106,31 +106,34 @@ export const handleOrderWebhook = async (request: Request, expectedTopic: string
       );
     } catch (rateLimitError) {
       if (rateLimitError instanceof Response && rateLimitError.status === 429) {
-        logger.warn("[webhook] Rate limit exceeded, returning 429 for retry", {
+        logger.warn("[webhook] Rate limit exceeded; accepting webhook and processing asynchronously", {
           shopDomain: shop,
           topic,
         });
-        // 返回 429 让 Shopify 延迟重试
-        return new Response("Rate limit exceeded", { status: 429 });
+        // 继续处理：入队异步处理由数据库队列吸收峰值
+      } else {
+        throw rateLimitError;
       }
-      throw rateLimitError;
     }
 
     if (topic !== expectedTopic) {
       await setWebhookStatus(shop, "warning", `Unexpected topic ${topic}`);
-      return new Response("Topic mismatch", { status: 400 });
+      // 不可恢复：返回 200 避免 Shopify 重试风暴
+      return new Response("Topic mismatch (ignored)", { status: 200 });
     }
 
     if (!admin || !shop) {
       await setWebhookStatus(shop, "warning", "Admin client unavailable for webhook processing");
-      return new Response("Admin client unavailable", { status: 500 });
+      // 多发生于卸载后 session 被清理等场景，重试通常无意义；避免重试风暴
+      return new Response("Admin client unavailable (ignored)", { status: 200 });
     }
 
     const orderGid = extractOrderGid(webhookPayload);
 
     if (!orderGid) {
       await setWebhookStatus(shop, "warning", "Missing order id in webhook payload");
-      return new Response("Missing order id", { status: 400 });
+      // 不可恢复：返回 200 避免 Shopify 重试
+      return new Response("Missing order id (ignored)", { status: 200 });
     }
 
     // 🆕 早期去重检查：在入队前检查 X-Shopify-Webhook-Id（Shopify 最佳实践）

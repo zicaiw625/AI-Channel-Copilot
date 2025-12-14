@@ -15,7 +15,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     logger.info(`Received ${topic} webhook`, { shopDomain: shop, topic });
 
-    if (!shop) return new Response(undefined, { status: 400 });
+    if (!shop) {
+      // 不可恢复：返回 200 避免 Shopify 重试风暴
+      return new Response();
+    }
 
     const { customerIds, orderIds, customerEmail } = extractGdprIdentifiers(source);
     const extraOrders = Array.isArray((source as Record<string, unknown>)?.orders_to_redact)

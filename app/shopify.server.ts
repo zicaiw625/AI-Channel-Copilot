@@ -8,14 +8,16 @@ import {
 import { PrismaSessionStorage } from "@shopify/shopify-app-session-storage-prisma";
 import prisma from "./db.server";
 import { readCriticalEnv, getAppConfig } from "./lib/env.server";
+import { logger } from "./lib/logger.server";
 import { runStartupSelfCheck } from "./lib/selfcheck.server";
 
 const { SHOPIFY_API_KEY: apiKey, SHOPIFY_API_SECRET: apiSecretKey, SHOPIFY_APP_URL: appUrl, SCOPES: scopes } =
   readCriticalEnv();
 
-// Debug: log scopes at startup
-console.log("[shopify.server] SCOPES from env:", JSON.stringify(scopes));
-console.log("[shopify.server] SCOPES includes read_orders:", scopes.includes("read_orders"));
+// 仅在非生产环境输出诊断日志，避免污染生产日志与暴露配置细节
+if (process.env.NODE_ENV !== "production") {
+  logger.debug("[shopify.server] SCOPES from env", { scopes });
+}
 
 const resolveCustomShopDomains = () => {
   const customDomainsEnv = process.env.SHOP_CUSTOM_DOMAIN;

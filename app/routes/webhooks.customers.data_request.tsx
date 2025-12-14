@@ -28,11 +28,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     logger.info(`Received ${topic} webhook`, { shopDomain: shop, topic });
 
-    if (!shop)
-      return new Response(
-        JSON.stringify({ ok: false, message: "Missing shop domain" }),
-        { status: 400, headers: { "Content-Type": "application/json" } },
-      );
+    if (!shop) {
+      // 不可恢复：返回 200 避免 Shopify 重试风暴
+      return jsonResponse({ ok: false, message: "Missing shop domain" });
+    }
 
     const { customerIds, customerEmail, orderIds } = extractGdprIdentifiers(webhookPayload);
     const footprint = await describeCustomerFootprint(shop, customerIds);

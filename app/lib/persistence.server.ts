@@ -1,5 +1,5 @@
 import prisma from "../db.server";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { type DateRange, type OrderRecord } from "./aiData";
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 import { getPlatform, isDemoMode } from "./runtime.server";
@@ -19,6 +19,28 @@ import {
   mapCustomerToState,
   createInitialCustomerState,
 } from "./mappers/orderMapper";
+
+const toNumber = (value: unknown): number => {
+  if (value === null || value === undefined) return 0;
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  if (typeof value === "string") {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : 0;
+  }
+  if (value instanceof Prisma.Decimal) return value.toNumber();
+  const maybe = value as { toNumber?: () => number; toString?: () => string };
+  if (typeof maybe?.toNumber === "function") {
+    const n = maybe.toNumber();
+    return Number.isFinite(n) ? n : 0;
+  }
+  if (typeof maybe?.toString === "function") {
+    const n = Number(maybe.toString());
+    return Number.isFinite(n) ? n : 0;
+  }
+  return 0;
+};
+
+const roundMoney = (value: number): number => Math.round(value * 100) / 100;
 
 const tableMissing = (error: unknown) =>
   (error instanceof PrismaClientKnownRequestError && error.code === "P2021") ||
@@ -152,10 +174,10 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
               platform,
               name: order.name,
               createdAt,
-              totalPrice: order.totalPrice,
+              totalPrice: roundMoney(order.totalPrice),
               currency: order.currency,
-              subtotalPrice: order.subtotalPrice ?? order.totalPrice,
-              refundTotal: order.refundTotal ?? 0,
+              subtotalPrice: roundMoney(order.subtotalPrice ?? order.totalPrice),
+              refundTotal: roundMoney(order.refundTotal ?? 0),
               aiSource,
               detection,
               referrer: order.referrer,
@@ -192,7 +214,7 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
                   prev.title !== line.title ||
                   prev.handle !== (line.handle || null) ||
                   prev.url !== (line.url || null) ||
-                  prev.price !== line.price ||
+                  toNumber(prev.price) !== roundMoney(line.price) ||
                   prev.currency !== (line.currency || prev.currency) ||
                   prev.quantity !== line.quantity;
                 if (changed) {
@@ -202,7 +224,7 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
                       title: line.title,
                       handle: line.handle || null,
                       url: line.url || null,
-                      price: line.price,
+                      price: roundMoney(line.price),
                       currency: line.currency ?? prev.currency,
                       quantity: line.quantity,
                     },
@@ -215,7 +237,7 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
                   title: line.title,
                   handle: line.handle || null,
                   url: line.url || null,
-                  price: line.price,
+                  price: roundMoney(line.price),
                   currency: line.currency || order.currency || "USD",
                   quantity: line.quantity,
                 });
@@ -292,7 +314,7 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
               // 计算订单金额变化
               const previousContribution: number =
                 existingOrder && existingOrder.customerId === customerId
-                  ? existingOrder.totalPrice
+                  ? toNumber(existingOrder.totalPrice)
                   : 0;
 
               // 【修复】订单计数逻辑：
@@ -306,7 +328,7 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
 
               // 总消费：减去旧订单金额，加上新订单金额
               const nextTotal: number =
-                current.totalSpent - previousContribution + order.totalPrice;
+                current.totalSpent - previousContribution + roundMoney(order.totalPrice);
 
               // 最后订单时间
               const nextLastOrderAt: Date =

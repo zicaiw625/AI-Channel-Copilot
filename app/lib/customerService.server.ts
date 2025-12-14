@@ -7,6 +7,27 @@ import prisma from "../db.server";
 import type { DateRange } from "./aiData";
 import { DatabaseError, NotFoundError } from "./errors";
 import { logger } from "./logger.server";
+import { Prisma } from "@prisma/client";
+
+const toNumber = (value: unknown): number => {
+  if (value === null || value === undefined) return 0;
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  if (typeof value === "string") {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : 0;
+  }
+  if (value instanceof Prisma.Decimal) return value.toNumber();
+  const maybe = value as { toNumber?: () => number; toString?: () => string };
+  if (typeof maybe?.toNumber === "function") {
+    const n = maybe.toNumber();
+    return Number.isFinite(n) ? n : 0;
+  }
+  if (typeof maybe?.toString === "function") {
+    const n = Number(maybe.toString());
+    return Number.isFinite(n) ? n : 0;
+  }
+  return 0;
+};
 
 export interface CustomerData {
   id: string;
@@ -53,6 +74,7 @@ export const loadCustomersByIds = async (
     return customers.map(c => ({
       ...c,
       acquiredViaAi: Boolean(c.acquiredViaAi),
+      totalSpent: toNumber(c.totalSpent),
     }));
   } catch (error) {
     logger.error("[customerService] Failed to load customers by IDs", {

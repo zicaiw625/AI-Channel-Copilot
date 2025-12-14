@@ -8,6 +8,27 @@ import type { DateRange, OrderRecord } from "./aiTypes";
 import { DatabaseError, ValidationError } from "./errors";
 import { logger } from "./logger.server";
 import { fromPrismaAiSource } from "./aiSourceMapper";
+import { Prisma } from "@prisma/client";
+
+const toNumber = (value: unknown): number => {
+  if (value === null || value === undefined) return 0;
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  if (typeof value === "string") {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : 0;
+  }
+  if (value instanceof Prisma.Decimal) return value.toNumber();
+  const maybe = value as { toNumber?: () => number; toString?: () => string };
+  if (typeof maybe?.toNumber === "function") {
+    const n = maybe.toNumber();
+    return Number.isFinite(n) ? n : 0;
+  }
+  if (typeof maybe?.toString === "function") {
+    const n = Number(maybe.toString());
+    return Number.isFinite(n) ? n : 0;
+  }
+  return 0;
+};
 
 export interface OrderQueryOptions {
   limit?: number;
@@ -54,14 +75,16 @@ export const loadOrdersFromDb = async (
     // 转换数据格式，包括 AI 来源枚举转换
     const orderRecords: OrderRecord[] = orders.map((order) => {
       const orderWithProducts = order as typeof order & { products?: Array<{ productId: string; title: string; handle: string | null; url: string | null; price: number; currency: string; quantity: number }> };
+      const totalPrice = toNumber(order.totalPrice);
+      const subtotal = order.subtotalPrice !== null && order.subtotalPrice !== undefined ? toNumber(order.subtotalPrice) : totalPrice;
       return {
       id: order.id,
       name: order.name,
       createdAt: order.createdAt.toISOString(),
-      totalPrice: order.totalPrice,
+      totalPrice,
       currency: order.currency,
-      subtotalPrice: order.subtotalPrice ?? order.totalPrice,
-      refundTotal: order.refundTotal,
+      subtotalPrice: subtotal,
+      refundTotal: toNumber(order.refundTotal),
       aiSource: fromPrismaAiSource(order.aiSource),
       detection: order.detection || "",
       signals: Array.isArray(order.detectionSignals) ? (order.detectionSignals as string[]) : [],
@@ -78,7 +101,7 @@ export const loadOrdersFromDb = async (
             title: p.title,
             handle: p.handle || "",
             url: p.url || "",
-            price: p.price,
+            price: toNumber(p.price),
             currency: p.currency,
             quantity: p.quantity,
           }))

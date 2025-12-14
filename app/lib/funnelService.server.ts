@@ -8,7 +8,27 @@ import { resolveDateRange, type TimeRangeKey, type AiDomainRule, type UtmSourceR
 import { toPrismaAiSource, fromPrismaAiSource } from "./aiSourceMapper";
 import { detectAiFromFields } from "./aiAttribution";
 import { logger } from "./logger.server";
-import type { AiSource } from "@prisma/client";
+import { Prisma, type AiSource } from "@prisma/client";
+
+const toNumber = (value: unknown): number => {
+  if (value === null || value === undefined) return 0;
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  if (typeof value === "string") {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : 0;
+  }
+  if (value instanceof Prisma.Decimal) return value.toNumber();
+  const maybe = value as { toNumber?: () => number; toString?: () => string };
+  if (typeof maybe?.toNumber === "function") {
+    const n = maybe.toNumber();
+    return Number.isFinite(n) ? n : 0;
+  }
+  if (typeof maybe?.toString === "function") {
+    const n = Number(maybe.toString());
+    return Number.isFinite(n) ? n : 0;
+  }
+  return 0;
+};
 
 // ============================================================================
 // 工具函数
@@ -552,7 +572,7 @@ export async function getFunnelData(
   
   for (const agg of orderAggBySource) {
     const count = agg._count._all;
-    const gmv = agg._sum.totalPrice || 0;
+    const gmv = toNumber(agg._sum.totalPrice);
     totalOrders += count;
     totalOrderGMV += gmv;
     

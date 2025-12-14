@@ -12,7 +12,6 @@ import { enforceRateLimit, RateLimitRules, buildRateLimitKey } from "./security/
 import {
   webhookSuccess,
   webhookBadRequest,
-  webhookRateLimited,
   handleWebhookError,
   logWebhookReceived,
 } from "./webhookUtils.server";
@@ -43,10 +42,11 @@ export const handleCheckoutCreateWebhook = async (request: Request) => {
       );
     } catch (rateLimitError) {
       if (rateLimitError instanceof Response && rateLimitError.status === 429) {
-        logger.warn("[webhook] Checkout rate limit exceeded", { shop });
-        return webhookRateLimited();
+        // Shopify 对非 2xx 会重试；这里不返回 429，避免重试风暴
+        logger.warn("[webhook] Checkout rate limit exceeded; accepting webhook and queueing", { shop });
+      } else {
+        throw rateLimitError;
       }
-      throw rateLimitError;
     }
 
     const checkoutPayload = payload as CheckoutPayload;
@@ -144,10 +144,11 @@ export const handleCheckoutUpdateWebhook = async (request: Request) => {
       );
     } catch (rateLimitError) {
       if (rateLimitError instanceof Response && rateLimitError.status === 429) {
-        logger.warn("[webhook] Checkout rate limit exceeded", { shop });
-        return webhookRateLimited();
+        // Shopify 对非 2xx 会重试；这里不返回 429，避免重试风暴
+        logger.warn("[webhook] Checkout rate limit exceeded; accepting webhook and queueing", { shop });
+      } else {
+        throw rateLimitError;
       }
-      throw rateLimitError;
     }
 
     const checkoutPayload = payload as CheckoutPayload;

@@ -651,12 +651,13 @@ export const detectAndPersistDevShop = async (
 
 export const computeIsTestMode = async (shopDomain: string): Promise<boolean> => {
   if (readAppFlags().billingForceTest) return true;
-  // 开发店不再自动使用测试模式，需要正常计费流程
+  const state = await getBillingState(shopDomain);
+  if (state?.isDevShop) return true;
   return isNonProduction();
 };
 
-export const shouldSkipBillingForPath = (pathname: string, _isDevShop: boolean): boolean => {
-  // 开发店不再跳过计费检查，需要正常订阅流程
+export const shouldSkipBillingForPath = (pathname: string, isDevShop: boolean): boolean => {
+  if (isDevShop) return true;
   const path = pathname.toLowerCase();
   if (path.includes("/webhooks/")) return true;
   if (path.includes("/public") || path.endsWith(".css") || path.endsWith(".js")) return true;

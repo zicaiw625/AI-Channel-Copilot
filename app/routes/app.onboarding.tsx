@@ -720,16 +720,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
       const isTest = await computeIsTestMode(shopDomain);
       const trialDays = await calculateRemainingTrialDays(shopDomain, planId);
-      // 关键：returnUrl 必须携带 shop/host 等上下文，否则确认回跳会丢失 session → 触发 /auth/login
-      const reqUrl = new URL(request.url);
-      const returnUrl = new URL("/app/billing/confirm", reqUrl.origin);
-      returnUrl.searchParams.set("shop", shopDomain);
-      const host = reqUrl.searchParams.get("host");
-      if (host) returnUrl.searchParams.set("host", host);
-      const embedded = reqUrl.searchParams.get("embedded");
-      if (embedded) returnUrl.searchParams.set("embedded", embedded);
-      const locale = reqUrl.searchParams.get("locale");
-      if (locale) returnUrl.searchParams.set("locale", locale);
 
       const confirmationUrl = await requestSubscription(
         admin,
@@ -737,7 +727,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         planId,
         isTest,
         trialDays,
-        returnUrl.toString(),
       );
 
       if (confirmationUrl) {

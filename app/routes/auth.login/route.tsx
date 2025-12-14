@@ -8,21 +8,20 @@ import { login } from "../../shopify.server";
 import { loginErrorMessage } from "./error.server";
 import { requireEnv, isProduction } from "../../lib/env.server";
 
-const shouldDenyManualLoginUiInProduction = (request: Request) => {
-  if (!isProduction()) return false;
-  // 生产环境允许 Shopify SDK 携带 shop 参数触发 OAuth，但不允许展示“手动输入店铺域名”的 UI
-  const url = new URL(request.url);
-  const hasShopHint = Boolean(url.searchParams.get("shop"));
-  return !hasShopHint;
+/**
+ * 生产环境禁止访问此页面
+ * Shopify 上架要求：应用不得在安装或配置流程中要求商家手动输入 myshopify.com 或店铺域名
+ */
+const rejectInProduction = () => {
+  if (isProduction()) {
+    throw new Response("Not Found", { status: 404 });
+  }
 };
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
+  rejectInProduction();
   const result = await login(request);
   if (result instanceof Response) throw result;
-  // 如果没有触发重定向，说明这是 UI 渲染路径；生产环境禁止
-  if (shouldDenyManualLoginUiInProduction(request)) {
-    throw new Response("Not Found", { status: 404 });
-  }
   const errors = loginErrorMessage(result);
   const url = new URL(request.url);
   const language = url.searchParams.get("lang") === "en" ? "English" : "中文";
@@ -30,11 +29,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
+  rejectInProduction();
   const result = await login(request);
   if (result instanceof Response) throw result;
-  if (shouldDenyManualLoginUiInProduction(request)) {
-    throw new Response("Not Found", { status: 404 });
-  }
   const errors = loginErrorMessage(result);
   const url = new URL(request.url);
   const language = url.searchParams.get("lang") === "en" ? "English" : "中文";

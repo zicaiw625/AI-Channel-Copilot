@@ -150,8 +150,7 @@ export const checkSecurityHeaders = (response: Response): SecurityIssue[] => {
 
   // 检查必要的安全头
   const requiredHeaders = [
-    // Shopify Embedded App 需要允许被 admin.shopify.com 以 iframe 嵌入；
-    // 点击劫持防护由 CSP 的 frame-ancestors 指令承担，因此不强制 X-Frame-Options。
+    { name: 'X-Frame-Options', description: '防止点击劫持攻击' },
     { name: 'X-Content-Type-Options', description: '防止MIME类型混淆' },
     { name: 'X-XSS-Protection', description: '启用XSS过滤' },
     { name: 'Strict-Transport-Security', description: '强制HTTPS' },

@@ -10,10 +10,24 @@ import {
 import { resolvePlanByShopifyName, PRIMARY_BILLABLE_PLAN_ID, getPlanConfig } from "../lib/billing/plans";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const result = await authenticate.admin(request);
-  // 某些情况下（比如回调缺少 session），Shopify SDK 会直接返回一个重定向 Response
-  if (result instanceof Response) throw result;
-  const { admin, billing, session } = result;
+  const url = new URL(request.url);
+  // 兼容旧的 returnUrl（没带 shop/host）导致 approve 回跳后无法鉴权：
+  // 尝试从 Referer 推断 shop，再把它补回 query 里，避免落到 /auth/login(生产环境 404)。
+  if (!url.searchParams.get("shop")) {
+    const referer = request.headers.get("referer") || request.headers.get("referrer") || "";
+    // 常见 referer: https://{shop}.myshopify.com/admin/...
+    const match = referer.match(/https?:\/\/([a-zA-Z0-9][a-zA-Z0-9-]*\.myshopify\.com)(?:\/|$)/);
+    const inferredShop = match?.[1];
+    if (inferredShop) {
+      url.searchParams.set("shop", inferredShop);
+      throw new Response(null, { status: 302, headers: { Location: url.toString() } });
+    }
+  }
+
+  const auth = await authenticate.admin(request);
+  // 某些 OAuth / 重新鉴权流程会返回 Response（302），需要原样抛出
+  if (auth instanceof Response) throw auth;
+  const { admin, billing, session } = auth;
   const shopDomain = session?.shop || "";
   const isTest = await computeIsTestMode(shopDomain);
   

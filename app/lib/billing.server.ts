@@ -796,7 +796,11 @@ export const requestSubscription = async (
   planId: PlanId,
   isTest: boolean,
   trialDays: number,
-  returnUrlOverride?: string,
+  returnUrlContext?: {
+    host?: string | null;
+    embedded?: string | null;
+    locale?: string | null;
+  },
 ) => {
   const plan = getPlanConfig(planId);
   if (plan.priceUsd <= 0) {
@@ -807,8 +811,15 @@ export const requestSubscription = async (
   const amount = plan.priceUsd;
   const currencyCode = cfg.billing.currencyCode;
   const interval = cfg.billing.interval;
-  const returnUrl =
-    returnUrlOverride || new URL("/app/billing/confirm", cfg.server.appUrl).toString();
+  // NOTE:
+  // Shopify 在 approve 后会跳转回 returnUrl。如果 returnUrl 不带 shop/host，
+  // embedded app 的 authenticate.admin() 将无法重新建立 session，最终可能走到 /auth/login（生产环境 404）。
+  const returnUrlUrl = new URL("/app/billing/confirm", cfg.server.appUrl);
+  returnUrlUrl.searchParams.set("shop", shopDomain);
+  if (returnUrlContext?.host) returnUrlUrl.searchParams.set("host", returnUrlContext.host);
+  if (returnUrlContext?.embedded) returnUrlUrl.searchParams.set("embedded", returnUrlContext.embedded);
+  if (returnUrlContext?.locale) returnUrlUrl.searchParams.set("locale", returnUrlContext.locale);
+  const returnUrl = returnUrlUrl.toString();
 
   const MUTATION = `#graphql
     mutation AppSubscriptionCreate($name: String!, $lineItems: [AppSubscriptionLineItemInput!]!, $returnUrl: URL!, $test: Boolean, $trialDays: Int) {

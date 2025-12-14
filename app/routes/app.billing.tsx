@@ -3,8 +3,8 @@ import type { HeadersFunction, LoaderFunctionArgs, ActionFunctionArgs } from "re
 import { useLoaderData, useActionData, Form, useFetcher, Link } from "react-router";
 import { useUILanguage } from "../lib/useUILanguage";
 import { boundary } from "@shopify/shopify-app-react-router/server";
-import { authenticate, login } from "../shopify.server";
-import { readAppFlags, requireEnv } from "../lib/env.server";
+import { authenticate } from "../shopify.server";
+import { readAppFlags } from "../lib/env.server";
 import { getSettings, syncShopPreferences } from "../lib/settings.server";
 import {
   detectAndPersistDevShop,
@@ -493,6 +493,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   let admin: Awaited<ReturnType<typeof authenticate.admin>>["admin"] | null = null;
   let session: Awaited<ReturnType<typeof authenticate.admin>>["session"] | null = null;
   let shopDomain = "";
+  const urlForContext = new URL(request.url);
+  const returnUrlContext = {
+    host: urlForContext.searchParams.get("host"),
+    embedded: urlForContext.searchParams.get("embedded"),
+    locale: urlForContext.searchParams.get("locale"),
+  };
 
   try {
     const auth = await authenticate.admin(request);
@@ -500,23 +506,16 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     session = auth.session;
     shopDomain = session?.shop || "";
   } catch (authError) {
-    try {
-      const originalUrl = new URL(request.url);
-      const lang = originalUrl.searchParams.get("lang") === "en" ? "en" : "zh";
-      const loginUrl = new URL("/auth/login", originalUrl.origin);
-      loginUrl.searchParams.set("lang", lang);
-      const originalForm = await request.formData().catch(() => new FormData());
-      const forwardForm = new FormData();
-      if (originalForm.has("shop")) {
-        forwardForm.set("shop", String(originalForm.get("shop")));
-      }
-      const forwardReq = new Request(loginUrl.toString(), { method: "POST", headers: request.headers, body: forwardForm });
-      const result = await login(forwardReq as any);
-      if (result instanceof Response) throw result;
-      return null;
-    } catch {
-      return Response.json({ ok: false, message: "Action failed." });
-    }
+    // 生产环境禁止 /auth/login（会返回 404）。这里直接走标准 /auth OAuth 流程。
+    const originalForm = await request.formData().catch(() => new FormData());
+    const shop = originalForm.get("shop") ? String(originalForm.get("shop")) : "";
+    if (!shop) return Response.json({ ok: false, message: "Missing shop." }, { status: 400 });
+    const next = new URL("/auth", urlForContext.origin);
+    next.searchParams.set("shop", shop);
+    if (returnUrlContext.host) next.searchParams.set("host", returnUrlContext.host);
+    if (returnUrlContext.embedded) next.searchParams.set("embedded", returnUrlContext.embedded);
+    if (returnUrlContext.locale) next.searchParams.set("locale", returnUrlContext.locale);
+    throw new Response(null, { status: 302, headers: { Location: next.toString() } });
   }
 
   try {
@@ -544,23 +543,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       const currentState = await getBillingState(shopDomain);
       const isUpgradeFromPaid = currentState?.billingState?.includes("ACTIVE") && currentState?.billingPlan !== "free" && currentState?.billingPlan !== "NO_PLAN";
       const trialDays = isUpgradeFromPaid ? 0 : await calculateRemainingTrialDays(shopDomain, planId);
-      // returnUrl 带上 shop/host/embedded，避免 approve 后回调缺参导致跳到 /auth/login
-      const appUrl = requireEnv("SHOPIFY_APP_URL");
-      const currentUrl = new URL(request.url);
-      const returnUrl = new URL("/app/billing/confirm", appUrl);
-      returnUrl.searchParams.set("shop", shopDomain);
-      const host = currentUrl.searchParams.get("host");
-      if (host) returnUrl.searchParams.set("host", host);
-      returnUrl.searchParams.set("embedded", currentUrl.searchParams.get("embedded") || "1");
-
-      const confirmationUrl = await requestSubscription(
-        admin!,
-        shopDomain,
-        planId,
-        isTest,
-        trialDays,
-        returnUrl.toString(),
-      );
+      const confirmationUrl = await requestSubscription(admin!, shopDomain, planId, isTest, trialDays, returnUrlContext);
       if (confirmationUrl) {
         const next = new URL("/app/redirect", new URL(request.url).origin);
         next.searchParams.set("to", confirmationUrl);

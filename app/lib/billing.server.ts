@@ -462,6 +462,18 @@ const syncSubscriptionFromShopifyInternal = async (
         const isTrialing = trialEndTime !== null && trialEndTime > Date.now();
         const trialEnd = trialEndTime ? new Date(trialEndTime) : null;
         
+        // Check if this is a new subscription that should have trial
+        // For dev stores with test: true subscriptions, Shopify doesn't return trialDays
+        // so we need to check local state to determine if trial should be granted
+        const existingState = await getBillingState(shopDomain);
+        const isNewSubscription = createdAt && (Date.now() - createdAt.getTime()) < 5 * 60 * 1000; // within 5 minutes
+        const shouldGrantTrial = 
+          plan.trialSupported && 
+          !isTrialing && 
+          isNewSubscription &&
+          !existingState?.lastTrialStartAt && // no previous trial recorded
+          (existingState?.usedTrialDays || 0) < plan.defaultTrialDays; // has trial days remaining
+        
         logger.info("[billing] Syncing subscription from Shopify", { 
           shopDomain, 
           planId: plan.id,
@@ -470,11 +482,25 @@ const syncSubscriptionFromShopifyInternal = async (
           trialDays,
           createdAt: createdAt?.toISOString(),
           trialEnd: trialEnd?.toISOString(),
+          shouldGrantTrial,
+          isNewSubscription,
         });
         
         // Update local billing state
         if (isTrialing && plan.trialSupported) {
           await setSubscriptionTrialState(shopDomain, plan.id, trialEnd, activeSub.status);
+        } else if (shouldGrantTrial) {
+          // For dev stores or when Shopify doesn't return trial info,
+          // grant trial locally based on remaining trial days
+          const remainingTrialDays = plan.defaultTrialDays - (existingState?.usedTrialDays || 0);
+          const localTrialEnd = new Date(Date.now() + remainingTrialDays * DAY_IN_MS);
+          logger.info("[billing] Granting local trial for new subscription", {
+            shopDomain,
+            planId: plan.id,
+            remainingTrialDays,
+            localTrialEnd: localTrialEnd.toISOString(),
+          });
+          await setSubscriptionTrialState(shopDomain, plan.id, localTrialEnd, activeSub.status);
         } else {
           await setSubscriptionActiveState(shopDomain, plan.id, activeSub.status);
         }

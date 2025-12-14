@@ -4,10 +4,13 @@ import {
   setSubscriptionTrialState,
   setSubscriptionActiveState,
   setSubscriptionExpiredState,
+  getBillingState,
 } from "../lib/billing.server";
 import { resolvePlanByShopifyName, getPlanConfig, PRIMARY_BILLABLE_PLAN_ID } from "../lib/billing/plans";
 import { logger } from "../lib/logger.server";
 import prisma from "../db.server";
+
+const DAY_IN_MS = 24 * 60 * 60 * 1000;
 
 type AppSubscriptionPayload = {
   app_subscription?: {
@@ -96,6 +99,27 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   if (status === "ACTIVE") {
     if (trialEnd && trialEnd.getTime() > Date.now() && plan.trialSupported) {
       await setSubscriptionTrialState(shopDomain, plan.id, trialEnd, status);
+    } else if (plan.trialSupported) {
+      // For dev stores with test: true subscriptions, Shopify doesn't return trial_end
+      // Check if we should grant trial locally
+      const existingState = await getBillingState(shopDomain);
+      const shouldGrantTrial = 
+        !existingState?.lastTrialStartAt && // no previous trial recorded
+        (existingState?.usedTrialDays || 0) < plan.defaultTrialDays; // has trial days remaining
+      
+      if (shouldGrantTrial) {
+        const remainingTrialDays = plan.defaultTrialDays - (existingState?.usedTrialDays || 0);
+        const localTrialEnd = new Date(Date.now() + remainingTrialDays * DAY_IN_MS);
+        logger.info("[billing-webhook] Granting local trial (Shopify did not return trial_end)", {
+          shopDomain,
+          planId: plan.id,
+          remainingTrialDays,
+          localTrialEnd: localTrialEnd.toISOString(),
+        });
+        await setSubscriptionTrialState(shopDomain, plan.id, localTrialEnd, status);
+      } else {
+        await setSubscriptionActiveState(shopDomain, plan.id, status);
+      }
     } else {
       await setSubscriptionActiveState(shopDomain, plan.id, status);
     }

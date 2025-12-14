@@ -160,11 +160,15 @@ export const setSubscriptionActiveState = async (
   if (state) {
     await applyTrialConsumption(shopDomain, state, plan);
   }
+  // 当变成正式付费状态时，清除试用相关字段
+  // 避免旧的试用结束日期影响界面显示（如从 Pro 升级到 Growth）
   await upsertBillingState(shopDomain, {
     billingPlan: planId,
     billingState: planStateKey(planId, "ACTIVE"),
     lastSubscriptionStatus: status,
     hasEverSubscribed: true,
+    lastTrialStartAt: null,
+    lastTrialEndAt: null,
   });
 };
 
@@ -178,10 +182,13 @@ export const setSubscriptionExpiredState = async (
   if (state) {
     await applyTrialConsumption(shopDomain, state, plan);
   }
+  // 订阅过期时清除试用状态
   await upsertBillingState(shopDomain, {
     billingPlan: planId,
     billingState: "EXPIRED_NO_SUBSCRIPTION",
     lastSubscriptionStatus: status,
+    lastTrialStartAt: null,
+    lastTrialEndAt: null,
   });
 };
 

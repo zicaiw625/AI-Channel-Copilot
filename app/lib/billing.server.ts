@@ -650,22 +650,14 @@ export const detectAndPersistDevShop = async (
 };
 
 export const computeIsTestMode = async (shopDomain: string): Promise<boolean> => {
-  // 1. 强制测试模式（环境变量覆盖）
   if (readAppFlags().billingForceTest) return true;
-  
-  // 2. 非生产环境始终用测试模式
-  if (isNonProduction()) return true;
-  
-  // 3. 开发店必须用测试模式（Shopify 要求：开发店只能接受 test charge）
-  // 参考: https://shopify.dev/docs/apps/launch/app-store-review/pass-app-review
   const state = await getBillingState(shopDomain);
   if (state?.isDevShop) return true;
-  
-  return false;
+  return isNonProduction();
 };
 
-export const shouldSkipBillingForPath = (pathname: string, _isDevShop: boolean): boolean => {
-  // 开发店不再跳过计费检查，需要正常订阅
+export const shouldSkipBillingForPath = (pathname: string, isDevShop: boolean): boolean => {
+  if (isDevShop) return true;
   const path = pathname.toLowerCase();
   if (path.includes("/webhooks/")) return true;
   if (path.includes("/public") || path.endsWith(".css") || path.endsWith(".js")) return true;

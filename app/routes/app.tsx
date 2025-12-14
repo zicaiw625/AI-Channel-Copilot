@@ -32,7 +32,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     authFailed = true;
     const url = new URL(request.url);
     const path = url.pathname.toLowerCase();
-    const allowUnauth = path.includes("/app/onboarding") || path.includes("/app/billing") || path.includes("/app/redirect");
+    // 仅允许 redirect 页面在无 session 时继续（用于跳转到 Shopify 确认页）。
+    // onboarding / billing 必须有有效 session，否则应触发 Shopify OAuth 流程。
+    const allowUnauth = path.includes("/app/redirect");
     if (!demo && !allowUnauth) throw e;
   }
 

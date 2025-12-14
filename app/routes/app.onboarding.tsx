@@ -54,25 +54,17 @@ interface PlanWithTrial {
 // ============================================================================
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  type AuthShape = Awaited<ReturnType<typeof authenticate.admin>>;
-  let admin: AuthShape["admin"] | null = null;
-  let session: AuthShape["session"] | null = null;
-  let authFailed = false;
-  
-  try {
-    const auth = await authenticate.admin(request);
-    admin = auth.admin;
-    session = auth.session;
-  } catch (_error) {
-    authFailed = true;
+  const { admin, session } = await authenticate.admin(request);
+  if (!session?.shop) {
+    // 正常情况下 Shopify SDK 会在缺少 session 时触发 OAuth 并返回 Response
+    // 这里兜底：避免渲染出 “Unauthorized” 导致新安装用户看不到订阅引导。
+    return { language: "中文", authorized: false };
   }
-  
-  if (!session) return { language: "中文", authorized: false };
 
   const shopDomain = session.shop;
   let settings = await getSettings(shopDomain);
   
-  if (admin && !authFailed) {
+  if (admin) {
     try {
       settings = await syncShopPreferences(admin, shopDomain, settings);
       await detectAndPersistDevShop(admin, shopDomain);

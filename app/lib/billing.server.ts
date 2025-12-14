@@ -754,6 +754,56 @@ export const getActiveSubscriptionDetails = async (
   return { id: sub.id, name: sub.name, status: sub.status || null, trialDays: sub.trialDays ?? null, currentPeriodEnd };
 };
 
+export type AppSubscriptionReplacementBehavior =
+  | "APPLY_IMMEDIATELY"
+  | "APPLY_ON_NEXT_BILLING_CYCLE"
+  | "STANDARD";
+
+/**
+ * 获取当前应用在该店铺的“我方计划”活跃订阅（用于升级/降级替换）
+ * Shopify 同一时间只允许一个 app subscription 生效；切换方案应使用 replacementSubscriptionId。
+ */
+export const getCurrentActiveAppSubscriptionForPlans = async (
+  admin: AdminGraphqlClient,
+  shopDomain: string,
+): Promise<{ id: string; status: string; name: string; plan: PlanConfig } | null> => {
+  const sdk = createGraphqlSdk(admin, shopDomain);
+  const QUERY = `#graphql
+    query ActiveSubscriptionsForReplacement {
+      currentAppInstallation {
+        activeSubscriptions {
+          id
+          name
+          status
+        }
+      }
+    }
+  `;
+
+  const resp = await sdk.request("activeSubscriptionsForReplacement", QUERY, {});
+  if (!resp.ok) return null;
+
+  const json = (await resp.json()) as {
+    data?: {
+      currentAppInstallation?: {
+        activeSubscriptions?: { id: string; name: string; status: string }[];
+      };
+    };
+  };
+
+  const subs = json.data?.currentAppInstallation?.activeSubscriptions || [];
+  const candidate = subs.find((s) => {
+    const p = resolvePlanByShopifyName(s.name);
+    return !!p && (s.status === "ACTIVE" || s.status === "PENDING");
+  });
+  if (!candidate) return null;
+
+  const plan = resolvePlanByShopifyName(candidate.name);
+  if (!plan) return null;
+
+  return { id: candidate.id, status: candidate.status, name: candidate.name, plan };
+};
+
 // GraphQL 响应类型定义
 type UserError = { field?: string | null; message: string };
 
@@ -801,6 +851,10 @@ export const requestSubscription = async (
     embedded?: string | null;
     locale?: string | null;
   },
+  replacement?: {
+    subscriptionId?: string | null;
+    behavior?: AppSubscriptionReplacementBehavior | null;
+  },
 ) => {
   const plan = getPlanConfig(planId);
   if (plan.priceUsd <= 0) {
@@ -839,14 +893,72 @@ export const requestSubscription = async (
   if (returnUrlContext?.locale) returnUrlUrl.searchParams.set("locale", returnUrlContext.locale);
   const returnUrl = returnUrlUrl.toString();
 
+  // -----------------------------
+  // Upgrade/Downgrade handling
+  // -----------------------------
+  // Shopify 同一时间只允许一个 app subscription 生效。
+  // 直接在已有付费订阅上再创建一个新订阅，可能会在 approve 阶段失败（例如 “The shop cannot accept the provided charge.”）。
+  // 因此：如果检测到已有我方计划订阅，切换方案时必须传 replacementSubscriptionId。
+  let replacementSubscriptionId: string | null = replacement?.subscriptionId ?? null;
+  let replacementBehavior: AppSubscriptionReplacementBehavior | null =
+    replacement?.behavior ?? null;
+
+  try {
+    if (!replacementSubscriptionId) {
+      const current = await getCurrentActiveAppSubscriptionForPlans(admin, shopDomain);
+      if (current) {
+        // 若正在订阅同一个方案，不需要重复创建
+        if (current.plan.id === planId) {
+          logger.info("[billing] Subscription request skipped (already on plan)", {
+            shopDomain,
+            planId,
+            currentSubscriptionId: current.id,
+            currentStatus: current.status,
+          });
+          return null;
+        }
+
+        replacementSubscriptionId = current.id;
+
+        // 根据价格判断升级/降级，选择更合理的替换行为
+        const isUpgrade = plan.priceUsd >= current.plan.priceUsd;
+        replacementBehavior = replacementBehavior ?? (isUpgrade ? "APPLY_IMMEDIATELY" : "STANDARD");
+
+        // 有旧订阅时不应再次发放 trial
+        trialDays = 0;
+      }
+    } else {
+      // 如果外部显式传了 replacementSubscriptionId，也禁止再发 trial
+      trialDays = 0;
+      replacementBehavior = replacementBehavior ?? "APPLY_IMMEDIATELY";
+    }
+  } catch (e) {
+    // 兜底：替换检测失败时仍可尝试创建（不阻断），但记录日志方便排查
+    logger.warn("[billing] Failed to detect current subscription for replacement", {
+      shopDomain,
+      planId,
+      error: (e as Error).message,
+    });
+  }
+
   const MUTATION = `#graphql
-    mutation AppSubscriptionCreate($name: String!, $lineItems: [AppSubscriptionLineItemInput!]!, $returnUrl: URL!, $test: Boolean, $trialDays: Int) {
+    mutation AppSubscriptionCreate(
+      $name: String!,
+      $lineItems: [AppSubscriptionLineItemInput!]!,
+      $returnUrl: URL!,
+      $test: Boolean,
+      $trialDays: Int,
+      $replacementSubscriptionId: ID,
+      $replacementBehavior: AppSubscriptionReplacementBehavior
+    ) {
       appSubscriptionCreate(
         name: $name,
         lineItems: $lineItems,
         returnUrl: $returnUrl,
         test: $test,
-        trialDays: $trialDays
+        trialDays: $trialDays,
+        replacementSubscriptionId: $replacementSubscriptionId,
+        replacementBehavior: $replacementBehavior
       ) {
         userErrors { field message }
         confirmationUrl
@@ -873,6 +985,8 @@ export const requestSubscription = async (
     returnUrl,
     test: effectiveIsTest,
     trialDays: plan.trialSupported ? Math.max(trialDays, 0) : 0,
+    replacementSubscriptionId,
+    replacementBehavior,
   });
 
   if (!resp.ok) {

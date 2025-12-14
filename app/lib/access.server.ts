@@ -72,9 +72,7 @@ export async function getEffectivePlan(shopDomain: string): Promise<PlanTier> {
 
   const { billingState, billingPlan } = state;
 
-  if (state.isDevShop) {
-    return "pro";
-  }
+  // 开发店不再自动获得 Pro 权限，需要正常订阅流程
   
   // If explicitly cancelled or expired
   if (billingState === "CANCELLED" || billingState === "EXPIRED_NO_SUBSCRIPTION") {

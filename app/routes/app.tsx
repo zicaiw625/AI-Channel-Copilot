@@ -111,8 +111,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     let trialDaysLeft: number | null = null;
     let canViewFullDashboard = false;
 
-    if (!billingEnabled || demo || isDevShop) {
-        plan = "pro"; // Treat as Pro for dev/demo
+    if (!billingEnabled || demo) {
+        plan = "pro"; // Treat as Pro for demo mode only
         canViewFullDashboard = true;
     } else if (!skipBilling) {
         plan = await getEffectivePlan(shopDomain);

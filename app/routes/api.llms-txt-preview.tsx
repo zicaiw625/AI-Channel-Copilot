@@ -10,8 +10,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const url = new URL(request.url);
   const { admin, session } = await authenticate.admin(request);
   const shopDomain = session?.shop || "";
-    if (!shopDomain) {
-      return Response.json({ ok: false, message: "Unauthorized" }, { status: 401 });
+  if (!shopDomain) {
+    return Response.json({ ok: false, message: "Unauthorized" }, { status: 401 });
   }
 
   // 速率限制：使用 EXPORT 规则（5 次/5 分钟）防止滥用

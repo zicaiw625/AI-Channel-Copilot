@@ -37,6 +37,10 @@ const generateCSP = (): string => {
     "img-src 'self' data: https:",
     "font-src 'self' https:",
     "connect-src 'self' https: wss:",
+    // 关键：允许 Shopify App Bridge / session-token 流程使用隐藏 iframe
+    // 不设置 frame-src/child-src 时会回退到 default-src 'self'，可能导致 embedded /auth/session-token 白屏
+    "frame-src https:",
+    "child-src https:",
     "object-src 'none'",
     "frame-ancestors https://*.myshopify.com https://admin.shopify.com",
     "base-uri 'self'",

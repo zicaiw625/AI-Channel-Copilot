@@ -45,7 +45,7 @@ export const handleCheckoutCreateWebhook = async (request: Request) => {
         // Shopify 对非 2xx 会重试；这里不返回 429，避免重试风暴
         logger.warn("[webhook] Checkout rate limit exceeded; accepting webhook and queueing", { shop });
       } else {
-        throw rateLimitError;
+      throw rateLimitError;
       }
     }
 
@@ -147,7 +147,7 @@ export const handleCheckoutUpdateWebhook = async (request: Request) => {
         // Shopify 对非 2xx 会重试；这里不返回 429，避免重试风暴
         logger.warn("[webhook] Checkout rate limit exceeded; accepting webhook and queueing", { shop });
       } else {
-        throw rateLimitError;
+      throw rateLimitError;
       }
     }
 

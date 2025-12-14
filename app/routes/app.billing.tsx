@@ -550,6 +550,25 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       const isTest = await computeIsTestMode(shopDomain);
       const currentState = await getBillingState(shopDomain);
       const isUpgradeFromPaid = currentState?.billingState?.includes("ACTIVE") && currentState?.billingPlan !== "free" && currentState?.billingPlan !== "NO_PLAN";
+      
+      // 关键：如果是从付费计划升级到另一个付费计划，需要先取消旧订阅
+      // Shopify 不允许同时有两个活跃的 recurring subscription，否则会报
+      // "The shop cannot accept the provided charge."
+      if (isUpgradeFromPaid) {
+        const paidPlans = Object.values(BILLING_PLANS).filter((p) => p.priceUsd > 0 && p.id !== planId);
+        for (const oldPlan of paidPlans) {
+          try {
+            const oldDetails = await getActiveSubscriptionDetails(admin!, oldPlan.shopifyName);
+            if (oldDetails?.id) {
+              await cancelSubscription(admin!, oldDetails.id, true);
+              break;
+            }
+          } catch (_cancelError) {
+            // 取消失败可能是因为该计划没有活跃订阅，继续检查下一个
+          }
+        }
+      }
+      
       const trialDays = isUpgradeFromPaid ? 0 : await calculateRemainingTrialDays(shopDomain, planId);
       const confirmationUrl = await requestSubscription(admin!, shopDomain, planId, isTest, trialDays, returnUrlContext);
       if (confirmationUrl) {

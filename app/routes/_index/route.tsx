@@ -35,7 +35,7 @@ export default function App() {
         </p>
         <div className={styles.actions}>
           {showForm && (
-            <Form className={styles.form} method="post" action="/auth/login">
+            <Form className={styles.form} method="get" action="/auth">
               <label className={styles.label}>
                 <span>{language === "English" ? "Shop domain" : "店铺域名"}</span>
                 <input

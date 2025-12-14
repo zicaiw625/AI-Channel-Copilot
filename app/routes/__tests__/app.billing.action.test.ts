@@ -19,40 +19,39 @@ vi.mock("../../shopify.server", () => {
 // Import after mocks so the module gets mocked dependencies
 import { action } from "../app.billing";
 
-describe("app.billing action login fallback", () => {
-  it("preserves headers and uses absolute URL (en)", async () => {
+describe("app.billing action auth fallback", () => {
+  it("redirects to /auth with shop (preserves host/embedded/locale if present)", async () => {
     const form = new FormData();
     form.set("shop", "helvetibillteststore.myshopify.com");
     const headers = new Headers({ Cookie: "sid=xyz; other=1" });
-    const req = new Request("https://example.com/app/billing?lang=en", { method: "POST", body: form, headers });
+    const req = new Request("https://example.com/app/billing?embedded=1&host=abc&locale=en", { method: "POST", body: form, headers });
 
     try {
       await action({ request: req } as any);
     } catch (resp) {
       expect(resp).toBeInstanceOf(Response);
+      const r = resp as Response;
+      expect(r.status).toBe(302);
+      const loc = r.headers.get("Location") || "";
+      const url = new URL(loc);
+      expect(url.origin).toBe("https://example.com");
+      expect(url.pathname).toBe("/auth");
+      expect(url.searchParams.get("shop")).toBe("helvetibillteststore.myshopify.com");
+      expect(url.searchParams.get("embedded")).toBe("1");
+      expect(url.searchParams.get("host")).toBe("abc");
+      expect(url.searchParams.get("locale")).toBe("en");
     }
-
-    expect(captured).not.toBeNull();
-    const url = new URL(captured!.url);
-    expect(url.href).toBe("https://example.com/auth/login?lang=en");
-    expect(captured!.method).toBe("POST");
-    expect(captured!.headers.get("cookie")).toContain("sid=xyz");
   });
 
-  it("defaults to zh when lang missing", async () => {
+  it("returns 400 when shop missing", async () => {
     captured = null;
     const form = new FormData();
     const headers = new Headers({ Cookie: "sid=abc" });
     const req = new Request("https://example.com/app/billing", { method: "POST", body: form, headers });
 
-    try {
-      await action({ request: req } as any);
-    } catch (resp) {
-      expect(resp).toBeInstanceOf(Response);
-    }
-
-    const url = new URL(captured!.url);
-    expect(url.href).toBe("https://example.com/auth/login?lang=zh");
-    expect(captured!.headers.get("cookie")).toContain("sid=abc");
+    const resp = await action({ request: req } as any);
+    expect(resp).toBeInstanceOf(Response);
+    const r = resp as Response;
+    expect(r.status).toBe(400);
   });
 });

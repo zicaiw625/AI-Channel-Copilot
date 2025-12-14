@@ -657,7 +657,10 @@ export const computeIsTestMode = async (shopDomain: string): Promise<boolean> =>
 };
 
 export const shouldSkipBillingForPath = (pathname: string, isDevShop: boolean): boolean => {
-  if (isDevShop) return true;
+  // 不再因为开发店跳过计费引导：
+  // - 开发店也需要走“选择计划/订阅确认”的引导流程
+  // - 订阅请求会通过 computeIsTestMode 自动进入 test mode
+  void isDevShop;
   const path = pathname.toLowerCase();
   if (path.includes("/webhooks/")) return true;
   if (path.includes("/public") || path.endsWith(".css") || path.endsWith(".js")) return true;

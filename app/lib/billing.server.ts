@@ -462,15 +462,15 @@ const syncSubscriptionFromShopifyInternal = async (
         const isTrialing = trialEndTime !== null && trialEndTime > Date.now();
         const trialEnd = trialEndTime ? new Date(trialEndTime) : null;
         
-        // Check if this is a new subscription that should have trial
+        // Check if this subscription should have trial
         // For dev stores with test: true subscriptions, Shopify doesn't return trialDays
         // so we need to check local state to determine if trial should be granted
         const existingState = await getBillingState(shopDomain);
-        const isNewSubscription = createdAt && (Date.now() - createdAt.getTime()) < 5 * 60 * 1000; // within 5 minutes
+        // 移除 isNewSubscription 时间窗口检查，与 webhook 处理逻辑保持一致
+        // 只要用户未曾开始试用期（lastTrialStartAt 为空）且有剩余试用天数，就授予试用期
         const shouldGrantTrial = 
           plan.trialSupported && 
-          !isTrialing && 
-          isNewSubscription &&
+          !isTrialing &&
           !existingState?.lastTrialStartAt && // no previous trial recorded
           (existingState?.usedTrialDays || 0) < plan.defaultTrialDays; // has trial days remaining
         
@@ -483,7 +483,6 @@ const syncSubscriptionFromShopifyInternal = async (
           createdAt: createdAt?.toISOString(),
           trialEnd: trialEnd?.toISOString(),
           shouldGrantTrial,
-          isNewSubscription,
         });
         
         // Update local billing state

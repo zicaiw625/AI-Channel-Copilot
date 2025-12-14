@@ -720,6 +720,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
       const isTest = await computeIsTestMode(shopDomain);
       const trialDays = await calculateRemainingTrialDays(shopDomain, planId);
+      const url = new URL(request.url);
+      const host = url.searchParams.get("host") ?? undefined;
+      const embedded = url.searchParams.get("embedded") ?? undefined;
+      const locale = url.searchParams.get("locale") ?? undefined;
+      const lang = url.searchParams.get("lang") ?? undefined;
 
       const confirmationUrl = await requestSubscription(
         admin,
@@ -727,6 +732,16 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         planId,
         isTest,
         trialDays,
+        {
+          returnUrlSearchParams: {
+            // shop is set inside requestSubscription, but keeping it here doesn't hurt
+            shop: shopDomain,
+            host,
+            embedded,
+            locale,
+            lang,
+          },
+        },
       );
 
       if (confirmationUrl) {

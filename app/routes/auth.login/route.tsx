@@ -12,15 +12,18 @@ import { requireEnv, isProduction } from "../../lib/env.server";
  * 生产环境禁止访问此页面
  * Shopify 上架要求：应用不得在安装或配置流程中要求商家手动输入 myshopify.com 或店铺域名
  */
-const rejectInProduction = () => {
-  if (isProduction()) {
-    throw new Response("Not Found", { status: 404 });
-  }
+const loginOr404InProduction = async (request: Request) => {
+  // In production, we never render the "enter shop domain" UI.
+  // But it's still safe (and necessary) to allow this endpoint to *initiate OAuth*
+  // when Shopify SDK redirects here with `shop` present.
+  const result = await login(request);
+  if (result instanceof Response) throw result;
+  // If we couldn't initiate OAuth (e.g. missing/invalid shop), return 404 to avoid an interactive page.
+  throw new Response("Not Found", { status: 404 });
 };
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  rejectInProduction();
-  const result = await login(request);
+  const result = isProduction() ? await loginOr404InProduction(request) : await login(request);
   if (result instanceof Response) throw result;
   const errors = loginErrorMessage(result);
   const url = new URL(request.url);
@@ -29,8 +32,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  rejectInProduction();
-  const result = await login(request);
+  const result = isProduction() ? await loginOr404InProduction(request) : await login(request);
   if (result instanceof Response) throw result;
   const errors = loginErrorMessage(result);
   const url = new URL(request.url);

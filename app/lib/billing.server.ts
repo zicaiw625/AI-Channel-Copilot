@@ -796,6 +796,14 @@ export const requestSubscription = async (
   planId: PlanId,
   isTest: boolean,
   trialDays: number,
+  opts?: {
+    /**
+     * Extra query params to append to the billing confirm returnUrl.
+     * This is important for embedded apps: `shop/host/embedded` helps the SDK
+     * re-initiate auth correctly after Shopify redirects back from the charge page.
+     */
+    returnUrlSearchParams?: Record<string, string | undefined | null>;
+  },
 ) => {
   const plan = getPlanConfig(planId);
   if (plan.priceUsd <= 0) {
@@ -806,7 +814,15 @@ export const requestSubscription = async (
   const amount = plan.priceUsd;
   const currencyCode = cfg.billing.currencyCode;
   const interval = cfg.billing.interval;
-  const returnUrl = new URL("/app/billing/confirm", cfg.server.appUrl).toString();
+  const returnUrlObj = new URL("/app/billing/confirm", cfg.server.appUrl);
+  // Always include shop to avoid falling back to `/auth/login` (blocked in production).
+  returnUrlObj.searchParams.set("shop", shopDomain);
+  const extra = opts?.returnUrlSearchParams || {};
+  for (const [key, value] of Object.entries(extra)) {
+    if (!value) continue;
+    returnUrlObj.searchParams.set(key, value);
+  }
+  const returnUrl = returnUrlObj.toString();
 
   const MUTATION = `#graphql
     mutation AppSubscriptionCreate($name: String!, $lineItems: [AppSubscriptionLineItemInput!]!, $returnUrl: URL!, $test: Boolean, $trialDays: Int) {

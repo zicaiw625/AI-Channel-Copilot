@@ -4,7 +4,7 @@ import { useLoaderData, useActionData, Form, useFetcher, Link } from "react-rout
 import { useUILanguage } from "../lib/useUILanguage";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate, login } from "../shopify.server";
-import { readAppFlags } from "../lib/env.server";
+import { readAppFlags, requireEnv } from "../lib/env.server";
 import { getSettings, syncShopPreferences } from "../lib/settings.server";
 import {
   detectAndPersistDevShop,
@@ -490,12 +490,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const demo = readAppFlags().demoMode;
   if (demo) return Response.json({ ok: false, message: "Demo mode" });
   
-  const originalUrl = new URL(request.url);
-  const lang = originalUrl.searchParams.get("lang") === "en" ? "en" : "zh";
-  // Read formData early so we can reuse it even if auth fails.
-  // `authenticate.admin` does not rely on the request body.
-  const originalForm = await request.formData().catch(() => new FormData());
-
   let admin: Awaited<ReturnType<typeof authenticate.admin>>["admin"] | null = null;
   let session: Awaited<ReturnType<typeof authenticate.admin>>["session"] | null = null;
   let shopDomain = "";
@@ -507,8 +501,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     shopDomain = session?.shop || "";
   } catch (authError) {
     try {
+      const originalUrl = new URL(request.url);
+      const lang = originalUrl.searchParams.get("lang") === "en" ? "en" : "zh";
       const loginUrl = new URL("/auth/login", originalUrl.origin);
       loginUrl.searchParams.set("lang", lang);
+      const originalForm = await request.formData().catch(() => new FormData());
       const forwardForm = new FormData();
       if (originalForm.has("shop")) {
         forwardForm.set("shop", String(originalForm.get("shop")));
@@ -523,7 +520,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
 
   try {
-    const formData = originalForm;
+    const formData = await request.formData();
     const intent = formData.get("intent");
 
     // 处理首次选择 Free 计划（用户还没选择任何计划时）
@@ -547,18 +544,23 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       const currentState = await getBillingState(shopDomain);
       const isUpgradeFromPaid = currentState?.billingState?.includes("ACTIVE") && currentState?.billingPlan !== "free" && currentState?.billingPlan !== "NO_PLAN";
       const trialDays = isUpgradeFromPaid ? 0 : await calculateRemainingTrialDays(shopDomain, planId);
-      const host = originalUrl.searchParams.get("host") ?? undefined;
-      const embedded = originalUrl.searchParams.get("embedded") ?? undefined;
-      const locale = originalUrl.searchParams.get("locale") ?? undefined;
-      const confirmationUrl = await requestSubscription(admin!, shopDomain, planId, isTest, trialDays, {
-        returnUrlSearchParams: {
-          shop: shopDomain,
-          host,
-          embedded,
-          locale,
-          lang,
-        },
-      });
+      // returnUrl 带上 shop/host/embedded，避免 approve 后回调缺参导致跳到 /auth/login
+      const appUrl = requireEnv("SHOPIFY_APP_URL");
+      const currentUrl = new URL(request.url);
+      const returnUrl = new URL("/app/billing/confirm", appUrl);
+      returnUrl.searchParams.set("shop", shopDomain);
+      const host = currentUrl.searchParams.get("host");
+      if (host) returnUrl.searchParams.set("host", host);
+      returnUrl.searchParams.set("embedded", currentUrl.searchParams.get("embedded") || "1");
+
+      const confirmationUrl = await requestSubscription(
+        admin!,
+        shopDomain,
+        planId,
+        isTest,
+        trialDays,
+        returnUrl.toString(),
+      );
       if (confirmationUrl) {
         const next = new URL("/app/redirect", new URL(request.url).origin);
         next.searchParams.set("to", confirmationUrl);

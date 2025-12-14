@@ -720,11 +720,16 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
       const isTest = await computeIsTestMode(shopDomain);
       const trialDays = await calculateRemainingTrialDays(shopDomain, planId);
-      const url = new URL(request.url);
-      const host = url.searchParams.get("host") ?? undefined;
-      const embedded = url.searchParams.get("embedded") ?? undefined;
-      const locale = url.searchParams.get("locale") ?? undefined;
-      const lang = url.searchParams.get("lang") ?? undefined;
+
+      // Shopify approve 后会回调到 returnUrl；如果 returnUrl 没带 shop/host，SDK 往往会跳到 /auth/login。
+      // 这里显式把 shop/host/embedded 带上，确保回调后能直接回到 embedded 应用。
+      const appUrl = requireEnv("SHOPIFY_APP_URL");
+      const currentUrl = new URL(request.url);
+      const returnUrl = new URL("/app/billing/confirm", appUrl);
+      returnUrl.searchParams.set("shop", shopDomain);
+      const host = currentUrl.searchParams.get("host");
+      if (host) returnUrl.searchParams.set("host", host);
+      returnUrl.searchParams.set("embedded", currentUrl.searchParams.get("embedded") || "1");
 
       const confirmationUrl = await requestSubscription(
         admin,
@@ -732,16 +737,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         planId,
         isTest,
         trialDays,
-        {
-          returnUrlSearchParams: {
-            // shop is set inside requestSubscription, but keeping it here doesn't hurt
-            shop: shopDomain,
-            host,
-            embedded,
-            locale,
-            lang,
-          },
-        },
+        returnUrl.toString(),
       );
 
       if (confirmationUrl) {

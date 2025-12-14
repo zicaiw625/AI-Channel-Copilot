@@ -10,12 +10,10 @@ import {
 import { resolvePlanByShopifyName, PRIMARY_BILLABLE_PLAN_ID, getPlanConfig } from "../lib/billing/plans";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const authResult = await authenticate.admin(request);
-  // In some flows (e.g. returning from the Shopify charge approval page),
-  // the Shopify SDK may return a Response (redirect/HTML) instead of throwing.
-  // We must pass it through as-is.
-  if (authResult instanceof Response) throw authResult;
-  const { admin, billing, session } = authResult;
+  const result = await authenticate.admin(request);
+  // 某些情况下（比如回调缺少 session），Shopify SDK 会直接返回一个重定向 Response
+  if (result instanceof Response) throw result;
+  const { admin, billing, session } = result;
   const shopDomain = session?.shop || "";
   const isTest = await computeIsTestMode(shopDomain);
   

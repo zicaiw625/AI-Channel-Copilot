@@ -24,24 +24,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     await detectAndPersistDevShop(admin, shopDomain);
     const isTest = await computeIsTestMode(shopDomain);
     const appUrl = requireEnv("SHOPIFY_APP_URL");
-    const url = new URL(request.url);
-    const host = url.searchParams.get("host");
-    const embedded = url.searchParams.get("embedded");
-    const locale = url.searchParams.get("locale");
-    const lang = url.searchParams.get("lang");
-
-    // IMPORTANT:
-    // Shopify billing approval redirects back to `returnUrl` in a top-level context
-    // and often without our app session cookies. If `shop` (and ideally `host/embedded`)
-    // are missing, Shopify SDK may redirect to `/auth/login` which is blocked in prod
-    // and results in a 404 after approving a charge.
+    const currentUrl = new URL(request.url);
     const returnUrl = new URL("/app/billing/confirm", appUrl);
     returnUrl.searchParams.set("shop", shopDomain);
+    const host = currentUrl.searchParams.get("host");
     if (host) returnUrl.searchParams.set("host", host);
-    if (embedded) returnUrl.searchParams.set("embedded", embedded);
-    if (locale) returnUrl.searchParams.set("locale", locale);
-    if (lang) returnUrl.searchParams.set("lang", lang);
-
+    returnUrl.searchParams.set("embedded", currentUrl.searchParams.get("embedded") || "1");
     // Use MONTHLY_PLAN directly as the plan name for billing request
     // Type assertion needed because plan names are dynamic (from env config)
     await billing.request({ 

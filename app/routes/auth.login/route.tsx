@@ -12,18 +12,20 @@ import { requireEnv, isProduction } from "../../lib/env.server";
  * 生产环境禁止访问此页面
  * Shopify 上架要求：应用不得在安装或配置流程中要求商家手动输入 myshopify.com 或店铺域名
  */
-const loginOr404InProduction = async (request: Request) => {
-  // In production, we never render the "enter shop domain" UI.
-  // But it's still safe (and necessary) to allow this endpoint to *initiate OAuth*
-  // when Shopify SDK redirects here with `shop` present.
-  const result = await login(request);
-  if (result instanceof Response) throw result;
-  // If we couldn't initiate OAuth (e.g. missing/invalid shop), return 404 to avoid an interactive page.
-  throw new Response("Not Found", { status: 404 });
+const shouldRejectInProduction = (request: Request) => {
+  if (!isProduction()) return false;
+  // 生产环境允许 Shopify SDK 触发的 OAuth 登录跳转（会携带 shop 参数）
+  // 但禁止渲染“手动输入店铺域名”的登录页（无 shop 参数时直接 404）
+  const url = new URL(request.url);
+  const shopFromQuery = url.searchParams.get("shop");
+  return !shopFromQuery;
 };
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const result = isProduction() ? await loginOr404InProduction(request) : await login(request);
+  if (shouldRejectInProduction(request)) {
+    throw new Response("Not Found", { status: 404 });
+  }
+  const result = await login(request);
   if (result instanceof Response) throw result;
   const errors = loginErrorMessage(result);
   const url = new URL(request.url);
@@ -32,7 +34,23 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const result = isProduction() ? await loginOr404InProduction(request) : await login(request);
+  // 生产环境：仅允许带 shop 的 OAuth 跳转，不允许渲染/提交手动登录表单
+  if (isProduction()) {
+    const url = new URL(request.url);
+    const qpShop = url.searchParams.get("shop");
+    let bodyShop: string | null = null;
+    try {
+      const fd = await request.clone().formData();
+      const raw = fd.get("shop");
+      if (typeof raw === "string") bodyShop = raw;
+    } catch {
+      // ignore
+    }
+    if (!qpShop && !bodyShop) {
+      throw new Response("Not Found", { status: 404 });
+    }
+  }
+  const result = await login(request);
   if (result instanceof Response) throw result;
   const errors = loginErrorMessage(result);
   const url = new URL(request.url);
@@ -49,6 +67,8 @@ export default function Auth() {
   const actionData = useActionData<typeof action>();
   const [shop, setShop] = useState("");
   const { errors, language, apiKey } = actionData || loaderData;
+  // 生产环境不会渲染该页面（loader/action 会在无 shop 时直接 404；有 shop 时会被 login() 重定向）
+  if (isProduction()) return null;
 
   return (
     <AppProvider embedded apiKey={apiKey}>

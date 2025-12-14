@@ -386,6 +386,8 @@ const syncSubscriptionFromShopifyInternal = async (
   shopDomain: string,
   maxRetries = 3,
 ): Promise<{ synced: boolean; status?: string; planId?: PlanId }> => {
+  // 增加 createdAt 字段来准确计算试用期结束时间
+  // 注意：trialDays 是订阅创建时设置的值，试用结束后不会变成 0
   const QUERY = `#graphql
     query ActiveSubscriptionsForSync {
       currentAppInstallation {
@@ -394,6 +396,7 @@ const syncSubscriptionFromShopifyInternal = async (
           name 
           status 
           trialDays 
+          createdAt
           currentPeriodEnd
         }
       }
@@ -416,6 +419,7 @@ const syncSubscriptionFromShopifyInternal = async (
                 name: string; 
                 status: string;
                 trialDays?: number | null;
+                createdAt?: string | null;
                 currentPeriodEnd?: string | null;
               }[] 
             } 
@@ -441,16 +445,24 @@ const syncSubscriptionFromShopifyInternal = async (
           return { synced: false };
         }
         
-        // Check if it's trialing
-        const trialEnd = activeSub.currentPeriodEnd ? new Date(activeSub.currentPeriodEnd) : null;
-        const isTrialing = activeSub.trialDays && activeSub.trialDays > 0 && trialEnd && trialEnd.getTime() > Date.now();
+        // 正确计算试用期：使用 createdAt + trialDays 来判断
+        // 而不是依赖 currentPeriodEnd（试用结束后会变成下一个计费周期结束日期）
+        const createdAt = activeSub.createdAt ? new Date(activeSub.createdAt) : null;
+        const trialDays = activeSub.trialDays ?? 0;
+        const trialEndTime = createdAt && trialDays > 0
+          ? createdAt.getTime() + trialDays * DAY_IN_MS
+          : null;
+        const isTrialing = trialEndTime !== null && trialEndTime > Date.now();
+        const trialEnd = trialEndTime ? new Date(trialEndTime) : null;
         
         logger.info("[billing] Syncing subscription from Shopify", { 
           shopDomain, 
           planId: plan.id,
           status: activeSub.status,
           isTrialing,
-          trialDays: activeSub.trialDays,
+          trialDays,
+          createdAt: createdAt?.toISOString(),
+          trialEnd: trialEnd?.toISOString(),
         });
         
         // Update local billing state

@@ -308,13 +308,16 @@ export const upsertBillingState = async (
     throw new Error(`Invalid shop domain: ${shopDomain?.slice(0, 50) || "(empty)"}`);
   }
   
+  // 重要：不要给 isDevShop 和 hasEverSubscribed 设置默认值 (如 ?? false)
+  // 因为调用方可能只想更新部分字段，如果设为 false 会覆盖数据库中的正确值
+  // 例如 setSubscriptionActiveState 不传递 isDevShop，如果默认为 false 会破坏开发店标记
   const payload: BillingStatePayload = {
-    isDevShop: updates.isDevShop ?? false,
+    isDevShop: updates.isDevShop,
     billingPlan: updates.billingPlan,
     billingState: updates.billingState,
     firstInstalledAt: updates.firstInstalledAt,
     usedTrialDays: updates.usedTrialDays,
-    hasEverSubscribed: updates.hasEverSubscribed ?? false,
+    hasEverSubscribed: updates.hasEverSubscribed,
     lastSubscriptionStatus: updates.lastSubscriptionStatus,
     lastTrialStartAt: updates.lastTrialStartAt || null,
     lastTrialEndAt: updates.lastTrialEndAt || null,
@@ -328,13 +331,17 @@ export const upsertBillingState = async (
     Object.entries(payload).filter(([_, value]) => value !== undefined)
   ) as BillingStatePayload;
 
+  // 创建新记录时需要提供默认值
+  // 注意：这里的默认值只用于 create 操作，update 时 cleanedPayload 会过滤掉 undefined
   const createData = {
     shopDomain, 
     platform: "shopify", 
     ...cleanedPayload,
+    isDevShop: cleanedPayload.isDevShop ?? false,
     billingPlan: cleanedPayload.billingPlan || updates.billingPlan || "NO_PLAN",
     billingState: cleanedPayload.billingState || updates.billingState || "NO_PLAN",
     usedTrialDays: cleanedPayload.usedTrialDays ?? updates.usedTrialDays ?? 0,
+    hasEverSubscribed: cleanedPayload.hasEverSubscribed ?? false,
   };
 
   try {

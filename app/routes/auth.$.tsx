@@ -5,7 +5,7 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { getSettings } from "../lib/settings.server";
 import { resolveDateRange } from "../lib/aiData";
 import { startBackfill, processBackfillQueue } from "../lib/backfill.server";
-import { BACKFILL_COOLDOWN_MINUTES, MAX_BACKFILL_DURATION_MS, MAX_BACKFILL_ORDERS } from "../lib/constants";
+import { MAX_BACKFILL_DURATION_MS, MAX_BACKFILL_ORDERS } from "../lib/constants";
 import { ensureWebhooks } from "../lib/webhooks.server";
 import { logger } from "../lib/logger.server";
 
@@ -23,11 +23,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
       const shopDomain = session.shop;
       const settings = await getSettings(shopDomain);
-      const now = new Date();
+      // 🔧 代码简化：仅首次安装时触发 backfill，后续由 scheduler 或用户手动触发
       const lastBackfillAt = settings.lastBackfillAt ? new Date(settings.lastBackfillAt) : null;
-      const withinCooldown =
-        lastBackfillAt && now.getTime() - lastBackfillAt.getTime() < BACKFILL_COOLDOWN_MINUTES * 60 * 1000;
-      if (admin && !withinCooldown && !lastBackfillAt) {
+      if (admin && !lastBackfillAt) {
         const calculationTimezone = settings.timezones[0] || "UTC";
         const range = resolveDateRange("90d", new Date(), undefined, undefined, calculationTimezone);
         const queued = await startBackfill(shopDomain, range, {

@@ -34,8 +34,9 @@ const CRON_SECRET = process.env.CRON_SECRET;
  */
 function verifyCronRequest(request: Request): boolean {
   // Vercel Cron 验证
+  // 🔒 安全修复：必须确保 CRON_SECRET 已设置才进行比对，防止 "Bearer undefined" 绕过
   const authHeader = request.headers.get("authorization");
-  if (authHeader === `Bearer ${process.env.CRON_SECRET}`) {
+  if (CRON_SECRET && authHeader === `Bearer ${CRON_SECRET}`) {
     return true;
   }
   

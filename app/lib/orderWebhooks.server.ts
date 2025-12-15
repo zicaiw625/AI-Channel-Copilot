@@ -309,7 +309,9 @@ const extractAdminClient = (unauthResult: unknown): AdminGraphqlClient | null =>
 };
 
 export const registerDefaultOrderWebhookHandlers = () => {
-  const intents = ["orders/create", "orders/updated"] as const;
+  // 🔒 安全修复：注册所有订单相关的 webhook intent，包括 orders/cancelled
+  // 确保进程重启后能处理 DB 中的历史任务
+  const intents = ["orders/create", "orders/updated", "orders/cancelled"] as const;
   intents.forEach((intent) => {
     registerWebhookHandler(intent, async (jobPayload: Record<string, unknown>) => {
       const jobOrderGid = jobPayload.orderGid as string | undefined;

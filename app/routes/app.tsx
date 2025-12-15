@@ -13,7 +13,7 @@ import { detectAndPersistDevShop, shouldSkipBillingForPath, calculateRemainingTr
 import { getEffectivePlan, FEATURES, hasFeature, type PlanTier } from "../lib/access.server";
 import { startBackfill, processBackfillQueue } from "../lib/backfill.server";
 import { resolveDateRange } from "../lib/aiData";
-import { BACKFILL_COOLDOWN_MINUTES, MAX_BACKFILL_DURATION_MS, MAX_BACKFILL_ORDERS } from "../lib/constants";
+import { MAX_BACKFILL_DURATION_MS, MAX_BACKFILL_ORDERS } from "../lib/constants";
 import { ensureWebhooks } from "../lib/webhooks.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -58,11 +58,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     }
     
     // 首次安装时自动触发 backfill（检查 lastBackfillAt 为空）
-    const now = new Date();
+    // 🔧 代码简化：仅首次安装时触发，后续由 scheduler 或用户手动触发
     const lastBackfillAt = settings.lastBackfillAt ? new Date(settings.lastBackfillAt) : null;
-    const withinCooldown = lastBackfillAt && now.getTime() - lastBackfillAt.getTime() < BACKFILL_COOLDOWN_MINUTES * 60 * 1000;
     
-    if (!withinCooldown && !lastBackfillAt) {
+    if (!lastBackfillAt) {
       logger.info("[app] First install detected, triggering initial backfill", { shopDomain });
       const calculationTimezone = settings.timezones[0] || "UTC";
       const range = resolveDateRange("90d", new Date(), undefined, undefined, calculationTimezone);

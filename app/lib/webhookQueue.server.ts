@@ -448,6 +448,57 @@ export const getDeadLetterJobs = async (limit = 50) =>
   prisma.webhookJob.findMany({ where: { status: "failed" }, orderBy: { finishedAt: "desc" }, take: limit });
 
 /**
+ * 🆕 队列唤醒扫描器
+ * 扫描 DB 中所有 due 的任务，触发各店铺的队列处理
+ * 用于解决进程重启后 setTimeout 丢失导致的任务卡死问题
+ * 
+ * 多实例部署时，依赖现有的 advisory lock 机制避免重复消费
+ */
+export const wakeupDueWebhookJobs = async (): Promise<{ shopsWoken: number }> => {
+  if (isShuttingDown) {
+    return { shopsWoken: 0 };
+  }
+
+  try {
+    const now = new Date();
+    
+    // 查找所有有 due 任务的店铺（distinct shopDomain）
+    const shopsWithDueJobs = await prisma.webhookJob.groupBy({
+      by: ["shopDomain"],
+      where: {
+        status: "queued",
+        OR: [
+          { nextRunAt: null },
+          { nextRunAt: { lte: now } },
+        ],
+      },
+      _count: { _all: true },
+    });
+
+    if (shopsWithDueJobs.length === 0) {
+      return { shopsWoken: 0 };
+    }
+
+    logger.info("[webhook] Wakeup scanner found due jobs", {
+      shopsCount: shopsWithDueJobs.length,
+      totalJobs: shopsWithDueJobs.reduce((sum, s) => sum + s._count._all, 0),
+    });
+
+    // 触发各店铺的队列处理（不等待完成）
+    for (const shop of shopsWithDueJobs) {
+      void processWebhookQueueForShop(shop.shopDomain);
+    }
+
+    return { shopsWoken: shopsWithDueJobs.length };
+  } catch (error) {
+    logger.error("[webhook] Wakeup scanner failed", {
+      error: sanitizeErrorMessage(error),
+    });
+    return { shopsWoken: 0 };
+  }
+};
+
+/**
  * 🆕 早期去重检查（Shopify 最佳实践）
  * 在入队前检查 X-Shopify-Webhook-Id 是否已处理
  * 这比依赖数据库唯一约束更高效，避免不必要的入队和处理

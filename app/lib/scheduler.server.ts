@@ -8,10 +8,12 @@ import { unauthenticated } from "../shopify.server";
 import { logger } from "./logger.server";
 import { readAppFlags } from "./env.server";
 import { withAdvisoryLock } from "./locks.server";
+import { wakeupDueWebhookJobs } from "./webhookQueue.server";
 
 // 锁 ID 常量（需要在整个应用中唯一）
 const SCHEDULER_LOCK_RETENTION = 2001;
 const SCHEDULER_LOCK_BACKFILL = 2002;
+const SCHEDULER_LOCK_WEBHOOK_WAKEUP = 2003;
 
 let initialized = false;
 
@@ -36,6 +38,28 @@ const runRetentionSweep = async () => {
   
   if (!lockInfo.acquired) {
     logger.debug("[scheduler] Retention sweep skipped (another instance is running)");
+  }
+};
+
+/**
+ * 🆕 Webhook 队列唤醒任务
+ * 扫描并唤醒 DB 中 due 的任务，解决进程重启后 setTimeout 丢失的问题
+ * 使用分布式锁确保多实例部署时只有一个实例执行
+ */
+const runWebhookWakeup = async () => {
+  const { lockInfo } = await withAdvisoryLock(SCHEDULER_LOCK_WEBHOOK_WAKEUP, async () => {
+    try {
+      const result = await wakeupDueWebhookJobs();
+      if (result.shopsWoken > 0) {
+        logger.info("[scheduler] Webhook wakeup completed", { shopsWoken: result.shopsWoken });
+      }
+    } catch (error) {
+      logger.warn("[scheduler] Webhook wakeup failed", undefined, { message: (error as Error).message });
+    }
+  });
+
+  if (!lockInfo.acquired) {
+    logger.debug("[scheduler] Webhook wakeup skipped (another instance is running)");
   }
 };
 
@@ -108,6 +132,17 @@ const runBackfillSweep = async () => {
 export const initScheduler = () => {
   if (initialized) return;
   initialized = true;
+  
+  // 🆕 Webhook 队列唤醒扫描器：每 30 秒检查一次
+  // 这个扫描器不依赖 enableRetentionSweep，始终启用
+  // 解决进程重启后 setTimeout 丢失导致的任务卡死问题
+  setTimeout(() => {
+    void runWebhookWakeup();
+  }, 5000); // 启动后 5 秒执行第一次
+  setInterval(() => {
+    void runWebhookWakeup();
+  }, 30 * 1000); // 每 30 秒执行一次
+  
   if (!readAppFlags().enableRetentionSweep) {
     return;
   }

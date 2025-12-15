@@ -5,6 +5,7 @@
  * 低样本量时弱化 AI 相关指标的展示，提示用户数据不足
  */
 
+import { Link } from "react-router";
 import { t } from "../../lib/i18n";
 import type { DashboardOverview, FormatHelpers, Lang } from "./types";
 import styles from "../../styles/app.dashboard.module.css";
@@ -325,8 +326,8 @@ function DetectionCoverageCard({
         
         {/* 行动按钮 */}
         {isLowCoverage && (
-          <a
-            href="/app/utm-wizard"
+          <Link
+            to="/app/utm-wizard"
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -342,7 +343,7 @@ function DetectionCoverageCard({
             }}
           >
             🔗 {isEnglish ? "Setup UTM Links" : "设置 UTM 链接"}
-          </a>
+          </Link>
         )}
       </div>
     </div>

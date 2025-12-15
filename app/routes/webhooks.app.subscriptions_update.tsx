@@ -110,7 +110,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       const existingState = await getBillingState(shopDomain);
       
       // 详细记录 existingState 用于调试
-      logger.info("[billing-webhook] Checking shouldGrantTrial", {
+      logger.info("[billing-webhook] Checking trial state", {
         shopDomain,
         hasState: !!existingState,
         billingPlan: existingState?.billingPlan,
@@ -121,6 +121,22 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         lastTrialEndAt: existingState?.lastTrialEndAt?.toISOString() ?? null,
         "plan.defaultTrialDays": plan.defaultTrialDays,
       });
+      
+      // 关键修复：如果当前已经处于 TRIALING 状态且试用期未过期，不要覆盖为 ACTIVE
+      const isCurrentlyTrialing = existingState?.billingState?.includes("TRIALING") &&
+        existingState?.lastTrialEndAt && 
+        existingState.lastTrialEndAt.getTime() > Date.now();
+      
+      if (isCurrentlyTrialing) {
+        logger.info("[billing-webhook] Skipping ACTIVE update - already in valid TRIALING state", {
+          shopDomain,
+          planId: plan.id,
+          currentState: existingState?.billingState,
+          trialEndAt: existingState?.lastTrialEndAt?.toISOString(),
+        });
+        // 不做任何更新，保持当前的 TRIALING 状态
+        return new Response();
+      }
       
       const shouldGrantTrial = 
         !existingState?.lastTrialStartAt && // no previous trial recorded

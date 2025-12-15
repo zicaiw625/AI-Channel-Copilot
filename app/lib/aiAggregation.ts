@@ -259,8 +259,8 @@ const determineBucket = (range: DateRange): TrendBucket => {
 const formatTrendLabel = (date: Date, bucket: TrendBucket, timeZone?: string): string => {
   if (bucket === "day") return formatDateOnly(date, timeZone);
   if (bucket === "week") {
-    const start = getWeekStart(date, timeZone);
-    return `${formatDateOnly(start, timeZone)} · 周`;
+    const weekStart = getWeekStart(date, timeZone);
+    return `${formatDateOnly(weekStart, timeZone)} · 周`;
   }
   return new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit" }).format(
     date
@@ -293,6 +293,7 @@ export const buildTrend = (
   ordersInRange.forEach((order) => {
     const orderDate = new Date(order.createdAt);
     let bucketStart: Date;
+    
     if (bucket === "week") {
       bucketStart = getWeekStart(orderDate, timeZone);
     } else if (bucket === "month") {

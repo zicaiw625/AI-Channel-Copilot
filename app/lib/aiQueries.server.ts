@@ -206,13 +206,13 @@ async function buildDashboardFromDb(
          key = formatDateOnly(date, timezone);
          sortKey = startOfDay(date, timezone).getTime();
        } else if (bucket === "week") {
-         const start = getWeekStart(date, timezone);
-         key = `${formatDateOnly(start, timezone)} · 周`;
-         sortKey = start.getTime();
+         const weekStart = getWeekStart(date, timezone);
+         key = `${formatDateOnly(weekStart, timezone)} · 周`;
+         sortKey = weekStart.getTime();
        } else {
          key = new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit" }).format(date);
-         const start = getMonthStart(date, timezone);
-         sortKey = start.getTime();
+         const monthStart = getMonthStart(date, timezone);
+         sortKey = monthStart.getTime();
        }
 
        if (!bucketMap.has(key)) {

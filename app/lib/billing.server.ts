@@ -721,22 +721,20 @@ export const calculateRemainingTrialDays = async (
     return 0;
   }
 
-  if (state.hasEverSubscribed && toPlanId(state.billingPlan) === plan.id) {
-    return 0;
-  }
-
   const remainingBudget = Math.max(plan.defaultTrialDays - (state.usedTrialDays || 0), 0);
   
-  // If firstInstalledAt is missing but we have a state record, do NOT reset to full trial.
-  // If usedTrialDays is 0 and hasEverSubscribed is true, user has exhausted trial.
-  // Only return remaining budget if user hasn't completed a subscription before.
-  if (!state.firstInstalledAt) {
-    // If user has ever subscribed to this plan, no more trial
-    if (state.hasEverSubscribed && toPlanId(state.billingPlan) === plan.id) {
+  // 如果曾经订阅过同一计划，检查是否还有剩余试用天数
+  // 允许用户在卸载后重新安装时继续使用剩余的试用期
+  if (state.hasEverSubscribed && toPlanId(state.billingPlan) === plan.id) {
+    // 只有当试用期完全用完时才返回 0
+    if (remainingBudget <= 0) {
       return 0;
     }
+    // 否则返回剩余的试用天数
     return remainingBudget;
   }
+  
+  // 返回剩余试用天数
   return remainingBudget;
 };
 

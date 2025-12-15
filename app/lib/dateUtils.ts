@@ -1,10 +1,13 @@
 /**
  * 日期时间处理工具函数
+ * 提取自多个文件中的重复代码
  * 
- * 【重要】时区处理说明：
- * - startOfDay/endOfDay 返回的是"某时区当天 00:00:00 / 23:59:59.999 对应的 UTC 时间点"
- * - 例如：Asia/Shanghai 的 2024-01-15 00:00:00 对应 UTC 2024-01-14T16:00:00Z
- * - 这确保了按时间范围过滤订单时，日期边界与店铺时区一致
+ * 【重要修复】2024-12 修复时区边界计算问题
+ * 原实现把"目标时区的本地时间"误当作"UTC时间"，导致：
+ * - UTC-X 时区（如美洲）：endOfDay 提前结束，漏掉当天晚上的订单
+ * - UTC+X 时区（如亚洲）：startOfDay 延迟开始，漏掉当天凌晨的订单
+ * 
+ * 新实现正确计算"某时区本地时间 00:00:00 / 23:59:59" 对应的真实 UTC 时间点
  */
 
 type DateParts = {
@@ -19,13 +22,9 @@ type DateParts = {
 // DateTimeFormat 缓存，避免重复创建
 const dtfCache = new Map<string, Intl.DateTimeFormat>();
 
-/**
- * 获取或创建指定时区的 DateTimeFormat
- */
 const getDtf = (timeZone: string): Intl.DateTimeFormat => {
   const cached = dtfCache.get(timeZone);
   if (cached) return cached;
-  
   const dtf = new Intl.DateTimeFormat("en-US", {
     timeZone,
     year: "numeric",
@@ -41,11 +40,12 @@ const getDtf = (timeZone: string): Intl.DateTimeFormat => {
 };
 
 /**
- * 从 Date 对象中提取指定时区的日期部分
+ * 获取指定时区下日期的各个部分（年月日时分秒）
  */
 const getParts = (date: Date, timeZone: string): DateParts => {
   const parts = getDtf(timeZone).formatToParts(date);
-  const pick = (t: string) => Number(parts.find((p) => p.type === t)?.value ?? 0);
+  const pick = (t: Intl.DateTimeFormatPartTypes): number =>
+    Number(parts.find((p) => p.type === t)?.value ?? 0);
   return {
     year: pick("year"),
     month: pick("month"),
@@ -57,74 +57,77 @@ const getParts = (date: Date, timeZone: string): DateParts => {
 };
 
 /**
- * 计算指定时区相对于 UTC 的偏移量（毫秒）
+ * 计算时区偏移量（毫秒）
  * offsetMs = (wall-clock interpreted as UTC) - (real UTC millis)
+ * 注意：只计算到秒级精度，避免毫秒导致的舍入误差
  */
 const getTimeZoneOffsetMs = (timeZone: string, date: Date): number => {
   const p = getParts(date, timeZone);
   const asUTC = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second);
-  return asUTC - date.getTime();
+  // 截断 date 的毫秒部分，确保比较精度一致
+  const dateMs = Math.floor(date.getTime() / 1000) * 1000;
+  return asUTC - dateMs;
 };
 
 /**
  * 将"某时区的本地时间"转换成真正的 UTC Date
- * 使用两次校正来处理 DST 边界情况
+ * 使用两次校正处理 DST 边界
  */
 const zonedTimeToUtc = (
-  local: { year: number; month: number; day: number; hour: number; minute: number; second: number; ms?: number },
+  local: {
+    year: number;
+    month: number;
+    day: number;
+    hour: number;
+    minute: number;
+    second: number;
+    ms?: number;
+  },
   timeZone: string,
 ): Date => {
-  const ms = local.ms ?? 0;
-  
-  // 首先假设这个本地时间就是 UTC，创建一个初始猜测（不含毫秒，避免偏移计算误差）
-  const utcGuess = new Date(Date.UTC(
-    local.year,
-    local.month - 1,
-    local.day,
-    local.hour,
-    local.minute,
-    local.second,
-    0, // 先不含毫秒
-  ));
+  // 第一次猜测：把本地时间当作 UTC 时间
+  const utcGuess = new Date(
+    Date.UTC(
+      local.year,
+      local.month - 1,
+      local.day,
+      local.hour,
+      local.minute,
+      local.second,
+      local.ms ?? 0,
+    ),
+  );
 
-  // 第一次校正：减去时区偏移
-  const offset = getTimeZoneOffsetMs(timeZone, utcGuess);
+  // 第一次校正
+  let offset = getTimeZoneOffsetMs(timeZone, utcGuess);
   let utc = new Date(utcGuess.getTime() - offset);
-  
-  // 第二次校正：处理 DST 边界（夏令时切换时偏移量可能变化）
+
+  // 第二次校正（处理 DST 边界情况）
   const offset2 = getTimeZoneOffsetMs(timeZone, utc);
   if (offset2 !== offset) {
     utc = new Date(utcGuess.getTime() - offset2);
   }
-  
-  // 最后加上毫秒
-  if (ms > 0) {
-    utc = new Date(utc.getTime() + ms);
-  }
-  
+
   return utc;
 };
 
 /**
  * 将日期转换为指定时区的日期对象
- * 
- * 注意：此函数返回的 Date 对象的 UTC 值代表"该时区本地时间的数值"
- * 主要用于显示和格式化，不应用于时间范围计算
- * 
- * @deprecated 建议直接使用 getParts 获取日期部分，或使用 startOfDay/endOfDay 进行范围计算
+ * 注意：这个函数返回的 Date 对象的 UTC 值代表的是目标时区的"墙钟时间"
+ * 主要用于格式化显示，不应用于时间范围计算
  */
 export const toZonedDate = (date: Date, timeZone?: string): Date => {
   if (!timeZone) return new Date(date);
-  
+
   const p = getParts(date, timeZone);
-  return new Date(Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second));
+  return new Date(
+    Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second),
+  );
 };
 
 /**
  * 获取日期的开始时间（00:00:00.000）
- * 
- * 【关键修复】返回的是"指定时区当天 00:00:00 对应的真实 UTC 时间点"
- * 例如：Asia/Shanghai 的 2024-01-15 00:00:00 → UTC 2024-01-14T16:00:00Z
+ * 返回的是该时区当天 00:00:00 对应的真实 UTC 时间点
  */
 export const startOfDay = (date: Date, timeZone?: string): Date => {
   if (!timeZone) {
@@ -132,7 +135,6 @@ export const startOfDay = (date: Date, timeZone?: string): Date => {
     d.setHours(0, 0, 0, 0);
     return d;
   }
-  
   const p = getParts(date, timeZone);
   return zonedTimeToUtc(
     { year: p.year, month: p.month, day: p.day, hour: 0, minute: 0, second: 0, ms: 0 },
@@ -142,9 +144,7 @@ export const startOfDay = (date: Date, timeZone?: string): Date => {
 
 /**
  * 获取日期的结束时间（23:59:59.999）
- * 
- * 【关键修复】返回的是"指定时区当天 23:59:59.999 对应的真实 UTC 时间点"
- * 例如：Asia/Shanghai 的 2024-01-15 23:59:59.999 → UTC 2024-01-15T15:59:59.999Z
+ * 返回的是该时区当天 23:59:59.999 对应的真实 UTC 时间点
  */
 export const endOfDay = (date: Date, timeZone?: string): Date => {
   if (!timeZone) {
@@ -152,7 +152,6 @@ export const endOfDay = (date: Date, timeZone?: string): Date => {
     d.setHours(23, 59, 59, 999);
     return d;
   }
-  
   const p = getParts(date, timeZone);
   return zonedTimeToUtc(
     { year: p.year, month: p.month, day: p.day, hour: 23, minute: 59, second: 59, ms: 999 },
@@ -197,57 +196,45 @@ export const daysBetween = (start: Date, end: Date): number => {
 
 /**
  * 获取周一日期（用于周趋势分析）
- * 
- * 【修复】基于正确的时区计算周一
  */
 export const getWeekStart = (date: Date, timeZone?: string): Date => {
-  if (!timeZone) {
-    const d = new Date(date);
-    d.setHours(0, 0, 0, 0);
-    const day = d.getDay();
-    const diff = (day + 6) % 7;
-    d.setDate(d.getDate() - diff);
-    return d;
+  const start = startOfDay(date, timeZone);
+  // 获取该时区下的星期几
+  const p = timeZone ? getParts(start, timeZone) : null;
+  const dayOfWeek = p
+    ? new Date(Date.UTC(p.year, p.month - 1, p.day)).getUTCDay()
+    : start.getDay();
+  const diff = (dayOfWeek + 6) % 7;
+  // 回退到周一
+  if (timeZone) {
+    return zonedTimeToUtc(
+      {
+        year: p!.year,
+        month: p!.month,
+        day: p!.day - diff,
+        hour: 0,
+        minute: 0,
+        second: 0,
+        ms: 0,
+      },
+      timeZone,
+    );
+  } else {
+    start.setDate(start.getDate() - diff);
+    return start;
   }
-  
-  const p = getParts(date, timeZone);
-  // 计算该时区本地日期对应的星期几（0=周日, 1=周一, ...）
-  const localDate = new Date(Date.UTC(p.year, p.month - 1, p.day, 12, 0, 0));
-  const dayOfWeek = localDate.getUTCDay();
-  const diff = (dayOfWeek + 6) % 7; // 转换为周一=0
-  
-  // 计算周一的日期
-  const mondayDate = new Date(localDate);
-  mondayDate.setUTCDate(mondayDate.getUTCDate() - diff);
-  
-  // 返回周一 00:00:00 对应的 UTC 时间
-  return zonedTimeToUtc(
-    {
-      year: mondayDate.getUTCFullYear(),
-      month: mondayDate.getUTCMonth() + 1,
-      day: mondayDate.getUTCDate(),
-      hour: 0,
-      minute: 0,
-      second: 0,
-      ms: 0,
-    },
-    timeZone,
-  );
 };
 
 /**
  * 获取月初日期（用于月趋势分析）
- * 
- * 【修复】基于正确的时区计算月初
  */
 export const getMonthStart = (date: Date, timeZone?: string): Date => {
   if (!timeZone) {
-    const d = new Date(date);
-    d.setHours(0, 0, 0, 0);
-    d.setDate(1);
-    return d;
+    const start = new Date(date);
+    start.setHours(0, 0, 0, 0);
+    start.setDate(1);
+    return start;
   }
-  
   const p = getParts(date, timeZone);
   return zonedTimeToUtc(
     { year: p.year, month: p.month, day: 1, hour: 0, minute: 0, second: 0, ms: 0 },

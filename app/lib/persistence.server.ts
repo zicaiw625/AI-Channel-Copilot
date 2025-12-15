@@ -197,20 +197,23 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
               update: orderData,
             });
 
-            // 处理订单产品
+            // 🔧 修复：使用 lineItemId 作为唯一标识，正确处理同一产品的多个 variant
             const newLines = order.products || [];
             const existingLines = await tx.orderProduct.findMany({ where: { orderId: order.id } });
-            const existingByPid = new Map(existingLines.map((p) => [p.productId, p]));
-            const nextByPid = new Map(newLines.map((l) => [l.id, l]));
+            // 🔧 使用 lineItemId 作为 Map key，而不是 productId
+            const existingByLineItemId = new Map(existingLines.map((p) => [p.lineItemId, p]));
+            const nextByLineItemId = new Map(newLines.map((l) => [l.lineItemId, l]));
 
             // 收集批量操作
             const toCreate: Prisma.OrderProductCreateManyInput[] = [];
             const toDeleteIds: number[] = [];
 
             for (const line of newLines) {
-              const prev = existingByPid.get(line.id);
+              // 🔧 使用 lineItemId 查找现有记录
+              const prev = existingByLineItemId.get(line.lineItemId);
               if (prev) {
                 const changed =
+                  prev.productId !== line.id ||  // productId 也可能变化（产品被替换）
                   prev.title !== line.title ||
                   prev.handle !== (line.handle || null) ||
                   prev.url !== (line.url || null) ||
@@ -221,6 +224,7 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
                   await tx.orderProduct.update({
                     where: { id: prev.id },
                     data: {
+                      productId: line.id,  // 更新 productId（以防产品被替换）
                       title: line.title,
                       handle: line.handle || null,
                       url: line.url || null,
@@ -234,6 +238,7 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
                 toCreate.push({
                   orderId: order.id,
                   productId: line.id,
+                  lineItemId: line.lineItemId,  // 🔧 新增：存储 lineItemId
                   title: line.title,
                   handle: line.handle || null,
                   url: line.url || null,
@@ -244,18 +249,18 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
               }
             }
 
-            // 收集要删除的产品 ID
+            // 🔧 使用 lineItemId 判断哪些行需要删除
             for (const prev of existingLines) {
-              if (!nextByPid.has(prev.productId)) {
+              if (!nextByLineItemId.has(prev.lineItemId)) {
                 toDeleteIds.push(prev.id);
               }
             }
 
-            // 批量创建新产品
+            // 批量创建新产品（唯一约束现在基于 orderId + lineItemId）
             if (toCreate.length > 0) {
               await tx.orderProduct.createMany({
                 data: toCreate,
-                skipDuplicates: true,
+                skipDuplicates: true,  // 现在有唯一约束，skipDuplicates 生效
               });
             }
 

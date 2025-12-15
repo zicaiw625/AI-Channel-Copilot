@@ -28,27 +28,32 @@ const CRON_SECRET = process.env.CRON_SECRET;
 /**
  * 验证 cron 请求
  * 支持多种验证方式:
- * 1. Vercel Cron 的 Authorization header
- * 2. 自定义 CRON_SECRET
+ * 1. Vercel Cron 的 Authorization header（推荐，适用于所有环境）
+ * 2. 🔧 URL 参数 secret（仅限开发环境，生产环境禁用以防泄漏）
  * 3. 本地开发模式 (无密钥时跳过验证)
  */
 function verifyCronRequest(request: Request): boolean {
-  // Vercel Cron 验证
+  const isProduction = process.env.NODE_ENV === "production";
+  
+  // Vercel Cron 验证 - Authorization header（推荐方式）
   // 🔒 安全修复：必须确保 CRON_SECRET 已设置才进行比对，防止 "Bearer undefined" 绕过
   const authHeader = request.headers.get("authorization");
   if (CRON_SECRET && authHeader === `Bearer ${CRON_SECRET}`) {
     return true;
   }
   
-  // 自定义密钥验证 (URL 参数)
-  const url = new URL(request.url);
-  const secret = url.searchParams.get("secret");
-  if (CRON_SECRET && secret === CRON_SECRET) {
-    return true;
+  // 🔧 安全改进：URL 参数密钥仅限开发环境使用
+  // 生产环境禁用此方式，防止密钥通过 CDN 日志/监控系统泄漏
+  if (!isProduction) {
+    const url = new URL(request.url);
+    const secret = url.searchParams.get("secret");
+    if (CRON_SECRET && secret === CRON_SECRET) {
+      return true;
+    }
   }
   
   // 本地开发模式 (未设置 CRON_SECRET 时允许访问)
-  if (!CRON_SECRET && process.env.NODE_ENV === "development") {
+  if (!CRON_SECRET && !isProduction) {
     return true;
   }
   

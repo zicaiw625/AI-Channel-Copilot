@@ -67,9 +67,11 @@ export interface CustomerState {
 
 /**
  * 将数据库 OrderProduct 映射到应用层 OrderLine
+ * 🔧 修复：包含 lineItemId 以支持同一产品的多个 variant
  */
 export const mapProductToOrderLine = (product: OrderProduct): OrderLine => ({
   id: product.productId,
+  lineItemId: product.lineItemId,  // 🔧 新增：行项目唯一标识
   title: product.title,
   handle: product.handle || "",
   url: product.url || "",

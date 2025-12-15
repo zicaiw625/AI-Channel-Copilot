@@ -107,7 +107,8 @@ export type DateRange = {
  * 订单产品行
  */
 export type OrderLine = {
-  id: string;
+  id: string;           // productId - 用于产品级聚合
+  lineItemId: string;   // 🔧 新增：Shopify 行项目 ID，唯一标识订单中的每一行
   title: string;
   handle: string;
   url: string;

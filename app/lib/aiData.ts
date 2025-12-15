@@ -531,20 +531,23 @@ export const mapShopifyOrderToRecord = (
       const handle = product?.handle || "";
       const url = product?.onlineStoreUrl || "";
 
-      // 优先使用产品 ID，其次是 legacyResourceId，最后才使用行项目 ID
-      // 注意：使用行项目 ID 作为回退可能导致产品聚合不准确
+      // 🔧 修复：使用 lineItemId 唯一标识每一行，productId 仅用于产品级聚合
+      // 这样可以正确处理同一订单中同一产品的多个 variant
+      const lineItemId = node.id;  // Shopify LineItem GID，每行唯一
+
+      // productId 用于产品级聚合（如 Top Products 统计）
       let productId = product?.id;
       if (!productId && product?.legacyResourceId) {
         productId = `gid://shopify/Product/${product.legacyResourceId}`;
       }
       // 如果仍然没有产品 ID，说明这是一个自定义行项目或已删除的产品
-      // 使用行项目 ID 但添加前缀以区分
       if (!productId) {
-        productId = `lineitem:${node.id}`;
+        productId = `custom:${node.id}`;
       }
 
       return {
         id: productId,
+        lineItemId,  // 🔧 新增：行项目级唯一标识
         title: product?.title || node.name,
         handle,
         url,

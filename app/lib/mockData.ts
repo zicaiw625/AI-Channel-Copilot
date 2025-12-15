@@ -7,6 +7,9 @@ const DEMO_NOW = Date.now();
 /** 计算 N 天前的 ISO 日期字符串（用于 mock 数据） */
 const daysAgoISO = (days: number): string => new Date(DEMO_NOW - days * 86_400_000).toISOString();
 
+// 🔧 辅助函数：为 mock 产品生成 lineItemId
+const mockLineItemId = (orderId: string, idx: number) => `gid://shopify/LineItem/${orderId}-${idx}`;
+
 const seedOrders: (Omit<OrderRecord, "signals"> & { signals?: string[] })[] = [
   {
     id: "4310",
@@ -26,6 +29,7 @@ const seedOrders: (Omit<OrderRecord, "signals"> & { signals?: string[] })[] = [
     products: [
       {
         id: "p-kit",
+        lineItemId: mockLineItemId("4310", 0),
         title: "Starter Discovery Kit",
         handle: "starter-kit",
         url: `${DEMO_STORE_URL}/products/starter-kit`,
@@ -35,6 +39,7 @@ const seedOrders: (Omit<OrderRecord, "signals"> & { signals?: string[] })[] = [
       },
       {
         id: "p-vitc",
+        lineItemId: mockLineItemId("4310", 1),
         title: "Radiance Vitamin C Drops",
         handle: "vitamin-c-drops",
         url: `${DEMO_STORE_URL}/products/vitamin-c-drops`,
@@ -629,5 +634,10 @@ const seedOrders: (Omit<OrderRecord, "signals"> & { signals?: string[] })[] = [
 export const mockOrders: OrderRecord[] = seedOrders.map((order) => ({
   ...order,
   signals: order.signals ?? [],
+  // 🔧 自动为缺少 lineItemId 的产品生成唯一标识
+  products: order.products.map((p, idx) => ({
+    ...p,
+    lineItemId: p.lineItemId || mockLineItemId(order.id, idx),
+  })),
 }));
 

@@ -303,12 +303,13 @@ export class OrdersRepository {
             // 【修复一致性】产品处理：无论是否有产品都先删除旧的
             await tx.orderProduct.deleteMany({ where: { orderId: order.id } });
             
-            // 如果有新产品则创建
+            // 如果有新产品则创建（🔧 包含 lineItemId）
             if (order.products && order.products.length > 0) {
               await tx.orderProduct.createMany({
                 data: order.products.map((p) => ({
                   orderId: order.id,
                   productId: p.id,
+                  lineItemId: p.lineItemId,  // 🔧 新增：行项目唯一标识
                   title: p.title,
                   handle: p.handle,
                   url: p.url,
@@ -316,6 +317,7 @@ export class OrdersRepository {
                   currency: p.currency,
                   quantity: p.quantity,
                 })),
+                skipDuplicates: true,  // 现在有唯一约束，skipDuplicates 生效
               });
             }
             
@@ -433,12 +435,13 @@ export class OrdersRepository {
           where: { orderId: order.id },
         });
 
-        // 如果有新产品则创建
+        // 如果有新产品则创建（🔧 包含 lineItemId）
         if (order.products && order.products.length > 0) {
           await tx.orderProduct.createMany({
             data: order.products.map((p) => ({
               orderId: order.id,
               productId: p.id,
+              lineItemId: p.lineItemId,  // 🔧 新增：行项目唯一标识
               title: p.title,
               handle: p.handle,
               url: p.url,
@@ -446,6 +449,7 @@ export class OrdersRepository {
               currency: p.currency,
               quantity: p.quantity,
             })),
+            skipDuplicates: true,  // 现在有唯一约束，skipDuplicates 生效
           });
         }
       });

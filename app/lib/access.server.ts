@@ -1,6 +1,7 @@
 import { getBillingState, setSubscriptionExpiredState } from "./billing.server";
 import { logger } from "./logger.server";
 import { withAdvisoryLock } from "./locks.server";
+import { isDemoMode } from "./runtime.server";
 
 export type PlanTier = "free" | "pro" | "growth" | "none";
 
@@ -116,6 +117,12 @@ export async function getEffectivePlan(shopDomain: string): Promise<PlanTier> {
 }
 
 export async function hasFeature(shopDomain: string, feature: string): Promise<boolean> {
+  // 🔧 Demo 模式下允许所有功能（用于演示/测试）
+  if (isDemoMode()) {
+    logger.debug("[access] Demo mode: granting all features", { feature });
+    return true;
+  }
+  
   const plan = await getEffectivePlan(shopDomain);
   
   switch (feature) {
@@ -136,6 +143,12 @@ export async function hasFeature(shopDomain: string, feature: string): Promise<b
 }
 
 export async function requireFeature(shopDomain: string, feature: string) {
+  // 🔧 Demo 模式下跳过 feature gate 检查
+  if (isDemoMode()) {
+    logger.debug("[access] Demo mode: bypassing feature gate", { feature });
+    return;
+  }
+  
   const allowed = await hasFeature(shopDomain, feature);
   if (!allowed) {
     throw new Response("Upgrade required", { status: 403, statusText: "Forbidden" });

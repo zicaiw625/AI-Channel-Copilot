@@ -25,35 +25,99 @@ const API_SECURITY_HEADERS: Record<string, string> = {
 };
 
 /**
- * 生成额外的 CSP 指令（不包含 frame-ancestors）
+ * 🔧 CSP 指令解析器：将 CSP 字符串解析为 Map
+ */
+const parseCSP = (csp: string): Map<string, string> => {
+  const directives = new Map<string, string>();
+  // 按分号分割，处理每个指令
+  for (const part of csp.split(";")) {
+    const trimmed = part.trim();
+    if (!trimmed) continue;
+    // 第一个空格分割指令名和值
+    const spaceIdx = trimmed.indexOf(" ");
+    if (spaceIdx === -1) {
+      directives.set(trimmed.toLowerCase(), "");
+    } else {
+      const name = trimmed.slice(0, spaceIdx).toLowerCase();
+      const value = trimmed.slice(spaceIdx + 1).trim();
+      directives.set(name, value);
+    }
+  }
+  return directives;
+};
+
+/**
+ * 🔧 合并两个 CSP Map，优先保留 Shopify 的关键指令
+ */
+const mergeCSPDirectives = (
+  shopifyCSP: Map<string, string>,
+  appCSP: Map<string, string>
+): string => {
+  const merged = new Map<string, string>();
+  
+  // 先应用 app 的默认指令
+  for (const [name, value] of appCSP) {
+    merged.set(name, value);
+  }
+  
+  // 🔧 保留 Shopify SDK 设置的关键指令（frame-ancestors 是必须的）
+  // 同时合并 script-src 中的 nonce（如果存在）
+  const preserveDirectives = ["frame-ancestors"];
+  const mergeDirectives = ["script-src", "style-src", "connect-src"];
+  
+  for (const [name, value] of shopifyCSP) {
+    if (preserveDirectives.includes(name)) {
+      // 完全保留 Shopify 的值
+      merged.set(name, value);
+    } else if (mergeDirectives.includes(name)) {
+      // 合并指令：提取 Shopify 的 nonce 并添加到 app 的指令中
+      const appValue = merged.get(name) || "";
+      const nonceMatch = value.match(/'nonce-[^']+'/g);
+      if (nonceMatch && !appValue.includes("nonce-")) {
+        // 将 nonce 添加到现有值中
+        merged.set(name, `${appValue} ${nonceMatch.join(" ")}`.trim());
+      }
+    }
+    // 其他指令使用 app 的默认值
+  }
+  
+  // 构建最终 CSP 字符串
+  return Array.from(merged.entries())
+    .map(([name, value]) => value ? `${name} ${value}` : name)
+    .join("; ");
+};
+
+/**
+ * 生成 App 默认的 CSP 指令 Map
  * 
  * 注意：frame-ancestors 由 Shopify SDK 动态设置
  * 每个店铺需要不同的 frame-ancestors 值以通过 Shopify 审核
  */
-const generateAdditionalCSP = (): string => {
+const getDefaultAppCSP = (): Map<string, string> => {
   // Shopify App Bridge requires 'unsafe-inline' and 'unsafe-eval' for proper operation
-  // in embedded apps. We cannot use nonce because:
+  // in embedded apps. We cannot fully use nonce because:
   // 1. CSP Level 2 ignores 'unsafe-inline' when nonce is present
   // 2. Shopify App Bridge dynamically injects scripts without nonce
-  return [
-    "default-src 'self'",
-    "script-src 'self' https: 'unsafe-inline' 'unsafe-eval'",
-    "style-src 'self' 'unsafe-inline' https:",
-    "img-src 'self' data: https:",
-    "font-src 'self' https:",
-    "connect-src 'self' https: wss:",
-    "object-src 'none'",
-    // frame-ancestors 不在这里设置 - 由 Shopify SDK 处理
-    "base-uri 'self'",
-    "form-action 'self' https://*.myshopify.com https://admin.shopify.com",
-  ].join("; ");
+  const directives = new Map<string, string>();
+  directives.set("default-src", "'self'");
+  directives.set("script-src", "'self' https: 'unsafe-inline' 'unsafe-eval'");
+  directives.set("style-src", "'self' 'unsafe-inline' https:");
+  directives.set("img-src", "'self' data: https:");
+  directives.set("font-src", "'self' https:");
+  directives.set("connect-src", "'self' https: wss:");
+  directives.set("object-src", "'none'");
+  directives.set("base-uri", "'self'");
+  directives.set("form-action", "'self' https://*.myshopify.com https://admin.shopify.com");
+  return directives;
 };
 
 /**
  * 为页面响应应用安全头
  * 
- * 重要：此函数应在 Shopify SDK 的 addDocumentResponseHeaders 之后调用
- * 它会合并 CSP 而不是覆盖，保留 Shopify 设置的 frame-ancestors
+ * 🔧 重要改进：此函数现在完整解析并合并 Shopify SDK 设置的 CSP
+ * - 保留 Shopify 的 frame-ancestors（店铺动态值）
+ * - 合并 script-src/style-src 中的 nonce（如果存在）
+ * - 使用 App 的其他默认安全指令
  */
 export const applySecurityHeaders = (request: Request, responseHeaders: Headers) => {
   // 应用基础安全头
@@ -61,24 +125,22 @@ export const applySecurityHeaders = (request: Request, responseHeaders: Headers)
     responseHeaders.set(key, value);
   });
 
-  // 合并 CSP：保留 Shopify SDK 设置的 frame-ancestors，追加其他指令
+  // 🔧 改进：完整解析并合并 CSP，而不是只提取 frame-ancestors
   const existingCSP = responseHeaders.get("Content-Security-Policy");
-  const additionalCSP = generateAdditionalCSP();
+  const appCSP = getDefaultAppCSP();
   
   if (existingCSP) {
-    // 提取现有 CSP 中的 frame-ancestors（Shopify 动态设置）
-    const frameAncestorsMatch = existingCSP.match(/frame-ancestors\s+[^;]+/);
-    const frameAncestors = frameAncestorsMatch ? frameAncestorsMatch[0] : null;
-    
-    // 合并：使用我们的指令 + Shopify 的 frame-ancestors
-    if (frameAncestors) {
-      responseHeaders.set("Content-Security-Policy", `${additionalCSP}; ${frameAncestors}`);
-    } else {
-      // 如果没有 frame-ancestors，直接使用我们的 CSP
-      responseHeaders.set("Content-Security-Policy", additionalCSP);
-    }
+    // 解析 Shopify SDK 设置的 CSP
+    const shopifyCSP = parseCSP(existingCSP);
+    // 合并两个 CSP（保留 Shopify 的关键指令，合并 nonce）
+    const mergedCSP = mergeCSPDirectives(shopifyCSP, appCSP);
+    responseHeaders.set("Content-Security-Policy", mergedCSP);
   } else {
-    responseHeaders.set("Content-Security-Policy", additionalCSP);
+    // 如果 Shopify 没有设置 CSP，使用 App 的默认 CSP
+    const defaultCSP = Array.from(appCSP.entries())
+      .map(([name, value]) => value ? `${name} ${value}` : name)
+      .join("; ");
+    responseHeaders.set("Content-Security-Policy", defaultCSP);
   }
 
   // 生产环境 HTTPS 启用 HSTS

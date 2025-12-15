@@ -114,6 +114,7 @@ model OrderProduct {
   id         Int     @id @default(autoincrement())
   orderId    String
   productId  String
+  lineItemId String  // 🔧 新增：Shopify 行项目 ID，用于唯一标识同一订单中的不同 variant
   title      String
   handle     String?
   url        String?
@@ -125,6 +126,8 @@ model OrderProduct {
 
   @@index([orderId])
   @@index([productId])
+  // 🔧 新增：唯一约束，确保同一订单的同一行项目不会重复
+  @@unique([orderId, lineItemId], map: "order_line_item_unique")
 }
 
 model ShopSettings {

@@ -146,7 +146,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   try {
     await enforceRateLimit(
       buildRateLimitKey("billing-confirm", clientId, shopDomain),
-      RateLimitRules.API  // 使用 API 级别限流规则
+      RateLimitRules.API_DEFAULT  // 使用 API 级别限流规则
     );
   } catch (rateLimitError) {
     if (rateLimitError instanceof Response && rateLimitError.status === 429) {

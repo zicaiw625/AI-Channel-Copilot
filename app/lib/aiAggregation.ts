@@ -16,7 +16,7 @@ import type {
 import { AI_CHANNELS } from "./aiTypes";
 import type { MetricKey } from "./metrics";
 import { metricOrderValue } from "./metrics";
-import { startOfDay, formatDateOnly } from "./dateUtils";
+import { startOfDay, formatDateOnly, getWeekStart, getMonthStart } from "./dateUtils";
 
 // 重新导出 TopCustomerRow 以保持向后兼容
 export type { TopCustomerRow } from "./aiTypes";
@@ -259,10 +259,7 @@ const determineBucket = (range: DateRange): TrendBucket => {
 const formatTrendLabel = (date: Date, bucket: TrendBucket, timeZone?: string): string => {
   if (bucket === "day") return formatDateOnly(date, timeZone);
   if (bucket === "week") {
-    const start = startOfDay(date, timeZone);
-    const day = start.getUTCDay();
-    const diff = (day + 6) % 7;
-    start.setUTCDate(start.getUTCDate() - diff);
+    const start = getWeekStart(date, timeZone);
     return `${formatDateOnly(start, timeZone)} · 周`;
   }
   return new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit" }).format(
@@ -294,13 +291,14 @@ export const buildTrend = (
   >();
 
   ordersInRange.forEach((order) => {
-    const bucketStart = startOfDay(new Date(order.createdAt), timeZone);
-    if (bucket === "week") {
-      const day = bucketStart.getUTCDay();
-      const diff = (day + 6) % 7;
-      bucketStart.setUTCDate(bucketStart.getUTCDate() - diff);
+    let bucketStart: Date;
+    if (bucket === "day") {
+      bucketStart = startOfDay(new Date(order.createdAt), timeZone);
+    } else if (bucket === "week") {
+      bucketStart = getWeekStart(new Date(order.createdAt), timeZone);
+    } else {
+      bucketStart = getMonthStart(new Date(order.createdAt), timeZone);
     }
-    if (bucket === "month") bucketStart.setUTCDate(1);
 
     const label = formatTrendLabel(bucketStart, bucket, timeZone);
     if (!buckets.has(label)) {

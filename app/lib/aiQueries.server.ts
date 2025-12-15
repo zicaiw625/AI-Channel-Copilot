@@ -19,7 +19,7 @@ import { allowDemoData } from "./runtime.server";
 import prisma from "../db.server";
 import { Prisma } from "@prisma/client";
 import { fromPrismaAiSource, toPrismaAiSource } from "./aiSourceMapper";
-import { startOfDay, formatDateOnly } from "./dateUtils";
+import { startOfDay, formatDateOnly, getWeekStart, getMonthStart } from "./dateUtils";
 import { logger } from "./logger.server";
 
 const toNumber = (value: unknown): number => {
@@ -206,17 +206,12 @@ async function buildDashboardFromDb(
          key = formatDateOnly(date, timezone);
          sortKey = startOfDay(date, timezone).getTime();
        } else if (bucket === "week") {
-         const start = startOfDay(date, timezone);
-         const day = start.getUTCDay();
-         const diff = (day + 6) % 7;
-         start.setUTCDate(start.getUTCDate() - diff);
+         const start = getWeekStart(date, timezone);
          key = `${formatDateOnly(start, timezone)} · 周`;
          sortKey = start.getTime();
        } else {
          key = new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit" }).format(date);
-         // Bug Fix: 使用 startOfDay 保持时区一致，然后设置为月初
-         const start = startOfDay(date, timezone);
-         start.setUTCDate(1); 
+         const start = getMonthStart(date, timezone);
          sortKey = start.getTime();
        }
 

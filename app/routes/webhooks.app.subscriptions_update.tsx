@@ -24,6 +24,11 @@ type AppSubscriptionPayload = {
 /**
  * 检查订阅更新 webhook 是否已处理（幂等性检查）
  * 使用订阅 ID + 状态作为幂等键
+ * 
+ * 🔒 安全说明：
+ * - payload 只存储 { subscriptionId, status }，不包含 PII
+ * - subscriptionId 是 Shopify 内部 ID (gid://shopify/AppSubscription/xxx)
+ * - 这些记录会被 retention.server.ts 的 WebhookJob 清理逻辑定期删除（7 天 TTL）
  */
 const checkAndMarkProcessed = async (
   shopDomain: string,
@@ -36,13 +41,14 @@ const checkAndMarkProcessed = async (
   
   try {
     // 尝试创建记录，如果已存在则会因唯一约束失败
+    // 🔒 只存储最小化数据，不包含客户 PII
     await prisma.webhookJob.create({
       data: {
         shopDomain,
         topic,
         intent: "subscription_status_change",
         externalId,
-        payload: { subscriptionId, status },
+        payload: { subscriptionId, status },  // 🔒 最小化 payload，无 PII
         status: "completed",
         finishedAt: new Date(),
       },

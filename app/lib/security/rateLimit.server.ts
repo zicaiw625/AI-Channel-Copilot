@@ -1,6 +1,22 @@
 /**
  * Rate Limiting 服务
  * 防止 API 滥用和 DDoS 攻击
+ * 
+ * ⚠️ 重要限制：当前实现使用内存 Map 存储限流状态
+ * 
+ * 在多实例/Serverless 部署场景下存在以下问题：
+ * 1. 每个实例维护独立的计数，无法跨实例共享
+ * 2. 攻击者可以通过分散请求到不同实例来绕过限制
+ * 3. 实例重启会丢失所有限流状态
+ * 
+ * 生产环境建议：
+ * - 使用 Redis 实现分布式限流
+ * - 或在负载均衡层（如 Cloudflare、nginx）配置限流
+ * 
+ * 当前实现适用于：
+ * - 单实例部署
+ * - 开发/测试环境
+ * - 作为应用层的第二道防线（配合 LB 层限流）
  */
 
 import { logger } from '../logger.server';
@@ -22,10 +38,137 @@ interface CheckLimitResult {
   resetAt: number;
 }
 
+/**
+ * 🔒 分布式限流存储接口
+ * 未来可以实现 Redis 版本替换内存版本
+ */
+export interface RateLimitStore {
+  get(key: string): Promise<RateLimitEntry | null>;
+  set(key: string, entry: RateLimitEntry, ttlMs: number): Promise<void>;
+  increment(key: string, windowMs: number): Promise<{ count: number; resetAt: number }>;
+  delete(key: string): Promise<void>;
+  size(): Promise<number>;
+}
+
+/**
+ * 内存实现的限流存储
+ * ⚠️ 仅适用于单实例部署
+ */
+class InMemoryRateLimitStore implements RateLimitStore {
+  private store: Map<string, RateLimitEntry>;
+  private readonly MAX_ENTRIES = 100000;
+  private readonly EMERGENCY_CLEANUP_THRESHOLD = 0.8;
+
+  constructor() {
+    this.store = new Map();
+  }
+
+  async get(key: string): Promise<RateLimitEntry | null> {
+    const entry = this.store.get(key);
+    if (!entry || entry.resetAt <= Date.now()) {
+      return null;
+    }
+    return { count: entry.count, resetAt: entry.resetAt };
+  }
+
+  async set(key: string, entry: RateLimitEntry): Promise<void> {
+    if (this.store.size > this.MAX_ENTRIES) {
+      this.emergencyCleanup();
+    }
+    this.store.set(key, entry);
+  }
+
+  async increment(key: string, windowMs: number): Promise<{ count: number; resetAt: number }> {
+    if (this.store.size > this.MAX_ENTRIES) {
+      this.emergencyCleanup();
+    }
+
+    const now = Date.now();
+    let entry = this.store.get(key);
+
+    if (!entry || entry.resetAt <= now) {
+      entry = {
+        count: 0,
+        resetAt: now + windowMs
+      };
+    }
+
+    entry.count++;
+    this.store.set(key, entry);
+
+    return { count: entry.count, resetAt: entry.resetAt };
+  }
+
+  async delete(key: string): Promise<void> {
+    this.store.delete(key);
+  }
+
+  async size(): Promise<number> {
+    return this.store.size;
+  }
+
+  /**
+   * 清理过期条目
+   */
+  cleanup(): number {
+    const now = Date.now();
+    let cleaned = 0;
+    for (const [key, entry] of this.store.entries()) {
+      if (entry.resetAt <= now) {
+        this.store.delete(key);
+        cleaned++;
+      }
+    }
+    return cleaned;
+  }
+
+  /**
+   * 紧急清理
+   */
+  private emergencyCleanup(): void {
+    const startSize = this.store.size;
+    const now = Date.now();
+
+    // 1. 删除所有过期的
+    for (const [key, entry] of this.store.entries()) {
+      if (entry.resetAt <= now) {
+        this.store.delete(key);
+      }
+    }
+
+    // 2. 如果还是太多，删除最早过期的 20%
+    if (this.store.size > this.MAX_ENTRIES * this.EMERGENCY_CLEANUP_THRESHOLD) {
+      const entries = Array.from(this.store.entries())
+        .sort((a, b) => a[1].resetAt - b[1].resetAt);
+      
+      const toDelete = Math.floor(entries.length * 0.2);
+      for (let i = 0; i < toDelete; i++) {
+        this.store.delete(entries[i][0]);
+      }
+    }
+
+    logger.warn('[RateLimit] Emergency cleanup triggered', {
+      before: startSize,
+      after: this.store.size,
+      maxEntries: this.MAX_ENTRIES
+    });
+  }
+
+  /**
+   * 获取内部 Map 的 keys（用于迁移到 Redis 时的迭代）
+   */
+  keys(): IterableIterator<string> {
+    return this.store.keys();
+  }
+}
+
+// 🔒 是否已显示多实例警告
+let multiInstanceWarningShown = false;
+
 export class RateLimiter {
   private static instance: RateLimiter;
   private static listenerAdded = false;
-  private store: Map<string, RateLimitEntry>;
+  private store: InMemoryRateLimitStore;
   private cleanupInterval?: NodeJS.Timeout;
   
   // 内存保护：最大条目数限制
@@ -33,8 +176,33 @@ export class RateLimiter {
   private readonly EMERGENCY_CLEANUP_THRESHOLD = 0.8;
 
   private constructor() {
-    this.store = new Map();
+    this.store = new InMemoryRateLimitStore();
     this.startCleanup();
+    this.logMultiInstanceWarning();
+  }
+
+  /**
+   * 🔒 记录多实例部署警告
+   * 仅在生产环境首次初始化时记录一次
+   */
+  private logMultiInstanceWarning(): void {
+    if (multiInstanceWarningShown) return;
+    multiInstanceWarningShown = true;
+
+    const isProduction = process.env.NODE_ENV === 'production';
+    const instanceId = process.env.RENDER_INSTANCE_ID || 
+                       process.env.FLY_ALLOC_ID || 
+                       process.env.DYNO ||  // Heroku
+                       process.env.K_REVISION ||  // Cloud Run
+                       null;
+
+    if (isProduction) {
+      logger.warn('[RateLimit] ⚠️ Using in-memory rate limiting in production', {
+        instanceId: instanceId?.slice(0, 20),
+        recommendation: 'Consider using Redis for distributed rate limiting in multi-instance deployments',
+        documentation: 'https://docs.aicc.app/deployment/rate-limiting',  // 可以换成实际文档地址
+      });
+    }
   }
 
   static getInstance(): RateLimiter {
@@ -52,35 +220,18 @@ export class RateLimiter {
     identifier: string,
     rule: RateLimitRule
   ): Promise<CheckLimitResult> {
-    // 内存保护：检查是否需要紧急清理
-    if (this.store.size > this.MAX_ENTRIES) {
-      this.emergencyCleanup();
-    }
-    
-    const now = Date.now();
     const key = this.getKey(identifier, rule.windowMs);
     
-    let entry = this.store.get(key);
+    // 使用 store 的 increment 方法（支持未来切换到 Redis）
+    const { count, resetAt } = await this.store.increment(key, rule.windowMs);
 
-    // 如果没有记录或已过期，创建新记录
-    if (!entry || entry.resetAt <= now) {
-      entry = {
-        count: 0,
-        resetAt: now + rule.windowMs
-      };
-      this.store.set(key, entry);
-    }
-
-    // 增加计数
-    entry.count++;
-
-    const allowed = entry.count <= rule.maxRequests;
-    const remaining = Math.max(0, rule.maxRequests - entry.count);
+    const allowed = count <= rule.maxRequests;
+    const remaining = Math.max(0, rule.maxRequests - count);
 
     if (!allowed) {
       logger.warn('[RateLimit] Request blocked', {
         identifier: identifier.slice(0, 100), // 限制日志长度
-        count: entry.count,
+        count,
         limit: rule.maxRequests,
         windowMs: rule.windowMs
       });
@@ -89,7 +240,7 @@ export class RateLimiter {
     return {
       allowed,
       remaining,
-      resetAt: entry.resetAt
+      resetAt
     };
   }
 
@@ -97,13 +248,13 @@ export class RateLimiter {
    * 只读查询当前状态（不增加计数）
    * 用于获取响应头等场景
    */
-  peek(
+  async peek(
     identifier: string,
     rule: RateLimitRule
-  ): CheckLimitResult {
+  ): Promise<CheckLimitResult> {
     const now = Date.now();
     const key = this.getKey(identifier, rule.windowMs);
-    const entry = this.store.get(key);
+    const entry = await this.store.get(key);
 
     // 如果没有记录或已过期
     if (!entry || entry.resetAt <= now) {
@@ -124,15 +275,15 @@ export class RateLimiter {
   /**
    * 重置指定标识符的限制
    */
-  reset(identifier: string, windowMs?: number): void {
+  async reset(identifier: string, windowMs?: number): Promise<void> {
     if (windowMs) {
       const key = this.getKey(identifier, windowMs);
-      this.store.delete(key);
+      await this.store.delete(key);
     } else {
       // 删除所有匹配的键
       for (const key of this.store.keys()) {
         if (key.startsWith(`${identifier}:`)) {
-          this.store.delete(key);
+          await this.store.delete(key);
         }
       }
     }
@@ -141,9 +292,9 @@ export class RateLimiter {
   /**
    * 获取当前统计信息（只读，不增加计数）
    */
-  getStats(identifier: string, windowMs: number): RateLimitEntry | null {
+  async getStats(identifier: string, windowMs: number): Promise<RateLimitEntry | null> {
     const key = this.getKey(identifier, windowMs);
-    const entry = this.store.get(key);
+    const entry = await this.store.get(key);
     
     if (!entry || entry.resetAt <= Date.now()) {
       return null;
@@ -156,8 +307,8 @@ export class RateLimiter {
   /**
    * 获取当前存储大小（用于监控）
    */
-  getStoreSize(): number {
-    return this.store.size;
+  async getStoreSize(): Promise<number> {
+    return this.store.size();
   }
 
   /**
@@ -171,51 +322,13 @@ export class RateLimiter {
    * 清理过期的记录
    */
   private cleanup(): void {
-    const now = Date.now();
-    let cleaned = 0;
-
-    for (const [key, entry] of this.store.entries()) {
-      if (entry.resetAt <= now) {
-        this.store.delete(key);
-        cleaned++;
-      }
-    }
+    const cleaned = this.store.cleanup();
 
     if (cleaned > 0) {
-      logger.debug('[RateLimit] Cleanup completed', { cleaned, remaining: this.store.size });
+      void this.store.size().then(remaining => {
+        logger.debug('[RateLimit] Cleanup completed', { cleaned, remaining });
+      });
     }
-  }
-
-  /**
-   * 紧急清理：当内存使用过高时触发
-   */
-  private emergencyCleanup(): void {
-    const startSize = this.store.size;
-    const now = Date.now();
-    
-    // 1. 先删除所有过期的
-    for (const [key, entry] of this.store.entries()) {
-      if (entry.resetAt <= now) {
-        this.store.delete(key);
-      }
-    }
-    
-    // 2. 如果还是太多，删除最早过期的 20%
-    if (this.store.size > this.MAX_ENTRIES * this.EMERGENCY_CLEANUP_THRESHOLD) {
-      const entries = Array.from(this.store.entries())
-        .sort((a, b) => a[1].resetAt - b[1].resetAt);
-      
-      const toDelete = Math.floor(entries.length * 0.2);
-      for (let i = 0; i < toDelete; i++) {
-        this.store.delete(entries[i][0]);
-      }
-    }
-    
-    logger.warn('[RateLimit] Emergency cleanup triggered', {
-      before: startSize,
-      after: this.store.size,
-      maxEntries: this.MAX_ENTRIES
-    });
   }
 
   /**
@@ -359,13 +472,13 @@ export async function enforceRateLimit(
 /**
  * 获取速率限制响应头（只读，不消耗配额）
  */
-export function getRateLimitHeaders(
+export async function getRateLimitHeaders(
   identifier: string,
   rule: RateLimitRule = RateLimitRules.API_DEFAULT
-): Record<string, string> {
+): Promise<Record<string, string>> {
   const limiter = RateLimiter.getInstance();
   // 使用 peek 方法，不增加计数
-  const result = limiter.peek(identifier, rule);
+  const result = await limiter.peek(identifier, rule);
 
   return {
     'X-RateLimit-Limit': rule.maxRequests.toString(),

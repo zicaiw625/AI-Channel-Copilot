@@ -12,6 +12,13 @@ import { readAppFlags, readIntegerEnv } from "./env.server";
 
 const platform = getPlatform();
 
+/**
+ * 🔒 WebhookJob 保留天数
+ * 较短的 TTL 是因为 WebhookJob payload 可能包含敏感数据
+ * 任务完成后无需长期保留
+ */
+const WEBHOOK_JOB_RETENTION_DAYS = 7;
+
 const parseEnvRetention = () => {
   const parsed = readIntegerEnv("DATA_RETENTION_MONTHS", undefined, 1);
   return parsed ?? null;
@@ -83,6 +90,68 @@ const deleteOrdersInBatches = async (
 };
 
 /**
+ * 🔒 删除过期的 WebhookJob 记录
+ * 这是 GDPR 合规的关键：WebhookJob.payload 可能包含客户 PII
+ * 
+ * @param shopDomain - 店铺域名
+ * @param retentionDays - 保留天数（默认 7 天）
+ * @returns 删除的任务数
+ */
+const deleteExpiredWebhookJobs = async (
+  shopDomain: string,
+  retentionDays: number = WEBHOOK_JOB_RETENTION_DAYS
+): Promise<number> => {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - retentionDays);
+  
+  let totalDeleted = 0;
+  let batchCount = 0;
+  
+  // eslint-disable-next-line no-constant-condition -- 分批处理循环，通过 break 退出
+  while (true) {
+    // 查询要删除的 WebhookJob ID（已完成或失败且超过 TTL）
+    const jobsToDelete = await prisma.webhookJob.findMany({
+      where: {
+        shopDomain,
+        createdAt: { lt: cutoff },
+        // 只删除已终结的任务，避免删除正在处理中的任务
+        status: { in: ["completed", "failed"] },
+      },
+      select: { id: true },
+      take: RETENTION_DELETE_BATCH_SIZE,
+    });
+    
+    if (jobsToDelete.length === 0) {
+      break;
+    }
+    
+    const jobIds = jobsToDelete.map(j => j.id);
+    
+    const result = await prisma.webhookJob.deleteMany({
+      where: { id: { in: jobIds } },
+    });
+    
+    totalDeleted += result.count;
+    batchCount++;
+    
+    logger.debug("[retention] batch deleted webhook jobs", {
+      shopDomain,
+      batch: batchCount,
+      batchSize: result.count,
+      totalDeleted,
+    });
+    
+    if (jobsToDelete.length < RETENTION_DELETE_BATCH_SIZE) {
+      break;
+    }
+    
+    await new Promise(resolve => setTimeout(resolve, RETENTION_DELETE_BATCH_DELAY_MS));
+  }
+  
+  return totalDeleted;
+};
+
+/**
  * 分批删除无订单关联的过期客户
  * @returns 删除的客户总数
  */
@@ -140,7 +209,7 @@ const deleteOrphanCustomersInBatches = async (
 };
 
 export const pruneHistoricalData = async (shopDomain: string, months: number) => {
-  if (!shopDomain) return { deletedOrders: 0, deletedCustomers: 0, deletedCheckouts: 0, deletedSessions: 0, deletedEvents: 0, cutoff: null };
+  if (!shopDomain) return { deletedOrders: 0, deletedCustomers: 0, deletedCheckouts: 0, deletedSessions: 0, deletedEvents: 0, deletedWebhookJobs: 0, cutoff: null };
 
   const cutoff = computeCutoff(months);
   const startTime = Date.now();
@@ -151,6 +220,9 @@ export const pruneHistoricalData = async (shopDomain: string, months: number) =>
     
     // 分批删除无订单关联的过期客户
     const deletedCustomers = await deleteOrphanCustomersInBatches(shopDomain, cutoff);
+    
+    // 🔒 清理过期的 WebhookJob（GDPR 合规：payload 可能包含 PII）
+    const deletedWebhookJobs = await deleteExpiredWebhookJobs(shopDomain);
     
     // 清理漏斗相关数据（Checkout 仅存 hasEmail 布尔值，无 PII）
     const [checkoutResult, sessionResult, eventResult] = await Promise.all([
@@ -183,11 +255,12 @@ export const pruneHistoricalData = async (shopDomain: string, months: number) =>
       deletedCheckouts,
       deletedSessions,
       deletedEvents,
+      deletedWebhookJobs,  // 🔒 新增
       elapsedMs,
       jobType: "retention",
     });
 
-    return { cutoff, deletedOrders, deletedCustomers, deletedCheckouts, deletedSessions, deletedEvents };
+    return { cutoff, deletedOrders, deletedCustomers, deletedCheckouts, deletedSessions, deletedEvents, deletedWebhookJobs };
   } catch (error) {
     logger.warn("[retention] cleanup skipped (table or connection issue)", { 
       platform, 
@@ -195,7 +268,7 @@ export const pruneHistoricalData = async (shopDomain: string, months: number) =>
     }, { 
       message: (error as Error).message 
     });
-    return { cutoff, deletedOrders: 0, deletedCustomers: 0, deletedCheckouts: 0, deletedSessions: 0, deletedEvents: 0 };
+    return { cutoff, deletedOrders: 0, deletedCustomers: 0, deletedCheckouts: 0, deletedSessions: 0, deletedEvents: 0, deletedWebhookJobs: 0 };
   }
 };
 

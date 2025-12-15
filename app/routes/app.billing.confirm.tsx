@@ -5,6 +5,58 @@ import {
   syncSubscriptionFromShopify,
 } from "../lib/billing.server";
 import { requireEnv } from "../lib/env.server";
+import { enforceRateLimit, RateLimitRules, buildRateLimitKey } from "../lib/security/rateLimit.server";
+import { logger } from "../lib/logger.server";
+import prisma from "../db.server";
+
+/**
+ * 🔒 Shop 域名格式校验
+ * 防止恶意构造的 shop 参数被用于滥用 Admin API
+ */
+const SHOP_DOMAIN_REGEX = /^[a-z0-9][a-z0-9-]*\.myshopify\.com$/i;
+
+const isValidShopDomain = (shop: string): boolean => {
+  if (!shop || typeof shop !== "string") return false;
+  if (shop.length > 255) return false;  // 域名长度限制
+  return SHOP_DOMAIN_REGEX.test(shop);
+};
+
+/**
+ * 🔒 检查店铺是否有有效的 offline session/token
+ * 如果没有，说明该店铺从未安装过应用，不应该调用 Admin API
+ */
+const hasValidOfflineSession = async (shopDomain: string): Promise<boolean> => {
+  try {
+    const session = await prisma.session.findFirst({
+      where: {
+        shop: shopDomain,
+        isOnline: false,  // offline token
+        accessToken: { not: "" },
+      },
+      select: { id: true },
+    });
+    return !!session;
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * 🔒 获取客户端标识用于限流
+ */
+const getClientIdentifier = (request: Request): string => {
+  // 优先使用 CF-Connecting-IP (Cloudflare) 或 X-Forwarded-For
+  const cfIp = request.headers.get("CF-Connecting-IP");
+  const xForwardedFor = request.headers.get("X-Forwarded-For");
+  const realIp = request.headers.get("X-Real-IP");
+  
+  if (cfIp) return cfIp.split(",")[0].trim();
+  if (xForwardedFor) return xForwardedFor.split(",")[0].trim();
+  if (realIp) return realIp.trim();
+  
+  // 回退到 user-agent hash（不太可靠但总比没有好）
+  return request.headers.get("User-Agent") || "unknown";
+};
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const url = new URL(request.url);
@@ -78,6 +130,45 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   if (!shopDomain) {
     const next = new URL("/app", url.origin);
     next.search = url.search;
+    throw new Response(null, { status: 302, headers: { Location: next.toString() } });
+  }
+
+  // 🔒 安全校验 1: Shop 域名格式硬校验
+  if (!isValidShopDomain(shopDomain)) {
+    logger.warn("[billing-confirm] Invalid shop domain format rejected", {
+      shopDomain: shopDomain.slice(0, 100),  // 截断避免日志注入
+    });
+    return new Response("Invalid shop parameter", { status: 400 });
+  }
+
+  // 🔒 安全校验 2: 限流（按 IP + shop 组合）
+  const clientId = getClientIdentifier(request);
+  try {
+    await enforceRateLimit(
+      buildRateLimitKey("billing-confirm", clientId, shopDomain),
+      RateLimitRules.API  // 使用 API 级别限流规则
+    );
+  } catch (rateLimitError) {
+    if (rateLimitError instanceof Response && rateLimitError.status === 429) {
+      logger.warn("[billing-confirm] Rate limit exceeded", {
+        shopDomain,
+        clientId: clientId.slice(0, 50),
+      });
+      return new Response("Too many requests", { status: 429 });
+    }
+    throw rateLimitError;
+  }
+
+  // 🔒 安全校验 3: 检查是否有有效的 offline session
+  // 如果没有，说明该店铺从未正确安装过应用，不应该调用 Admin API
+  const hasSession = await hasValidOfflineSession(shopDomain);
+  if (!hasSession) {
+    logger.info("[billing-confirm] No valid session for shop, redirecting to app", {
+      shopDomain,
+    });
+    // 重定向到 app，触发正常的 OAuth 流程
+    const next = new URL("/app", url.origin);
+    next.searchParams.set("shop", shopDomain);
     throw new Response(null, { status: 302, headers: { Location: next.toString() } });
   }
 

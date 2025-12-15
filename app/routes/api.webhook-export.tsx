@@ -14,6 +14,7 @@ import dns from "dns/promises";
 
 const WEBHOOK_TIMEOUT_MS = 30_000; // 30 秒超时
 const MAX_EXPORT_ORDERS = 100; // 最大导出订单数
+const MAX_RESPONSE_SIZE = 1024 * 1024; // 🔒 限制响应体最大 1MB（防止内存耗尽）
 
 // ============================================================================
 // Types
@@ -137,6 +138,20 @@ function validateWebhookUrl(urlString: string): { valid: boolean; error?: string
       return { valid: false, error: "URL is too long (max 2000 characters)" };
     }
     
+    // 🔒 检查 Punycode/IDN 同形攻击
+    // 如果 hostname 以 xn-- 开头，说明使用了国际化域名编码
+    // 这可能被用于视觉欺骗（例如 аррlе.com 看起来像 apple.com）
+    if (hostname.split(".").some(part => part.startsWith("xn--"))) {
+      return { valid: false, error: "Internationalized domain names (IDN) are not allowed for security reasons" };
+    }
+    
+    // 🔒 检查是否包含非 ASCII 字符（应该已经被 punycode 编码）
+    // 这是额外的防护层
+    // eslint-disable-next-line no-control-regex
+    if (/[^\x00-\x7F]/.test(hostname)) {
+      return { valid: false, error: "Non-ASCII characters in hostname are not allowed" };
+    }
+    
     return { valid: true };
   } catch {
     return { valid: false, error: "Invalid URL format" };
@@ -218,6 +233,7 @@ async function generateSignature(payload: string, secret: string): Promise<strin
  * 安全措施：
  * - 禁止跟随重定向（防止 SSRF 通过重定向绕过）
  * - 30 秒超时
+ * - 响应体大小限制（防止内存耗尽）
  */
 async function sendWebhook(
   url: string,
@@ -244,6 +260,44 @@ async function sendWebhook(
       // 禁止跟随重定向，防止 SSRF 通过重定向绕过
       redirect: "error",
     });
+    
+    // 🔒 检查响应体大小（通过 Content-Length header）
+    const contentLength = response.headers.get("Content-Length");
+    if (contentLength && parseInt(contentLength, 10) > MAX_RESPONSE_SIZE) {
+      // 不读取响应体，直接返回错误
+      return { 
+        ok: false, 
+        status: response.status,
+        error: `Response too large (${contentLength} bytes, max ${MAX_RESPONSE_SIZE})` 
+      };
+    }
+    
+    // 🔒 安全地读取响应体（带大小限制）
+    // 即使没有 Content-Length，也要限制读取的数据量
+    if (response.body) {
+      const reader = response.body.getReader();
+      let totalSize = 0;
+      
+      try {
+        // eslint-disable-next-line no-constant-condition
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          
+          totalSize += value?.length || 0;
+          if (totalSize > MAX_RESPONSE_SIZE) {
+            reader.cancel();
+            return { 
+              ok: false, 
+              status: response.status,
+              error: `Response exceeded size limit (>${MAX_RESPONSE_SIZE} bytes)` 
+            };
+          }
+        }
+      } finally {
+        reader.releaseLock();
+      }
+    }
     
     if (!response.ok) {
       return { 

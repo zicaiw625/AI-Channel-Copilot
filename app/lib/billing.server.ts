@@ -466,6 +466,19 @@ const syncSubscriptionFromShopifyInternal = async (
         // For dev stores with test: true subscriptions, Shopify doesn't return trialDays
         // so we need to check local state to determine if trial should be granted
         const existingState = await getBillingState(shopDomain);
+        
+        // 详细记录 existingState 用于调试
+        logger.info("[billing] syncSubscription existingState", {
+          shopDomain,
+          hasState: !!existingState,
+          billingPlan: existingState?.billingPlan,
+          billingState: existingState?.billingState,
+          hasEverSubscribed: existingState?.hasEverSubscribed,
+          usedTrialDays: existingState?.usedTrialDays,
+          lastTrialStartAt: existingState?.lastTrialStartAt?.toISOString(),
+          lastTrialEndAt: existingState?.lastTrialEndAt?.toISOString(),
+        });
+        
         // 移除 isNewSubscription 时间窗口检查，与 webhook 处理逻辑保持一致
         // 只要用户未曾开始试用期（lastTrialStartAt 为空）且有剩余试用天数，就授予试用期
         const shouldGrantTrial = 
@@ -473,6 +486,21 @@ const syncSubscriptionFromShopifyInternal = async (
           !isTrialing &&
           !existingState?.lastTrialStartAt && // no previous trial recorded
           (existingState?.usedTrialDays || 0) < plan.defaultTrialDays; // has trial days remaining
+        
+        // 详细记录 shouldGrantTrial 计算过程
+        logger.info("[billing] shouldGrantTrial calculation", {
+          shopDomain,
+          planId: plan.id,
+          "plan.trialSupported": plan.trialSupported,
+          isTrialing,
+          "!isTrialing": !isTrialing,
+          "existingState?.lastTrialStartAt": existingState?.lastTrialStartAt?.toISOString() ?? null,
+          "!existingState?.lastTrialStartAt": !existingState?.lastTrialStartAt,
+          "existingState?.usedTrialDays": existingState?.usedTrialDays,
+          "plan.defaultTrialDays": plan.defaultTrialDays,
+          "(usedTrialDays || 0) < defaultTrialDays": (existingState?.usedTrialDays || 0) < plan.defaultTrialDays,
+          shouldGrantTrial,
+        });
         
         logger.info("[billing] Syncing subscription from Shopify", { 
           shopDomain, 

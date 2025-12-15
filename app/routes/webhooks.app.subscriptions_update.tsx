@@ -98,14 +98,40 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   if (status === "ACTIVE") {
     if (trialEnd && trialEnd.getTime() > Date.now() && plan.trialSupported) {
+      logger.info("[billing-webhook] Setting trial state (Shopify returned trial_end)", {
+        shopDomain,
+        planId: plan.id,
+        trialEnd: trialEnd.toISOString(),
+      });
       await setSubscriptionTrialState(shopDomain, plan.id, trialEnd, status);
     } else if (plan.trialSupported) {
       // For dev stores with test: true subscriptions, Shopify doesn't return trial_end
       // Check if we should grant trial locally
       const existingState = await getBillingState(shopDomain);
+      
+      // 详细记录 existingState 用于调试
+      logger.info("[billing-webhook] Checking shouldGrantTrial", {
+        shopDomain,
+        hasState: !!existingState,
+        billingPlan: existingState?.billingPlan,
+        billingState: existingState?.billingState,
+        hasEverSubscribed: existingState?.hasEverSubscribed,
+        usedTrialDays: existingState?.usedTrialDays,
+        lastTrialStartAt: existingState?.lastTrialStartAt?.toISOString() ?? null,
+        lastTrialEndAt: existingState?.lastTrialEndAt?.toISOString() ?? null,
+        "plan.defaultTrialDays": plan.defaultTrialDays,
+      });
+      
       const shouldGrantTrial = 
         !existingState?.lastTrialStartAt && // no previous trial recorded
         (existingState?.usedTrialDays || 0) < plan.defaultTrialDays; // has trial days remaining
+      
+      logger.info("[billing-webhook] shouldGrantTrial result", {
+        shopDomain,
+        shouldGrantTrial,
+        "!lastTrialStartAt": !existingState?.lastTrialStartAt,
+        "usedTrialDays < defaultTrialDays": (existingState?.usedTrialDays || 0) < plan.defaultTrialDays,
+      });
       
       if (shouldGrantTrial) {
         const remainingTrialDays = plan.defaultTrialDays - (existingState?.usedTrialDays || 0);
@@ -118,9 +144,17 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         });
         await setSubscriptionTrialState(shopDomain, plan.id, localTrialEnd, status);
       } else {
+        logger.info("[billing-webhook] Setting ACTIVE state (no trial granted)", {
+          shopDomain,
+          planId: plan.id,
+        });
         await setSubscriptionActiveState(shopDomain, plan.id, status);
       }
     } else {
+      logger.info("[billing-webhook] Setting ACTIVE state (plan does not support trial)", {
+        shopDomain,
+        planId: plan.id,
+      });
       await setSubscriptionActiveState(shopDomain, plan.id, status);
     }
   } else if (status === "CANCELLED") {

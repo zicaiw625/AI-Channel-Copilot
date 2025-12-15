@@ -6,6 +6,7 @@ import { logger } from "../lib/logger.server";
 import { OrdersRepository } from "../lib/repositories/orders.repository";
 import { resolveDateRange } from "../lib/aiData";
 import { enforceRateLimit, RateLimitRules } from "../lib/security/rateLimit.server";
+import dns from "dns/promises";
 
 // ============================================================================
 // Constants
@@ -40,8 +41,39 @@ interface WebhookPayload {
 // ============================================================================
 
 /**
+ * 检查 IP 是否为私网地址
+ */
+function isPrivateIP(ip: string): boolean {
+  const privatePatterns = [
+    /^127\./,                           // Loopback
+    /^10\./,                            // Private Class A
+    /^192\.168\./,                      // Private Class C
+    /^172\.(1[6-9]|2[0-9]|3[0-1])\./,  // Private Class B
+    /^0\./,                             // Current network
+    /^169\.254\./,                      // Link-local
+    /^100\.(6[4-9]|[7-9]\d|1[0-1]\d|12[0-7])\./, // Carrier-grade NAT
+    /^198\.1[89]\./,                    // Benchmark testing
+    /^::1$/,                            // IPv6 loopback
+    /^fc00:/i,                          // IPv6 unique local
+    /^fe80:/i,                          // IPv6 link-local
+    /^fd[0-9a-f]{2}:/i,                 // IPv6 unique local
+    /^::ffff:127\./i,                   // IPv4-mapped loopback
+    /^::ffff:10\./i,                    // IPv4-mapped private
+    /^::ffff:192\.168\./i,              // IPv4-mapped private
+    /^::ffff:172\.(1[6-9]|2[0-9]|3[0-1])\./i, // IPv4-mapped private
+  ];
+  
+  return privatePatterns.some(pattern => pattern.test(ip));
+}
+
+/**
  * 验证 URL 是否安全（非私网地址且使用 HTTPS）
  * 防止 SSRF 攻击
+ * 
+ * 安全措施：
+ * 1. 强制 HTTPS
+ * 2. 字符串层面检查 hostname
+ * 3. DNS 解析后检查真实 IP
  */
 function validateWebhookUrl(urlString: string): { valid: boolean; error?: string } {
   try {
@@ -52,10 +84,15 @@ function validateWebhookUrl(urlString: string): { valid: boolean; error?: string
       return { valid: false, error: "Only HTTPS URLs are allowed" };
     }
     
+    // 限制端口（只允许 443 或默认端口）
+    if (url.port && url.port !== "443") {
+      return { valid: false, error: "Only port 443 is allowed" };
+    }
+    
     const hostname = url.hostname.toLowerCase();
     
-    // 检查私网地址
-    const privatePatterns = [
+    // 第一层防护：字符串层面检查 hostname
+    const privateHostnamePatterns = [
       /^localhost$/i,
       /^127\./,
       /^10\./,
@@ -70,11 +107,28 @@ function validateWebhookUrl(urlString: string): { valid: boolean; error?: string
       /\.local$/i,
       /\.internal$/i,
       /\.localhost$/i,
+      /\.localdomain$/i,
+      /\.home$/i,
+      /\.corp$/i,
+      /\.lan$/i,
     ];
     
-    for (const pattern of privatePatterns) {
+    for (const pattern of privateHostnamePatterns) {
       if (pattern.test(hostname)) {
         return { valid: false, error: "Private network URLs are not allowed" };
+      }
+    }
+    
+    // 阻止云元数据服务端点
+    const metadataPatterns = [
+      /^metadata\.google\.internal$/i,
+      /^169\.254\.169\.254$/,
+      /^metadata$/,
+    ];
+    
+    for (const pattern of metadataPatterns) {
+      if (pattern.test(hostname)) {
+        return { valid: false, error: "Cloud metadata endpoints are not allowed" };
       }
     }
     
@@ -86,6 +140,50 @@ function validateWebhookUrl(urlString: string): { valid: boolean; error?: string
     return { valid: true };
   } catch {
     return { valid: false, error: "Invalid URL format" };
+  }
+}
+
+/**
+ * 验证 URL 并进行 DNS 解析检查（异步）
+ * 这是第二层防护，防止 DNS rebinding 攻击
+ */
+async function validateWebhookUrlWithDNS(urlString: string): Promise<{ valid: boolean; error?: string }> {
+  // 先做基础验证
+  const basicValidation = validateWebhookUrl(urlString);
+  if (!basicValidation.valid) {
+    return basicValidation;
+  }
+  
+  try {
+    const url = new URL(urlString);
+    const hostname = url.hostname;
+    
+    // DNS 解析获取真实 IP
+    let addresses: string[];
+    try {
+      addresses = await dns.resolve4(hostname);
+    } catch {
+      // 如果 IPv4 解析失败，尝试 IPv6
+      try {
+        addresses = await dns.resolve6(hostname);
+      } catch {
+        return { valid: false, error: "Failed to resolve hostname" };
+      }
+    }
+    
+    // 检查所有解析出的 IP 是否有私网地址
+    for (const ip of addresses) {
+      if (isPrivateIP(ip)) {
+        return { 
+          valid: false, 
+          error: "URL resolves to private network address" 
+        };
+      }
+    }
+    
+    return { valid: true };
+  } catch {
+    return { valid: false, error: "Failed to validate URL" };
   }
 }
 
@@ -115,7 +213,11 @@ async function generateSignature(payload: string, secret: string): Promise<strin
 }
 
 /**
- * 发送 Webhook 请求（带超时控制）
+ * 发送 Webhook 请求（带超时控制和安全限制）
+ * 
+ * 安全措施：
+ * - 禁止跟随重定向（防止 SSRF 通过重定向绕过）
+ * - 30 秒超时
  */
 async function sendWebhook(
   url: string,
@@ -139,6 +241,8 @@ async function sendWebhook(
       },
       body,
       signal: controller.signal,
+      // 禁止跟随重定向，防止 SSRF 通过重定向绕过
+      redirect: "error",
     });
     
     if (!response.ok) {
@@ -153,6 +257,10 @@ async function sendWebhook(
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
       return { ok: false, error: "Request timed out (30s)" };
+    }
+    // 捕获重定向错误
+    if (error instanceof TypeError && error.message.includes("redirect")) {
+      return { ok: false, error: "Redirects are not allowed for security reasons" };
     }
     return { 
       ok: false, 
@@ -211,9 +319,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const secret = (formData.get("secret") as string) || "";
     const events = (formData.get("events") as string || "").split(",").filter(Boolean);
     
-    // 验证 URL（如果启用且有 URL）
+    // 验证 URL（如果启用且有 URL）- 包含 DNS 解析检查
     if (enabled && url) {
-      const validation = validateWebhookUrl(url);
+      const validation = await validateWebhookUrlWithDNS(url);
       if (!validation.valid) {
         return Response.json({ ok: false, error: validation.error }, { status: 400 });
       }
@@ -251,8 +359,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       return Response.json({ ok: false, error: "URL is required" }, { status: 400 });
     }
     
-    // 验证 URL
-    const validation = validateWebhookUrl(url);
+    // 验证 URL - 包含 DNS 解析检查
+    const validation = await validateWebhookUrlWithDNS(url);
     if (!validation.valid) {
       return Response.json({ ok: false, error: validation.error }, { status: 400 });
     }
@@ -288,8 +396,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       return Response.json({ ok: false, error: "URL is required" }, { status: 400 });
     }
     
-    // 验证 URL
-    const validation = validateWebhookUrl(url);
+    // 验证 URL - 包含 DNS 解析检查
+    const validation = await validateWebhookUrlWithDNS(url);
     if (!validation.valid) {
       return Response.json({ ok: false, error: validation.error }, { status: 400 });
     }

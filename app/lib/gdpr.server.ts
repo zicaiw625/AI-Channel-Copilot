@@ -107,6 +107,13 @@ export const redactCustomerRecords = async (
         await tx.order.deleteMany({
           where: { shopDomain, id: { in: orderIds } },
         });
+        
+        // 清理包含这些订单的 WebhookJob payload（可能含 PII）
+        // 只清空 payload，保留 job 记录用于审计
+        await tx.webhookJob.updateMany({
+          where: { shopDomain, orderId: { in: orderIds } },
+          data: { payload: {} },
+        });
       }
 
       if (customerIds.length) {
@@ -126,12 +133,28 @@ export const redactCustomerRecords = async (
         await tx.orderProduct.deleteMany({
           where: { order: { shopDomain, customerId: { in: customerIds } } },
         });
+        
+        // 获取属于这些客户的订单 ID，用于清理 WebhookJob
+        const customerOrders = await tx.order.findMany({
+          where: { shopDomain, customerId: { in: customerIds } },
+          select: { id: true },
+        });
+        const customerOrderIds = customerOrders.map(o => o.id);
+        
         await tx.order.deleteMany({
           where: { shopDomain, customerId: { in: customerIds } },
         });
         await tx.customer.deleteMany({
           where: { shopDomain, id: { in: customerIds } },
         });
+        
+        // 清理包含这些客户订单的 WebhookJob payload（可能含 PII）
+        if (customerOrderIds.length) {
+          await tx.webhookJob.updateMany({
+            where: { shopDomain, orderId: { in: customerOrderIds } },
+            data: { payload: {} },
+          });
+        }
       }
     });
   } catch (error) {

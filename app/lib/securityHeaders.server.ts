@@ -1,14 +1,16 @@
 /**
  * 基础安全头 - 适用于所有响应
+ * 
+ * 注意：不设置 X-Frame-Options 和 CSP frame-ancestors
+ * 这些由 Shopify SDK 的 addDocumentResponseHeaders 动态设置
+ * 以确保每个店铺的 frame-ancestors 是动态的（Shopify 审核要求）
  */
 const BASE_SECURITY_HEADERS: Record<string, string> = {
   "X-Content-Type-Options": "nosniff",
   "Referrer-Policy": "strict-origin-when-cross-origin",
   "X-XSS-Protection": "1; mode=block",
-  // X-Frame-Options for legacy browser support (CSP frame-ancestors is the modern approach)
-  // Note: ALLOW-FROM is deprecated, but we set SAMEORIGIN as fallback
-  // The primary protection comes from CSP frame-ancestors directive
-  "X-Frame-Options": "SAMEORIGIN",
+  // 不设置 X-Frame-Options - 由 Shopify SDK 处理
+  // X-Frame-Options: SAMEORIGIN 会阻止 Shopify Admin 嵌入 iframe
 };
 
 /**
@@ -23,9 +25,12 @@ const API_SECURITY_HEADERS: Record<string, string> = {
 };
 
 /**
- * 生成 CSP 策略字符串
+ * 生成额外的 CSP 指令（不包含 frame-ancestors）
+ * 
+ * 注意：frame-ancestors 由 Shopify SDK 动态设置
+ * 每个店铺需要不同的 frame-ancestors 值以通过 Shopify 审核
  */
-const generateCSP = (): string => {
+const generateAdditionalCSP = (): string => {
   // Shopify App Bridge requires 'unsafe-inline' and 'unsafe-eval' for proper operation
   // in embedded apps. We cannot use nonce because:
   // 1. CSP Level 2 ignores 'unsafe-inline' when nonce is present
@@ -38,7 +43,7 @@ const generateCSP = (): string => {
     "font-src 'self' https:",
     "connect-src 'self' https: wss:",
     "object-src 'none'",
-    "frame-ancestors https://*.myshopify.com https://admin.shopify.com",
+    // frame-ancestors 不在这里设置 - 由 Shopify SDK 处理
     "base-uri 'self'",
     "form-action 'self' https://*.myshopify.com https://admin.shopify.com",
   ].join("; ");
@@ -46,6 +51,9 @@ const generateCSP = (): string => {
 
 /**
  * 为页面响应应用安全头
+ * 
+ * 重要：此函数应在 Shopify SDK 的 addDocumentResponseHeaders 之后调用
+ * 它会合并 CSP 而不是覆盖，保留 Shopify 设置的 frame-ancestors
  */
 export const applySecurityHeaders = (request: Request, responseHeaders: Headers) => {
   // 应用基础安全头
@@ -53,8 +61,25 @@ export const applySecurityHeaders = (request: Request, responseHeaders: Headers)
     responseHeaders.set(key, value);
   });
 
-  // 应用 CSP
-  responseHeaders.set("Content-Security-Policy", generateCSP());
+  // 合并 CSP：保留 Shopify SDK 设置的 frame-ancestors，追加其他指令
+  const existingCSP = responseHeaders.get("Content-Security-Policy");
+  const additionalCSP = generateAdditionalCSP();
+  
+  if (existingCSP) {
+    // 提取现有 CSP 中的 frame-ancestors（Shopify 动态设置）
+    const frameAncestorsMatch = existingCSP.match(/frame-ancestors\s+[^;]+/);
+    const frameAncestors = frameAncestorsMatch ? frameAncestorsMatch[0] : null;
+    
+    // 合并：使用我们的指令 + Shopify 的 frame-ancestors
+    if (frameAncestors) {
+      responseHeaders.set("Content-Security-Policy", `${additionalCSP}; ${frameAncestors}`);
+    } else {
+      // 如果没有 frame-ancestors，直接使用我们的 CSP
+      responseHeaders.set("Content-Security-Policy", additionalCSP);
+    }
+  } else {
+    responseHeaders.set("Content-Security-Policy", additionalCSP);
+  }
 
   // 生产环境 HTTPS 启用 HSTS
   const isProd = process.env.NODE_ENV === "production";

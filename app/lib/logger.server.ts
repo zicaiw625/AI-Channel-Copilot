@@ -24,6 +24,13 @@ const SENSITIVE_FIELDS = new Set([
   "password", "token", "secret", "apiKey", "accessToken", "refreshToken",
   "authorization", "cookie", "session", "creditCard", "ssn", "email",
   "phone", "address", "ip", "payload", "body", "rawPayload", "webhookPayload",
+  // IP 地址相关字段（GDPR/隐私合规）
+  "clientIp", "clientip", "remoteAddress", "remoteaddress",
+  "x-forwarded-for", "xForwardedFor", "x-real-ip", "xRealIp",
+  "cf-connecting-ip", "cfConnectingIp",
+  // 其他可能包含 PII 的字段
+  "customerEmail", "customerPhone", "billingAddress", "shippingAddress",
+  "destinationUrl", "webhookUrl", "callbackUrl",
 ]);
 
 /**

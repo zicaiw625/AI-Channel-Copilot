@@ -18,7 +18,9 @@ fi
 
 export DATABASE_URL="$DB_URL"
 
-echo "[render-setup] Using DATABASE_URL=$DATABASE_URL" >&2
+# 仅输出脱敏后的连接信息（隐藏密码和用户名）
+DB_HOST=$(echo "$DATABASE_URL" | sed -E 's|.*@([^/:]+).*|\1|' || echo "unknown")
+echo "[render-setup] Database host: $DB_HOST" >&2
 
 npx prisma generate
 npx prisma migrate deploy

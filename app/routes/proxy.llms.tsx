@@ -9,6 +9,9 @@ import { enforceRateLimit, RateLimitRules, getClientIp, buildRateLimitKey } from
 /**
  * Verify Shopify App Proxy signature
  * @see https://shopify.dev/docs/apps/build/online-store/display-data-on-online-stores#verify-the-request
+ * 
+ * 重要：Shopify 签名算法要求同一参数有多个值时用逗号拼接
+ * 例如 extra=1&extra=2 需要变成 extra=1,2
  */
 function verifyAppProxySignature(
   query: URLSearchParams,
@@ -22,15 +25,20 @@ function verifyAppProxySignature(
     return false;
   }
 
-  // Build the message by sorting query params (excluding signature)
-  const params: string[] = [];
-  query.forEach((value, key) => {
-    if (key !== "signature") {
-      params.push(`${key}=${value}`);
-    }
-  });
-  params.sort();
-  const message = params.join("");
+  // 收集所有参数，同一个 key 可能有多个值
+  const grouped = new Map<string, string[]>();
+  for (const [key, value] of query.entries()) {
+    if (key === "signature") continue;
+    const arr = grouped.get(key) ?? [];
+    arr.push(value);
+    grouped.set(key, arr);
+  }
+
+  // Shopify 要求：同 key 多值用逗号拼接，然后排序
+  const message = Array.from(grouped.entries())
+    .map(([key, values]) => `${key}=${values.join(",")}`)
+    .sort()
+    .join("");
 
   // Calculate expected signature
   const expectedSignature = crypto

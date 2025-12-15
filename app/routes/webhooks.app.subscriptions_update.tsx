@@ -98,29 +98,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   if (status === "ACTIVE") {
     if (trialEnd && trialEnd.getTime() > Date.now() && plan.trialSupported) {
-      logger.info("[billing-webhook] Setting trial state (Shopify returned trial_end)", {
-        shopDomain,
-        planId: plan.id,
-        trialEnd: trialEnd.toISOString(),
-      });
       await setSubscriptionTrialState(shopDomain, plan.id, trialEnd, status);
     } else if (plan.trialSupported) {
       // For dev stores with test: true subscriptions, Shopify doesn't return trial_end
       // Check if we should grant trial locally
       const existingState = await getBillingState(shopDomain);
-      
-      // 详细记录 existingState 用于调试
-      logger.info("[billing-webhook] Checking trial state", {
-        shopDomain,
-        hasState: !!existingState,
-        billingPlan: existingState?.billingPlan,
-        billingState: existingState?.billingState,
-        hasEverSubscribed: existingState?.hasEverSubscribed,
-        usedTrialDays: existingState?.usedTrialDays,
-        lastTrialStartAt: existingState?.lastTrialStartAt?.toISOString() ?? null,
-        lastTrialEndAt: existingState?.lastTrialEndAt?.toISOString() ?? null,
-        "plan.defaultTrialDays": plan.defaultTrialDays,
-      });
       
       // 关键修复：如果当前已经处于 TRIALING 状态且试用期未过期，不要覆盖为 ACTIVE
       const isCurrentlyTrialing = existingState?.billingState?.includes("TRIALING") &&
@@ -128,49 +110,22 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         existingState.lastTrialEndAt.getTime() > Date.now();
       
       if (isCurrentlyTrialing) {
-        logger.info("[billing-webhook] Skipping ACTIVE update - already in valid TRIALING state", {
-          shopDomain,
-          planId: plan.id,
-          currentState: existingState?.billingState,
-          trialEndAt: existingState?.lastTrialEndAt?.toISOString(),
-        });
-        // 不做任何更新，保持当前的 TRIALING 状态
+        // 保持当前的 TRIALING 状态，不做任何更新
         return new Response();
       }
       
       const shouldGrantTrial = 
-        !existingState?.lastTrialStartAt && // no previous trial recorded
-        (existingState?.usedTrialDays || 0) < plan.defaultTrialDays; // has trial days remaining
-      
-      logger.info("[billing-webhook] shouldGrantTrial result", {
-        shopDomain,
-        shouldGrantTrial,
-        "!lastTrialStartAt": !existingState?.lastTrialStartAt,
-        "usedTrialDays < defaultTrialDays": (existingState?.usedTrialDays || 0) < plan.defaultTrialDays,
-      });
+        !existingState?.lastTrialStartAt &&
+        (existingState?.usedTrialDays || 0) < plan.defaultTrialDays;
       
       if (shouldGrantTrial) {
         const remainingTrialDays = plan.defaultTrialDays - (existingState?.usedTrialDays || 0);
         const localTrialEnd = new Date(Date.now() + remainingTrialDays * DAY_IN_MS);
-        logger.info("[billing-webhook] Granting local trial (Shopify did not return trial_end)", {
-          shopDomain,
-          planId: plan.id,
-          remainingTrialDays,
-          localTrialEnd: localTrialEnd.toISOString(),
-        });
         await setSubscriptionTrialState(shopDomain, plan.id, localTrialEnd, status);
       } else {
-        logger.info("[billing-webhook] Setting ACTIVE state (no trial granted)", {
-          shopDomain,
-          planId: plan.id,
-        });
         await setSubscriptionActiveState(shopDomain, plan.id, status);
       }
     } else {
-      logger.info("[billing-webhook] Setting ACTIVE state (plan does not support trial)", {
-        shopDomain,
-        planId: plan.id,
-      });
       await setSubscriptionActiveState(shopDomain, plan.id, status);
     }
   } else if (status === "CANCELLED") {

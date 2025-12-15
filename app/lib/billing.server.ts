@@ -467,51 +467,12 @@ const syncSubscriptionFromShopifyInternal = async (
         // so we need to check local state to determine if trial should be granted
         const existingState = await getBillingState(shopDomain);
         
-        // 详细记录 existingState 用于调试
-        logger.info("[billing] syncSubscription existingState", {
-          shopDomain,
-          hasState: !!existingState,
-          billingPlan: existingState?.billingPlan,
-          billingState: existingState?.billingState,
-          hasEverSubscribed: existingState?.hasEverSubscribed,
-          usedTrialDays: existingState?.usedTrialDays,
-          lastTrialStartAt: existingState?.lastTrialStartAt?.toISOString(),
-          lastTrialEndAt: existingState?.lastTrialEndAt?.toISOString(),
-        });
-        
-        // 移除 isNewSubscription 时间窗口检查，与 webhook 处理逻辑保持一致
         // 只要用户未曾开始试用期（lastTrialStartAt 为空）且有剩余试用天数，就授予试用期
         const shouldGrantTrial = 
           plan.trialSupported && 
           !isTrialing &&
-          !existingState?.lastTrialStartAt && // no previous trial recorded
-          (existingState?.usedTrialDays || 0) < plan.defaultTrialDays; // has trial days remaining
-        
-        // 详细记录 shouldGrantTrial 计算过程
-        logger.info("[billing] shouldGrantTrial calculation", {
-          shopDomain,
-          planId: plan.id,
-          "plan.trialSupported": plan.trialSupported,
-          isTrialing,
-          "!isTrialing": !isTrialing,
-          "existingState?.lastTrialStartAt": existingState?.lastTrialStartAt?.toISOString() ?? null,
-          "!existingState?.lastTrialStartAt": !existingState?.lastTrialStartAt,
-          "existingState?.usedTrialDays": existingState?.usedTrialDays,
-          "plan.defaultTrialDays": plan.defaultTrialDays,
-          "(usedTrialDays || 0) < defaultTrialDays": (existingState?.usedTrialDays || 0) < plan.defaultTrialDays,
-          shouldGrantTrial,
-        });
-        
-        logger.info("[billing] Syncing subscription from Shopify", { 
-          shopDomain, 
-          planId: plan.id,
-          status: activeSub.status,
-          isTrialing,
-          trialDays,
-          createdAt: createdAt?.toISOString(),
-          trialEnd: trialEnd?.toISOString(),
-          shouldGrantTrial,
-        });
+          !existingState?.lastTrialStartAt &&
+          (existingState?.usedTrialDays || 0) < plan.defaultTrialDays;
         
         // Update local billing state
         if (isTrialing && plan.trialSupported) {
@@ -521,12 +482,6 @@ const syncSubscriptionFromShopifyInternal = async (
           // grant trial locally based on remaining trial days
           const remainingTrialDays = plan.defaultTrialDays - (existingState?.usedTrialDays || 0);
           const localTrialEnd = new Date(Date.now() + remainingTrialDays * DAY_IN_MS);
-          logger.info("[billing] Granting local trial for new subscription", {
-            shopDomain,
-            planId: plan.id,
-            remainingTrialDays,
-            localTrialEnd: localTrialEnd.toISOString(),
-          });
           await setSubscriptionTrialState(shopDomain, plan.id, localTrialEnd, activeSub.status);
         } else {
           await setSubscriptionActiveState(shopDomain, plan.id, activeSub.status);
@@ -753,55 +708,24 @@ export const calculateRemainingTrialDays = async (
   planId: PlanId = PRIMARY_BILLABLE_PLAN_ID,
 ): Promise<number> => {
   const plan = getPlanConfig(planId);
-  if (!plan.trialSupported) {
-    logger.debug("[billing] Trial not supported for plan", { shopDomain, planId });
-    return 0;
-  }
+  if (!plan.trialSupported) return 0;
   const state = await getBillingState(shopDomain);
-  if (!state) {
-    logger.debug("[billing] No billing state found, returning default trial days", { 
-      shopDomain, planId, defaultTrialDays: plan.defaultTrialDays 
-    });
-    return plan.defaultTrialDays;
-  }
-
-  // 调试日志：输出当前 billing state
-  logger.info("[billing] calculateRemainingTrialDays state", {
-    shopDomain,
-    planId,
-    billingPlan: state.billingPlan,
-    billingState: state.billingState,
-    hasEverSubscribed: state.hasEverSubscribed,
-    usedTrialDays: state.usedTrialDays,
-    lastTrialStartAt: state.lastTrialStartAt?.toISOString(),
-    lastTrialEndAt: state.lastTrialEndAt?.toISOString(),
-    firstInstalledAt: state.firstInstalledAt?.toISOString(),
-  });
+  if (!state) return plan.defaultTrialDays;
 
   if (state.lastTrialEndAt && state.lastTrialEndAt.getTime() > Date.now()) {
     const diff = Math.ceil((state.lastTrialEndAt.getTime() - Date.now()) / DAY_IN_MS);
-    logger.debug("[billing] Trial still active", { shopDomain, planId, remainingDays: diff });
     return Math.max(diff, 0);
   }
 
   if (state.lastTrialEndAt && state.lastTrialEndAt.getTime() <= Date.now()) {
-    logger.info("[billing] Trial expired (lastTrialEndAt in past)", { 
-      shopDomain, planId, lastTrialEndAt: state.lastTrialEndAt.toISOString() 
-    });
     return 0;
   }
 
   if (state.hasEverSubscribed && toPlanId(state.billingPlan) === plan.id) {
-    logger.info("[billing] No trial - hasEverSubscribed and same plan", { 
-      shopDomain, planId, billingPlan: state.billingPlan 
-    });
     return 0;
   }
 
   const remainingBudget = Math.max(plan.defaultTrialDays - (state.usedTrialDays || 0), 0);
-  logger.debug("[billing] Calculated remaining trial budget", { 
-    shopDomain, planId, remainingBudget, usedTrialDays: state.usedTrialDays 
-  });
   
   // If firstInstalledAt is missing but we have a state record, do NOT reset to full trial.
   // If usedTrialDays is 0 and hasEverSubscribed is true, user has exhausted trial.
@@ -809,9 +733,6 @@ export const calculateRemainingTrialDays = async (
   if (!state.firstInstalledAt) {
     // If user has ever subscribed to this plan, no more trial
     if (state.hasEverSubscribed && toPlanId(state.billingPlan) === plan.id) {
-      logger.info("[billing] No trial - no firstInstalledAt, hasEverSubscribed, same plan", { 
-        shopDomain, planId 
-      });
       return 0;
     }
     return remainingBudget;

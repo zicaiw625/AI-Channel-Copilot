@@ -85,22 +85,16 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   // billing confirm 不依赖 embedded session（容易在 Shopify approve 回跳时丢失），
   // 直接用 offline token（unauthenticated.admin）去 Shopify 拉取并同步订阅状态。
   try {
-    console.log("[billing.confirm] Starting subscription sync for", shopDomain);
     const unauth = await unauthenticated.admin(shopDomain);
     const admin =
       unauth && typeof (unauth as any).graphql === "function"
         ? (unauth as any)
         : (unauth as any)?.admin;
     if (admin && typeof admin.graphql === "function") {
-      console.log("[billing.confirm] Calling syncSubscriptionFromShopify");
-      const result = await syncSubscriptionFromShopify(admin, shopDomain);
-      console.log("[billing.confirm] Sync result:", result);
-    } else {
-      console.log("[billing.confirm] No valid admin client available");
+      await syncSubscriptionFromShopify(admin, shopDomain);
     }
-  } catch (error) {
+  } catch {
     // ignore — 即使同步失败，也继续把用户送回应用；应用内会再走正常鉴权/引导
-    console.log("[billing.confirm] Sync failed:", (error as Error).message);
   }
 
   // 强制回到 Shopify Admin 内打开应用（最稳，避免停留在计费确认页/顶层窗口）

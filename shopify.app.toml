@@ -69,9 +69,10 @@ api_version = "2025-10"
 # - read_checkouts: 转化漏斗分析 (必需)
 # - write_orders: 订单标签写回 (可选，用户可控)
 # - read_content: llms.txt 博客内容获取 (可选，用于 AI 发现)
+# - read_themes: 检测 App Embed 启用状态 (用于优化建议)
 #
 # ⚠️ 2025-12-09 审计：write_customers 已移除，仅操作本地数据库不需要此权限
-scopes = "read_orders,read_customers,read_products,write_orders,read_checkouts,read_content"
+scopes = "read_orders,read_customers,read_products,write_orders,read_checkouts,read_content,read_themes"
 
 [auth]
 redirect_urls = [

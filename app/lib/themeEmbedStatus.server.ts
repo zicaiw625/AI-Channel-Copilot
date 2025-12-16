@@ -55,7 +55,7 @@ type SettingsData = {
  * @returns 
  *   - true: App Embed 已启用
  *   - false: App Embed 存在但已禁用，或未找到
- *   - null: 无法确定（API 调用失败或解析失败）
+ *   - null: 无法确定（API 调用失败、权限不足或解析失败）
  */
 export async function isProductSchemaEmbedEnabled(
   admin: AdminGraphqlClient,
@@ -63,13 +63,30 @@ export async function isProductSchemaEmbedEnabled(
 ): Promise<boolean | null> {
   try {
     // Step 1: 获取当前激活主题的 ID
-    const themeResponse = await graphqlRequest(
-      admin,
-      "themes.main",
-      MAIN_THEME_ID_QUERY,
-      {},
-      { shopDomain }
-    );
+    let themeResponse: Response;
+    try {
+      themeResponse = await graphqlRequest(
+        admin,
+        "themes.main",
+        MAIN_THEME_ID_QUERY,
+        {},
+        { shopDomain }
+      );
+    } catch (error) {
+      // graphqlRequest 在权限不足或其他错误时会抛出异常
+      const message = (error as Error).message || "";
+      if (message.includes("read_themes") || message.includes("Access denied")) {
+        logger.info("[themeEmbedStatus] Missing read_themes permission, skipping embed detection", {
+          shopDomain,
+        });
+      } else {
+        logger.warn("[themeEmbedStatus] Failed to fetch main theme", {
+          shopDomain,
+          error: message,
+        });
+      }
+      return null;
+    }
 
     if (!themeResponse.ok) {
       logger.warn("[themeEmbedStatus] Failed to fetch main theme", {
@@ -81,7 +98,19 @@ export async function isProductSchemaEmbedEnabled(
 
     const themeJson = await themeResponse.json() as {
       data?: { themes?: { nodes: { id: string; name: string }[] } };
+      errors?: Array<{ message: string }>;
     };
+
+    // 检查 GraphQL 错误（即使 HTTP 200，也可能有 GraphQL 错误）
+    if (themeJson.errors?.length) {
+      const errorMsg = themeJson.errors[0]?.message || "Unknown GraphQL error";
+      if (errorMsg.includes("read_themes") || errorMsg.includes("Access denied")) {
+        logger.info("[themeEmbedStatus] Missing read_themes permission", { shopDomain });
+      } else {
+        logger.warn("[themeEmbedStatus] GraphQL error fetching theme", { shopDomain, error: errorMsg });
+      }
+      return null;
+    }
 
     const themeId = themeJson?.data?.themes?.nodes?.[0]?.id;
     if (!themeId) {
@@ -90,13 +119,23 @@ export async function isProductSchemaEmbedEnabled(
     }
 
     // Step 2: 读取主题的 settings_data.json
-    const settingsResponse = await graphqlRequest(
-      admin,
-      "theme.settings_data",
-      SETTINGS_DATA_QUERY,
-      { id: themeId },
-      { shopDomain }
-    );
+    let settingsResponse: Response;
+    try {
+      settingsResponse = await graphqlRequest(
+        admin,
+        "theme.settings_data",
+        SETTINGS_DATA_QUERY,
+        { id: themeId },
+        { shopDomain }
+      );
+    } catch (error) {
+      logger.warn("[themeEmbedStatus] Failed to fetch settings_data.json", {
+        shopDomain,
+        themeId,
+        error: (error as Error).message,
+      });
+      return null;
+    }
 
     if (!settingsResponse.ok) {
       logger.warn("[themeEmbedStatus] Failed to fetch settings_data.json", {
@@ -118,7 +157,18 @@ export async function isProductSchemaEmbedEnabled(
           };
         };
       };
+      errors?: Array<{ message: string }>;
     };
+
+    // 检查 GraphQL 错误
+    if (settingsJson.errors?.length) {
+      logger.warn("[themeEmbedStatus] GraphQL error fetching settings_data.json", {
+        shopDomain,
+        themeId,
+        error: settingsJson.errors[0]?.message,
+      });
+      return null;
+    }
 
     const content = settingsJson?.data?.theme?.files?.nodes?.[0]?.body?.content;
     if (!content) {

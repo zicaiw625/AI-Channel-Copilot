@@ -465,26 +465,31 @@ export default function Index() {
                     );
                   })}
                 </div>
-                {backfillAvailable && (
-                  <div className={styles.backfillRow}>
-                    <button
-                      className={styles.primaryButton}
-                      onClick={triggerBackfill}
-                      disabled={backfillFetcher.state !== "idle"}
-                    >
-                      {backfillFetcher.state === "idle" ? (uiLanguage === "English" ? "Backfill in background" : "后台补拉") : (uiLanguage === "English" ? "Backfilling..." : "后台补拉中...")}
-                    </button>
-                    {backfillFetcher.data && (
-                      <span className={styles.backfillStatus}>
-                        {backfillFetcher.data.queued
-                          ? (uiLanguage === "English" ? `Background task triggered (${backfillFetcher.data.range})` : `已触发后台任务（${backfillFetcher.data.range}）`)
-                          : backfillFetcher.data.reason === "in-flight"
-                            ? (uiLanguage === "English" ? "A backfill is already running; refresh later" : "已有补拉在进行中，稍后刷新")
-                            : (uiLanguage === "English" ? "Cannot trigger backfill; check shop session" : "无法触发补拉，请确认店铺会话")}
-                      </span>
-                    )}
-                  </div>
-                )}
+                <div className={styles.backfillRow}>
+                  <button
+                    className={styles.primaryButton}
+                    onClick={triggerBackfill}
+                    disabled={backfillFetcher.state !== "idle" || !backfillAvailable}
+                  >
+                    {backfillFetcher.state === "idle" 
+                      ? (uiLanguage === "English" ? "Backfill in background" : "后台补拉") 
+                      : (uiLanguage === "English" ? "Backfilling..." : "后台补拉中...")}
+                  </button>
+                  {!backfillAvailable && backfillFetcher.state === "idle" && (
+                    <span className={styles.backfillStatus}>
+                      {uiLanguage === "English" ? "A backfill task is running in background" : "后台补拉任务进行中，请稍后刷新"}
+                    </span>
+                  )}
+                  {backfillFetcher.data && (
+                    <span className={styles.backfillStatus}>
+                      {backfillFetcher.data.queued
+                        ? (uiLanguage === "English" ? `Background task triggered (${backfillFetcher.data.range})` : `已触发后台任务（${backfillFetcher.data.range}）`)
+                        : backfillFetcher.data.reason === "in-flight"
+                          ? (uiLanguage === "English" ? "A backfill is already running; refresh later" : "已有补拉在进行中，稍后刷新")
+                          : (uiLanguage === "English" ? "Cannot trigger backfill; check shop session" : "无法触发补拉，请确认店铺会话")}
+                    </span>
+                  )}
+                </div>
               </div>
             </details>
             {/* 补拉提示移入系统状态折叠块，避免首页拥挤 */}

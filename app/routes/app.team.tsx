@@ -242,7 +242,7 @@ export default function Team() {
                 : "团队管理功能仅在 Growth 版中可用。升级后可查看团队成员的访问权限。"}
             </p>
             <Link
-              to="/app/onboarding?step=plan_selection"
+              to="/app/billing"
               style={{
                 display: "inline-block",
                 padding: "12px 24px",

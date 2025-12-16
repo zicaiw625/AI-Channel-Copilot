@@ -104,7 +104,7 @@ export default function Copilot() {
                   : "AI Copilot 需要 Pro 计划。升级以解锁智能问答。"}
             </p>
           </div>
-          <Link to="/app/onboarding?step=plan_selection" className={styles.primaryButton}>
+          <Link to="/app/billing" className={styles.primaryButton}>
               {language === "English" ? "Upgrade to Pro" : "升级到 Pro"}
           </Link>
       </div>

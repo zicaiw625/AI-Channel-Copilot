@@ -153,7 +153,7 @@ export default function Billing() {
                     : "请从下方选择一个计划以开始使用 AI Channel Copilot"}
                 </div>
                 <Link 
-                  to="/app/onboarding?step=plan_selection"
+                  to="/app/billing"
                   style={{
                     display: "inline-block",
                     background: "#008060",

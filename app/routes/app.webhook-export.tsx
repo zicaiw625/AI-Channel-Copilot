@@ -162,7 +162,7 @@ export default function WebhookExport() {
                 : "Webhook 导出功能仅在 Growth 版中可用。升级后可自动将 AI 订单数据推送到您的系统。"}
             </p>
             <Link
-              to="/app/onboarding?step=plan_selection"
+              to="/app/billing"
               style={{
                 display: "inline-block",
                 padding: "12px 24px",

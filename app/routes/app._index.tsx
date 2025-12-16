@@ -379,7 +379,7 @@ export default function Index() {
                 <span style={{ color: "#0050b3" }}>
                     {uiLanguage === "English" ? "You are on the Free plan (Limited to 7 days history)." : "当前为免费版（仅限查看最近 7 天数据）。"}
                 </span>
-                <Link to="/app/onboarding?step=plan_selection" style={{ color: "#0050b3", fontWeight: "bold", textDecoration: "underline" }}>
+                <Link to="/app/billing" style={{ color: "#0050b3", fontWeight: "bold", textDecoration: "underline" }}>
                     {uiLanguage === "English" ? "Upgrade to Pro" : "升级到 Pro 版"}
                 </Link>
             </div>

@@ -187,7 +187,7 @@ export const UpgradePrompt = ({
             {en ? details.title.en : details.title.zh}
           </h3>
           <Link
-            to="/app/onboarding?step=plan_selection"
+            to="/app/billing"
             style={{
               display: "inline-block",
               background: "#635bff",
@@ -240,7 +240,7 @@ export const UpgradePrompt = ({
           </div>
         </div>
         <Link
-          to="/app/onboarding?step=plan_selection"
+          to="/app/billing"
           style={{
             background: "white",
             color: "#635bff",
@@ -276,7 +276,7 @@ export const UpgradePrompt = ({
         {en ? details.title.en : details.title.zh}
       </span>
       <Link
-        to="/app/onboarding?step=plan_selection"
+        to="/app/billing"
         style={{
           marginLeft: "auto",
           color: "#635bff",

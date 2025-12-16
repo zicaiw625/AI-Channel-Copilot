@@ -1,9 +1,0 @@
-{
-  "name": "AI Product Schema",
-  "blocks": {
-    "product_schema": {
-      "name": "Product Schema Markup",
-      "settings": {}
-    }
-  }
-}

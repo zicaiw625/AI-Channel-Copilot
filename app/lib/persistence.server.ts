@@ -144,6 +144,53 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
           // 这样可以避免竞态条件，确保 orderCount 和 totalSpent 正确累加
           const ordersByCustomer = groupOrdersByCustomer(chunk);
 
+          // 【关键修复】先为所有新客户创建占位记录，避免 Order_customerId_fkey 外键约束失败
+          // 问题：Order.customerId 是外键，如果 customer 不存在，upsert order 会失败
+          // 解决：在 upsert orders 之前，先创建所有需要的 customer 占位记录
+          for (const customerId of customerIds) {
+            if (!customerStateMap.has(customerId)) {
+              // 找到该客户最早的订单作为初始数据
+              const customerOrders = ordersByCustomer.get(customerId) || [];
+              const firstOrder = customerOrders[0];
+              if (firstOrder) {
+                const firstCreatedAt = new Date(firstOrder.createdAt);
+                const aiSource = toPrismaAiSource(firstOrder.aiSource);
+                
+                // 创建初始客户状态
+                const initialState = createInitialCustomerState(
+                  customerId,
+                  shopDomain,
+                  platform,
+                  {
+                    createdAt: firstCreatedAt,
+                    id: firstOrder.id,
+                    aiSource,
+                  }
+                );
+                
+                // 创建占位记录（使用 upsert 避免重复）
+                await tx.customer.upsert({
+                  where: { id: customerId },
+                  create: {
+                    id: customerId,
+                    shopDomain,
+                    platform,
+                    firstOrderAt: firstCreatedAt,
+                    firstOrderId: firstOrder.id,
+                    lastOrderAt: firstCreatedAt,
+                    orderCount: 0, // 初始为 0，后面会更新
+                    totalSpent: 0,
+                    acquiredViaAi: Boolean(aiSource),
+                    firstAiOrderId: aiSource ? firstOrder.id : null,
+                  },
+                  update: {}, // 如果已存在，不更新（理论上不会发生）
+                });
+                
+                customerStateMap.set(customerId, initialState);
+              }
+            }
+          }
+
           // 先处理所有订单的基本数据和产品
           for (const order of chunk) {
             const aiSource = toPrismaAiSource(order.aiSource);

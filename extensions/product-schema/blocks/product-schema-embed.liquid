@@ -1,0 +1,58 @@
+{% comment %}
+  AI Channel Copilot - Product JSON-LD Schema
+  Automatically outputs structured data for better SEO on product pages
+{% endcomment %}
+
+{% if template.name == 'product' and product and block.settings.enable_product_schema %}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Product",
+  "name": {{ product.title | json }},
+  "description": {{ product.description | strip_html | truncate: 5000 | json }},
+  "image": [{% for image in product.images limit: 10 %}{{ image | image_url: width: 1024 | json }}{% unless forloop.last %},{% endunless %}{% endfor %}],
+  "sku": {{ product.selected_or_first_available_variant.sku | default: product.id | json }},
+  "mpn": {{ product.selected_or_first_available_variant.barcode | default: product.selected_or_first_available_variant.sku | json }},
+  "brand": {
+    "@type": "Brand",
+    "name": {{ product.vendor | json }}
+  },
+  "offers": {
+    "@type": "Offer",
+    "url": {{ request.origin | append: product.url | json }},
+    "price": "{{ product.price | money_without_currency | remove: ',' }}",
+    "priceCurrency": {{ shop.currency | json }},
+    "availability": "{% if product.available %}https://schema.org/InStock{% else %}https://schema.org/OutOfStock{% endif %}",
+    "itemCondition": "https://schema.org/NewCondition",
+    "priceValidUntil": "{{ 'now' | date: '%Y' | plus: 1 }}-12-31",
+    "seller": {
+      "@type": "Organization",
+      "name": {{ shop.name | json }}
+    }
+  }
+  {% if product.metafields.reviews.rating.value %}
+  ,"aggregateRating": {
+    "@type": "AggregateRating",
+    "ratingValue": "{{ product.metafields.reviews.rating.value.rating }}",
+    "reviewCount": "{{ product.metafields.reviews.rating_count.value | default: 1 }}"
+  }
+  {% endif %}
+}
+</script>
+{% endif %}
+
+{% schema %}
+{
+  "name": "t:product_schema.name",
+  "target": "head",
+  "settings": [
+    {
+      "type": "checkbox",
+      "id": "enable_product_schema",
+      "label": "t:product_schema.settings.enable.label",
+      "default": true,
+      "info": "t:product_schema.settings.enable.info"
+    }
+  ]
+}
+{% endschema %}

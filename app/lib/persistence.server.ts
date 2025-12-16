@@ -258,12 +258,16 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
             for (const line of newLines) {
               // 🔧 使用 lineItemId 查找现有记录
               const prev = existingByLineItemId.get(line.lineItemId);
+              // 🔧 修复：URL 兜底逻辑 - 如果 onlineStoreUrl 为空但 handle 存在，用 handle 拼接 URL
+              // Shopify 的 onlineStoreUrl 在商品未发布到 Online Store 时会为 null
+              const lineUrl = line.url || (line.handle ? `https://${shopDomain}/products/${line.handle}` : null);
+              
               if (prev) {
                 const changed =
                   prev.productId !== line.id ||  // productId 也可能变化（产品被替换）
                   prev.title !== line.title ||
                   prev.handle !== (line.handle || null) ||
-                  prev.url !== (line.url || null) ||
+                  prev.url !== lineUrl ||
                   toNumber(prev.price) !== roundMoney(line.price) ||
                   prev.currency !== (line.currency || prev.currency) ||
                   prev.quantity !== line.quantity;
@@ -274,7 +278,7 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
                       productId: line.id,  // 更新 productId（以防产品被替换）
                       title: line.title,
                       handle: line.handle || null,
-                      url: line.url || null,
+                      url: lineUrl,
                       price: roundMoney(line.price),
                       currency: line.currency ?? prev.currency,
                       quantity: line.quantity,
@@ -288,7 +292,7 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
                   lineItemId: line.lineItemId,  // 🔧 新增：存储 lineItemId
                   title: line.title,
                   handle: line.handle || null,
-                  url: line.url || null,
+                  url: lineUrl,
                   price: roundMoney(line.price),
                   currency: line.currency || order.currency || "USD",
                   quantity: line.quantity,

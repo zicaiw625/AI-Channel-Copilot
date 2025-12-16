@@ -112,6 +112,12 @@ type ArticleNode = {
   blog?: { handle: string };
 };
 
+/** Result type for fetch functions that includes error status */
+type FetchResult<T> = {
+  data: T[];
+  error?: "permission_denied" | "api_error" | "unknown";
+};
+
 /**
  * Fetch collections from Shopify API
  */
@@ -119,56 +125,106 @@ export const fetchCollections = async (
   admin: AdminGraphqlClient,
   shopDomain: string,
   limit: number = 20,
-): Promise<{ url: string; title: string }[]> => {
+): Promise<FetchResult<{ url: string; title: string }>> => {
   try {
     const sdk = createGraphqlSdk(admin, shopDomain);
     const response = await sdk.request("collectionsForLlms", COLLECTIONS_QUERY, { first: limit });
     
     if (!response.ok) {
-      logger.warn("[llms] Failed to fetch collections", { shopDomain, status: response.status });
-      return [];
+      const errorText = await response.text().catch(() => "");
+      logger.warn("[llms] Failed to fetch collections", { shopDomain, status: response.status, error: errorText });
+      return { data: [], error: "api_error" };
     }
     
     const json = (await response.json()) as {
       data?: { collections?: { edges: { node: CollectionNode }[] } };
+      errors?: Array<{ message: string; extensions?: { code?: string } }>;
     };
     
+    // Check for permission/access errors
+    if (json.errors && json.errors.length > 0) {
+      const hasAccessDenied = json.errors.some(e => 
+        e.message.includes("ACCESS_DENIED") || 
+        e.extensions?.code === "ACCESS_DENIED" ||
+        e.message.toLowerCase().includes("access") ||
+        e.message.toLowerCase().includes("permission")
+      );
+      
+      if (hasAccessDenied) {
+        logger.warn("[llms] Collections query access denied", { shopDomain });
+        return { data: [], error: "permission_denied" };
+      }
+      
+      logger.warn("[llms] GraphQL errors in collections query", { shopDomain }, {
+        errors: json.errors.map(e => e.message).join(", "),
+      });
+    }
+    
     const collections = json.data?.collections?.edges || [];
-    return collections
+    logger.info("[llms] Fetched collections", { shopDomain, count: collections.length });
+    
+    const result = collections
       .map(({ node }) => ({
         url: node.onlineStoreUrl || `https://${shopDomain}/collections/${node.handle}`,
         title: node.title,
       }))
       .filter((c) => c.url);
+    
+    return { data: result };
   } catch (error) {
     logger.error("[llms] Error fetching collections", { shopDomain }, { error: (error as Error).message });
-    return [];
+    return { data: [], error: "unknown" };
   }
 };
 
 /**
  * Fetch blog articles from Shopify API
+ * 
+ * Note: Requires `read_content` or `read_online_store_pages` scope
  */
 export const fetchArticles = async (
   admin: AdminGraphqlClient,
   shopDomain: string,
   limit: number = 20,
-): Promise<{ url: string; title: string }[]> => {
+): Promise<FetchResult<{ url: string; title: string }>> => {
   try {
     const sdk = createGraphqlSdk(admin, shopDomain);
     const response = await sdk.request("articlesForLlms", ARTICLES_QUERY, { first: limit });
     
     if (!response.ok) {
-      logger.warn("[llms] Failed to fetch articles", { shopDomain, status: response.status });
-      return [];
+      const errorText = await response.text().catch(() => "");
+      logger.warn("[llms] Failed to fetch articles", { shopDomain, status: response.status, error: errorText });
+      return { data: [], error: "api_error" };
     }
     
     const json = (await response.json()) as {
       data?: { articles?: { edges: { node: ArticleNode }[] } };
+      errors?: Array<{ message: string; extensions?: { code?: string } }>;
     };
     
+    // Check for permission/access errors (read_content scope required)
+    if (json.errors && json.errors.length > 0) {
+      const hasAccessDenied = json.errors.some(e => 
+        e.message.includes("ACCESS_DENIED") || 
+        e.extensions?.code === "ACCESS_DENIED" ||
+        e.message.toLowerCase().includes("access") ||
+        e.message.toLowerCase().includes("permission")
+      );
+      
+      if (hasAccessDenied) {
+        logger.warn("[llms] Articles query requires read_content scope", { shopDomain });
+        return { data: [], error: "permission_denied" };
+      }
+      
+      logger.warn("[llms] GraphQL errors in articles query", { shopDomain }, { 
+        errors: json.errors.map(e => e.message).join(", "),
+      });
+    }
+    
     const articles = json.data?.articles?.edges || [];
-    return articles
+    logger.info("[llms] Fetched articles", { shopDomain, count: articles.length });
+    
+    const result = articles
       .map(({ node }) => ({
         url: node.onlineStoreUrl || (node.blog?.handle 
           ? `https://${shopDomain}/blogs/${node.blog.handle}/${node.handle}`
@@ -176,9 +232,11 @@ export const fetchArticles = async (
         title: node.title,
       }))
       .filter((a) => a.url);
+    
+    return { data: result };
   } catch (error) {
     logger.error("[llms] Error fetching articles", { shopDomain }, { error: (error as Error).message });
-    return [];
+    return { data: [], error: "unknown" };
   }
 };
 
@@ -260,6 +318,66 @@ async function fetchProductDetailsForLlms(
   }
   
   return productMap;
+}
+
+// GraphQL query for fetching recent products as fallback (when no AI order data)
+const RECENT_PRODUCTS_QUERY = `#graphql
+  query RecentProductsForLlms($first: Int!) {
+    products(first: $first, sortKey: UPDATED_AT, reverse: true) {
+      edges {
+        node {
+          id
+          title
+          handle
+          description
+          onlineStoreUrl
+          priceRangeV2 {
+            minVariantPrice {
+              amount
+              currencyCode
+            }
+          }
+          productType
+          vendor
+        }
+      }
+    }
+  }
+`;
+
+/**
+ * Fetch recent products from Shopify as fallback when no AI order data exists
+ * Used to ensure llms.txt always has some product data for AI crawlers
+ */
+async function fetchRecentProductsAsFallback(
+  admin: AdminGraphqlClient,
+  shopDomain: string,
+  limit: number = 20,
+): Promise<ProductForLlms[]> {
+  if (!admin) return [];
+  
+  try {
+    const sdk = createGraphqlSdk(admin, shopDomain);
+    const response = await sdk.request("recentProductsForLlms", RECENT_PRODUCTS_QUERY, { first: limit });
+    
+    if (!response.ok) {
+      logger.warn("[llms] Failed to fetch recent products fallback", { shopDomain, status: response.status });
+      return [];
+    }
+    
+    const json = await response.json() as {
+      data?: { products?: { edges: { node: ProductForLlms }[] } };
+    };
+    
+    const products = json.data?.products?.edges?.map(({ node }) => node) || [];
+    logger.info("[llms] Fetched recent products as fallback", { shopDomain, count: products.length });
+    return products;
+  } catch (error) {
+    logger.error("[llms] Error fetching recent products fallback", { shopDomain }, {
+      error: (error as Error).message,
+    });
+    return [];
+  }
 }
 
 export const buildLlmsTxt = async (
@@ -401,9 +519,56 @@ export const buildLlmsTxt = async (
         lines.push("");
       }
     } else {
-      lines.push(isEnglish 
-        ? "# No AI-driven product data found in the selected time range"
-        : "# 所选时间范围内未找到 AI 驱动的产品数据");
+      // 🔧 Fallback: 没有 AI 订单数据时，从 Shopify 拉取最近更新的产品
+      // 这样确保 llms.txt 总是有产品数据供 AI 爬虫发现
+      const fallbackProducts = admin ? await fetchRecentProductsAsFallback(admin, shopDomain, topN) : [];
+      
+      if (fallbackProducts.length > 0) {
+        lines.push(isEnglish 
+          ? "# Recent products (no AI-driven sales data yet)"
+          : "# 最近更新产品（暂无 AI 驱动的销售数据）");
+        lines.push("");
+        lines.push("products:");
+        for (const product of fallbackProducts) {
+          const url = product.onlineStoreUrl || `https://${shopDomain}/products/${product.handle}`;
+          lines.push(`  - url: ${url}`);
+          lines.push(`    title: ${yamlValue(product.title)}`);
+          
+          // Add price if available
+          if (product.priceRangeV2?.minVariantPrice) {
+            const price = product.priceRangeV2.minVariantPrice;
+            lines.push(`    price: ${yamlValue(`${price.amount} ${price.currencyCode}`)}`);
+          }
+          
+          // Add description summary (first 150 chars)
+          if (product.description) {
+            const rawSummary = product.description
+              .replace(/[\n\r]+/g, " ")
+              .trim()
+              .slice(0, 150);
+            if (rawSummary) {
+              const suffix = product.description.length > 150 ? "..." : "";
+              lines.push(`    summary: ${yamlValue(rawSummary + suffix)}`);
+            }
+          }
+          
+          // Add category/type
+          if (product.productType) {
+            lines.push(`    category: ${yamlValue(product.productType)}`);
+          }
+          
+          // Add vendor/brand
+          if (product.vendor) {
+            lines.push(`    brand: ${yamlValue(product.vendor)}`);
+          }
+          
+          lines.push("");
+        }
+      } else {
+        lines.push(isEnglish 
+          ? "# No products found"
+          : "# 未找到产品");
+      }
     }
   } else {
     lines.push(isEnglish 
@@ -413,25 +578,33 @@ export const buildLlmsTxt = async (
   lines.push("");
 
   // === Fetch collections and articles in parallel for better performance ===
-  const [collections, articles] = await Promise.all([
+  const [collectionsResult, articlesResult] = await Promise.all([
     settings.exposurePreferences.exposeCollections && admin
       ? fetchCollections(admin, shopDomain, topN)
-      : Promise.resolve([]),
+      : Promise.resolve({ data: [] } as FetchResult<{ url: string; title: string }>),
     settings.exposurePreferences.exposeBlogs && admin
       ? fetchArticles(admin, shopDomain, topN)
-      : Promise.resolve([]),
+      : Promise.resolve({ data: [] } as FetchResult<{ url: string; title: string }>),
   ]);
 
   // === Collections Section ===
   if (settings.exposurePreferences.exposeCollections) {
     lines.push(isEnglish ? "## Collections" : "## 产品集合");
     if (admin) {
-      if (collections.length > 0) {
+      if (collectionsResult.data.length > 0) {
         lines.push("collections:");
-        collections.forEach(({ url, title }) => {
+        collectionsResult.data.forEach(({ url, title }) => {
           lines.push(`  - url: ${url}`);
           lines.push(`    title: ${yamlValue(title)}`);
         });
+      } else if (collectionsResult.error === "permission_denied") {
+        lines.push(isEnglish 
+          ? "# Permission denied - please re-authorize the app"
+          : "# 权限不足 - 请重新授权应用");
+      } else if (collectionsResult.error) {
+        lines.push(isEnglish 
+          ? "# Failed to fetch collections (API error)"
+          : "# 获取集合失败（API 错误）");
       } else {
         lines.push(isEnglish 
           ? "# No collections found"
@@ -453,12 +626,21 @@ export const buildLlmsTxt = async (
   if (settings.exposurePreferences.exposeBlogs) {
     lines.push(isEnglish ? "## Blog & Content" : "## 博客与内容");
     if (admin) {
-      if (articles.length > 0) {
+      if (articlesResult.data.length > 0) {
         lines.push("articles:");
-        articles.forEach(({ url, title }) => {
+        articlesResult.data.forEach(({ url, title }) => {
           lines.push(`  - url: ${url}`);
           lines.push(`    title: ${yamlValue(title)}`);
         });
+      } else if (articlesResult.error === "permission_denied") {
+        // 🔧 修复：明确提示需要重新授权（scope 变更后需要重新 grant）
+        lines.push(isEnglish 
+          ? "# Permission denied - read_content scope required. Please re-install or re-authorize the app."
+          : "# 权限不足 - 需要 read_content 权限。请重新安装或重新授权应用。");
+      } else if (articlesResult.error) {
+        lines.push(isEnglish 
+          ? "# Failed to fetch articles (API error)"
+          : "# 获取博客文章失败（API 错误）");
       } else {
         lines.push(isEnglish 
           ? "# No blog articles found"

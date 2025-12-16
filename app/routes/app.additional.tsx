@@ -890,6 +890,7 @@ export default function SettingsAndExport() {
         </div>
 
         <div className={styles.gridTwo}>
+          {/* 标签写回卡片 */}
           <div className={styles.card}>
             <div className={styles.sectionHeader}>
               <div>
@@ -945,21 +946,6 @@ export default function SettingsAndExport() {
                 </div>
               </div>
             </div>
-            {/* 客户标签写回功能已下线 - 需要 write_customers 权限，当前应用未申请此权限
-            <div className={styles.checkboxRow}>
-              <input
-                type="checkbox"
-                checked={tagging.writeCustomerTags}
-                onChange={(event) =>
-                  setTagging((prev) => ({ ...prev, writeCustomerTags: event.target.checked }))
-                }
-              />
-              <div>
-                <div className={styles.ruleTitle}>{language === "English" ? "Write AI acquisition tag to customers" : "向客户写回 AI 获客标签"}</div>
-                <div className={styles.ruleMeta}>{language === "English" ? "Example: " : "示例："}{tagging.customerTag}</div>
-              </div>
-            </div>
-            */}
             <div className={styles.alert}>{t(language as Lang, "tagging_enable_alert")}</div>
             <label className={styles.stackField}>
               <span className={styles.fieldLabel}>{language === "English" ? "Order tag prefix" : "订单标签前缀"}</span>
@@ -971,165 +957,10 @@ export default function SettingsAndExport() {
                 }
               />
             </label>
-            {/* 客户标签配置已下线 - 需要 write_customers 权限
-            <label className={styles.stackField}>
-              <span className={styles.fieldLabel}>{language === "English" ? "Customer tag" : "客户标签"}</span>
-              <input
-                className={styles.input}
-                value={tagging.customerTag}
-                onChange={(event) =>
-                  setTagging((prev) => ({ ...prev, customerTag: event.target.value }))
-                }
-              />
-            </label>
-            */}
             <p className={styles.helpText}>{language === "English" ? "Tags are off by default; when enabled, they write to Shopify orders/customers for filtering/export." : "标签默认关闭；开启后会回写到 Shopify 订单/客户，便于在后台过滤或导出。"}</p>
           </div>
 
-          <div className={styles.card}>
-            <div className={styles.sectionHeader}>
-              <div>
-                <p className={styles.sectionLabel}>{language === "English" ? "llms.txt Preferences" : "llms.txt 偏好"}</p>
-                <h3 className={styles.sectionTitle}>{language === "English" ? "Site Types to Expose to AI" : "希望向 AI 暴露的站点类型"}</h3>
-              </div>
-              <div className={styles.inlineActions}>
-                <button type="button" className={styles.secondaryButton} onClick={submitSettings} data-action="llms-save">
-                  {t(language as Lang, "btn_save")}
-                </button>
-                <span className={styles.badge}>{t(language as Lang, "badge_experiment")}</span>
-              </div>
-            </div>
-            {shopDomain && (
-              <div className={styles.alert} style={{ background: "#e3f1df", borderColor: "#50b83c" }}>
-                {language === "English" ? "Public URL: " : "公开访问地址："}
-                <a 
-                  href={`https://${shopDomain}/a/llms`} 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  style={{ color: "#006d3a", fontWeight: 500 }}
-                >
-                  https://{shopDomain}/a/llms
-                </a>
-                <span style={{ marginLeft: 8, color: "#637381", fontSize: 12 }}>
-                  {language === "English" ? "(AI crawlers can access this URL)" : "（AI 爬虫可访问此地址）"}
-                </span>
-              </div>
-            )}
-            <p className={styles.helpText}>{language === "English" ? "Configure which content types AI crawlers (ChatGPT, Perplexity, etc.) can discover via llms.txt. Changes take effect after saving." : "配置 AI 爬虫（ChatGPT、Perplexity 等）可通过 llms.txt 发现哪些内容类型。更改保存后生效。"}</p>
-            <div className={styles.checkboxRow}>
-              <input
-                type="checkbox"
-                checked={exposurePreferences.exposeProducts}
-                onChange={(event) =>
-                  setExposurePreferences((prev) => ({
-                    ...prev,
-                    exposeProducts: event.target.checked,
-                  }))
-                }
-              />
-              <div>
-                <div className={styles.ruleTitle}>{language === "English" ? "Allow AI to access product pages" : "允许 AI 访问产品页"}</div>
-                <div className={styles.ruleMeta}>{language === "English" ? "product_url / handle" : "product_url / handle"}</div>
-              </div>
-            </div>
-            <div className={styles.checkboxRow}>
-              <input
-                type="checkbox"
-                checked={exposurePreferences.exposeCollections}
-                onChange={(event) =>
-                  setExposurePreferences((prev) => ({
-                    ...prev,
-                    exposeCollections: event.target.checked,
-                  }))
-                }
-              />
-              <div>
-                <div className={styles.ruleTitle}>{language === "English" ? "Allow AI to access collections/categories" : "允许 AI 访问合集/分类页"}</div>
-                <div className={styles.ruleMeta}>{language === "English" ? "Reserved for curated collections in future" : "未来用于生成精选集合"}</div>
-              </div>
-            </div>
-            <div className={styles.checkboxRow}>
-              <input
-                type="checkbox"
-                checked={exposurePreferences.exposeBlogs}
-                onChange={(event) =>
-                  setExposurePreferences((prev) => ({
-                    ...prev,
-                    exposeBlogs: event.target.checked,
-                  }))
-                }
-              />
-              <div>
-                <div className={styles.ruleTitle}>{language === "English" ? "Allow AI to access blog content" : "允许 AI 访问博客内容"}</div>
-                <div className={styles.ruleMeta}>{language === "English" ? "Blog/content pages optional" : "博客/内容页可选暴露"}</div>
-              </div>
-            </div>
-          </div>
-
-          <div className={styles.card}>
-            <div className={styles.sectionHeader}>
-              <div>
-                <p className={styles.sectionLabel}>{language === "English" ? "llms.txt Preview" : "llms.txt 预览"}</p>
-                <h3 className={styles.sectionTitle}>{language === "English" ? "Draft Based on Preferences" : "根据偏好生成草稿"}</h3>
-              </div>
-              <div className={styles.inlineActions}>
-                <button type="button" className={styles.secondaryButton} onClick={submitSettings} data-action="llms-preview-save">
-                  {t(language as Lang, "btn_save")}
-                </button>
-                <span className={styles.badge}>{t(language as Lang, "badge_experiment")}</span>
-              </div>
-            </div>
-            <div className={styles.alert} style={{ background: "#fff7e6", borderColor: "#fa8c16", marginBottom: 12 }}>
-              {language === "English" 
-                ? "⚠️ This preview reflects your current UI selections. Click \"Save\" to update the public URL."
-                : "⚠️ 此预览反映您当前的 UI 选择。点击「保存」按钮以更新公开 URL。"}
-            </div>
-            <LlmsPreview language={language} canExport={canExport} lastSavedAt={lastSavedAt} />
-            <p className={styles.helpText}>{t(language as Lang, "llms_preview_help")}</p>
-          </div>
-
-          {/* 调试面板 - 仅在 SHOW_DEBUG_PANELS=true 时显示 */}
-          {showDebugPanels && (
-          <div className={styles.card}>
-            <div className={styles.sectionHeader}>
-              <div>
-                <p className={styles.sectionLabel}>{language === "English" ? "Debug" : "调试"}</p>
-                <h3 className={styles.sectionTitle}>{language === "English" ? "Recent Orders Diagnosis" : "最近订单诊断"}</h3>
-              </div>
-              <span className={styles.badge}>{language === "English" ? "Admin" : "仅管理员"}</span>
-            </div>
-            <div className={styles.tableWrap}>
-              <table className={styles.table}>
-                <thead>
-                  <tr>
-                    <th>{language === "English" ? "Order" : "订单"}</th>
-                    <th>referrer</th>
-                    <th>landing</th>
-                    <th>utm_source</th>
-                    <th>utm_medium</th>
-                    <th>{language === "English" ? "AI" : "AI"}</th>
-                    <th>{language === "English" ? "Detection" : "解析"}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(ordersSample || []).map((o) => (
-                    <tr key={o.id}>
-                      <td>{o.name}</td>
-                      <td>{o.referrer || ""}</td>
-                      <td>{o.landingPage || ""}</td>
-                      <td>{o.utmSource || ""}</td>
-                      <td>{o.utmMedium || ""}</td>
-                      <td>{o.aiSource || ""}</td>
-                      <td>{o.detection || ""}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <p className={styles.helpText}>{language === "English" ? "Only shows a small sample for debugging attribution signals; referrer has priority over UTM." : "用于调试 AI 渠道识别，仅展示少量样本；referrer 识别优先于 UTM。"}</p>
-          </div>
-          )}
-
+          {/* 语言/时区卡片 */}
           <div className={styles.card}>
             <div className={styles.sectionHeader}>
               <div>
@@ -1146,12 +977,9 @@ export default function SettingsAndExport() {
                 onChange={(event) => {
                   const next = event.target.value as Lang;
                   setLanguage(next);
-                  // 更新本地存储和派发事件以立即更新 UI
                   try { window.localStorage.setItem(LANGUAGE_STORAGE_KEY, next); } catch { void 0; }
-                  // 同时保存到 cookie，以便后端可以读取
                   try { document.cookie = `${LANGUAGE_STORAGE_KEY}=${encodeURIComponent(next)};path=/;max-age=31536000;SameSite=Lax`; } catch { void 0; }
                   try { window.dispatchEvent(new CustomEvent(LANGUAGE_EVENT, { detail: next })); } catch { void 0; }
-                  // 自动保存语言设置到服务器（更新 llms.txt 缓存）
                   const payload = {
                     aiDomains: sanitizedDomains,
                     utmSources: sanitizedUtmSources,
@@ -1216,6 +1044,152 @@ export default function SettingsAndExport() {
             <p className={styles.helpText}>{t(language as Lang, "gmv_metric_help")}</p>
           </div>
         </div>
+
+        {/* llms.txt 完整卡片 - 合并偏好设置和预览 */}
+        <div className={styles.card}>
+          <div className={styles.sectionHeader}>
+            <div>
+              <p className={styles.sectionLabel}>{language === "English" ? "llms.txt Preferences" : "llms.txt 偏好"}</p>
+              <h3 className={styles.sectionTitle}>{language === "English" ? "Site Types to Expose to AI" : "希望向 AI 暴露的站点类型"}</h3>
+            </div>
+            <div className={styles.inlineActions}>
+              <button type="button" className={styles.secondaryButton} onClick={submitSettings} data-action="llms-save">
+                {t(language as Lang, "btn_save")}
+              </button>
+              <span className={styles.badge}>{t(language as Lang, "badge_experiment")}</span>
+            </div>
+          </div>
+          
+          {shopDomain && (
+            <div className={styles.alert} style={{ background: "#e3f1df", borderColor: "#50b83c" }}>
+              {language === "English" ? "Public URL: " : "公开访问地址："}
+              <a 
+                href={`https://${shopDomain}/a/llms`} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                style={{ color: "#006d3a", fontWeight: 500 }}
+              >
+                https://{shopDomain}/a/llms
+              </a>
+              <span style={{ marginLeft: 8, color: "#637381", fontSize: 12 }}>
+                {language === "English" ? "(AI crawlers can access this URL)" : "（AI 爬虫可访问此地址）"}
+              </span>
+            </div>
+          )}
+          
+          <p className={styles.helpText}>{language === "English" ? "Configure which content types AI crawlers (ChatGPT, Perplexity, etc.) can discover via llms.txt. Changes take effect after saving." : "配置 AI 爬虫（ChatGPT、Perplexity 等）可通过 llms.txt 发现哪些内容类型。更改保存后生效。"}</p>
+          
+          <div className={styles.gridTwo}>
+            {/* 左侧：偏好设置 */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+              <div className={styles.checkboxRow}>
+                <input
+                  type="checkbox"
+                  checked={exposurePreferences.exposeProducts}
+                  onChange={(event) =>
+                    setExposurePreferences((prev) => ({
+                      ...prev,
+                      exposeProducts: event.target.checked,
+                    }))
+                  }
+                />
+                <div>
+                  <div className={styles.ruleTitle}>{language === "English" ? "Allow AI to access product pages" : "允许 AI 访问产品页"}</div>
+                  <div className={styles.ruleMeta}>{language === "English" ? "product_url / handle" : "product_url / handle"}</div>
+                </div>
+              </div>
+              <div className={styles.checkboxRow}>
+                <input
+                  type="checkbox"
+                  checked={exposurePreferences.exposeCollections}
+                  onChange={(event) =>
+                    setExposurePreferences((prev) => ({
+                      ...prev,
+                      exposeCollections: event.target.checked,
+                    }))
+                  }
+                />
+                <div>
+                  <div className={styles.ruleTitle}>{language === "English" ? "Allow AI to access collections/categories" : "允许 AI 访问合集/分类页"}</div>
+                  <div className={styles.ruleMeta}>{language === "English" ? "Reserved for curated collections in future" : "未来用于生成精选集合"}</div>
+                </div>
+              </div>
+              <div className={styles.checkboxRow}>
+                <input
+                  type="checkbox"
+                  checked={exposurePreferences.exposeBlogs}
+                  onChange={(event) =>
+                    setExposurePreferences((prev) => ({
+                      ...prev,
+                      exposeBlogs: event.target.checked,
+                    }))
+                  }
+                />
+                <div>
+                  <div className={styles.ruleTitle}>{language === "English" ? "Allow AI to access blog content" : "允许 AI 访问博客内容"}</div>
+                  <div className={styles.ruleMeta}>{language === "English" ? "Blog/content pages optional" : "博客/内容页可选暴露"}</div>
+                </div>
+              </div>
+            </div>
+            
+            {/* 右侧：预览 */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.25rem" }}>
+                <span className={styles.fieldLabel}>{language === "English" ? "Preview" : "预览"}</span>
+                <span className={styles.helpText} style={{ fontSize: "0.8rem" }}>
+                  {language === "English" 
+                    ? "Click \"Save\" to update public URL"
+                    : "点击「保存」以更新公开 URL"}
+                </span>
+              </div>
+              <LlmsPreview language={language} canExport={canExport} lastSavedAt={lastSavedAt} />
+            </div>
+          </div>
+          
+          <p className={styles.helpText}>{t(language as Lang, "llms_preview_help")}</p>
+        </div>
+
+        {/* 调试面板 - 仅在 SHOW_DEBUG_PANELS=true 时显示 */}
+        {showDebugPanels && (
+        <div className={styles.card}>
+          <div className={styles.sectionHeader}>
+            <div>
+              <p className={styles.sectionLabel}>{language === "English" ? "Debug" : "调试"}</p>
+              <h3 className={styles.sectionTitle}>{language === "English" ? "Recent Orders Diagnosis" : "最近订单诊断"}</h3>
+            </div>
+            <span className={styles.badge}>{language === "English" ? "Admin" : "仅管理员"}</span>
+          </div>
+          <div className={styles.tableWrap}>
+            <table className={styles.table}>
+              <thead>
+                <tr>
+                  <th>{language === "English" ? "Order" : "订单"}</th>
+                  <th>referrer</th>
+                  <th>landing</th>
+                  <th>utm_source</th>
+                  <th>utm_medium</th>
+                  <th>{language === "English" ? "AI" : "AI"}</th>
+                  <th>{language === "English" ? "Detection" : "解析"}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(ordersSample || []).map((o) => (
+                  <tr key={o.id}>
+                    <td>{o.name}</td>
+                    <td>{o.referrer || ""}</td>
+                    <td>{o.landingPage || ""}</td>
+                    <td>{o.utmSource || ""}</td>
+                    <td>{o.utmMedium || ""}</td>
+                    <td>{o.aiSource || ""}</td>
+                    <td>{o.detection || ""}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className={styles.helpText}>{language === "English" ? "Only shows a small sample for debugging attribution signals; referrer has priority over UTM." : "用于调试 AI 渠道识别，仅展示少量样本；referrer 识别优先于 UTM。"}</p>
+        </div>
+        )}
 
           <div className={styles.card}>
             <div className={styles.sectionHeader}>

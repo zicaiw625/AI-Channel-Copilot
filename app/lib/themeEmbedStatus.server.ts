@@ -145,20 +145,42 @@ export async function isProductSchemaEmbedEnabled(
 
     // 遍历 blocks，查找包含我们 app embed 的 block
     // Block 文件名: extensions/product-schema/blocks/product-schema-embed.liquid
-    // Block type 通常包含: "shopify://apps/{app-handle}/blocks/{block-handle}/{uuid}"
+    // Block type 格式: "shopify://apps/{app-handle}/blocks/{block-handle}/{uuid}"
+    // 
+    // 需要检查多个位置，因为不同主题可能有不同的结构：
+    // 1. settings.current.blocks - 大多数主题
+    // 2. settings.blocks - 某些旧主题
+    // 3. 可能需要递归查找
     const blocks = settings?.current?.blocks ?? settings?.blocks ?? {};
     const entries = Object.values(blocks) as ThemeBlock[];
 
+    // 记录所有 block types 以便调试
+    const allBlockTypes = entries
+      .map(b => b.type)
+      .filter((t): t is string => typeof t === "string");
+    
+    logger.info("[themeEmbedStatus] Scanning theme blocks", {
+      shopDomain,
+      themeId,
+      blockCount: entries.length,
+      blockTypes: allBlockTypes.slice(0, 20), // 只记录前 20 个，避免日志过长
+    });
+
     // 查找我们的 product-schema-embed block
+    // 匹配模式：
+    // 1. shopify://apps/ai-channel-copilot/blocks/product-schema-embed/...
+    // 2. shopify://apps/.../blocks/product-schema-embed/...
+    // 3. product-schema-embed
+    // 4. product-schema
+    // 5. 包含 "ai-channel-copilot" 和 "product-schema" 的组合
     const hit = entries.find(b => {
       if (typeof b.type !== "string") return false;
-      // 匹配 app embed block type，可能包含以下模式之一：
-      // - product-schema-embed
-      // - product-schema
-      // 根据实际的 app handle 和 block handle 进行匹配
+      const typeLower = b.type.toLowerCase();
       return (
-        b.type.includes("product-schema-embed") ||
-        b.type.includes("product-schema")
+        typeLower.includes("product-schema-embed") ||
+        typeLower.includes("product-schema") ||
+        (typeLower.includes("ai-channel-copilot") && typeLower.includes("schema")) ||
+        (typeLower.includes("ai_channel_copilot") && typeLower.includes("schema"))
       );
     });
 
@@ -167,6 +189,13 @@ export async function isProductSchemaEmbedEnabled(
         shopDomain,
         themeId,
         blockCount: entries.length,
+        // 记录所有可能相关的 block（包含 schema 或 embed 关键字）
+        relatedBlocks: allBlockTypes.filter(t => 
+          t.toLowerCase().includes("schema") || 
+          t.toLowerCase().includes("embed") ||
+          t.toLowerCase().includes("json-ld") ||
+          t.toLowerCase().includes("product")
+        ),
       });
       return false;
     }

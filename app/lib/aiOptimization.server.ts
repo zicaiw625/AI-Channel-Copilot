@@ -662,11 +662,17 @@ function generateSuggestions(
   const incompleteProducts = missingSchema + partialSchema;
   
   // ============================================================================
-  // 建议 A（高优先级）：仅当 App Embed 未启用时显示"启用 App Embed"
+  // 建议 A（高优先级）：当 App Embed 未启用或无法确定时显示"启用 App Embed"
+  // - isSchemaEmbedEnabled === false: 明确检测到未启用
+  // - isSchemaEmbedEnabled === null: 无法确定（API 失败或未找到 block）
+  // - 只有 isSchemaEmbedEnabled === true 时才不显示此建议
   // ============================================================================
-  if (isSchemaEmbedEnabled === false) {
+  if (isSchemaEmbedEnabled !== true) {
     const manualPath = getAppEmbedManualPath(language);
     const deepLink = shopDomain ? getAppEmbedDeepLink(shopDomain) : "";
+    
+    // 根据检测结果调整文案
+    const isUncertain = isSchemaEmbedEnabled === null;
     
     suggestions.push({
       id: "schema-embed-disabled",
@@ -677,8 +683,12 @@ function generateSuggestions(
         zh: "启用产品 Schema App Embed",
       },
       description: {
-        en: "The Product Schema (JSON-LD) app embed is installed but not enabled in your theme. Enable it to add structured data to your product pages.",
-        zh: "产品 Schema (JSON-LD) App Embed 已安装但未在主题中启用。启用后可为产品页面添加结构化数据。",
+        en: isUncertain
+          ? "Please verify that the Product Schema (JSON-LD) app embed is enabled in your theme. This adds structured data to your product pages for better AI discoverability."
+          : "The Product Schema (JSON-LD) app embed is installed but not enabled in your theme. Enable it to add structured data to your product pages.",
+        zh: isUncertain
+          ? "请确认产品 Schema (JSON-LD) App Embed 已在主题中启用。这将为产品页面添加结构化数据，提升 AI 可发现性。"
+          : "产品 Schema (JSON-LD) App Embed 已安装但未在主题中启用。启用后可为产品页面添加结构化数据。",
       },
       impact: isEnglish 
         ? "Schema markup helps AI assistants understand and recommend your products more accurately."

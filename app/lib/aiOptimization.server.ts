@@ -656,8 +656,8 @@ function generateSuggestions(
       category: "schema_markup",
       priority: "high",
       title: {
-        en: "Add Product Schema Markup",
-        zh: "添加产品 Schema 标记",
+        en: "Enable Product Schema Markup",
+        zh: "启用产品 Schema 标记",
       },
       description: {
         en: `${missingSchema} products lack complete information needed for structured data markup, reducing their visibility to AI assistants.`,
@@ -667,30 +667,8 @@ function generateSuggestions(
         ? "Products with complete schema markup may improve AI discoverability."
         : "完整的 Schema 标记可以提升产品在 AI 中的可发现性。",
       action: isEnglish
-        ? "Add JSON-LD Product schema to your product pages."
-        : "将 JSON-LD 产品 Schema 添加到您的产品页面。",
-      codeSnippet: `<script type="application/ld+json">
-{
-  "@context": "https://schema.org",
-  "@type": "Product",
-  "name": {{ product.title | json }},
-  "description": {{ product.description | strip_html | json }},
-  "image": [{% for image in product.images %}"{{ image | image_url: width: 1024 }}"{% unless forloop.last %},{% endunless %}{% endfor %}],
-  "sku": {{ product.selected_or_first_available_variant.sku | json }},
-  "brand": {
-    "@type": "Brand",
-    "name": {{ product.vendor | json }}
-  },
-  "offers": {
-    "@type": "Offer",
-    "url": "{{ shop.url }}{{ product.url }}",
-    "price": "{{ product.price | money_without_currency | remove: ',' }}",
-    "priceCurrency": "{{ shop.currency }}",
-    "availability": "{% if product.available %}https://schema.org/InStock{% else %}https://schema.org/OutOfStock{% endif %}",
-    "itemCondition": "https://schema.org/NewCondition"
-  }
-}
-</script>`,
+        ? "Enable Product Schema in theme editor: Online Store → Themes → Customize → App embeds → Turn on 'Product Schema (JSON-LD)'"
+        : "在主题编辑器中启用：在线商店 → 主题 → 自定义 → App embeds → 开启「Product Schema (JSON-LD)」",
       affectedProducts: products.filter(p => p.schemaMarkupStatus === "missing").map(p => p.productId),
       estimatedLift: "+15-25% AI visibility",
     });

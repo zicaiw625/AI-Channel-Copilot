@@ -131,16 +131,30 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     await saveSettings(shopDomain, merged);
     
-    // Refresh llms.txt cache when exposure preferences may have changed
+    // Refresh llms.txt cache when exposure preferences or language may have changed
     // Use force=true to bypass cooldown since this is a user-initiated save
     if (admin && shopDomain) {
       try {
+        const targetLanguage = merged.languages?.[0] || "中文";
+        logger.info("[settings] Refreshing llms.txt cache", { 
+          shopDomain, 
+          targetLanguage,
+          exposurePreferences: merged.exposurePreferences,
+        });
+        
         const llmsText = await buildLlmsTxt(shopDomain, merged, {
           range: "30d",
           topN: 20,
           admin,
         });
-        await updateLlmsTxtCache(shopDomain, llmsText, { force: true });
+        const cacheResult = await updateLlmsTxtCache(shopDomain, llmsText, { force: true });
+        
+        logger.info("[settings] llms.txt cache refresh result", { 
+          shopDomain, 
+          targetLanguage,
+          updated: cacheResult.updated,
+          reason: cacheResult.reason,
+        });
       } catch (e) {
         // Non-blocking: log but don't fail the save operation
         logger.warn("[settings] Failed to refresh llms.txt cache", { shopDomain }, { error: (e as Error).message });
@@ -1060,6 +1074,11 @@ export default function SettingsAndExport() {
               </div>
               <span className={styles.badge}>{t(language as Lang, "badge_experiment")}</span>
             </div>
+            <div className={styles.alert} style={{ background: "#fff7e6", borderColor: "#fa8c16", marginBottom: 12 }}>
+              {language === "English" 
+                ? "⚠️ This preview reflects your current UI selections. Click \"Save\" button above to update the public URL."
+                : "⚠️ 此预览反映您当前的 UI 选择。点击上方的「保存」按钮以更新公开 URL。"}
+            </div>
             <LlmsPreview language={language} canExport={canExport} lastSavedAt={lastSavedAt} />
             <p className={styles.helpText}>{t(language as Lang, "llms_preview_help")}</p>
           </div>
@@ -1127,8 +1146,7 @@ export default function SettingsAndExport() {
                   // 同时保存到 cookie，以便后端可以读取
                   try { document.cookie = `${LANGUAGE_STORAGE_KEY}=${encodeURIComponent(next)};path=/;max-age=31536000;SameSite=Lax`; } catch { void 0; }
                   try { window.dispatchEvent(new CustomEvent(LANGUAGE_EVENT, { detail: next })); } catch { void 0; }
-                  
-                  // 自动保存语言设置到服务器，确保 llms.txt 也同步更新
+                  // 自动保存语言设置到服务器（更新 llms.txt 缓存）
                   const payload = {
                     aiDomains: sanitizedDomains,
                     utmSources: sanitizedUtmSources,
@@ -1155,8 +1173,8 @@ export default function SettingsAndExport() {
               </select>
               <span className={styles.helpText}>
                 {language === "English"
-                  ? "Language change takes effect immediately and auto-saves to server (including llms.txt)."
-                  : "语言更改立即生效并自动保存到服务器（包括 llms.txt）。"}
+                  ? "Language change auto-saves and updates llms.txt immediately."
+                  : "语言更改会自动保存并立即更新 llms.txt。"}
               </span>
             </label>
             <label className={styles.stackField}>

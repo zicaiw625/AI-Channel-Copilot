@@ -18,7 +18,7 @@ import { fetchOrdersForRange } from "../lib/shopifyOrders.server";
 import { getSettings, markActivity, normalizeSettingsPayload, saveSettings, syncShopPreferences } from "../lib/settings.server";
 import { buildLlmsTxt, updateLlmsTxtCache } from "../lib/llms.server";
 import { getDeadLetterJobs, getWebhookQueueSize } from "../lib/webhookQueue.server";
-import { persistOrders } from "../lib/persistence.server";
+import { persistOrders, removeDeletedOrders } from "../lib/persistence.server";
 import { applyAiTags } from "../lib/tagging.server";
 import { authenticate } from "../shopify.server";
 import styles from "../styles/app.settings.module.css";
@@ -198,6 +198,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       }
       
       const result = await persistOrders(shopDomain, orders);
+      
+      // 【修复】删除数据库中存在但 Shopify 已删除的订单
+      const shopifyOrderIds = new Set(orders.map(o => o.id));
+      const deletedCount = await removeDeletedOrders(shopDomain, range, shopifyOrderIds);
+      
       await markActivity(shopDomain, { lastBackfillAt: new Date() });
       logger.info(
         "[backfill] settings-trigger completed",
@@ -206,6 +211,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           fetched: orders.length,
           created: result.created,
           updated: result.updated,
+          deleted: deletedCount,
         },
       );
     }

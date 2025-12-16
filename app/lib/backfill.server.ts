@@ -2,7 +2,7 @@ import type { Prisma } from "@prisma/client";
 import type { SettingsDefaults, DateRange } from "./aiData";
 import { fetchOrdersForRange } from "./shopifyOrders.server";
 import { markActivity, updatePipelineStatuses } from "./settings.server";
-import { persistOrders } from "./persistence.server";
+import { persistOrders, removeDeletedOrders } from "./persistence.server";
 import prisma from "../db.server";
 import { withAdvisoryLock } from "./locks.server";
 import { logger } from "./logger.server";
@@ -154,6 +154,10 @@ const processQueue = async (
           await markActivity(job.shopDomain, { lastBackfillAt: new Date() });
         }
 
+        // 【修复】删除数据库中存在但 Shopify 已删除的订单
+        const shopifyOrderIds = new Set(fetched.orders.map(o => o.id));
+        const deletedCount = await removeDeletedOrders(job.shopDomain, range, shopifyOrderIds);
+
         await updateJobStatus(job.id, "completed", { ordersFetched: fetched.orders.length });
         await setBackfillStatus(
           job.shopDomain,
@@ -165,6 +169,7 @@ const processQueue = async (
           jobId: job.id,
           shopDomain: job.shopDomain,
           ordersFetched: fetched.orders.length,
+          deletedFromDb: deletedCount,
         });
       } catch (error) {
         const message = (error as Error).message;

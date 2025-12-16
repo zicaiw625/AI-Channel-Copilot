@@ -490,6 +490,94 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
 };
 
 /**
+ * 删除数据库中存在但 Shopify 已不存在的订单
+ * 用于后台补位时同步删除已从 Shopify 删除的订单
+ * 
+ * @param shopDomain - 店铺域名
+ * @param range - 时间范围（用于限定同步范围）
+ * @param shopifyOrderIds - Shopify 当前返回的订单 ID 集合
+ * @returns 删除的订单数量
+ */
+export const removeDeletedOrders = async (
+  shopDomain: string,
+  range: DateRange,
+  shopifyOrderIds: Set<string>
+): Promise<number> => {
+  if (!shopDomain || isDemoMode()) {
+    return 0;
+  }
+
+  try {
+    // 查询数据库中该时间范围内的所有订单 ID
+    const dbOrders = await prisma.order.findMany({
+      where: {
+        shopDomain,
+        platform,
+        createdAt: {
+          gte: range.start,
+          lte: range.end,
+        },
+      },
+      select: { id: true },
+    });
+
+    // 找出数据库中存在但 Shopify 已不存在的订单 ID
+    const ordersToDelete = dbOrders
+      .map(o => o.id)
+      .filter(id => !shopifyOrderIds.has(id));
+
+    if (ordersToDelete.length === 0) {
+      logger.debug("[persistence] No deleted orders to remove", {
+        shopDomain,
+        rangeStart: range.start.toISOString(),
+        rangeEnd: range.end.toISOString(),
+        dbOrderCount: dbOrders.length,
+        shopifyOrderCount: shopifyOrderIds.size,
+      });
+      return 0;
+    }
+
+    // 分批删除订单（OrderProduct 会通过 onDelete: Cascade 自动删除）
+    const BATCH_SIZE = 100;
+    let totalDeleted = 0;
+
+    for (let i = 0; i < ordersToDelete.length; i += BATCH_SIZE) {
+      const batch = ordersToDelete.slice(i, i + BATCH_SIZE);
+      
+      const result = await prisma.order.deleteMany({
+        where: { id: { in: batch } },
+      });
+      
+      totalDeleted += result.count;
+    }
+
+    logger.info("[persistence] Removed deleted orders from database", {
+      shopDomain,
+      rangeStart: range.start.toISOString(),
+      rangeEnd: range.end.toISOString(),
+      dbOrderCount: dbOrders.length,
+      shopifyOrderCount: shopifyOrderIds.size,
+      deletedCount: totalDeleted,
+    });
+
+    return totalDeleted;
+  } catch (error) {
+    if (tableMissing(error)) {
+      logger.warn("[persistence] Database tables not available for order removal", { shopDomain });
+      return 0;
+    }
+
+    logger.error("[persistence] Failed to remove deleted orders", {
+      shopDomain,
+      error: error instanceof Error ? error.message : String(error),
+    });
+
+    // 删除失败不抛出异常，只记录日志，避免影响主流程
+    return 0;
+  }
+};
+
+/**
  * 从数据库加载订单
  * @deprecated 请直接从 orderService.server 导入 loadOrdersFromDb
  * 为保持向后兼容，此处重新导出

@@ -10,6 +10,11 @@ import styles from "../styles/app.dashboard.module.css";
 import { FEATURES, hasFeature } from "../lib/access.server";
 import { generateAIOptimizationReport } from "../lib/aiOptimization.server";
 import { logger } from "../lib/logger.server";
+import { 
+  isProductSchemaEmbedEnabled, 
+  getAppEmbedDeepLink, 
+  getAppEmbedManualPath 
+} from "../lib/themeEmbedStatus.server";
 
 // ============================================================================
 // Loader
@@ -24,6 +29,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   
   const settings = await getSettings(shopDomain);
   const language = settings.languages?.[0] || "中文";
+
+  // 检测 Product Schema App Embed 是否已启用
+  const embedEnabled = admin ? await isProductSchemaEmbedEnabled(admin, shopDomain) : null;
+  
+  // 生成 App Embed 启用的 deep link
+  const embedDeepLink = getAppEmbedDeepLink(shopDomain);
+  
+  // 获取手动路径说明
+  const embedManualPath = getAppEmbedManualPath(language);
 
   // 获取优化报告
   const report = await generateAIOptimizationReport(shopDomain, admin, {
@@ -78,6 +92,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     isGrowth,
     report,
     shopInfo,
+    // 新增：embed 状态相关
+    embedEnabled,      // true: 已启用, false: 未启用/未找到, null: 无法确定
+    embedDeepLink,     // 一键启用的 deep link
+    embedManualPath,   // 手动路径说明 { en, zh }
   };
 };
 
@@ -161,6 +179,239 @@ function CopyButton({ text, en, label, disabled }: { text: string; en: boolean; 
         ? (en ? "Copied!" : "已复制！") 
         : (label || (en ? "Copy Code" : "复制代码"))}
     </button>
+  );
+}
+
+// ============================================================================
+// Embed Status Card - 显示 App Embed 启用状态
+// ============================================================================
+
+function EmbedStatusCard({
+  embedEnabled,
+  embedDeepLink,
+  embedManualPath,
+  en,
+}: {
+  embedEnabled: boolean | null;
+  embedDeepLink: string;
+  embedManualPath: { en: string; zh: string };
+  en: boolean;
+}) {
+  // embedEnabled: true = 已启用, false = 未启用/未找到, null = 无法确定（权限不足等）
+  
+  if (embedEnabled === true) {
+    // ✅ 已启用状态
+    return (
+      <div style={{
+        background: "#e6f7ed",
+        border: "1px solid #b7eb8f",
+        borderRadius: 8,
+        padding: 20,
+        marginBottom: 20,
+      }}>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+          <span style={{ fontSize: 24 }}>✅</span>
+          <div style={{ flex: 1 }}>
+            <h4 style={{ margin: "0 0 8px", fontSize: 16, fontWeight: 600, color: "#389e0d" }}>
+              {en ? "Product Schema is Active" : "Product Schema 已启用"}
+            </h4>
+            <p style={{ margin: 0, fontSize: 14, color: "#52c41a" }}>
+              {en 
+                ? "Your product pages are automatically outputting structured data (JSON-LD) to help AI assistants and search engines understand your products."
+                : "您的产品页面正在自动输出结构化数据 (JSON-LD)，帮助 AI 助手和搜索引擎更好地理解您的产品。"}
+            </p>
+            <div style={{ marginTop: 12, display: "flex", gap: 12, flexWrap: "wrap" }}>
+              <a
+                href={embedDeepLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  padding: "8px 16px",
+                  background: "#fff",
+                  color: "#389e0d",
+                  border: "1px solid #b7eb8f",
+                  borderRadius: 4,
+                  fontSize: 13,
+                  fontWeight: 500,
+                  textDecoration: "none",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                ⚙️ {en ? "View Theme Settings" : "查看主题设置"}
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (embedEnabled === false) {
+    // ⚠️ 未启用状态
+    return (
+      <div style={{
+        background: "#fff7e6",
+        border: "1px solid #ffd591",
+        borderRadius: 8,
+        padding: 20,
+        marginBottom: 20,
+      }}>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+          <span style={{ fontSize: 24 }}>⚠️</span>
+          <div style={{ flex: 1 }}>
+            <h4 style={{ margin: "0 0 8px", fontSize: 16, fontWeight: 600, color: "#d46b08" }}>
+              {en ? "Product Schema Not Enabled" : "Product Schema 未启用"}
+            </h4>
+            <p style={{ margin: "0 0 12px", fontSize: 14, color: "#8a6116" }}>
+              {en 
+                ? "Enable Product Schema in your theme to automatically add structured data to all product pages. No code changes required!"
+                : "在主题中启用 Product Schema，即可自动为所有产品页面添加结构化数据。无需修改代码！"}
+            </p>
+            <a
+              href={embedDeepLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                padding: "12px 24px",
+                background: "#008060",
+                color: "#fff",
+                border: "none",
+                borderRadius: 6,
+                fontSize: 14,
+                fontWeight: 600,
+                textDecoration: "none",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
+              🚀 {en ? "Enable Product Schema Now" : "立即启用 Product Schema"}
+            </a>
+            <p style={{ margin: "12px 0 0", fontSize: 12, color: "#8a6116" }}>
+              📍 {en ? "Manual path:" : "手动路径："}{en ? embedManualPath.en : embedManualPath.zh}
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ❓ 无法确定状态（权限不足等）
+  return (
+    <div style={{
+      background: "#f0f7ff",
+      border: "1px solid #91d5ff",
+      borderRadius: 8,
+      padding: 20,
+      marginBottom: 20,
+    }}>
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+        <span style={{ fontSize: 24 }}>ℹ️</span>
+        <div style={{ flex: 1 }}>
+          <h4 style={{ margin: "0 0 8px", fontSize: 16, fontWeight: 600, color: "#0050b3" }}>
+            {en ? "Check Your Theme Settings" : "请检查主题设置"}
+          </h4>
+          <p style={{ margin: "0 0 12px", fontSize: 14, color: "#096dd9" }}>
+            {en 
+              ? "We couldn't detect the current status. Please check if Product Schema is enabled in your theme settings."
+              : "无法检测当前状态。请检查主题设置中是否已启用 Product Schema。"}
+          </p>
+          <a
+            href={embedDeepLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              padding: "12px 24px",
+              background: "#1890ff",
+              color: "#fff",
+              border: "none",
+              borderRadius: 6,
+              fontSize: 14,
+              fontWeight: 600,
+              textDecoration: "none",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+            }}
+          >
+            🔍 {en ? "Check Theme Settings" : "检查主题设置"}
+          </a>
+          <p style={{ margin: "12px 0 0", fontSize: 12, color: "#096dd9" }}>
+            📍 {en ? "Path:" : "路径："}{en ? embedManualPath.en : embedManualPath.zh}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// Schema Preview - 预览自动生成的 JSON-LD（仅用于排查）
+// ============================================================================
+
+function SchemaPreview({ shopInfo, en }: { shopInfo: { name: string; url: string }; en: boolean }) {
+  const previewCode = useMemo(() => {
+    const schema = {
+      "@context": "https://schema.org",
+      "@type": "Product",
+      "name": "{{ product.title }}",
+      "description": "{{ product.description | strip_html | truncate: 5000 }}",
+      "image": ["{{ product.images | first | image_url: width: 1024 }}"],
+      "sku": "{{ variant.sku | default: product.id }}",
+      "brand": {
+        "@type": "Brand",
+        "name": "{{ product.vendor }}"
+      },
+      "offers": {
+        "@type": "Offer",
+        "url": "{{ request.origin }}{{ product.url }}",
+        "price": "{{ variant.price | divided_by: 100.0 }}",
+        "priceCurrency": "{{ shop.currency }}",
+        "availability": "https://schema.org/InStock",
+        "itemCondition": "https://schema.org/NewCondition",
+        "seller": {
+          "@type": "Organization",
+          "name": "{{ shop.name }}"
+        }
+      }
+    };
+    return JSON.stringify(schema, null, 2);
+  }, []);
+
+  return (
+    <div style={{ marginTop: 16 }}>
+      <div style={{ 
+        display: "flex", 
+        justifyContent: "space-between", 
+        alignItems: "center", 
+        marginBottom: 8 
+      }}>
+        <span style={{ fontSize: 14, fontWeight: 600 }}>
+          {en ? "JSON-LD Template Preview" : "JSON-LD 模板预览"}
+        </span>
+        <CopyButton text={previewCode} en={en} label={en ? "Copy Template" : "复制模板"} />
+      </div>
+      <pre
+        style={{
+          background: "#1e1e1e",
+          color: "#d4d4d4",
+          padding: 16,
+          borderRadius: 8,
+          overflow: "auto",
+          fontSize: 12,
+          maxHeight: 250,
+        }}
+      >
+        {previewCode}
+      </pre>
+      <p style={{ margin: "8px 0 0", fontSize: 12, color: "#888" }}>
+        💡 {en 
+          ? "This is a template showing the structure. Actual values are filled dynamically from your product data."
+          : "这是一个模板，展示结构化数据的格式。实际值会从您的产品数据中动态填充。"}
+      </p>
+    </div>
   );
 }
 
@@ -822,11 +1073,20 @@ function LlmsTxtGenerator({ shopInfo, en }: { shopInfo: { name: string; url: str
 type TabId = "schema" | "faq" | "llmstxt";
 
 export default function AIVisibility() {
-  const { language, isGrowth, shopInfo, report } = useLoaderData<typeof loader>();
+  const { 
+    language, 
+    isGrowth, 
+    shopInfo, 
+    report,
+    embedEnabled,
+    embedDeepLink,
+    embedManualPath,
+  } = useLoaderData<typeof loader>();
   const uiLanguage = useUILanguage(language);
   const en = uiLanguage === "English";
 
   const [activeTab, setActiveTab] = useState<TabId>("schema");
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   return (
     <s-page heading={en ? "AI Visibility Suite" : "AI 可见性套件"}>
@@ -927,11 +1187,85 @@ export default function AIVisibility() {
                 <div>
                   <p className={styles.sectionLabel}>{en ? "Product Schema" : "产品 Schema"}</p>
                   <h3 className={styles.sectionTitle}>
-                    {en ? "Generate Product Structured Data" : "生成产品结构化数据"}
+                    {en ? "Automatic Structured Data" : "自动结构化数据"}
                   </h3>
                 </div>
               </div>
-              <SchemaGenerator shopInfo={shopInfo} en={en} />
+              
+              <p className={styles.helpText} style={{ marginBottom: 16 }}>
+                {en 
+                  ? "Product Schema (JSON-LD) helps AI assistants and search engines understand your products. When enabled, it automatically outputs structured data on all product pages."
+                  : "Product Schema (JSON-LD) 帮助 AI 助手和搜索引擎理解您的产品。启用后，会自动在所有产品页面输出结构化数据。"}
+              </p>
+
+              {/* 启用状态卡片 */}
+              <EmbedStatusCard
+                embedEnabled={embedEnabled}
+                embedDeepLink={embedDeepLink}
+                embedManualPath={embedManualPath}
+                en={en}
+              />
+
+              {/* 预览模板 */}
+              {embedEnabled === true && (
+                <SchemaPreview shopInfo={shopInfo} en={en} />
+              )}
+
+              {/* 高级选项 - 折叠区域 */}
+              <div style={{ 
+                marginTop: 24, 
+                borderTop: "1px solid #e0e0e0", 
+                paddingTop: 16 
+              }}>
+                <button
+                  type="button"
+                  onClick={() => setShowAdvanced(!showAdvanced)}
+                  style={{
+                    background: "transparent",
+                    border: "none",
+                    cursor: "pointer",
+                    fontSize: 14,
+                    color: "#637381",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    padding: 0,
+                  }}
+                >
+                  <span style={{ 
+                    transform: showAdvanced ? "rotate(90deg)" : "rotate(0deg)",
+                    transition: "transform 0.2s",
+                  }}>▶</span>
+                  {en 
+                    ? "Advanced: Manual Schema Generator (for Headless/Custom Storefront)"
+                    : "高级选项：手动 Schema 生成器（用于 Headless/自定义 Storefront）"}
+                </button>
+                
+                {showAdvanced && (
+                  <div style={{ 
+                    marginTop: 16, 
+                    padding: 16, 
+                    background: "#f9fafb", 
+                    borderRadius: 8,
+                    border: "1px solid #e0e0e0",
+                  }}>
+                    <div style={{
+                      marginBottom: 16,
+                      padding: 12,
+                      background: "#fff7e6",
+                      border: "1px solid #ffd591",
+                      borderRadius: 6,
+                      fontSize: 13,
+                      color: "#d46b08",
+                    }}>
+                      ⚠️ {en 
+                        ? "This is for advanced users with Headless or custom storefronts who cannot use Theme App Extensions. For standard Shopify themes, use the automatic App Embed above instead."
+                        : "此功能仅适用于使用 Headless 或自定义 Storefront 的高级用户。如果您使用标准 Shopify 主题，请使用上方的自动 App Embed 功能。"}
+                    </div>
+                    <SchemaGenerator shopInfo={shopInfo} en={en} />
+                  </div>
+                )}
+              </div>
             </>
           )}
 

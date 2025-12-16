@@ -1,0 +1,9 @@
+{
+  "name": "AI 产品结构化数据",
+  "blocks": {
+    "product_schema": {
+      "name": "产品 Schema 标记",
+      "settings": {}
+    }
+  }
+}

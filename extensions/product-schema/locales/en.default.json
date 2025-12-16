@@ -1,5 +1,11 @@
 {
-  "product_schema.name": "Product Schema (JSON-LD)",
-  "product_schema.settings.enable.label": "Enable Product Schema",
-  "product_schema.settings.enable.info": "Outputs JSON-LD structured data on product pages for better SEO and rich snippets in search results"
+  "product_schema": {
+    "name": "Product Schema (JSON-LD)",
+    "settings": {
+      "enable": {
+        "label": "Enable Product Schema",
+        "info": "Outputs JSON-LD structured data on product pages for better SEO and rich snippets in search results"
+      }
+    }
+  }
 }

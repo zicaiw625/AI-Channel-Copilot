@@ -74,12 +74,23 @@ export const handleRefundWebhook = async (request: Request) => {
     const settings = await getSettings(shop);
 
     // Fetch the updated order to get the new refund total
-    const record = await fetchOrderById(admin, orderGid, settings, {
+    const { order: record, error: fetchError } = await fetchOrderById(admin, orderGid, settings, {
       shopDomain: shop,
     });
 
     if (!record) {
-      logger.warn("[webhook] order not found for refund", { shopDomain: shop, orderGid });
+      // 【修复】记录具体错误原因
+      if (fetchError) {
+        logger.warn("[webhook] order fetch failed for refund", { 
+          shopDomain: shop, 
+          orderGid,
+          errorCode: fetchError.code,
+          errorMessage: fetchError.message,
+          suggestReauth: fetchError.suggestReauth,
+        });
+      } else {
+        logger.warn("[webhook] order not found for refund", { shopDomain: shop, orderGid });
+      }
       // 不可恢复：订单不存在/不可访问时不应触发重试风暴
       return new Response("Order not found (ignored)", { status: 200 });
     }

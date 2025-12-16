@@ -439,7 +439,7 @@ export default function Index() {
                     // 状态标签的国际化翻译
                     const titleTranslations: Record<string, string> = {
                       "orders/create webhook": uiLanguage === "English" ? "orders/create webhook" : "订单创建 Webhook",
-                      "Hourly backfill (last 90 days)": uiLanguage === "English" ? "Hourly backfill (last 90 days)" : "每小时补拉（最近 90 天）",
+                      "Hourly backfill (last 60 days)": uiLanguage === "English" ? "Hourly backfill (last 60 days)" : "每小时补拉（最近 60 天）",
                       "AI tagging write-back": uiLanguage === "English" ? "AI tagging write-back" : "AI 标签回写",
                     };
                     const statusTranslations: Record<string, string> = {

@@ -269,7 +269,7 @@ const defaultPipelineStatuses: PipelineStatus[] = [
     detail: "Waiting for first webhook · auto-retries enabled",
   },
   {
-    title: "Hourly backfill (last 90 days)",
+    title: "Hourly backfill (last 60 days)",
     status: "info",
     detail: "Waiting for first backfill · Catching up 90d orders",
   },

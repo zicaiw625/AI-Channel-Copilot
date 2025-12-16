@@ -8,7 +8,8 @@ import { withAdvisoryLock } from "./locks.server";
 import { logger } from "./logger.server";
 import { MAX_BACKFILL_DURATION_MS, MAX_BACKFILL_ORDERS } from "./constants";
 
-const BACKFILL_STATUS_TITLE = "Hourly backfill (last 90 days)";
+// 【修复】更新标题以反映实际的 60 天限制
+const BACKFILL_STATUS_TITLE = "Hourly backfill (last 60 days)";
 
 const setBackfillStatus = async (
   shopDomain: string,
@@ -121,6 +122,32 @@ const processQueue = async (
             maxDurationMs: job.maxDurationMs ?? MAX_BACKFILL_DURATION_MS,
           },
         );
+
+        // 【修复】处理权限相关的错误，显示明确的提示
+        if (fetched.error) {
+          const errorDetail = fetched.error.suggestReauth 
+            ? `${fetched.error.message} 建议商家重新授权。`
+            : fetched.error.message;
+          
+          logger.warn("[backfill] job completed with access restriction", {
+            jobType: "backfill",
+            jobId: job.id,
+            shopDomain: job.shopDomain,
+            errorCode: fetched.error.code,
+            suggestReauth: fetched.error.suggestReauth,
+          });
+          
+          await updateJobStatus(job.id, "completed", { 
+            ordersFetched: 0, 
+            error: `[${fetched.error.code}] ${fetched.error.message}`,
+          });
+          await setBackfillStatus(
+            job.shopDomain,
+            "warning",
+            errorDetail.slice(0, 100),
+          );
+          continue;
+        }
 
         if (fetched.orders.length > 0) {
           await persistOrders(job.shopDomain, fetched.orders);

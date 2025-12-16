@@ -159,12 +159,28 @@ export const handleOrderWebhook = async (request: Request, expectedTopic: string
       const jobShopDomain = (jobPayload.shopDomain as string) || shop;
       const settings = await getSettings(jobShopDomain);
 
-      const record = await fetchOrderById(admin, jobOrderGid, settings, {
+      const { order: record, error: fetchError } = await fetchOrderById(admin, jobOrderGid, settings, {
         shopDomain: jobShopDomain,
       });
 
       if (!record) {
-        await setWebhookStatus(jobShopDomain, "warning", "Order not found for webhook payload");
+        // 【修复】显示具体的错误原因，而不是误导性的 "Order not found"
+        if (fetchError) {
+          const statusDetail = fetchError.suggestReauth 
+            ? `${fetchError.message} 建议商家重新授权应用。`
+            : fetchError.message;
+          await setWebhookStatus(jobShopDomain, "warning", statusDetail);
+          logger.warn("[webhook] order fetch failed", {
+            platform,
+            shop: jobShopDomain,
+            orderId: jobOrderGid,
+            errorCode: fetchError.code,
+            suggestReauth: fetchError.suggestReauth,
+          });
+        } else {
+          // 真正的订单不存在（可能已被删除）
+          await setWebhookStatus(jobShopDomain, "warning", "订单不存在或已被删除");
+        }
         return;
       }
 
@@ -338,9 +354,19 @@ export const registerDefaultOrderWebhookHandlers = () => {
         return;
       }
 
-      const record = await fetchOrderById(admin, jobOrderGid, settings, { shopDomain: jobShopDomain });
+      const { order: record, error: fetchError } = await fetchOrderById(admin, jobOrderGid, settings, { shopDomain: jobShopDomain });
       if (!record) {
-        logger.warn("[webhook] default handler order not found", { shopDomain: jobShopDomain });
+        // 【修复】记录具体错误原因
+        if (fetchError) {
+          logger.warn("[webhook] default handler order fetch failed", { 
+            shopDomain: jobShopDomain,
+            errorCode: fetchError.code,
+            errorMessage: fetchError.message,
+            suggestReauth: fetchError.suggestReauth,
+          });
+        } else {
+          logger.warn("[webhook] default handler order not found", { shopDomain: jobShopDomain });
+        }
         return;
       }
 

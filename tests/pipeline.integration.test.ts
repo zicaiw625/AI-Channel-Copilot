@@ -64,13 +64,16 @@ describe("orders webhook to dashboard integration", () => {
     });
 
     vi.mocked(getSettings).mockResolvedValue(defaultSettings);
+    // 【修复】适配新的返回类型 { order, error? }
     vi.mocked(fetchOrderById).mockResolvedValue({
-      id: "gid://shopify/Order/123",
-      aiSource: "ChatGPT",
-      detection: "referrer=chatgpt",
-      signals: ["referrer:chatgpt"],
-      createdAt: new Date(),
-    } as any);
+      order: {
+        id: "gid://shopify/Order/123",
+        aiSource: "ChatGPT",
+        detection: "referrer=chatgpt",
+        signals: ["referrer:chatgpt"],
+        createdAt: new Date(),
+      } as any,
+    });
     vi.mocked(persistOrders).mockResolvedValue({ created: 0, updated: 0 } as any);
     vi.mocked(markActivity).mockResolvedValue();
     vi.mocked(applyAiTags).mockResolvedValue();

@@ -172,11 +172,31 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           { status: 401 },
         );
       }
-      const { orders } = await fetchOrdersForRange(admin, range, merged, {
+      const { orders, error: fetchError } = await fetchOrdersForRange(admin, range, merged, {
         shopDomain,
         intent: "settings-backfill",
         rangeLabel: range.label,
       });
+      
+      // 【修复】处理权限相关的错误，返回明确的错误信息
+      if (fetchError) {
+        logger.warn("[backfill] settings-trigger failed due to access restriction", {
+          platform,
+          shopDomain,
+          errorCode: fetchError.code,
+          suggestReauth: fetchError.suggestReauth,
+        });
+        return Response.json(
+          { 
+            ok: false, 
+            message: fetchError.message,
+            errorCode: fetchError.code,
+            suggestReauth: fetchError.suggestReauth,
+          },
+          { status: 403 },
+        );
+      }
+      
       const result = await persistOrders(shopDomain, orders);
       await markActivity(shopDomain, { lastBackfillAt: new Date() });
       logger.info(
@@ -197,11 +217,31 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           { status: 401 },
         );
       }
-      const { orders } = await fetchOrdersForRange(admin, range, merged, {
+      const { orders, error: tagFetchError } = await fetchOrdersForRange(admin, range, merged, {
         shopDomain,
         intent: "settings-tagging",
         rangeLabel: range.label,
       });
+      
+      // 【修复】处理权限相关的错误
+      if (tagFetchError) {
+        logger.warn("[tagging] fetch failed due to access restriction", {
+          platform,
+          shopDomain,
+          errorCode: tagFetchError.code,
+          suggestReauth: tagFetchError.suggestReauth,
+        });
+        return Response.json(
+          { 
+            ok: false, 
+            message: tagFetchError.message,
+            errorCode: tagFetchError.code,
+            suggestReauth: tagFetchError.suggestReauth,
+          },
+          { status: 403 },
+        );
+      }
+      
       const aiOrders = orders.filter((order) => order.aiSource);
 
       // ⚠️ 2025-12-10: 仅支持订单标签写回，客户标签功能已下线（需要 write_customers 权限）
@@ -470,14 +510,20 @@ export default function SettingsAndExport() {
   };
 
   useEffect(() => {
-    const data = fetcher.data as { ok: boolean; intent?: string; message?: string } | undefined;
+    const data = fetcher.data as { 
+      ok: boolean; 
+      intent?: string; 
+      message?: string;
+      errorCode?: string;
+      suggestReauth?: boolean;
+    } | undefined;
     if (data) {
       if (data.ok) {
         const message =
           data.intent === "tag"
-            ? (language === "English" ? "Tag write-back triggered (based on last 90 days AI orders)" : "标签写回已触发（基于最近 90 天 AI 订单）")
+            ? (language === "English" ? "Tag write-back triggered (based on last 60 days AI orders)" : "标签写回已触发（基于最近 60 天 AI 订单）")
             : data.intent === "backfill"
-              ? (language === "English" ? "Backfilled last 90 days (including AI detection)" : "已补拉最近 90 天订单（含 AI 识别）")
+              ? (language === "English" ? "Backfilled last 60 days (including AI detection)" : "已补拉最近 60 天订单（含 AI 识别）")
               : (language === "English" ? "Settings saved" : "设置已保存");
         shopify.toast.show?.(message);
         // Trigger llms.txt preview refresh after successful save
@@ -485,7 +531,17 @@ export default function SettingsAndExport() {
       } else {
         // 将技术错误转换为用户友好的消息
         let friendlyMessage = data.message || "";
-        if (friendlyMessage.includes("noteAttributes") || friendlyMessage.includes("doesn't exist on type")) {
+        
+        // 【修复】处理权限相关的错误，提供明确的提示
+        if (data.errorCode === "pcd_not_approved") {
+          friendlyMessage = language === "English" 
+            ? "Protected Customer Data access not approved. Please apply for PCD access in Shopify Partners Dashboard." 
+            : "应用尚未获得 Protected Customer Data 访问权限，请在 Shopify Partners Dashboard 申请。";
+        } else if (data.suggestReauth) {
+          friendlyMessage = language === "English" 
+            ? `${data.message} Please reinstall the app to grant updated permissions.`
+            : `${data.message} 请重新安装应用以授予最新权限。`;
+        } else if (friendlyMessage.includes("noteAttributes") || friendlyMessage.includes("doesn't exist on type")) {
           friendlyMessage = language === "English" 
             ? "Retrying with compatible query... Please try again." 
             : "正在切换兼容查询，请重试...";
@@ -538,8 +594,8 @@ export default function SettingsAndExport() {
           {clamped && (
             <span>
               {language === "English"
-                ? "Hint: Export/Backfill is limited to the last 90 days."
-                : "提示：导出/补拉已限制为最近 90 天内的订单窗口。"}
+                ? "Hint: Export/Backfill is limited to the last 60 days (Shopify default)."
+                : "提示：导出/补拉已限制为最近 60 天内的订单窗口（Shopify 默认限制）。"}
             </span>
           )}
         </div>
@@ -568,7 +624,7 @@ export default function SettingsAndExport() {
               )
             }
             data-action="settings-backfill"
-          >{language === "English" ? "Backfill Last 90 Days" : "补拉最近 90 天订单"}</button>
+          >{language === "English" ? "Backfill Last 60 Days" : "补拉最近 60 天订单"}</button>
         </div>
         <div className={styles.alert}>{t(language as Lang, "backfill_protect_alert")}</div>
         <p className={styles.helpText}>{t(language as Lang, "backfill_help")}</p>
@@ -1121,7 +1177,7 @@ export default function SettingsAndExport() {
               // 国际化翻译映射
               const titleMap: Record<string, string> = {
                 "orders/create webhook": language === "English" ? "orders/create webhook" : "订单创建 Webhook",
-                "Hourly backfill (last 90 days)": language === "English" ? "Hourly backfill (last 90 days)" : "每小时补拉（最近 90 天）",
+                "Hourly backfill (last 60 days)": language === "English" ? "Hourly backfill (last 60 days)" : "每小时补拉（最近 60 天）",
                 "AI tagging write-back": language === "English" ? "AI tagging write-back" : "AI 标签回写",
               };
               const statusMap: Record<string, string> = {
@@ -1137,8 +1193,10 @@ export default function SettingsAndExport() {
                   .replace(/Delivered (\d+) hours? ago/g, "$1 小时前送达")
                   .replace(/Delivered (\d+) days? ago/g, "$1 天前送达")
                   .replace(/auto-retries enabled/g, "已启用自动重试")
-                  .replace(/Catching up 90d orders to avoid webhook gaps/g, "补拉 90 天订单以避免 Webhook 漏单")
-                  .replace(/Catching up 90d orders/g, "补拉 90 天订单")
+                  .replace(/Catching up 90d orders to avoid webhook gaps/g, "补拉 60 天订单以避免 Webhook 漏单")
+                  .replace(/Catching up 90d orders/g, "补拉 60 天订单")
+                  .replace(/Catching up 60d orders to avoid webhook gaps/g, "补拉 60 天订单以避免 Webhook 漏单")
+                  .replace(/Catching up 60d orders/g, "补拉 60 天订单")
                   .replace(/Order \+ customer tags ready/g, "订单和客户标签已就绪")
                   .replace(/off by default/g, "默认关闭")
                   .replace(/Waiting for first webhook/g, "等待首次 Webhook")

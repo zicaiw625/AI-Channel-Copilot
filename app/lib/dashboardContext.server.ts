@@ -105,11 +105,21 @@ export const loadDashboardContext = async ({
         { maxOrders: MAX_BACKFILL_ORDERS, maxDurationMs: MAX_BACKFILL_DURATION_MS },
       );
 
-      orders = fetched.orders;
-      clamped = fetched.clamped;
-      if (orders.length > 0) {
-        await persistOrders(shopDomain, orders);
-        dataSource = "live";
+      // 【修复】处理权限相关的错误
+      if (fetched.error) {
+        logger.warn("[backfill] fallback fetch failed due to access restriction", { 
+          shopDomain,
+          errorCode: fetched.error.code,
+          suggestReauth: fetched.error.suggestReauth,
+        }, { message: fetched.error.message });
+        dataSource = demoAllowed ? "demo" : "empty";
+      } else {
+        orders = fetched.orders;
+        clamped = fetched.clamped;
+        if (orders.length > 0) {
+          await persistOrders(shopDomain, orders);
+          dataSource = "live";
+        }
       }
     } catch (error) {
       logger.warn("[backfill] fallback fetch skipped", { shopDomain }, { message: (error as Error).message });

@@ -321,8 +321,8 @@ const setQueryLevel = (shopDomain: string | undefined, type: "orders" | "single"
   }
 };
 
-// 向后兼容的辅助函数
-const shouldUseFallbackQuery = (shopDomain: string | undefined, type: "orders" | "single"): boolean => {
+// 向后兼容的辅助函数（当前未使用，保留供外部调用）
+const _shouldUseFallbackQuery = (shopDomain: string | undefined, type: "orders" | "single"): boolean => {
   const level = getQueryLevel(shopDomain, type);
   return level === "fallback" || level === "minimal";
 };
@@ -368,11 +368,16 @@ const isNoteAttributesError = (errors: unknown): boolean => {
 };
 
 // 检查是否是 customer 字段权限问题（Protected Customer Data）
+// 检查是否是 customer 字段权限问题（Protected Customer Data）
+// 【修复】统一转小写，避免大小写不一致导致匹配失败
 const isCustomerAccessError = (errors: unknown): boolean => {
   if (!errors) return false;
-  const errStr = typeof errors === "string" ? errors : JSON.stringify(errors).toLowerCase();
+  const errStr = typeof errors === "string" 
+    ? errors.toLowerCase() 
+    : JSON.stringify(errors).toLowerCase();
   return errStr.includes("customer") ||
     errStr.includes("access denied") ||
+    errStr.includes("not approved") ||  // 新增：匹配 "not approved to access"
     errStr.includes("protected") ||
     errStr.includes("permission") ||
     errStr.includes("unauthorized");
@@ -582,6 +587,76 @@ type FetchContext = {
   rangeLabel?: string;
 };
 
+/**
+ * 【新增】订单获取错误类型
+ * 用于明确标识错误原因，便于前端显示准确的提示信息
+ */
+export type OrderFetchErrorCode = 
+  | "pcd_not_approved"      // Protected Customer Data 未获批
+  | "access_denied"         // 访问被拒绝（权限不足）
+  | "scope_missing"         // 缺少必要的 scope
+  | "network_error"         // 网络错误
+  | "invalid_input"         // 无效输入（如无效的 Order GID）
+  | "unknown";              // 未知错误
+
+export type OrderFetchError = {
+  code: OrderFetchErrorCode;
+  message: string;
+  /** 是否建议商家重新授权 */
+  suggestReauth?: boolean;
+};
+
+/**
+ * 检测错误类型并返回结构化错误信息
+ */
+const classifyFetchError = (error: unknown): OrderFetchError => {
+  const message = error instanceof Error ? error.message : String(error);
+  const lowerMessage = message.toLowerCase();
+  
+  if (/not approved to access the order object/i.test(message) || 
+      /protected customer data/i.test(message)) {
+    return {
+      code: "pcd_not_approved",
+      message: "应用尚未获得 Protected Customer Data 访问权限。请在 Shopify Partners Dashboard 申请 PCD 权限后重试。",
+      suggestReauth: false,
+    };
+  }
+  
+  if (lowerMessage.includes("access denied") || 
+      lowerMessage.includes("unauthorized") ||
+      lowerMessage.includes("permission")) {
+    return {
+      code: "access_denied",
+      message: "访问被拒绝。可能需要商家重新授权应用以获取最新权限。",
+      suggestReauth: true,
+    };
+  }
+  
+  if (lowerMessage.includes("scope") || lowerMessage.includes("missing scope")) {
+    return {
+      code: "scope_missing",
+      message: "缺少必要的 API 权限。请检查应用配置或要求商家重新授权。",
+      suggestReauth: true,
+    };
+  }
+  
+  if (lowerMessage.includes("network") || 
+      lowerMessage.includes("timeout") ||
+      lowerMessage.includes("econnrefused")) {
+    return {
+      code: "network_error",
+      message: "网络连接失败，请稍后重试。",
+      suggestReauth: false,
+    };
+  }
+  
+  return {
+    code: "unknown",
+    message: message.slice(0, 200),
+    suggestReauth: false,
+  };
+};
+
 export const fetchOrdersForRange = async (
   admin: AdminGraphqlClient,
   range: DateRange,
@@ -597,6 +672,8 @@ export const fetchOrdersForRange = async (
   hitPageLimit: boolean;
   hitOrderLimit: boolean;
   hitDurationLimit: boolean;
+  /** 【新增】如果获取失败，返回结构化错误信息 */
+  error?: OrderFetchError;
 }> => {
   if (isDemoMode()) {
     logger.info("[backfill] demo mode enabled; skipping Shopify fetch", {
@@ -734,14 +811,19 @@ export const fetchOrdersForRange = async (
     } while (after);
   } catch (error) {
     const message = (error as Error)?.message || String(error);
-    if (/not approved to access the Order object/i.test(message) || /protected customer data/i.test(message)) {
-      logger.warn("[backfill] orders fetch skipped due to protected customer data access", {
+    const classifiedError = classifyFetchError(error);
+    
+    // 【修复】不再静默返回空数组，而是返回结构化错误信息
+    // 这样前端可以显示准确的错误提示，而不是让用户误以为"没有订单"
+    if (classifiedError.code === "pcd_not_approved" || classifiedError.code === "access_denied") {
+      logger.warn("[backfill] orders fetch failed due to access restriction", {
         platform,
         shopDomain: context?.shopDomain,
         jobType: "backfill",
         intent: context?.intent,
-      }, { message });
-      // Return empty dataset gracefully so settings页面可加载
+        errorCode: classifiedError.code,
+      }, { message, suggestReauth: classifiedError.suggestReauth });
+      
       return {
         orders: [],
         start: effectiveStart,
@@ -751,6 +833,7 @@ export const fetchOrdersForRange = async (
         hitPageLimit: false,
         hitOrderLimit: false,
         hitDurationLimit: false,
+        error: classifiedError,
       };
     }
     throw error;
@@ -794,12 +877,23 @@ const getSingleOrderQuery = (level: QueryLevel): string => {
 };
 
 /**
+ * 【新增】单订单获取结果类型
+ */
+export type FetchOrderByIdResult = {
+  order: OrderRecord | null;
+  error?: OrderFetchError;
+};
+
+/**
  * 根据 ID 获取单个订单
  * @param admin - GraphQL 客户端
  * @param id - Shopify Order GID
  * @param settings - 设置配置
  * @param context - 上下文信息
  * @param downgradeRetryCount - 降级重试计数器（防止无限递归）
+ * 
+ * 【修复】返回结构化结果，包含 order 和可选的 error 信息
+ * 这样调用方可以根据 error 显示准确的错误提示
  */
 export const fetchOrderById = async (
   admin: AdminGraphqlClient,
@@ -807,10 +901,10 @@ export const fetchOrderById = async (
   settings: SettingsDefaults = defaultSettings,
   context?: FetchContext,
   downgradeRetryCount = 0,
-): Promise<OrderRecord | null> => {
+): Promise<FetchOrderByIdResult> => {
   if (isDemoMode()) {
     logger.info("[webhook] demo mode enabled; skipping order fetch", { platform, id, jobType: "webhook" });
-    return null;
+    return { order: null };
   }
 
   // 输入验证：检查 Order GID 格式
@@ -821,7 +915,10 @@ export const fetchOrderById = async (
       jobType: "webhook",
       shopDomain: context?.shopDomain,
     });
-    return null;
+    return { 
+      order: null, 
+      error: { code: "invalid_input", message: `无效的订单 ID 格式: ${id}` },
+    };
   }
 
   // 防止无限递归：检查降级重试次数
@@ -833,7 +930,10 @@ export const fetchOrderById = async (
       downgradeRetryCount,
       maxRetries: GRAPHQL_MAX_DOWNGRADE_RETRIES,
     });
-    return null;
+    return { 
+      order: null, 
+      error: { code: "access_denied", message: "多次查询降级后仍然失败，可能是权限问题", suggestReauth: true },
+    };
   }
 
   const shopDomain = context?.shopDomain;
@@ -854,13 +954,15 @@ export const fetchOrderById = async (
       return fetchOrderById(admin, id, settings, context, downgradeRetryCount + 1);
     }
     
+    const classifiedError = classifyFetchError(error);
     logger.error("[webhook] order fetch failed with exception", { 
       platform, 
       shopDomain, 
       queryLevel,
+      errorCode: classifiedError.code,
       ...logContext,
     }, { error: error instanceof Error ? error.message : String(error) });
-    return null;
+    return { order: null, error: classifiedError };
   }
   
   if (!response.ok) {
@@ -872,14 +974,15 @@ export const fetchOrderById = async (
       return fetchOrderById(admin, id, settings, context, downgradeRetryCount + 1);
     }
     
-    // 【优化】在日志中记录更完整的错误信息
+    const classifiedError = classifyFetchError(new Error(text));
     logger.error("[webhook] order fetch failed", { 
       platform, 
       shopDomain, 
       queryLevel,
+      errorCode: classifiedError.code,
       ...logContext,
     }, { status: response.status, body: text.slice(0, 500), bodyLength: text.length });
-    return null;
+    return { order: null, error: classifiedError };
   }
 
   const json = (await response.json()) as { data?: { order?: ShopifyOrderNode | null }; errors?: unknown };
@@ -890,11 +993,20 @@ export const fetchOrderById = async (
     return fetchOrderById(admin, id, settings, context, downgradeRetryCount + 1);
   }
   if (errorAction === 'throw') {
-    // 对于单订单查询，返回 null 而不是抛异常（保持原有行为）
-    return null;
+    // 【修复】返回结构化错误，而不是静默返回 null
+    const errorMessages = Array.isArray(json.errors) 
+      ? json.errors.map((e: { message?: string }) => e.message || JSON.stringify(e)).join("; ")
+      : JSON.stringify(json.errors);
+    return { 
+      order: null, 
+      error: classifyFetchError(new Error(errorMessages)),
+    };
   }
   
-  if (!json.data?.order) return null;
+  if (!json.data?.order) {
+    // 订单真的不存在（不是权限问题）
+    return { order: null };
+  }
 
-  return mapShopifyOrderToRecord(json.data.order, settings);
+  return { order: mapShopifyOrderToRecord(json.data.order, settings) };
 };

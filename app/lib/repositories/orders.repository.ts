@@ -19,6 +19,22 @@ import {
   type OrderWithProducts,
 } from '../mappers/orderMapper';
 
+/**
+ * 【修复】sourceName 过滤条件
+ * 
+ * 问题：`sourceName: { notIn: ['pos', 'draft'] }` 会把 NULL 值也过滤掉
+ * 因为在 SQL 中 `NULL NOT IN (...)` 的结果是 UNKNOWN，会被视为 false
+ * 
+ * 解决：使用 OR 条件，允许 NULL 值或非 POS/Draft 值通过
+ * 参考：https://github.com/prisma/prisma/issues/27622
+ */
+export const SOURCE_NAME_FILTER: Prisma.OrderWhereInput = {
+  OR: [
+    { sourceName: null },
+    { sourceName: { notIn: ['pos', 'draft'] } },
+  ],
+};
+
 const toNumber = (value: unknown): number => {
   if (value === null || value === undefined) return 0;
   if (typeof value === "number") return Number.isFinite(value) ? value : 0;
@@ -62,7 +78,7 @@ export class OrdersRepository {
       const where: Prisma.OrderWhereInput = {
         shopDomain,
         createdAt: { gte: range.start, lte: range.end },
-        sourceName: { notIn: ['pos', 'draft'] },
+        ...SOURCE_NAME_FILTER,
       };
 
       if (options?.aiOnly) {
@@ -114,7 +130,7 @@ export class OrdersRepository {
         shopDomain,
         createdAt: { gte: range.start, lte: range.end },
         aiSource: aiSource ? (aiSource as AiSource) : { not: null },
-        sourceName: { notIn: ['pos', 'draft'] },
+        ...SOURCE_NAME_FILTER,
       };
 
       const count = await prisma.order.count({ where });
@@ -145,7 +161,7 @@ export class OrdersRepository {
       const baseWhere: Prisma.OrderWhereInput = {
         shopDomain,
         createdAt: { gte: range.start, lte: range.end },
-        sourceName: { notIn: ['pos', 'draft'] },
+        ...SOURCE_NAME_FILTER,
       };
 
       const [totalStats, aiStats] = await Promise.all([
@@ -471,7 +487,7 @@ export class OrdersRepository {
       const lastOrder = await prisma.order.findFirst({
         where: {
           shopDomain,
-          sourceName: { notIn: ['pos', 'draft'] },
+          ...SOURCE_NAME_FILTER,
         },
         orderBy: { createdAt: 'desc' },
         select: { createdAt: true },

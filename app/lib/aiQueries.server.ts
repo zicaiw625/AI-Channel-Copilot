@@ -22,6 +22,21 @@ import { fromPrismaAiSource, toPrismaAiSource } from "./aiSourceMapper";
 import { startOfDay, formatDateOnly } from "./dateUtils";
 import { logger } from "./logger.server";
 
+/**
+ * 【修复】sourceName 过滤条件
+ * 
+ * 问题：`sourceName: { notIn: ['pos', 'draft'] }` 会把 NULL 值也过滤掉
+ * 因为在 SQL 中 `NULL NOT IN (...)` 的结果是 UNKNOWN，会被视为 false
+ * 
+ * 解决：使用 OR 条件，允许 NULL 值或非 POS/Draft 值通过
+ */
+const SOURCE_NAME_FILTER: Prisma.OrderWhereInput = {
+  OR: [
+    { sourceName: null },
+    { sourceName: { notIn: ["pos", "draft"] } },
+  ],
+};
+
 const toNumber = (value: unknown): number => {
   if (value === null || value === undefined) return 0;
   if (typeof value === "number") return Number.isFinite(value) ? value : 0;
@@ -69,6 +84,29 @@ const getSum = (agg: OrderAggregateResult, metric: string): number => {
 };
 
 /**
+ * 【新增】检测店铺最常用的货币
+ * 当设置中的货币与实际订单货币不匹配时，用于回退
+ */
+async function detectPrimaryCurrency(
+  shopDomain: string,
+  range: DateRange
+): Promise<string | null> {
+  const currencyGroups = await prisma.order.groupBy({
+    by: ["currency"],
+    where: {
+      shopDomain,
+      createdAt: { gte: range.start, lte: range.end },
+      ...SOURCE_NAME_FILTER,
+    },
+    _count: { _all: true },
+    orderBy: { _count: { id: "desc" } },
+    take: 1,
+  });
+
+  return currencyGroups[0]?.currency ?? null;
+}
+
+/**
  * DB 聚合模式：直接从数据库查询统计数据
  */
 async function buildDashboardFromDb(
@@ -77,15 +115,39 @@ async function buildDashboardFromDb(
   settings: SettingsDefaults,
   timezone: string = "UTC"
 ): Promise<DashboardData> {
-  const currency = settings.primaryCurrency || "USD";
+  let currency = settings.primaryCurrency || "USD";
   const metric = settings.gmvMetric;
 
+  // 【修复】货币回退机制：如果设置的货币没有订单，尝试使用数据库中最常见的货币
+  const testCount = await prisma.order.count({
+    where: {
+      shopDomain,
+      createdAt: { gte: range.start, lte: range.end },
+      currency: currency,
+      ...SOURCE_NAME_FILTER,
+    },
+  });
+
+  if (testCount === 0) {
+    const detectedCurrency = await detectPrimaryCurrency(shopDomain, range);
+    if (detectedCurrency && detectedCurrency !== currency) {
+      logger.info("[aiQueries] Currency mismatch, using detected currency", {
+        shopDomain,
+        settingsCurrency: currency,
+        detectedCurrency,
+        rangeLabel: range.label,
+      });
+      currency = detectedCurrency;
+    }
+  }
+
   // 基础过滤条件
+  // 【修复】使用 SOURCE_NAME_FILTER 允许 NULL 值通过，避免把没有 sourceName 的订单过滤掉
   const where: Prisma.OrderWhereInput = {
     shopDomain,
     createdAt: { gte: range.start, lte: range.end },
     currency: currency,
-    sourceName: { notIn: ["pos", "draft"] }, // 排除 POS 和 Draft
+    ...SOURCE_NAME_FILTER, // 排除 POS 和 Draft，但允许 NULL
   };
 
   // 1. 概览数据聚合

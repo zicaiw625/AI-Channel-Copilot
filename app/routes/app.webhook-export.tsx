@@ -242,6 +242,7 @@ export default function WebhookExport() {
               placeholder="https://your-server.com/webhook"
               style={{
                 width: "100%",
+                boxSizing: "border-box",
                 padding: "10px 12px",
                 border: url && !url.startsWith("https://") ? "1px solid #ff4d4f" : "1px solid #c4cdd5",
                 borderRadius: 4,
@@ -271,6 +272,7 @@ export default function WebhookExport() {
               placeholder={en ? "Enter secret for signature verification" : "输入用于签名验证的密钥"}
               style={{
                 width: "100%",
+                boxSizing: "border-box",
                 padding: "10px 12px",
                 border: "1px solid #c4cdd5",
                 borderRadius: 4,

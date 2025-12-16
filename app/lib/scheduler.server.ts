@@ -3,7 +3,7 @@ import { getSettings } from "./settings.server";
 import { ensureRetentionOncePerDay } from "./retention.server";
 import { resolveDateRange } from "./aiData";
 import { BACKFILL_COOLDOWN_MINUTES, MAX_BACKFILL_DURATION_MS, MAX_BACKFILL_ORDERS } from "./constants";
-import { startBackfill, processBackfillQueue } from "./backfill.server";
+import { startBackfill, processBackfillQueue, cleanupStaleBackfillJobs } from "./backfill.server";
 import { unauthenticated } from "../shopify.server";
 import { logger } from "./logger.server";
 import { readAppFlags } from "./env.server";
@@ -14,6 +14,7 @@ import { wakeupDueWebhookJobs } from "./webhookQueue.server";
 const SCHEDULER_LOCK_RETENTION = 2001;
 const SCHEDULER_LOCK_BACKFILL = 2002;
 const SCHEDULER_LOCK_WEBHOOK_WAKEUP = 2003;
+const SCHEDULER_LOCK_BACKFILL_CLEANUP = 2004;
 
 let initialized = false;
 
@@ -129,6 +130,27 @@ const runBackfillSweep = async () => {
   }
 };
 
+/**
+ * 清理超时的补拉任务
+ * 使用分布式锁确保多实例部署时只有一个实例执行
+ */
+const runBackfillCleanup = async () => {
+  const { lockInfo } = await withAdvisoryLock(SCHEDULER_LOCK_BACKFILL_CLEANUP, async () => {
+    try {
+      const cleaned = await cleanupStaleBackfillJobs();
+      if (cleaned > 0) {
+        logger.info("[scheduler] Backfill cleanup completed", { cleanedJobs: cleaned });
+      }
+    } catch (error) {
+      logger.warn("[scheduler] Backfill cleanup failed", undefined, { message: (error as Error).message });
+    }
+  });
+
+  if (!lockInfo.acquired) {
+    logger.debug("[scheduler] Backfill cleanup skipped (another instance is running)");
+  }
+};
+
 export const initScheduler = () => {
   if (initialized) return;
   initialized = true;
@@ -142,6 +164,15 @@ export const initScheduler = () => {
   setInterval(() => {
     void runWebhookWakeup();
   }, 30 * 1000); // 每 30 秒执行一次
+
+  // 🆕 超时补拉任务清理：每 2 分钟检查一次
+  // 始终启用，清理卡住超过 BACKFILL_TIMEOUT_MINUTES 的任务
+  setTimeout(() => {
+    void runBackfillCleanup();
+  }, 15000); // 启动后 15 秒执行第一次
+  setInterval(() => {
+    void runBackfillCleanup();
+  }, 2 * 60 * 1000); // 每 2 分钟执行一次
   
   if (!readAppFlags().enableRetentionSweep) {
     return;

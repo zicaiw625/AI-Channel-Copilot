@@ -14,6 +14,7 @@ export const MAX_BACKFILL_DAYS = fromEnv("MAX_BACKFILL_DAYS", 60);
 export const MAX_BACKFILL_DURATION_MS = fromEnv("MAX_BACKFILL_DURATION_MS", 15000);
 export const BACKFILL_TAGGING_BATCH_SIZE = fromEnv("BACKFILL_TAGGING_BATCH_SIZE", 25);
 export const BACKFILL_COOLDOWN_MINUTES = fromEnv("BACKFILL_COOLDOWN_MINUTES", 30);
+export const BACKFILL_TIMEOUT_MINUTES = fromEnv("BACKFILL_TIMEOUT_MINUTES", 10); // 超时取消阈值
 export const MAX_DETECTION_LENGTH = 200;
 export const LANGUAGE_STORAGE_KEY = "aicc_language";
 export const LANGUAGE_EVENT = "aicc_language_change";

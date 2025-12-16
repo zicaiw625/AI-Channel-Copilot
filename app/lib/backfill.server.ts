@@ -6,7 +6,7 @@ import { persistOrders, removeDeletedOrders } from "./persistence.server";
 import prisma from "../db.server";
 import { withAdvisoryLock } from "./locks.server";
 import { logger } from "./logger.server";
-import { MAX_BACKFILL_DURATION_MS, MAX_BACKFILL_ORDERS } from "./constants";
+import { MAX_BACKFILL_DURATION_MS, MAX_BACKFILL_ORDERS, BACKFILL_TIMEOUT_MINUTES } from "./constants";
 
 // 【修复】更新标题以反映实际的 60 天限制
 const BACKFILL_STATUS_TITLE = "Hourly backfill (last 60 days)";
@@ -254,3 +254,29 @@ export const processBackfillQueue = async (
   ) => Promise<BackfillDependencies>,
   where: Prisma.BackfillJobWhereInput = {},
 ) => processQueue(resolveDependencies, where);
+
+/**
+ * 清理超时的补拉任务
+ * 将卡在 queued 或 processing 状态超过指定时间的任务标记为失败
+ */
+export const cleanupStaleBackfillJobs = async () => {
+  const timeoutThreshold = new Date(Date.now() - BACKFILL_TIMEOUT_MINUTES * 60 * 1000);
+  
+  const result = await prisma.backfillJob.updateMany({
+    where: {
+      status: { in: ["queued", "processing"] },
+      createdAt: { lt: timeoutThreshold },
+    },
+    data: {
+      status: "failed",
+      finishedAt: new Date(),
+      error: `Timed out: stuck for more than ${BACKFILL_TIMEOUT_MINUTES} minutes`,
+    },
+  });
+
+  if (result.count > 0) {
+    logger.info("[backfill] Cleaned up stale jobs", { count: result.count, timeoutMinutes: BACKFILL_TIMEOUT_MINUTES });
+  }
+
+  return result.count;
+};

@@ -48,6 +48,78 @@ type SettingsData = {
 };
 
 /**
+ * 去除 JSON 中的注释（支持 JSONC 格式）
+ * Shopify 的 settings_data.json 可能包含块注释 /* */ 和行注释 //
+ */
+function stripJsonComments(jsonString: string): string {
+  // 状态机处理，避免误删字符串中的注释符号
+  let result = "";
+  let i = 0;
+  let inString = false;
+  let stringChar = "";
+  
+  while (i < jsonString.length) {
+    const char = jsonString[i];
+    const nextChar = jsonString[i + 1];
+    
+    // 处理字符串内部
+    if (inString) {
+      result += char;
+      // 检查转义字符
+      if (char === "\\" && i + 1 < jsonString.length) {
+        result += nextChar;
+        i += 2;
+        continue;
+      }
+      // 检查字符串结束
+      if (char === stringChar) {
+        inString = false;
+      }
+      i++;
+      continue;
+    }
+    
+    // 检查字符串开始
+    if (char === '"' || char === "'") {
+      inString = true;
+      stringChar = char;
+      result += char;
+      i++;
+      continue;
+    }
+    
+    // 检查块注释 /* */
+    if (char === "/" && nextChar === "*") {
+      // 跳过直到找到 */
+      i += 2;
+      while (i < jsonString.length) {
+        if (jsonString[i] === "*" && jsonString[i + 1] === "/") {
+          i += 2;
+          break;
+        }
+        i++;
+      }
+      continue;
+    }
+    
+    // 检查行注释 //
+    if (char === "/" && nextChar === "/") {
+      // 跳过直到行尾
+      i += 2;
+      while (i < jsonString.length && jsonString[i] !== "\n") {
+        i++;
+      }
+      continue;
+    }
+    
+    result += char;
+    i++;
+  }
+  
+  return result;
+}
+
+/**
  * 检测产品 Schema App Embed 是否启用
  * 
  * @param admin - Shopify Admin GraphQL 客户端
@@ -180,9 +252,11 @@ export async function isProductSchemaEmbedEnabled(
     }
 
     // Step 3: 解析 JSON 并查找 app embed block
+    // Shopify 的 settings_data.json 可能包含注释（JSONC 格式），需要先去除
     let settings: SettingsData;
     try {
-      settings = JSON.parse(content);
+      const cleanedContent = stripJsonComments(content);
+      settings = JSON.parse(cleanedContent);
     } catch (parseError) {
       logger.error("[themeEmbedStatus] Failed to parse settings_data.json", {
         shopDomain,

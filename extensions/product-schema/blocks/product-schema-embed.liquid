@@ -4,6 +4,14 @@
 {% endcomment %}
 
 {% if template.name == 'product' and product and block.settings.enable_product_schema %}
+{% comment %}
+  获取当前选中或首个可用的 variant 用于价格计算
+  variant.price 在 Shopify 中是以"分"为单位的整数（如 1999 表示 $19.99）
+  Schema.org 要求价格使用小数点 "." 且不带千位分隔符
+{% endcomment %}
+{% assign v = product.selected_or_first_available_variant %}
+{% assign price_in_cents = v.price | default: 0 %}
+{% assign price_decimal = price_in_cents | divided_by: 100.0 | round: 2 %}
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -11,8 +19,8 @@
   "name": {{ product.title | json }},
   "description": {{ product.description | strip_html | truncate: 5000 | json }},
   "image": [{% for image in product.images limit: 10 %}{{ image | image_url: width: 1024 | json }}{% unless forloop.last %},{% endunless %}{% endfor %}],
-  "sku": {{ product.selected_or_first_available_variant.sku | default: product.id | json }},
-  "mpn": {{ product.selected_or_first_available_variant.barcode | default: product.selected_or_first_available_variant.sku | json }},
+  "sku": {{ v.sku | default: product.id | json }},
+  "mpn": {{ v.barcode | default: v.sku | json }},
   "brand": {
     "@type": "Brand",
     "name": {{ product.vendor | json }}
@@ -20,8 +28,8 @@
   "offers": {
     "@type": "Offer",
     "url": {{ request.origin | append: product.url | json }},
-    "price": "{{ product.price | money_without_currency | remove: ',' }}",
-    "priceCurrency": {{ shop.currency | json }},
+    "price": {{ price_decimal | json }},
+    "priceCurrency": {{ cart.currency.iso_code | default: shop.currency | json }},
     "availability": "{% if product.available %}https://schema.org/InStock{% else %}https://schema.org/OutOfStock{% endif %}",
     "itemCondition": "https://schema.org/NewCondition",
     "priceValidUntil": "{{ 'now' | date: '%Y' | plus: 1 }}-12-31",

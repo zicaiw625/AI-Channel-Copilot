@@ -10,6 +10,7 @@ import { logger } from "./logger.server";
 import type { AdminGraphqlClient } from "./graphqlSdk.server";
 import { createGraphqlSdk } from "./graphqlSdk.server";
 import { MAX_ORDER_PRODUCTS } from "./constants";
+import { isProductSchemaEmbedEnabled, getAppEmbedDeepLink, getAppEmbedManualPath } from "./themeEmbedStatus.server";
 
 // ============================================================================
 // Types
@@ -485,10 +486,10 @@ function productNodeToPerformance(
 function analyzeContentReadiness(product: ProductNode): "complete" | "partial" | "missing" {
   const hasDescription = Boolean(product.description?.trim());
   const hasImages = product.images.edges.length > 0;
-  // 检查是否有有效价格（价格必须大于 0）
-  const hasPrice = product.variants.edges.some(
-    v => v.node.price && parseFloat(v.node.price) > 0
-  );
+  // 修复：使用 priceRange.minVariantPrice.amount 判定价格，避免 variants(first:1) 误判
+  // priceRange 包含所有 variants 的最低价格，更加准确
+  const minAmount = parseFloat(product.priceRange?.minVariantPrice?.amount ?? "0");
+  const hasPrice = Number.isFinite(minAmount) && minAmount > 0;
   const hasSEO = Boolean(product.seo?.title || product.seo?.description);
   
   const score = [hasDescription, hasImages, hasPrice, hasSEO].filter(Boolean).length;
@@ -636,12 +637,21 @@ function generateFAQSuggestions(
 
 /**
  * 生成优化建议（双语版本）
+ * 
+ * @param products - 产品性能数据
+ * @param language - 语言设置
+ * @param hasLlmsTxtEnabled - llms.txt 是否已启用
+ * @param hasFAQContent - 是否有 FAQ 内容
+ * @param isSchemaEmbedEnabled - App Embed 是否已启用（true/false/null）
+ * @param shopDomain - 店铺域名（用于生成 deep link）
  */
 function generateSuggestions(
   products: ProductAIPerformance[],
   language: string,
   hasLlmsTxtEnabled: boolean = false,
   hasFAQContent: boolean = false,
+  isSchemaEmbedEnabled: boolean | null = null,
+  shopDomain: string = "",
 ): OptimizationSuggestion[] {
   const suggestions: OptimizationSuggestion[] = [];
   const isEnglish = language === "English";
@@ -649,52 +659,64 @@ function generateSuggestions(
   // 检查产品信息完整度（作为 Schema 标记的前提条件）
   const missingSchema = products.filter(p => p.schemaMarkupStatus === "missing").length;
   const partialSchema = products.filter(p => p.schemaMarkupStatus === "partial").length;
+  const incompleteProducts = missingSchema + partialSchema;
   
-  if (missingSchema > 0) {
+  // ============================================================================
+  // 建议 A（高优先级）：仅当 App Embed 未启用时显示"启用 App Embed"
+  // ============================================================================
+  if (isSchemaEmbedEnabled === false) {
+    const manualPath = getAppEmbedManualPath(language);
+    const deepLink = shopDomain ? getAppEmbedDeepLink(shopDomain) : "";
+    
     suggestions.push({
-      id: "schema-missing",
+      id: "schema-embed-disabled",
       category: "schema_markup",
       priority: "high",
       title: {
-        en: "Enable Product Schema Markup",
-        zh: "启用产品 Schema 标记",
+        en: "Enable Product Schema App Embed",
+        zh: "启用产品 Schema App Embed",
       },
       description: {
-        en: `${missingSchema} products lack complete information needed for structured data markup, reducing their visibility to AI assistants.`,
-        zh: `${missingSchema} 个产品缺少结构化数据标记所需的完整信息，这会降低 AI 助手的识别能力。`,
+        en: "The Product Schema (JSON-LD) app embed is installed but not enabled in your theme. Enable it to add structured data to your product pages.",
+        zh: "产品 Schema (JSON-LD) App Embed 已安装但未在主题中启用。启用后可为产品页面添加结构化数据。",
       },
       impact: isEnglish 
-        ? "Products with complete schema markup may improve AI discoverability."
-        : "完整的 Schema 标记可以提升产品在 AI 中的可发现性。",
+        ? "Schema markup helps AI assistants understand and recommend your products more accurately."
+        : "Schema 标记帮助 AI 助手更准确地理解和推荐您的产品。",
       action: isEnglish
-        ? "Enable Product Schema in theme editor: Online Store → Themes → Customize → App embeds → Turn on 'Product Schema (JSON-LD)'"
-        : "在主题编辑器中启用：在线商店 → 主题 → 自定义 → App embeds → 开启「Product Schema (JSON-LD)」",
-      affectedProducts: products.filter(p => p.schemaMarkupStatus === "missing").map(p => p.productId),
+        ? `${manualPath.en}${deepLink ? `\n\nOr use this direct link: ${deepLink}` : ""}`
+        : `${manualPath.zh}${deepLink ? `\n\n或使用此直达链接：${deepLink}` : ""}`,
       estimatedLift: "+15-25% AI visibility",
     });
   }
   
-  if (partialSchema > 0) {
+  // ============================================================================
+  // 建议 B（中/高优先级）：当有产品信息不完整时显示"完善产品信息"
+  // 注意：这是独立于 App Embed 的建议，针对产品内容本身
+  // ============================================================================
+  if (incompleteProducts > 0) {
     suggestions.push({
-      id: "schema-partial",
-      category: "schema_markup",
-      priority: "medium",
+      id: "schema-product-info-incomplete",
+      category: "product_info",
+      priority: missingSchema > 0 ? "high" : "medium",
       title: {
-        en: "Complete Product Information",
-        zh: "完善产品信息",
+        en: "Complete Product Information for Schema Markup",
+        zh: "完善产品信息以支持 Schema 标记",
       },
       description: {
-        en: `${partialSchema} products have incomplete information. Adding missing fields will improve AI understanding.`,
-        zh: `${partialSchema} 个产品的信息不完整。补充缺失字段可提升 AI 理解能力。`,
+        en: `${incompleteProducts} product${incompleteProducts > 1 ? "s have" : " has"} incomplete information. Missing fields like description, images, price, or SEO data will result in incomplete Schema markup.`,
+        zh: `${incompleteProducts} 个产品信息不完整。缺少描述、图片、价格或 SEO 数据会导致 Schema 标记不完整。`,
       },
       impact: isEnglish
-        ? "Complete product information helps AI provide more accurate recommendations."
-        : "完整的产品信息有助于 AI 提供更准确的推荐。",
+        ? "Complete product information enables full Schema markup, improving AI discoverability and search rankings."
+        : "完整的产品信息可生成完整的 Schema 标记，提升 AI 可发现性和搜索排名。",
       action: isEnglish
-        ? "Review and add missing fields like description, images, SEO title."
-        : "检查并补充缺失的字段，如描述、图片、SEO 标题。",
-      affectedProducts: products.filter(p => p.schemaMarkupStatus === "partial").map(p => p.productId),
-      estimatedLift: "+10-15% AI visibility",
+        ? "Review products and add missing fields: product description, high-quality images, SEO title & description, and ensure prices are set correctly."
+        : "检查产品并补充缺失字段：产品描述、高质量图片、SEO 标题与描述，并确保价格设置正确。",
+      affectedProducts: products
+        .filter(p => p.schemaMarkupStatus === "missing" || p.schemaMarkupStatus === "partial")
+        .map(p => p.productId),
+      estimatedLift: missingSchema > 0 ? "+15-25% AI visibility" : "+10-15% AI visibility",
     });
   }
   
@@ -1056,7 +1078,18 @@ export async function generateAIOptimizationReport(
   // 生成建议（基于用于评分的产品）
   // hasFAQContent: 如果已生成 FAQ 建议，说明有足够的产品信息来支持 FAQ
   const hasFAQContent = suggestedFAQs.length > 0;
-  const suggestions = generateSuggestions(productsForScoring, language, hasLlmsTxtEnabled, hasFAQContent);
+  
+  // 检测 App Embed 是否已启用
+  const embedEnabled = admin ? await isProductSchemaEmbedEnabled(admin, shopDomain) : null;
+  
+  const suggestions = generateSuggestions(
+    productsForScoring, 
+    language, 
+    hasLlmsTxtEnabled, 
+    hasFAQContent,
+    embedEnabled,
+    shopDomain
+  );
   
   // llms.txt 增强建议
   const isEnglish = language === "English";

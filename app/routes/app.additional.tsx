@@ -894,7 +894,12 @@ export default function SettingsAndExport() {
                 <p className={styles.sectionLabel}>{language === "English" ? "llms.txt Preferences" : "llms.txt 偏好"}</p>
                 <h3 className={styles.sectionTitle}>{language === "English" ? "Site Types to Expose to AI" : "希望向 AI 暴露的站点类型"}</h3>
               </div>
-              <span className={styles.badge}>{t(language as Lang, "badge_experiment")}</span>
+              <div className={styles.inlineActions}>
+                <button type="button" className={styles.secondaryButton} onClick={submitSettings} data-action="llms-save">
+                  {t(language as Lang, "btn_save")}
+                </button>
+                <span className={styles.badge}>{t(language as Lang, "badge_experiment")}</span>
+              </div>
             </div>
             {shopDomain && (
               <div className={styles.alert} style={{ background: "#e3f1df", borderColor: "#50b83c" }}>

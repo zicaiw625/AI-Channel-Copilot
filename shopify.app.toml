@@ -79,6 +79,6 @@ redirect_urls = [
 ]
 
 [app_proxy]
-url = "https://ai-channel-copilot.onrender.com/proxy"
+url = "https://ai-channel-copilot.onrender.com/proxy/llms"
 subpath = "llms"
 prefix = "a"

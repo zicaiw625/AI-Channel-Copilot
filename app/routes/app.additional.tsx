@@ -1072,12 +1072,17 @@ export default function SettingsAndExport() {
                 <p className={styles.sectionLabel}>{language === "English" ? "llms.txt Preview" : "llms.txt 预览"}</p>
                 <h3 className={styles.sectionTitle}>{language === "English" ? "Draft Based on Preferences" : "根据偏好生成草稿"}</h3>
               </div>
-              <span className={styles.badge}>{t(language as Lang, "badge_experiment")}</span>
+              <div className={styles.inlineActions}>
+                <button type="button" className={styles.secondaryButton} onClick={submitSettings} data-action="llms-preview-save">
+                  {t(language as Lang, "btn_save")}
+                </button>
+                <span className={styles.badge}>{t(language as Lang, "badge_experiment")}</span>
+              </div>
             </div>
             <div className={styles.alert} style={{ background: "#fff7e6", borderColor: "#fa8c16", marginBottom: 12 }}>
               {language === "English" 
-                ? "⚠️ This preview reflects your current UI selections. Click \"Save\" button above to update the public URL."
-                : "⚠️ 此预览反映您当前的 UI 选择。点击上方的「保存」按钮以更新公开 URL。"}
+                ? "⚠️ This preview reflects your current UI selections. Click \"Save\" to update the public URL."
+                : "⚠️ 此预览反映您当前的 UI 选择。点击「保存」按钮以更新公开 URL。"}
             </div>
             <LlmsPreview language={language} canExport={canExport} lastSavedAt={lastSavedAt} />
             <p className={styles.helpText}>{t(language as Lang, "llms_preview_help")}</p>

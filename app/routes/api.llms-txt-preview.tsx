@@ -36,6 +36,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const langParam = url.searchParams.get("lang");
   const validLanguages = ["English", "中文"] as const;
   const isValidLang = langParam && validLanguages.includes(langParam as typeof validLanguages[number]);
+  // Track whether we're using a language override (not yet saved to DB)
+  const isLanguageOverride = isValidLang && langParam !== settings.languages?.[0];
   const settingsWithLang = isValidLang
     ? { ...settings, languages: [langParam, ...(settings.languages || []).filter((l: string) => l !== langParam)] }
     : settings;
@@ -48,7 +50,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   });
 
   // Update cache when we have admin access (includes collections/blogs)
-  if (admin && shopDomain) {
+  // IMPORTANT: Only update cache if NOT using a language override from query params
+  // This ensures the cached llms.txt matches the saved DB settings, not unsaved UI selections
+  if (admin && shopDomain && !isLanguageOverride) {
     // Fire and forget - don't block response, but log errors
     updateLlmsTxtCache(shopDomain, text).catch((error) => {
       logger.warn("[llms-preview] Cache update failed", { shopDomain }, {

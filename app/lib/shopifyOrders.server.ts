@@ -35,8 +35,28 @@ const ORDER_BASE_FIELDS = `
         }
         landingPageUrl
         customerJourneySummary {
+          ready
           firstVisit {
             referrerUrl
+            landingPage
+            utmParameters {
+              source
+              medium
+              campaign
+              content
+              term
+            }
+          }
+          lastVisit {
+            referrerUrl
+            landingPage
+            utmParameters {
+              source
+              medium
+              campaign
+              content
+              term
+            }
           }
         }
         sourceName

@@ -451,6 +451,28 @@ type ShopifyMoneySet = {
   } | null;
 };
 
+/**
+ * Shopify Customer Journey UTM 参数类型
+ * 对应 GraphQL 的 UTMParameters 对象
+ */
+type ShopifyUtmParameters = {
+  source?: string | null;
+  medium?: string | null;
+  campaign?: string | null;
+  content?: string | null;
+  term?: string | null;
+};
+
+/**
+ * Shopify Customer Visit 类型
+ * 对应 GraphQL 的 CustomerVisit 对象
+ */
+type ShopifyCustomerVisit = {
+  referrerUrl?: string | null;
+  landingPage?: string | null;
+  utmParameters?: ShopifyUtmParameters | null;
+};
+
 export type ShopifyOrderNode = {
   id: string;
   name: string;
@@ -459,9 +481,10 @@ export type ShopifyOrderNode = {
   currentSubtotalPriceSet?: ShopifyMoneySet | null;
   totalRefundedSet?: ShopifyMoneySet | null;
   customerJourneySummary?: {
-    firstVisit?: {
-      referrerUrl?: string | null;
-    } | null;
+    /** 归因数据是否已就绪，false 时 UTM 等字段可能为空 */
+    ready?: boolean | null;
+    firstVisit?: ShopifyCustomerVisit | null;
+    lastVisit?: ShopifyCustomerVisit | null;
   } | null;
   landingPageUrl?: string | null;
   sourceName?: string | null;
@@ -503,10 +526,32 @@ export const mapShopifyOrderToRecord = (
   const refundTotal = parseFloat(order.totalRefundedSet?.shopMoney?.amount || "0");
   const currency =
     order.currentTotalPriceSet?.shopMoney?.currencyCode || config.primaryCurrency || "USD";
-  // Use customerJourneySummary.firstVisit.referrerUrl (new API) instead of deprecated referringSite
-  const referrer = order.customerJourneySummary?.firstVisit?.referrerUrl || "";
-  const landingPage = order.landingPageUrl || "";
-  const { utmSource, utmMedium } = extractUtmRef(referrer, landingPage);
+  
+  // 获取 Customer Journey 数据
+  const journeySummary = order.customerJourneySummary;
+  const firstVisit = journeySummary?.firstVisit;
+  const lastVisit = journeySummary?.lastVisit;
+  
+  // 使用 firstVisit.landingPage（更可靠）或降级到 deprecated landingPageUrl
+  const referrer = firstVisit?.referrerUrl || "";
+  const landingPage = firstVisit?.landingPage || order.landingPageUrl || "";
+  
+  // 🔧 修复：优先使用 Shopify 结构化的 utmParameters（更可靠）
+  // 优先级：firstVisit.utmParameters > lastVisit.utmParameters > URL 解析（降级方案）
+  const firstVisitUtm = firstVisit?.utmParameters;
+  const lastVisitUtm = lastVisit?.utmParameters;
+  
+  // 从结构化 UTM 参数获取（优先）
+  let utmSource = firstVisitUtm?.source || lastVisitUtm?.source || undefined;
+  let utmMedium = firstVisitUtm?.medium || lastVisitUtm?.medium || undefined;
+  
+  // 如果结构化参数没有值，降级到 URL query string 解析
+  // 这是兼容旧数据和某些边缘情况的后备方案
+  if (!utmSource && !utmMedium) {
+    const extracted = extractUtmRef(referrer, landingPage);
+    utmSource = extracted.utmSource;
+    utmMedium = extracted.utmMedium;
+  }
 
   const { aiSource, detection, signals } = detectAiFromFieldsRef(
     referrer,

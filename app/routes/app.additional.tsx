@@ -1127,7 +1127,24 @@ export default function SettingsAndExport() {
                   // 同时保存到 cookie，以便后端可以读取
                   try { document.cookie = `${LANGUAGE_STORAGE_KEY}=${encodeURIComponent(next)};path=/;max-age=31536000;SameSite=Lax`; } catch { void 0; }
                   try { window.dispatchEvent(new CustomEvent(LANGUAGE_EVENT, { detail: next })); } catch { void 0; }
-                  // 注意：语言变更不再自动提交到服务器，需要用户点击"保存"按钮
+                  
+                  // 自动保存语言设置到服务器，确保 llms.txt 也同步更新
+                  const payload = {
+                    aiDomains: sanitizedDomains,
+                    utmSources: sanitizedUtmSources,
+                    utmMediumKeywords,
+                    gmvMetric,
+                    primaryCurrency: settings.primaryCurrency,
+                    tagging,
+                    exposurePreferences,
+                    languages: [next, ...settings.languages.filter((l) => l !== next)],
+                    timezones: [timezone, ...settings.timezones.filter((t) => t !== timezone)],
+                    pipelineStatuses: settings.pipelineStatuses,
+                  };
+                  fetcher.submit(
+                    { settings: JSON.stringify(payload) },
+                    { method: "post", encType: "application/x-www-form-urlencoded" },
+                  );
                 }}
               >
                 {settings.languages.map((option) => (
@@ -1138,8 +1155,8 @@ export default function SettingsAndExport() {
               </select>
               <span className={styles.helpText}>
                 {language === "English"
-                  ? "Language change takes effect immediately in UI. Click Save to persist to server."
-                  : "语言更改立即在界面生效。点击“保存”按钮以持久化到服务器。"}
+                  ? "Language change takes effect immediately and auto-saves to server (including llms.txt)."
+                  : "语言更改立即生效并自动保存到服务器（包括 llms.txt）。"}
               </span>
             </label>
             <label className={styles.stackField}>

@@ -59,6 +59,7 @@ const yamlValue = (value: string): string => {
 };
 
 // GraphQL query for fetching collections
+// Note: Collection type does not have onlineStoreUrl field in Shopify Admin API
 const COLLECTIONS_QUERY = `#graphql
   query CollectionsForLlms($first: Int!) {
     collections(first: $first, sortKey: UPDATED_AT, reverse: true) {
@@ -67,7 +68,6 @@ const COLLECTIONS_QUERY = `#graphql
           id
           title
           handle
-          onlineStoreUrl
           productsCount {
             count
           }
@@ -78,6 +78,7 @@ const COLLECTIONS_QUERY = `#graphql
 `;
 
 // GraphQL query for fetching blog articles
+// Note: Article type does not have onlineStoreUrl field in Shopify Admin API
 const ARTICLES_QUERY = `#graphql
   query ArticlesForLlms($first: Int!) {
     articles(first: $first, sortKey: UPDATED_AT, reverse: true) {
@@ -86,7 +87,6 @@ const ARTICLES_QUERY = `#graphql
           id
           title
           handle
-          onlineStoreUrl
           blog {
             handle
           }
@@ -100,7 +100,6 @@ type CollectionNode = {
   id: string;
   title: string;
   handle: string;
-  onlineStoreUrl: string | null;
   productsCount?: { count: number };
 };
 
@@ -108,7 +107,6 @@ type ArticleNode = {
   id: string;
   title: string;
   handle: string;
-  onlineStoreUrl: string | null;
   blog?: { handle: string };
 };
 
@@ -165,7 +163,7 @@ export const fetchCollections = async (
     
     const result = collections
       .map(({ node }) => ({
-        url: node.onlineStoreUrl || `https://${shopDomain}/collections/${node.handle}`,
+        url: `https://${shopDomain}/collections/${node.handle}`,
         title: node.title,
       }))
       .filter((c) => c.url);
@@ -226,9 +224,9 @@ export const fetchArticles = async (
     
     const result = articles
       .map(({ node }) => ({
-        url: node.onlineStoreUrl || (node.blog?.handle 
+        url: node.blog?.handle 
           ? `https://${shopDomain}/blogs/${node.blog.handle}/${node.handle}`
-          : `https://${shopDomain}/blogs/news/${node.handle}`),
+          : `https://${shopDomain}/blogs/news/${node.handle}`,
         title: node.title,
       }))
       .filter((a) => a.url);

@@ -49,14 +49,13 @@ type SettingsData = {
 
 /**
  * 移除 JSON 字符串中的注释
- * 支持 // 单行注释 和 /* ... */ 多行注释
+ * 支持单行注释 (//) 和多行注释
  * 注意：这是一个简化实现，不处理字符串内的注释字符
  */
 function stripJsonComments(jsonString: string): string {
-  // 移除多行注释 /* ... */
+  // 移除多行注释
   let result = jsonString.replace(/\/\*[\s\S]*?\*\//g, "");
-  // 移除单行注释 // ...（但要注意不要移除 URL 中的 //）
-  // 只移除行首或空白后的 //
+  // 移除单行注释（只移除行首或空白后的 //）
   result = result.replace(/^\s*\/\/.*$/gm, "");
   return result;
 }

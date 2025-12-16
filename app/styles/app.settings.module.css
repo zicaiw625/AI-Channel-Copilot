@@ -294,3 +294,52 @@
   border-radius: 10px;
   font-size: 0.95rem;
 }
+
+/* Collapsible section styles */
+.collapsibleHeader {
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.2s ease;
+  border-radius: 10px;
+  padding: 0.5rem;
+  margin: -0.5rem;
+}
+
+.collapsibleHeader:hover {
+  background: #f8fafc;
+}
+
+.collapsibleContent {
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Nested card style for advanced section */
+.nestedCard {
+  box-shadow: none;
+  border: 1px solid #e5e7eb;
+}
+
+/* Tip card style */
+.tipCard {
+  background: #f0f9ff;
+  border-color: #0ea5e9;
+}
+
+.tipCard h3 {
+  color: #0369a1;
+}
+
+.tipCard p {
+  color: #0c4a6e;
+}

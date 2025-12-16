@@ -7,6 +7,7 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import {
   channelList,
   resolveDateRange,
+  defaultSettings,
   type DateRange,
   type AIChannel,
   type AiDomainRule,
@@ -369,6 +370,9 @@ export default function SettingsAndExport() {
   // Modal state for confirming removal of default UTM rule
   const [confirmUtmModal, setConfirmUtmModal] = useState<{ open: boolean; rule: UtmSourceRule | null }>({ open: false, rule: null });
 
+  // Advanced settings collapsible state - default to collapsed
+  const [advancedExpanded, setAdvancedExpanded] = useState(false);
+
   const locale = language === "English" ? "en-US" : "zh-CN";
 
   const utmMediumKeywords = useMemo(
@@ -477,6 +481,14 @@ export default function SettingsAndExport() {
       setUtmMappings((prev) => prev.filter((rule) => rule.value !== confirmUtmModal.rule!.value));
     }
     setConfirmUtmModal({ open: false, rule: null });
+  };
+
+  // Reset to default rules
+  const resetToDefaults = () => {
+    setDomains(defaultSettings.aiDomains);
+    setUtmMappings(defaultSettings.utmSources);
+    setUtmMediumInput(defaultSettings.utmMediumKeywords.join(", "));
+    shopify.toast.show?.(language === "English" ? "Rules reset to defaults. Click Save to apply." : "已恢复默认规则，点击保存后生效");
   };
 
   const handleDownload = useCallback(async (e: React.MouseEvent<HTMLAnchorElement | HTMLButtonElement>, url: string, fallbackFilename: string) => {
@@ -637,15 +649,83 @@ export default function SettingsAndExport() {
         <p className={styles.helpText}>{t(language as Lang, "backfill_help")}</p>
       </div>
 
-        <div className={styles.gridTwo}>
-          <div className={styles.card}>
-            <div className={styles.sectionHeader}>
-              <div>
-                <p className={styles.sectionLabel}>{t(language as Lang, "channels_section_label")}</p>
-                <h3 className={styles.sectionTitle}>{language === "English" ? "Referrer Domains" : "Referrer 域名表"}</h3>
-              </div>
-              <span className={styles.badge}>{t(language as Lang, "badge_priority_high")}</span>
+        {/* 引导文案 - 推荐使用 UTM 链接 */}
+        <div className={styles.card} style={{ background: "#f0f9ff", borderColor: "#0ea5e9" }}>
+          <div className={styles.sectionHeader}>
+            <div>
+              <h3 className={styles.sectionTitle} style={{ color: "#0369a1" }}>
+                {language === "English" ? "💡 For Better Attribution Accuracy" : "💡 想要更准确的归因？"}
+              </h3>
             </div>
+          </div>
+          <p style={{ margin: 0, color: "#0c4a6e", lineHeight: 1.6 }}>
+            {language === "English"
+              ? "Use our UTM Link Generator to create trackable links. When AI assistants share these links, orders are automatically attributed to the correct AI channel."
+              : "请使用我们生成的带 UTM 链接进行投放。当 AI 助手分享这些链接时，订单会自动归因到对应的 AI 渠道。"}
+          </p>
+          <div className={styles.inlineActions} style={{ marginTop: 8 }}>
+            <button
+              type="button"
+              className={styles.primaryButton}
+              style={{ background: "#0284c7" }}
+              onClick={() => navigate("/app/utm-wizard")}
+            >
+              {language === "English" ? "Generate UTM Links →" : "生成 UTM 链接 →"}
+            </button>
+          </div>
+        </div>
+
+        {/* 高级设置/排错工具 - 可折叠 */}
+        <div className={styles.card}>
+          <div 
+            className={styles.sectionHeader} 
+            style={{ cursor: "pointer" }}
+            onClick={() => setAdvancedExpanded(!advancedExpanded)}
+          >
+            <div>
+              <p className={styles.sectionLabel}>{language === "English" ? "Debugging" : "排错工具"}</p>
+              <h3 className={styles.sectionTitle}>
+                {language === "English" ? "Advanced Settings / Troubleshooting" : "高级设置 / 排错工具"}
+              </h3>
+              <p className={styles.helpText} style={{ marginTop: 4 }}>
+                {language === "English"
+                  ? "Default rules cover major AI platforms. Expand only if attribution is inaccurate."
+                  : "默认规则已覆盖主流 AI 平台，无需修改。仅在归因不准确时展开排查。"}
+              </p>
+            </div>
+            <div className={styles.inlineActions}>
+              <span className={styles.badge}>{advancedExpanded ? "▼" : "▶"}</span>
+            </div>
+          </div>
+          
+          {advancedExpanded && (
+            <div style={{ marginTop: 12 }}>
+              {/* 恢复默认规则按钮 */}
+              <div className={styles.inlineActions} style={{ marginBottom: 16 }}>
+                <button
+                  type="button"
+                  className={styles.secondaryButton}
+                  onClick={resetToDefaults}
+                >
+                  {language === "English" ? "Reset to Default Rules" : "恢复默认规则"}
+                </button>
+                <span className={styles.helpText} style={{ marginLeft: 8 }}>
+                  {language === "English"
+                    ? "Restore all referrer/UTM rules to factory defaults"
+                    : "将所有 referrer/UTM 规则恢复到出厂设置"}
+                </span>
+              </div>
+
+              <div className={styles.gridTwo}>
+                {/* Referrer 域名表 */}
+                <div className={styles.card} style={{ boxShadow: "none", border: "1px solid #e5e7eb" }}>
+                  <div className={styles.sectionHeader}>
+                    <div>
+                      <p className={styles.sectionLabel}>{t(language as Lang, "channels_section_label")}</p>
+                      <h3 className={styles.sectionTitle}>{language === "English" ? "Referrer Domains" : "Referrer 域名表"}</h3>
+                    </div>
+                    <span className={styles.badge}>{t(language as Lang, "badge_priority_high")}</span>
+                  </div>
             <div className={styles.ruleList}>
               {domains.map((rule) => (
                 <div key={`${rule.domain}-${rule.channel}`} className={styles.ruleRow}>
@@ -789,7 +869,10 @@ export default function SettingsAndExport() {
               />
               <span className={styles.helpText}>{language === "English" ? "Current keywords: " : "当前关键词："}{utmMediumKeywords.join(", ") || (language === "English" ? "None" : "无")}</span>
             </label>
-          </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className={styles.gridTwo}>

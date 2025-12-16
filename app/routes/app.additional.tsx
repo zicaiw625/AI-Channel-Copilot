@@ -131,6 +131,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     await saveSettings(shopDomain, merged);
     
     // Refresh llms.txt cache when exposure preferences may have changed
+    // Use force=true to bypass cooldown since this is a user-initiated save
     if (admin && shopDomain) {
       try {
         const llmsText = await buildLlmsTxt(shopDomain, merged, {
@@ -138,7 +139,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           topN: 20,
           admin,
         });
-        await updateLlmsTxtCache(shopDomain, llmsText);
+        await updateLlmsTxtCache(shopDomain, llmsText, { force: true });
       } catch (e) {
         // Non-blocking: log but don't fail the save operation
         logger.warn("[settings] Failed to refresh llms.txt cache", { shopDomain }, { error: (e as Error).message });

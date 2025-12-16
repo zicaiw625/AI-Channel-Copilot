@@ -592,32 +592,41 @@ export const getLlmsTxtCache = async (
 
 /**
  * Update llms.txt cache for a shop
- * Includes cooldown check to prevent concurrent updates
+ * Includes cooldown check to prevent concurrent updates (can be bypassed with force=true)
+ * 
+ * @param shopDomain - The shop domain
+ * @param text - The llms.txt content to cache
+ * @param options - Optional settings
+ * @param options.force - If true, bypass cooldown check (use for user-initiated saves)
  */
 export const updateLlmsTxtCache = async (
   shopDomain: string,
   text: string,
+  options?: { force?: boolean },
 ): Promise<{ updated: boolean; reason?: string }> => {
   if (!shopDomain) return { updated: false, reason: "no_shop" };
 
   const platform = getPlatform();
+  const force = options?.force ?? false;
 
   try {
-    // 先检查上次更新时间，避免频繁更新
-    const existing = await prisma.shopSettings.findUnique({
-      where: { shopDomain_platform: { shopDomain, platform } },
-      select: { llmsTxtCachedAt: true },
-    });
+    // 先检查上次更新时间，避免频繁更新（除非强制更新）
+    if (!force) {
+      const existing = await prisma.shopSettings.findUnique({
+        where: { shopDomain_platform: { shopDomain, platform } },
+        select: { llmsTxtCachedAt: true },
+      });
 
-    if (existing?.llmsTxtCachedAt) {
-      const timeSinceLastUpdate = Date.now() - existing.llmsTxtCachedAt.getTime();
-      if (timeSinceLastUpdate < LLMS_CACHE_UPDATE_COOLDOWN_MS) {
-        logger.debug("[llms] Cache update skipped (cooldown)", { 
-          shopDomain, 
-          timeSinceLastUpdate,
-          cooldownMs: LLMS_CACHE_UPDATE_COOLDOWN_MS,
-        });
-        return { updated: false, reason: "cooldown" };
+      if (existing?.llmsTxtCachedAt) {
+        const timeSinceLastUpdate = Date.now() - existing.llmsTxtCachedAt.getTime();
+        if (timeSinceLastUpdate < LLMS_CACHE_UPDATE_COOLDOWN_MS) {
+          logger.debug("[llms] Cache update skipped (cooldown)", { 
+            shopDomain, 
+            timeSinceLastUpdate,
+            cooldownMs: LLMS_CACHE_UPDATE_COOLDOWN_MS,
+          });
+          return { updated: false, reason: "cooldown" };
+        }
       }
     }
 
@@ -628,7 +637,7 @@ export const updateLlmsTxtCache = async (
         llmsTxtCachedAt: new Date(),
       },
     });
-    logger.info("[llms] Cache updated", { shopDomain });
+    logger.info("[llms] Cache updated", { shopDomain, forced: force });
     return { updated: true };
   } catch (error) {
     logger.warn("[llms] Failed to update cache", { shopDomain }, {

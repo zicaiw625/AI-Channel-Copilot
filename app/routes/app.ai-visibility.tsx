@@ -164,351 +164,187 @@ function CopyButton({ text, en, label, disabled }: { text: string; en: boolean; 
   );
 }
 
-// URL 验证函数
-function isValidUrl(url: string): boolean {
-  if (!url.trim()) return true; // 可选字段，空值有效
-  try {
-    new URL(url);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-// 价格验证函数
-function isValidPrice(price: string): boolean {
-  if (!price.trim()) return false;
-  const num = parseFloat(price);
-  return !isNaN(num) && num > 0;
-}
-
-function SchemaGenerator({
+function ProductSchemaEmbed({
   shopInfo,
+  shopDomain,
   en,
 }: {
   shopInfo: { name: string; url: string; description: string; logo: string };
+  shopDomain: string;
   en: boolean;
 }) {
-  const [productName, setProductName] = useState("");
-  const [productDescription, setProductDescription] = useState("");
-  const [productPrice, setProductPrice] = useState("");
-  const [productCurrency, setProductCurrency] = useState("USD");
-  const [productAvailability, setProductAvailability] = useState("InStock");
-  const [productSku, setProductSku] = useState("");
-  const [productUrl, setProductUrl] = useState("");
-  const [productImage, setProductImage] = useState("");
-
-  // 检查是否填写了必填字段，并验证价格格式
-  const isPriceValid = isValidPrice(productPrice);
-  const isUrlValid = isValidUrl(productUrl);
-  const isImageUrlValid = isValidUrl(productImage);
-  const isValid = productName.trim() && isPriceValid && isUrlValid && isImageUrlValid;
-
-  const schemaCode = useMemo(() => {
-    if (!productName.trim() || !isPriceValid) {
-      return en 
-        ? "// Please fill in Product Name and a valid Price to generate valid schema"
-        : "// 请填写产品名称和有效价格以生成有效的 Schema";
-    }
-
-    if (!isUrlValid) {
-      return en
-        ? "// Please enter a valid Product URL"
-        : "// 请输入有效的产品链接";
-    }
-
-    if (!isImageUrlValid) {
-      return en
-        ? "// Please enter a valid Image URL"
-        : "// 请输入有效的图片链接";
-    }
-
-    const productUrlValue = productUrl || `${shopInfo.url}/products/your-product-handle`;
-
-    const schema: Record<string, unknown> = {
-      "@context": "https://schema.org",
-      "@type": "Product",
-      "@id": `${productUrlValue}#product`,
-      name: productName,
-      brand: {
-        "@type": "Brand",
-        name: shopInfo.name,
-      },
-      offers: {
-        "@type": "Offer",
-        price: productPrice,
-        priceCurrency: productCurrency,
-        availability: `https://schema.org/${productAvailability}`,
-        url: productUrlValue,
-        itemCondition: "https://schema.org/NewCondition",
-        seller: {
-          "@type": "Organization",
-          name: shopInfo.name,
-        },
-      },
-    };
-
-    // 可选字段：仅在有值时添加
-    if (productDescription.trim()) {
-      schema.description = productDescription;
-    }
-    if (productSku.trim()) {
-      schema.sku = productSku;
-    }
-    if (productImage.trim()) {
-      // image 使用数组格式以支持多图
-      schema.image = [productImage];
-    }
-
-    // 转义 </script> 以防止 XSS 注入
-    const safeJsonString = JSON.stringify(schema, null, 2)
-      .replace(/<\/script/gi, "<\\/script");
-
-    return `<script type="application/ld+json">
-${safeJsonString}
-</script>`;
-  }, [productName, productDescription, productPrice, productCurrency, productAvailability, productSku, productUrl, productImage, shopInfo, isPriceValid, isUrlValid, isImageUrlValid, en]);
-
-  // 计算验证错误信息
-  const getValidationMessage = () => {
-    if (!productName.trim()) {
-      return en ? "Product Name is required" : "产品名称为必填项";
-    }
-    if (!productPrice.trim()) {
-      return en ? "Price is required" : "价格为必填项";
-    }
-    if (!isPriceValid) {
-      return en ? "Please enter a valid price (positive number)" : "请输入有效价格（正数）";
-    }
-    if (!isUrlValid) {
-      return en ? "Please enter a valid Product URL" : "请输入有效的产品链接";
-    }
-    if (!isImageUrlValid) {
-      return en ? "Please enter a valid Image URL" : "请输入有效的图片链接";
-    }
-    return null;
-  };
-
-  const validationMessage = getValidationMessage();
+  // 生成 Theme Editor deep link
+  const themeEditorUrl = `https://${shopDomain}/admin/themes/current/editor?context=apps`;
 
   return (
     <div>
-      {/* 必填字段提示 */}
-      {validationMessage && (
-        <div style={{ 
-          marginBottom: 16, 
-          padding: 12, 
-          background: "#fff7e6", 
-          border: "1px solid #ffd591",
-          borderRadius: 6, 
-          fontSize: 13,
-          color: "#d46b08",
-        }}>
-          ⚠️ {validationMessage}
+      {/* 成功状态卡片 */}
+      <div style={{
+        padding: 24,
+        background: "linear-gradient(135deg, #f6ffed 0%, #e6f7ff 100%)",
+        borderRadius: 12,
+        border: "1px solid #b7eb8f",
+        marginBottom: 24,
+      }}>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 16 }}>
+          <div style={{
+            width: 48,
+            height: 48,
+            borderRadius: 12,
+            background: "#52c41a",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: 24,
+            flexShrink: 0,
+          }}>
+            ✓
+          </div>
+          <div style={{ flex: 1 }}>
+            <h3 style={{ margin: "0 0 8px", fontSize: 18, fontWeight: 600, color: "#1a3a1a" }}>
+              {en ? "Auto Product Schema Installed!" : "产品 Schema 自动注入已就绪！"}
+            </h3>
+            <p style={{ margin: 0, color: "#52734d", fontSize: 14, lineHeight: 1.6 }}>
+              {en
+                ? "We've set up automatic Product Schema injection for your store. No code copying needed! Just enable it in your theme settings."
+                : "我们已为您的店铺配置好产品 Schema 自动注入功能。无需复制任何代码！只需在主题设置中开启即可。"}
+            </p>
+          </div>
         </div>
-      )}
+      </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
-        <div>
-          <label style={{ display: "block", marginBottom: 6, fontSize: 13, fontWeight: 500 }}>
-            {en ? "Product Name" : "产品名称"} <span style={{ color: "#de3618" }}>*</span>
-          </label>
-          <input
-            type="text"
-            value={productName}
-            onChange={(e) => setProductName(e.target.value)}
-            placeholder={en ? "Enter product name" : "输入产品名称"}
-            style={{
-              width: "100%",
-              boxSizing: "border-box",
-              padding: "8px 12px",
-              border: `1px solid ${!productName.trim() ? "#ffc58b" : "#c4cdd5"}`,
-              borderRadius: 4,
-              fontSize: 14,
-            }}
-          />
-        </div>
-        <div>
-          <label style={{ display: "block", marginBottom: 6, fontSize: 13, fontWeight: 500 }}>
-            {en ? "Price" : "价格"} <span style={{ color: "#de3618" }}>*</span>
-          </label>
-          <div style={{ display: "flex", gap: 8 }}>
-            <input
-              type="text"
-              value={productPrice}
-              onChange={(e) => setProductPrice(e.target.value)}
-              placeholder="99.00"
+      {/* 步骤指引 */}
+      <div style={{ marginBottom: 24 }}>
+        <h4 style={{ margin: "0 0 16px", fontSize: 15, fontWeight: 600 }}>
+          {en ? "How to Enable (30 seconds)" : "如何开启（30 秒）"}
+        </h4>
+        
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {[
+            {
+              step: 1,
+              title: en ? "Open Theme Editor" : "打开主题编辑器",
+              desc: en ? "Click the button below to go directly to your theme settings" : "点击下方按钮直接跳转到主题设置",
+            },
+            {
+              step: 2,
+              title: en ? "Find App Embeds" : "找到 App embeds",
+              desc: en ? "In the left sidebar, click 'App embeds' at the bottom" : "在左侧边栏底部，点击「App embeds」",
+            },
+            {
+              step: 3,
+              title: en ? "Enable AI Product Schema" : "开启 AI 产品 Schema",
+              desc: en ? "Toggle on 'AI Product Schema' and save" : "打开「AI 产品 Schema」开关并保存",
+            },
+          ].map((item) => (
+            <div
+              key={item.step}
               style={{
-                flex: 1,
-                padding: "8px 12px",
-                border: `1px solid ${!productPrice.trim() || (productPrice.trim() && !isPriceValid) ? "#ffc58b" : "#c4cdd5"}`,
-                borderRadius: 4,
-                fontSize: 14,
-              }}
-            />
-            <select
-              value={productCurrency}
-              onChange={(e) => setProductCurrency(e.target.value)}
-              style={{
-                padding: "8px 12px",
-                border: "1px solid #c4cdd5",
-                borderRadius: 4,
-                fontSize: 14,
+                display: "flex",
+                alignItems: "flex-start",
+                gap: 12,
+                padding: 16,
+                background: "#f9fafb",
+                borderRadius: 8,
               }}
             >
-              <option value="USD">USD</option>
-              <option value="EUR">EUR</option>
-              <option value="GBP">GBP</option>
-              <option value="CNY">CNY</option>
-              <option value="JPY">JPY</option>
-            </select>
-          </div>
-          {productPrice.trim() && !isPriceValid && (
-            <span style={{ fontSize: 12, color: "#de3618", marginTop: 4, display: "block" }}>
-              {en ? "Enter a valid positive number" : "请输入有效的正数"}
-            </span>
-          )}
+              <div style={{
+                width: 28,
+                height: 28,
+                borderRadius: "50%",
+                background: "#008060",
+                color: "#fff",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 14,
+                fontWeight: 600,
+                flexShrink: 0,
+              }}>
+                {item.step}
+              </div>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>{item.title}</div>
+                <div style={{ fontSize: 13, color: "#637381" }}>{item.desc}</div>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
-        <div>
-          <label style={{ display: "block", marginBottom: 6, fontSize: 13, fontWeight: 500 }}>
-            {en ? "SKU (optional)" : "SKU（可选）"}
-          </label>
-          <input
-            type="text"
-            value={productSku}
-            onChange={(e) => setProductSku(e.target.value)}
-            placeholder={en ? "e.g., ABC-12345" : "例如：ABC-12345"}
-            style={{
-              width: "100%",
-              boxSizing: "border-box",
-              padding: "8px 12px",
-              border: "1px solid #c4cdd5",
-              borderRadius: 4,
-              fontSize: 14,
-            }}
-          />
-        </div>
-        <div>
-          <label style={{ display: "block", marginBottom: 6, fontSize: 13, fontWeight: 500 }}>
-            {en ? "Product URL (optional)" : "产品链接（可选）"}
-          </label>
-          <input
-            type="text"
-            value={productUrl}
-            onChange={(e) => setProductUrl(e.target.value)}
-            placeholder={`${shopInfo.url}/products/...`}
-            style={{
-              width: "100%",
-              boxSizing: "border-box",
-              padding: "8px 12px",
-              border: `1px solid ${productUrl && !isUrlValid ? "#de3618" : "#c4cdd5"}`,
-              borderRadius: 4,
-              fontSize: 14,
-            }}
-          />
-          {productUrl && !isUrlValid && (
-            <span style={{ fontSize: 12, color: "#de3618", marginTop: 4, display: "block" }}>
-              {en ? "Enter a valid URL" : "请输入有效的链接"}
-            </span>
-          )}
-        </div>
-      </div>
-      
-      <div style={{ marginBottom: 16 }}>
-        <label style={{ display: "block", marginBottom: 6, fontSize: 13, fontWeight: 500 }}>
-          {en ? "Product Image URL (optional)" : "产品图片链接（可选）"}
-        </label>
-        <input
-          type="text"
-          value={productImage}
-          onChange={(e) => setProductImage(e.target.value)}
-          placeholder={en ? "https://cdn.shopify.com/..." : "https://cdn.shopify.com/..."}
-          style={{
-            width: "100%",
-            boxSizing: "border-box",
-            padding: "8px 12px",
-            border: `1px solid ${productImage && !isImageUrlValid ? "#de3618" : "#c4cdd5"}`,
-            borderRadius: 4,
-            fontSize: 14,
-          }}
-        />
-        {productImage && !isImageUrlValid && (
-          <span style={{ fontSize: 12, color: "#de3618", marginTop: 4, display: "block" }}>
-            {en ? "Enter a valid URL" : "请输入有效的链接"}
-          </span>
-        )}
-      </div>
-
-      <div style={{ marginBottom: 16 }}>
-        <label style={{ display: "block", marginBottom: 6, fontSize: 13, fontWeight: 500 }}>
-          {en ? "Description (optional)" : "描述（可选）"}
-        </label>
-        <textarea
-          value={productDescription}
-          onChange={(e) => setProductDescription(e.target.value)}
-          placeholder={en ? "Enter product description" : "输入产品描述"}
-          rows={3}
-          style={{
-            width: "100%",
-            boxSizing: "border-box",
-            padding: "8px 12px",
-            border: "1px solid #c4cdd5",
-            borderRadius: 4,
-            fontSize: 14,
-            resize: "vertical",
-          }}
-        />
-      </div>
-
-      <div style={{ marginBottom: 16 }}>
-        <label style={{ display: "block", marginBottom: 6, fontSize: 13, fontWeight: 500 }}>
-          {en ? "Availability" : "库存状态"}
-        </label>
-        <select
-          value={productAvailability}
-          onChange={(e) => setProductAvailability(e.target.value)}
-          style={{
-            padding: "8px 12px",
-            border: "1px solid #c4cdd5",
-            borderRadius: 4,
-            fontSize: 14,
-          }}
-        >
-          <option value="InStock">{en ? "In Stock" : "有货"}</option>
-          <option value="OutOfStock">{en ? "Out of Stock" : "缺货"}</option>
-          <option value="PreOrder">{en ? "Pre-Order" : "预购"}</option>
-        </select>
-      </div>
-
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-        <span style={{ fontSize: 14, fontWeight: 600 }}>{en ? "Generated Schema Code" : "生成的 Schema 代码"}</span>
-        <CopyButton text={schemaCode} en={en} disabled={!isValid} />
-      </div>
-      <pre
+      {/* 跳转按钮 */}
+      <a
+        href={themeEditorUrl}
+        target="_blank"
+        rel="noreferrer"
         style={{
-          background: "#1e1e1e",
-          color: "#d4d4d4",
-          padding: 16,
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 8,
+          padding: "14px 28px",
+          background: "#008060",
+          color: "#fff",
           borderRadius: 8,
-          overflow: "auto",
-          fontSize: 12,
-          maxHeight: 300,
+          textDecoration: "none",
+          fontWeight: 600,
+          fontSize: 15,
+          boxShadow: "0 2px 8px rgba(0, 128, 96, 0.3)",
+          transition: "all 0.2s",
         }}
       >
-        {schemaCode}
-      </pre>
-      
-      <div style={{ marginTop: 12, padding: 12, background: "#f0f7ff", borderRadius: 6, fontSize: 13 }}>
-        <strong>📍 {en ? "How to use:" : "使用方法："}</strong>
-        <ol style={{ margin: "8px 0 0", paddingLeft: 20 }}>
-          <li>{en ? "Copy the code above" : "复制上面的代码"}</li>
-          <li>{en ? "Go to Shopify Admin → Online Store → Themes → Edit code" : "进入 Shopify 后台 → 在线商店 → 主题 → 编辑代码"}</li>
-          <li>{en ? "Open main-product.liquid (OS 2.0) or product.liquid (legacy)" : "打开 main-product.liquid（OS 2.0 主题）或 product.liquid（旧版主题）"}</li>
-          <li>{en ? "Paste the code before </head> or at the end of the file" : "将代码粘贴到 </head> 之前或文件末尾"}</li>
-        </ol>
+        {en ? "Open Theme Settings" : "打开主题设置"}
+        <span style={{ fontSize: 18 }}>→</span>
+      </a>
+
+      {/* Schema 包含的字段说明 */}
+      <div style={{
+        marginTop: 32,
+        padding: 20,
+        background: "#f4f6f8",
+        borderRadius: 8,
+      }}>
+        <h4 style={{ margin: "0 0 12px", fontSize: 14, fontWeight: 600 }}>
+          {en ? "What's Included in the Schema" : "Schema 包含的字段"}
+        </h4>
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))",
+          gap: 8,
+          fontSize: 13,
+        }}>
+          {[
+            { icon: "🏷️", label: en ? "Product Name" : "产品名称" },
+            { icon: "📝", label: en ? "Description" : "描述" },
+            { icon: "🖼️", label: en ? "Images (up to 10)" : "图片（最多10张）" },
+            { icon: "🔢", label: "SKU" },
+            { icon: "📊", label: en ? "Barcode/GTIN" : "条形码/GTIN" },
+            { icon: "🏢", label: en ? "Brand" : "品牌" },
+            { icon: "💰", label: en ? "Price & Currency" : "价格和货币" },
+            { icon: "📦", label: en ? "Availability" : "库存状态" },
+          ].map((item) => (
+            <div key={item.label} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <span>{item.icon}</span>
+              <span style={{ color: "#454f5b" }}>{item.label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* 好处说明 */}
+      <div style={{
+        marginTop: 16,
+        padding: 16,
+        background: "#fffbe6",
+        border: "1px solid #ffe58f",
+        borderRadius: 8,
+        fontSize: 13,
+      }}>
+        <strong>💡 {en ? "Why This Matters" : "为什么这很重要"}</strong>
+        <p style={{ margin: "8px 0 0", color: "#614700", lineHeight: 1.6 }}>
+          {en
+            ? "Product Schema helps AI assistants (like ChatGPT, Perplexity) understand your products better, increasing the chance they recommend your products when users ask for suggestions."
+            : "产品 Schema 帮助 AI 助手（如 ChatGPT、Perplexity）更好地理解您的产品，增加用户询问推荐时 AI 推荐您产品的机会。"}
+        </p>
       </div>
     </div>
   );
@@ -822,7 +658,7 @@ function LlmsTxtGenerator({ shopInfo, en }: { shopInfo: { name: string; url: str
 type TabId = "schema" | "faq" | "llmstxt";
 
 export default function AIVisibility() {
-  const { language, isGrowth, shopInfo, report } = useLoaderData<typeof loader>();
+  const { language, shopDomain, isGrowth, shopInfo, report } = useLoaderData<typeof loader>();
   const uiLanguage = useUILanguage(language);
   const en = uiLanguage === "English";
 
@@ -927,11 +763,11 @@ export default function AIVisibility() {
                 <div>
                   <p className={styles.sectionLabel}>{en ? "Product Schema" : "产品 Schema"}</p>
                   <h3 className={styles.sectionTitle}>
-                    {en ? "Generate Product Structured Data" : "生成产品结构化数据"}
+                    {en ? "Auto Product Schema Injection" : "产品 Schema 自动注入"}
                   </h3>
                 </div>
               </div>
-              <SchemaGenerator shopInfo={shopInfo} en={en} />
+              <ProductSchemaEmbed shopInfo={shopInfo} shopDomain={shopDomain} en={en} />
             </>
           )}
 

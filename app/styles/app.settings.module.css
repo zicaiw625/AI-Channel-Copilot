@@ -141,6 +141,7 @@
 .input,
 .select {
   width: 100%;
+  box-sizing: border-box;
   padding: 0.55rem 0.6rem;
   border-radius: 10px;
   border: 1px solid #e5e7eb;
@@ -179,6 +180,7 @@
 
 .textarea {
   width: 100%;
+  box-sizing: border-box;
   min-height: 180px;
   padding: 0.55rem 0.6rem;
   border-radius: 10px;

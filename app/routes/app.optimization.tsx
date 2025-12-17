@@ -264,6 +264,9 @@ const SuggestionCard = ({
     product_info: { en: "Product Info", zh: "产品信息" },
     ai_visibility: { en: "AI Visibility", zh: "AI 可见性" },
   };
+
+  // 特殊处理：Schema Embed 建议直接跳转到 AI Visibility 页面
+  const isSchemaEmbedSuggestion = suggestion.id === "schema-embed-disabled";
   
   return (
     <div
@@ -276,7 +279,7 @@ const SuggestionCard = ({
       }}
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <div>
+        <div style={{ flex: 1 }}>
           <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
             <span
               style={{
@@ -319,6 +322,30 @@ const SuggestionCard = ({
           </span>
         )}
       </div>
+
+      {/* Schema Embed 建议：显示快速操作按钮 */}
+      {isSchemaEmbedSuggestion && (
+        <div style={{ marginTop: 12 }}>
+          <Link
+            to="/app/ai-visibility"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "10px 20px",
+              background: "#008060",
+              color: "#fff",
+              border: "none",
+              borderRadius: 6,
+              fontSize: 14,
+              fontWeight: 600,
+              textDecoration: "none",
+            }}
+          >
+            🚀 {isEnglish ? "Enable Now" : "立即启用"}
+          </Link>
+        </div>
+      )}
       
       {expanded && (
         <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid rgba(0,0,0,0.1)" }}>

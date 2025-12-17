@@ -333,7 +333,7 @@ const SuggestionCard = ({
       {(isSchemaEmbedSuggestion || isLlmsTxtSuggestion) && (
         <div style={{ marginTop: 12 }}>
           <Link
-            to={isSchemaEmbedSuggestion ? "/app/ai-visibility" : "/app/additional#llms-txt-settings"}
+            to={isSchemaEmbedSuggestion ? "/app/ai-visibility#product-schema-settings" : "/app/additional#llms-txt-settings"}
             style={{
               display: "inline-flex",
               alignItems: "center",

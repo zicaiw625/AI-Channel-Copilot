@@ -709,3 +709,20 @@ details.statusBlock > summary {
   color: #637381;
   line-height: 1.4;
 }
+
+/* Highlight effect for scrolled-to target element */
+:global(.highlight-target) {
+  animation: highlight-pulse 2s ease-out;
+}
+
+@keyframes highlight-pulse {
+  0% {
+    box-shadow: 0 0 0 4px rgba(0, 128, 96, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(0, 128, 96, 0.2);
+  }
+  100% {
+    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.05);
+  }
+}

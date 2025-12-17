@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import type { HeadersFunction, LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
-import { Link, useLoaderData } from "react-router";
+import { Link, useLoaderData, useLocation } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 
 import { authenticate } from "../shopify.server";
@@ -1036,9 +1036,32 @@ export default function AIVisibility() {
   } = useLoaderData<typeof loader>();
   const uiLanguage = useUILanguage(language);
   const en = uiLanguage === "English";
+  const location = useLocation();
 
   const [activeTab, setActiveTab] = useState<TabId>("schema");
   const [showAdvanced, setShowAdvanced] = useState(false);
+
+  // 监听 URL hash 并滚动到目标元素（用于从其他页面跳转后定位到具体设置）
+  useEffect(() => {
+    const hash = location.hash;
+    if (hash) {
+      // 如果 hash 指向 product-schema-settings，确保切换到 schema tab
+      if (hash === "#product-schema-settings") {
+        setActiveTab("schema");
+      }
+      // 延迟执行以确保 DOM 已渲染（包括 tab 切换后的内容）
+      const timer = setTimeout(() => {
+        const element = document.querySelector(hash);
+        if (element) {
+          element.scrollIntoView({ behavior: "smooth", block: "start" });
+          // 添加高亮效果
+          element.classList.add("highlight-target");
+          setTimeout(() => element.classList.remove("highlight-target"), 2000);
+        }
+      }, 150);
+      return () => clearTimeout(timer);
+    }
+  }, [location.hash]);
 
   return (
     <s-page heading={en ? "AI Visibility Suite" : "AI 可见性套件"}>
@@ -1132,7 +1155,7 @@ export default function AIVisibility() {
         </div>
 
         {/* 内容区域 */}
-        <div className={styles.card}>
+        <div id="product-schema-settings" className={styles.card}>
           {activeTab === "schema" && (
             <>
               <div className={styles.sectionHeader}>

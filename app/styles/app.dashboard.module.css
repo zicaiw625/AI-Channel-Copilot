@@ -108,6 +108,12 @@
   color: #4338ca;
 }
 
+.detailIndicator {
+  opacity: 0.7;
+  font-size: 0.85em;
+  margin-left: 0.15em;
+}
+
 .backfillRow {
   display: flex;
   align-items: center;

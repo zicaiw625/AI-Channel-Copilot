@@ -149,20 +149,20 @@ const processQueue = async (
           continue;
         }
 
-        // 【优化 1】无论拉到多少单，都更新 lastBackfillAttemptAt 和 lastBackfillOrdersFetched
+        // 【优化】无论拉到多少单，都写入 lastBackfillAt，避免 0 单店铺永远显示 "Backfill: None"
         const now = new Date();
-        const activityUpdate: Parameters<typeof markActivity>[1] = {
+        
+        // 先记录回填完成时间（无论是否有订单）
+        await markActivity(job.shopDomain, { 
+          lastBackfillAt: now,
           lastBackfillAttemptAt: now,
           lastBackfillOrdersFetched: fetched.orders.length,
-        };
+        });
         
-        // 只在有订单时更新 lastBackfillAt
+        // 有订单时才持久化
         if (fetched.orders.length > 0) {
           await persistOrders(job.shopDomain, fetched.orders);
-          activityUpdate.lastBackfillAt = now;
         }
-        
-        await markActivity(job.shopDomain, activityUpdate);
 
         // 【修复】删除数据库中存在但 Shopify 已删除的订单
         const shopifyOrderIds = new Set(fetched.orders.map(o => o.id));
@@ -170,11 +170,13 @@ const processQueue = async (
 
         await updateJobStatus(job.id, "completed", { ordersFetched: fetched.orders.length });
         
-        // 【优化 2】0 单时显示 info 而非 healthy，让用户明确知道"任务成功但无数据"
+        // 【优化】0 单时显示 info 而非 healthy，让用户明确知道"任务成功但无数据"
+        // 同时 detail 提示 60 天限制和 read_all_orders 申请方式
         const statusLevel = fetched.orders.length > 0 ? "healthy" : "info";
+        const completedTime = now.toISOString().slice(0, 19).replace('T', ' ');
         const statusDetail = fetched.orders.length > 0
-          ? `Last completed at ${now.toISOString()} · ${fetched.orders.length} orders`
-          : `Completed at ${now.toISOString()} · 0 orders in last 60 days (Shopify default limit)`;
+          ? `Last: ${completedTime} · ${fetched.orders.length} orders synced`
+          : `Last: ${completedTime} · 0 orders (Shopify default: 60 days; need read_all_orders for older)`;
         
         await setBackfillStatus(job.shopDomain, statusLevel, statusDetail);
         logger.info("[backfill] job completed", {

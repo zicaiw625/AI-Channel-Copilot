@@ -1,5 +1,4 @@
 import prisma from "../db.server";
-import { Prisma } from "@prisma/client";
 import { type DateRange, type OrderRecord } from "./aiData";
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 import { getPlatform, isDemoMode } from "./runtime.server";
@@ -19,28 +18,7 @@ import {
   mapCustomerToState,
   createInitialCustomerState,
 } from "./mappers/orderMapper";
-
-const toNumber = (value: unknown): number => {
-  if (value === null || value === undefined) return 0;
-  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
-  if (typeof value === "string") {
-    const n = Number(value);
-    return Number.isFinite(n) ? n : 0;
-  }
-  if (value instanceof Prisma.Decimal) return value.toNumber();
-  const maybe = value as { toNumber?: () => number; toString?: () => string };
-  if (typeof maybe?.toNumber === "function") {
-    const n = maybe.toNumber();
-    return Number.isFinite(n) ? n : 0;
-  }
-  if (typeof maybe?.toString === "function") {
-    const n = Number(maybe.toString());
-    return Number.isFinite(n) ? n : 0;
-  }
-  return 0;
-};
-
-const roundMoney = (value: number): number => Math.round(value * 100) / 100;
+import { toNumber, roundMoney } from "./queries/helpers";
 
 const tableMissing = (error: unknown) =>
   (error instanceof PrismaClientKnownRequestError && error.code === "P2021") ||

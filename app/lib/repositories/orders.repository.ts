@@ -18,44 +18,7 @@ import {
   mapOrderToRecord,
   type OrderWithProducts,
 } from '../mappers/orderMapper';
-
-/**
- * 【修复】sourceName 过滤条件
- * 
- * 问题：`sourceName: { notIn: ['pos', 'draft'] }` 会把 NULL 值也过滤掉
- * 因为在 SQL 中 `NULL NOT IN (...)` 的结果是 UNKNOWN，会被视为 false
- * 
- * 解决：使用 OR 条件，允许 NULL 值或非 POS/Draft 值通过
- * 参考：https://github.com/prisma/prisma/issues/27622
- */
-export const SOURCE_NAME_FILTER: Prisma.OrderWhereInput = {
-  OR: [
-    { sourceName: null },
-    { sourceName: { notIn: ['pos', 'draft'] } },
-  ],
-};
-
-const toNumber = (value: unknown): number => {
-  if (value === null || value === undefined) return 0;
-  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
-  if (typeof value === "string") {
-    const n = Number(value);
-    return Number.isFinite(n) ? n : 0;
-  }
-  if (value instanceof Prisma.Decimal) return value.toNumber();
-  const maybe = value as { toNumber?: () => number; toString?: () => string };
-  if (typeof maybe?.toNumber === "function") {
-    const n = maybe.toNumber();
-    return Number.isFinite(n) ? n : 0;
-  }
-  if (typeof maybe?.toString === "function") {
-    const n = Number(maybe.toString());
-    return Number.isFinite(n) ? n : 0;
-  }
-  return 0;
-};
-
-const roundMoney = (value: number): number => Math.round(value * 100) / 100;
+import { toNumber, roundMoney, SOURCE_NAME_FILTER } from '../queries/helpers';
 
 export class OrdersRepository {
   /**

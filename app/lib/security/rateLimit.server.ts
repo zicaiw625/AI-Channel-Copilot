@@ -2,24 +2,21 @@
  * Rate Limiting 服务
  * 防止 API 滥用和 DDoS 攻击
  * 
- * ⚠️ 重要限制：当前实现使用内存 Map 存储限流状态
+ * 支持两种存储后端：
+ * 1. Redis（推荐生产环境）- 支持分布式限流
+ * 2. 内存存储（开发/单实例部署）- 自动回退
  * 
- * 在多实例/Serverless 部署场景下存在以下问题：
- * 1. 每个实例维护独立的计数，无法跨实例共享
- * 2. 攻击者可以通过分散请求到不同实例来绕过限制
- * 3. 实例重启会丢失所有限流状态
+ * 配置 Redis：
+ * - 设置环境变量 REDIS_URL（如: redis://localhost:6379）
+ * - 或设置 REDIS_HOST, REDIS_PORT, REDIS_PASSWORD
  * 
- * 生产环境建议：
- * - 使用 Redis 实现分布式限流
- * - 或在负载均衡层（如 Cloudflare、nginx）配置限流
- * 
- * 当前实现适用于：
- * - 单实例部署
- * - 开发/测试环境
- * - 作为应用层的第二道防线（配合 LB 层限流）
+ * 自动回退机制：
+ * - 如果 Redis 未配置或连接失败，自动使用内存存储
+ * - 记录警告日志提醒运维人员
  */
 
 import { logger } from '../logger.server';
+import { getRedisRateLimitStore, isRedisRateLimitEnabled } from './redisRateLimit.server';
 
 interface RateLimitRule {
   maxRequests: number;
@@ -162,32 +159,45 @@ class InMemoryRateLimitStore implements RateLimitStore {
   }
 }
 
-// 🔒 是否已显示多实例警告
-let multiInstanceWarningShown = false;
+// 🔒 是否已显示存储类型日志
+let storageTypeLogShown = false;
 
 export class RateLimiter {
   private static instance: RateLimiter;
   private static listenerAdded = false;
-  private store: InMemoryRateLimitStore;
+  private store: RateLimitStore;
+  private inMemoryStore: InMemoryRateLimitStore | null = null;
   private cleanupInterval?: NodeJS.Timeout;
+  private useRedis = false;
   
   // 内存保护：最大条目数限制
   private readonly MAX_ENTRIES = 100000;
   private readonly EMERGENCY_CLEANUP_THRESHOLD = 0.8;
 
   private constructor() {
-    this.store = new InMemoryRateLimitStore();
-    this.startCleanup();
-    this.logMultiInstanceWarning();
+    // 尝试使用 Redis，失败则回退到内存存储
+    const redisStore = getRedisRateLimitStore();
+    
+    if (redisStore) {
+      this.store = redisStore;
+      this.useRedis = true;
+      this.logStorageType('redis');
+    } else {
+      this.inMemoryStore = new InMemoryRateLimitStore();
+      this.store = this.inMemoryStore;
+      this.useRedis = false;
+      this.startCleanup();
+      this.logStorageType('memory');
+    }
   }
 
   /**
-   * 🔒 记录多实例部署警告
-   * 仅在生产环境首次初始化时记录一次
+   * 🔒 记录存储类型信息
+   * 仅在首次初始化时记录一次
    */
-  private logMultiInstanceWarning(): void {
-    if (multiInstanceWarningShown) return;
-    multiInstanceWarningShown = true;
+  private logStorageType(type: 'redis' | 'memory'): void {
+    if (storageTypeLogShown) return;
+    storageTypeLogShown = true;
 
     const isProduction = process.env.NODE_ENV === 'production';
     const instanceId = process.env.RENDER_INSTANCE_ID || 
@@ -196,13 +206,26 @@ export class RateLimiter {
                        process.env.K_REVISION ||  // Cloud Run
                        null;
 
-    if (isProduction) {
+    if (type === 'redis') {
+      logger.info('[RateLimit] ✅ Using Redis for distributed rate limiting', {
+        instanceId: instanceId?.slice(0, 20),
+      });
+    } else if (isProduction) {
       logger.warn('[RateLimit] ⚠️ Using in-memory rate limiting in production', {
         instanceId: instanceId?.slice(0, 20),
-        recommendation: 'Consider using Redis for distributed rate limiting in multi-instance deployments',
-        documentation: 'https://docs.aicc.app/deployment/rate-limiting',  // 可以换成实际文档地址
+        recommendation: 'Set REDIS_URL environment variable for distributed rate limiting',
+        documentation: 'https://docs.aicc.app/deployment/rate-limiting',
       });
+    } else {
+      logger.info('[RateLimit] Using in-memory rate limiting (development mode)');
     }
+  }
+  
+  /**
+   * 检查是否使用 Redis 存储
+   */
+  isUsingRedis(): boolean {
+    return this.useRedis;
   }
 
   static getInstance(): RateLimiter {
@@ -280,11 +303,18 @@ export class RateLimiter {
       const key = this.getKey(identifier, windowMs);
       await this.store.delete(key);
     } else {
-      // 删除所有匹配的键
-      for (const key of this.store.keys()) {
-        if (key.startsWith(`${identifier}:`)) {
-          await this.store.delete(key);
+      // 删除所有匹配的键（仅内存存储支持迭代）
+      if (this.inMemoryStore) {
+        for (const key of this.inMemoryStore.keys()) {
+          if (key.startsWith(`${identifier}:`)) {
+            await this.store.delete(key);
+          }
         }
+      } else {
+        // Redis 模式下，需要指定 windowMs 才能删除
+        logger.warn('[RateLimit] Reset without windowMs not supported in Redis mode', {
+          identifier: identifier.slice(0, 50),
+        });
       }
     }
   }
@@ -319,10 +349,13 @@ export class RateLimiter {
   }
 
   /**
-   * 清理过期的记录
+   * 清理过期的记录（仅内存存储需要）
    */
   private cleanup(): void {
-    const cleaned = this.store.cleanup();
+    // Redis 自动处理过期，无需手动清理
+    if (!this.inMemoryStore) return;
+    
+    const cleaned = this.inMemoryStore.cleanup();
 
     if (cleaned > 0) {
       void this.store.size().then(remaining => {

@@ -1,0 +1,689 @@
+openapi: 3.0.3
+info:
+  title: AI Channel Copilot API
+  description: |
+    AI Channel Copilot 是一个 Shopify 嵌入式应用，用于追踪和分析来自 AI 渠道（ChatGPT、Perplexity、Gemini、Copilot 等）的订单归因和 GMV 贡献。
+
+    ## 认证
+
+    所有 API 端点都需要通过 Shopify OAuth 认证。请求必须包含有效的 Shopify 会话。
+
+    ## 速率限制
+
+    所有 API 端点都有速率限制，超出限制将返回 429 状态码。
+
+    | 端点类型 | 限制 | 说明 |
+    |---------|------|------|
+    | API_DEFAULT | 60/分钟 | 默认 API 限制 |
+    | POLLING | 60/分钟 | 轮询端点（如 jobs） |
+    | DASHBOARD | 30/分钟 | Dashboard 查询 |
+    | COPILOT | 20/分钟 | Copilot AI 查询 |
+    | EXPORT | 5/5分钟 | 数据导出 |
+    | STRICT | 10/分钟 | 敏感操作 |
+
+  version: 1.0.0
+  contact:
+    name: AI Channel Copilot Support
+    email: support@aicc.app
+  license:
+    name: MIT
+
+servers:
+  - url: https://{shop-domain}
+    description: Shopify App Proxy
+    variables:
+      shop-domain:
+        default: your-shop.myshopify.com
+        description: Your Shopify shop domain
+
+tags:
+  - name: Jobs
+    description: 后台任务状态查询
+  - name: Backfill
+    description: 历史数据回填
+  - name: Export
+    description: 数据导出
+  - name: Copilot
+    description: AI Copilot 助手
+  - name: Retention
+    description: 数据保留管理
+  - name: Webhook Export
+    description: Webhook 数据推送
+  - name: LLMs.txt
+    description: AI 采集偏好声明
+
+paths:
+  /api/jobs:
+    get:
+      tags:
+        - Jobs
+      summary: 获取后台任务状态
+      description: |
+        查询当前店铺的 Backfill 和 Webhook 任务状态。
+        
+        **速率限制**: POLLING (60/分钟)
+        
+        **缓存**: 10秒 TTL
+      operationId: getJobsStatus
+      responses:
+        '200':
+          description: 任务状态
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /api/backfill:
+    post:
+      tags:
+        - Backfill
+      summary: 触发历史数据回填
+      description: |
+        触发指定时间范围的历史订单回填任务。
+        
+        **速率限制**: STRICT (10/分钟)
+      operationId: triggerBackfill
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                range:
+                  type: string
+                  enum: [7d, 30d, 90d, custom]
+                  description: 时间范围
+                  default: 30d
+                from:
+                  type: string
+                  format: date
+                  description: 自定义开始日期 (当 range=custom 时必填)
+                to:
+                  type: string
+                  format: date
+                  description: 自定义结束日期 (当 range=custom 时必填)
+      responses:
+        '200':
+          description: 回填任务状态
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackfillResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '405':
+          description: 方法不允许
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /api/copilot:
+    post:
+      tags:
+        - Copilot
+      summary: AI Copilot 查询
+      description: |
+        向 AI Copilot 提问，获取店铺数据洞察。
+        
+        **速率限制**: COPILOT (20/分钟)
+        
+        **请求体大小限制**: 10KB
+      operationId: copilotQuery
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CopilotRequest'
+      responses:
+        '200':
+          description: Copilot 回答
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CopilotResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: 功能需要升级
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /api/export/orders:
+    get:
+      tags:
+        - Export
+      summary: 导出订单数据
+      description: |
+        导出指定时间范围内的 AI 渠道订单数据为 CSV 格式。
+        
+        **速率限制**: EXPORT (5/5分钟)
+        
+        **需要功能**: EXPORTS
+      operationId: exportOrders
+      parameters:
+        - $ref: '#/components/parameters/RangeParam'
+        - $ref: '#/components/parameters/FromParam'
+        - $ref: '#/components/parameters/ToParam'
+      responses:
+        '200':
+          description: CSV 文件
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: 功能需要升级
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /api/export/customers:
+    get:
+      tags:
+        - Export
+      summary: 导出客户 LTV 数据
+      description: |
+        导出客户级别的 LTV（终身价值）数据为 CSV 格式。
+        
+        **速率限制**: EXPORT (5/5分钟)
+        
+        **需要功能**: EXPORTS
+      operationId: exportCustomers
+      parameters:
+        - $ref: '#/components/parameters/RangeParam'
+        - $ref: '#/components/parameters/FromParam'
+        - $ref: '#/components/parameters/ToParam'
+      responses:
+        '200':
+          description: CSV 文件
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: 功能需要升级
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /api/export/products:
+    get:
+      tags:
+        - Export
+      summary: 导出产品数据
+      description: |
+        导出 AI 渠道的产品销售数据为 CSV 格式。
+        
+        **速率限制**: EXPORT (5/5分钟)
+        
+        **需要功能**: EXPORTS
+      operationId: exportProducts
+      parameters:
+        - $ref: '#/components/parameters/RangeParam'
+        - $ref: '#/components/parameters/FromParam'
+        - $ref: '#/components/parameters/ToParam'
+      responses:
+        '200':
+          description: CSV 文件
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: 功能需要升级
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /api/retention:
+    post:
+      tags:
+        - Retention
+      summary: 执行数据保留清理
+      description: |
+        手动触发历史数据清理任务。
+        
+        **速率限制**: STRICT (10/分钟)
+      operationId: executeRetention
+      parameters:
+        - name: force
+          in: query
+          schema:
+            type: boolean
+            default: false
+          description: 强制执行（跳过每日一次限制）
+      responses:
+        '200':
+          description: 清理结果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RetentionResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /api/llms-txt-preview:
+    get:
+      tags:
+        - LLMs.txt
+      summary: 预览 llms.txt 内容
+      description: |
+        预览 llms.txt 文件内容，支持下载和语言切换。
+        
+        **速率限制**: EXPORT (5/5分钟)
+        
+        **需要功能**: EXPORTS
+      operationId: previewLlmsTxt
+      parameters:
+        - name: lang
+          in: query
+          schema:
+            type: string
+            enum: [English, 中文]
+          description: 语言（覆盖设置）
+        - name: download
+          in: query
+          schema:
+            type: string
+            enum: ['0', '1']
+          description: 是否下载文件
+      responses:
+        '200':
+          description: llms.txt 内容
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  text:
+                    type: string
+            text/plain:
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: 功能需要升级
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /api/webhook-export:
+    get:
+      tags:
+        - Webhook Export
+      summary: 获取 Webhook 配置
+      description: |
+        获取当前店铺的 Webhook 导出配置。
+        
+        **需要功能**: MULTI_STORE (Growth Plan)
+      operationId: getWebhookConfig
+      responses:
+        '200':
+          description: Webhook 配置
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookConfigResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: 功能需要升级
+
+    post:
+      tags:
+        - Webhook Export
+      summary: 更新 Webhook 配置或触发操作
+      description: |
+        更新配置、测试 Webhook 或触发数据导出。
+        
+        **速率限制**: EXPORT (5/5分钟)
+        
+        **需要功能**: MULTI_STORE (Growth Plan)
+      operationId: updateWebhookConfig
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required:
+                - intent
+              properties:
+                intent:
+                  type: string
+                  enum: [update_config, test_webhook, trigger_export]
+                  description: 操作类型
+                enabled:
+                  type: string
+                  enum: ['true', 'false']
+                  description: 是否启用
+                url:
+                  type: string
+                  format: uri
+                  description: Webhook URL (必须 HTTPS)
+                secret:
+                  type: string
+                  maxLength: 256
+                  description: HMAC 签名密钥
+                events:
+                  type: string
+                  description: 事件类型（逗号分隔）
+                range:
+                  type: string
+                  enum: [7d, 30d, 90d]
+                  description: 导出时间范围
+      responses:
+        '200':
+          description: 操作结果
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/WebhookConfigResponse'
+                  - $ref: '#/components/schemas/WebhookTestResponse'
+                  - $ref: '#/components/schemas/WebhookExportResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: 功能需要升级
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /a/llms:
+    get:
+      tags:
+        - LLMs.txt
+      summary: 公开的 llms.txt 端点
+      description: |
+        App Proxy 端点，提供店铺的 llms.txt 文件。
+        
+        **认证**: Shopify App Proxy 签名验证
+        
+        **速率限制**: 
+        - IP 级别: GLOBAL_IP (300/分钟)
+        - 店铺级别: PROXY (60/分钟)
+      operationId: getLlmsTxt
+      parameters:
+        - name: shop
+          in: query
+          required: true
+          schema:
+            type: string
+          description: 店铺域名
+        - name: signature
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Shopify 签名
+      responses:
+        '200':
+          description: llms.txt 内容
+          content:
+            text/plain:
+              schema:
+                type: string
+        '401':
+          description: 签名验证失败
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+components:
+  parameters:
+    RangeParam:
+      name: range
+      in: query
+      schema:
+        type: string
+        enum: [7d, 30d, 90d, custom]
+        default: 90d
+      description: 时间范围
+    
+    FromParam:
+      name: from
+      in: query
+      schema:
+        type: string
+        format: date
+      description: 自定义开始日期
+    
+    ToParam:
+      name: to
+      in: query
+      schema:
+        type: string
+        format: date
+      description: 自定义结束日期
+
+  responses:
+    Unauthorized:
+      description: 未认证
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              ok:
+                type: boolean
+                example: false
+              message:
+                type: string
+                example: unauthorized
+
+    BadRequest:
+      description: 请求参数错误
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              ok:
+                type: boolean
+                example: false
+              error:
+                type: string
+              details:
+                type: array
+                items:
+                  type: object
+
+    RateLimited:
+      description: 请求过于频繁
+      headers:
+        X-RateLimit-Limit:
+          schema:
+            type: integer
+          description: 限制数量
+        X-RateLimit-Remaining:
+          schema:
+            type: integer
+          description: 剩余数量
+        X-RateLimit-Reset:
+          schema:
+            type: integer
+          description: 重置时间戳
+        Retry-After:
+          schema:
+            type: integer
+          description: 重试等待秒数
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+              remaining:
+                type: integer
+              resetAt:
+                type: string
+                format: date-time
+
+  schemas:
+    JobsResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        backfills:
+          type: object
+          properties:
+            recent:
+              type: array
+              items:
+                type: object
+            counts:
+              type: object
+              additionalProperties:
+                type: integer
+        webhooks:
+          type: object
+          properties:
+            recent:
+              type: array
+              items:
+                type: object
+            counts:
+              type: object
+              additionalProperties:
+                type: integer
+
+    BackfillResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        queued:
+          type: boolean
+        reason:
+          type: string
+          enum: [in-flight, processing-existing]
+        startedAt:
+          type: string
+          format: date-time
+        range:
+          type: string
+
+    CopilotRequest:
+      type: object
+      required:
+        - question
+      properties:
+        question:
+          type: string
+          maxLength: 500
+          description: 用户问题
+        range:
+          type: string
+          enum: [7d, 30d, 90d, custom]
+          default: 30d
+        from:
+          type: string
+          format: date
+        to:
+          type: string
+          format: date
+
+    CopilotResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        answer:
+          type: string
+          description: AI 生成的回答
+        data:
+          type: object
+          description: 相关数据
+        suggestions:
+          type: array
+          items:
+            type: string
+          description: 后续问题建议
+
+    RetentionResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        retentionMonths:
+          type: integer
+        deletedOrders:
+          type: integer
+        deletedCustomers:
+          type: integer
+
+    WebhookConfigResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        config:
+          type: object
+          properties:
+            enabled:
+              type: boolean
+            url:
+              type: string
+            secret:
+              type: string
+            events:
+              type: array
+              items:
+                type: string
+            lastTriggeredAt:
+              type: string
+              format: date-time
+            lastStatus:
+              type: string
+              enum: [success, failed]
+            lastError:
+              type: string
+
+    WebhookTestResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        status:
+          type: integer
+
+    WebhookExportResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        ordersExported:
+          type: integer
+        summary:
+          type: object
+          properties:
+            totalOrders:
+              type: integer
+            totalGMV:
+              type: number
+            aiOrders:
+              type: integer
+            aiGMV:
+              type: number
+            aiShare:
+              type: number

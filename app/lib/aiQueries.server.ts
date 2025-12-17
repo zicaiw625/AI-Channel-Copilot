@@ -21,66 +21,24 @@ import { Prisma } from "@prisma/client";
 import { fromPrismaAiSource, toPrismaAiSource } from "./aiSourceMapper";
 import { startOfDay, formatDateOnly } from "./dateUtils";
 import { logger } from "./logger.server";
+import { t, type Lang } from "./i18n";
 
-/**
- * 【修复】sourceName 过滤条件
- * 
- * 问题：`sourceName: { notIn: ['pos', 'draft'] }` 会把 NULL 值也过滤掉
- * 因为在 SQL 中 `NULL NOT IN (...)` 的结果是 UNKNOWN，会被视为 false
- * 
- * 解决：使用 OR 条件，允许 NULL 值或非 POS/Draft 值通过
- */
-const SOURCE_NAME_FILTER: Prisma.OrderWhereInput = {
-  OR: [
-    { sourceName: null },
-    { sourceName: { notIn: ["pos", "draft"] } },
-  ],
-};
-
-const toNumber = (value: unknown): number => {
-  if (value === null || value === undefined) return 0;
-  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
-  if (typeof value === "string") {
-    const n = Number(value);
-    return Number.isFinite(n) ? n : 0;
-  }
-  if (value instanceof Prisma.Decimal) return value.toNumber();
-  const maybe = value as { toNumber?: () => number; toString?: () => string };
-  if (typeof maybe?.toNumber === "function") {
-    const n = maybe.toNumber();
-    return Number.isFinite(n) ? n : 0;
-  }
-  if (typeof maybe?.toString === "function") {
-    const n = Number(maybe.toString());
-    return Number.isFinite(n) ? n : 0;
-  }
-  return 0;
-};
+// Import helpers from extracted module
+import {
+  SOURCE_NAME_FILTER,
+  CHANNEL_COLORS,
+  toNumber,
+  getSum,
+  computeRepeatRate,
+  type OrderAggregateResult,
+} from "./queries/helpers";
+import { TREND_DATA_DB_AGGREGATION_THRESHOLD } from "./constants";
+import { createQueryTimer } from "./metrics/collector";
 
 type DashboardQueryOptions = {
   timezone?: string;
   allowDemo?: boolean;
   orders?: OrderRecord[];
-};
-
-// 定义聚合结果的类型
-type OrderAggregateResult = {
-  _sum: {
-    totalPrice: unknown;
-    subtotalPrice: unknown;
-    refundTotal: unknown;
-  };
-  _count: {
-    _all: number;
-  };
-};
-
-// 辅助函数：计算总值（类型安全版本）
-const getSum = (agg: OrderAggregateResult, metric: string): number => {
-  if (metric === "subtotal_price") {
-    return toNumber(agg._sum.subtotalPrice);
-  }
-  return toNumber(agg._sum.totalPrice); // Default to current_total_price which maps to totalPrice in DB schema
 };
 
 /**
@@ -213,14 +171,6 @@ async function buildDashboardFromDb(
     });
   });
 
-  const CHANNEL_COLORS: Record<string, string> = {
-    ChatGPT: "#635bff",
-    Perplexity: "#00a2ff",
-    Gemini: "#4285f4",
-    Copilot: "#0078d4",
-    "Other-AI": "#6c6f78",
-  };
-
   channelGroups.forEach((group) => {
     if (!group.aiSource) return;
     const channelName = fromPrismaAiSource(group.aiSource);
@@ -239,85 +189,198 @@ async function buildDashboardFromDb(
 
   const channels = Array.from(channelMap.values());
 
-  // 3. 趋势数据 (需要轻量级 Fetch)
-  // 为了准确按时区 Day/Week 分组，我们在内存中处理，但只取必要字段
-  const trendOrders = await prisma.order.findMany({
-    where,
-    select: { createdAt: true, totalPrice: true, subtotalPrice: true, aiSource: true },
-    orderBy: { createdAt: "asc" },
-  });
+  // 3. 趋势数据
+  // 性能优化：先检查订单数量，决定使用数据库聚合还是内存聚合
+  const orderCount = await prisma.order.count({ where });
+  const useDbAggregation = orderCount > TREND_DATA_DB_AGGREGATION_THRESHOLD;
 
-  // 使用 aiAggregation 中的逻辑需要适配
-  // 这里我们手写一个简单的 Trend Builder，因为不想依赖 aiAggregation 的 OrderRecord 类型
-  const buildTrendLocal = () => {
-    // 复用 aiAggregation 的 bucket 逻辑? 
-    // 简单实现：
-    const bucketMap = new Map<string, TrendPoint & { sortKey: number }>();
-    
-    // Determine bucket
-    let bucket: "day" | "week" | "month" = "day";
-    if (range.days > 60) bucket = "month";
-    else if (range.days > 14) bucket = "week";
-
-    trendOrders.forEach(o => {
-       const date = new Date(o.createdAt);
-       let key = "";
-       let sortKey = 0;
-       
-       if (bucket === "day") {
-         key = formatDateOnly(date, timezone);
-         sortKey = startOfDay(date, timezone).getTime();
-       } else if (bucket === "week") {
-         const start = startOfDay(date, timezone);
-         const day = start.getUTCDay();
-         const diff = (day + 6) % 7;
-         start.setUTCDate(start.getUTCDate() - diff);
-         key = `${formatDateOnly(start, timezone)} · 周`;
-         sortKey = start.getTime();
-       } else {
-         key = new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit" }).format(date);
-         // Bug Fix: 使用 startOfDay 保持时区一致，然后设置为月初
-         const start = startOfDay(date, timezone);
-         start.setUTCDate(1); 
-         sortKey = start.getTime();
-       }
-
-       if (!bucketMap.has(key)) {
-         bucketMap.set(key, {
-           label: key,
-           aiGMV: 0, aiOrders: 0, overallGMV: 0, overallOrders: 0,
-           byChannel: {},
-           sortKey: sortKey
-         });
-       }
-       
-       const entry = bucketMap.get(key)!;
-       const val = metric === "subtotal_price" ? toNumber(o.subtotalPrice) : toNumber(o.totalPrice);
-       
-       entry.overallGMV += val;
-       entry.overallOrders += 1;
-       // 更新 sortKey 为最小值（最早时间）
-       entry.sortKey = Math.min(entry.sortKey, sortKey);
-       
-       if (o.aiSource) {
-         const channel = fromPrismaAiSource(o.aiSource);
-         if (channel) {
-           entry.aiGMV += val;
-           entry.aiOrders += 1;
-           if (!entry.byChannel![channel]) entry.byChannel![channel] = { gmv: 0, orders: 0 };
-           entry.byChannel![channel]!.gmv += val;
-           entry.byChannel![channel]!.orders += 1;
-         }
-       }
+  let trend: TrendPoint[];
+  
+  if (useDbAggregation) {
+    // 🔧 大数据量优化：使用数据库层面聚合
+    // 使用 createdAtLocal 字段进行日期分组（已按店铺时区存储）
+    logger.info("[aiQueries] Using DB aggregation for trend data", {
+      shopDomain,
+      orderCount,
+      threshold: TREND_DATA_DB_AGGREGATION_THRESHOLD,
     });
     
-    // 按时间排序
-    return Array.from(bucketMap.values())
+    // 确定聚合粒度
+    let truncUnit: "day" | "week" | "month" = "day";
+    if (range.days > 60) truncUnit = "month";
+    else if (range.days > 14) truncUnit = "week";
+
+    // 使用原生 SQL 进行日期聚合
+    // PostgreSQL date_trunc 函数支持 day, week, month
+    type TrendAggRow = {
+      period: Date;
+      overall_gmv: number | null;
+      overall_orders: bigint;
+      ai_gmv: number | null;
+      ai_orders: bigint;
+      ai_source: string | null;
+    };
+
+    const priceColumn = metric === "subtotal_price" ? '"subtotalPrice"' : '"totalPrice"';
+    
+    // 构建动态 WHERE 条件
+    const sourceNameCondition = `AND ("sourceName" IS NULL OR "sourceName" NOT IN ('pos', 'draft_order', 'shopify_draft_order'))`;
+    
+    // 慢查询监控
+    const endTrendTimer = createQueryTimer("rawQuery", "Order", {
+      query: "trend_aggregation",
+      shopDomain,
+      metadata: { truncUnit, orderCount },
+    });
+    
+    const rawTrendData = await prisma.$queryRawUnsafe<TrendAggRow[]>(`
+      SELECT 
+        date_trunc('${truncUnit}', COALESCE("createdAtLocal", "createdAt")) as period,
+        SUM(${priceColumn}::numeric) as overall_gmv,
+        COUNT(*) as overall_orders,
+        SUM(CASE WHEN "aiSource" IS NOT NULL THEN ${priceColumn}::numeric ELSE 0 END) as ai_gmv,
+        COUNT(CASE WHEN "aiSource" IS NOT NULL THEN 1 END) as ai_orders,
+        "aiSource" as ai_source
+      FROM "Order"
+      WHERE "shopDomain" = $1
+        AND "createdAt" >= $2
+        AND "createdAt" <= $3
+        AND "currency" = $4
+        ${sourceNameCondition}
+      GROUP BY period, "aiSource"
+      ORDER BY period ASC
+    `, shopDomain, range.start, range.end, currency);
+    
+    endTrendTimer(); // 记录查询时间
+
+    // 转换为 TrendPoint 格式
+    const trendMap = new Map<string, TrendPoint & { sortKey: number }>();
+    
+    for (const row of rawTrendData) {
+      const periodDate = new Date(row.period);
+      let label: string;
+      
+      if (truncUnit === "day") {
+        label = formatDateOnly(periodDate, timezone);
+      } else if (truncUnit === "week") {
+        label = `${formatDateOnly(periodDate, timezone)} · 周`;
+      } else {
+        label = new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit" }).format(periodDate);
+      }
+      
+      if (!trendMap.has(label)) {
+        trendMap.set(label, {
+          label,
+          aiGMV: 0,
+          aiOrders: 0,
+          overallGMV: 0,
+          overallOrders: 0,
+          byChannel: {},
+          sortKey: periodDate.getTime(),
+        });
+      }
+      
+      const entry = trendMap.get(label)!;
+      // 每个 aiSource 是单独一行，所以要累加
+      if (row.ai_source === null) {
+        // 这行代表非 AI 订单的聚合
+        entry.overallGMV += Number(row.overall_gmv || 0);
+        entry.overallOrders += Number(row.overall_orders);
+      } else {
+        // AI 订单
+        const channel = fromPrismaAiSource(row.ai_source as Parameters<typeof fromPrismaAiSource>[0]);
+        if (channel) {
+          const aiGmv = Number(row.ai_gmv || 0);
+          const aiOrders = Number(row.ai_orders);
+          entry.aiGMV += aiGmv;
+          entry.aiOrders += aiOrders;
+          entry.overallGMV += Number(row.overall_gmv || 0);
+          entry.overallOrders += Number(row.overall_orders);
+          if (!entry.byChannel![channel]) {
+            entry.byChannel![channel] = { gmv: 0, orders: 0 };
+          }
+          entry.byChannel![channel]!.gmv += aiGmv;
+          entry.byChannel![channel]!.orders += aiOrders;
+        }
+      }
+    }
+    
+    trend = Array.from(trendMap.values())
       .sort((a, b) => a.sortKey - b.sortKey)
       .map(({ sortKey: _sortKey, ...rest }) => rest);
-  };
-  
-  const trend = buildTrendLocal();
+      
+  } else {
+    // 小数据量：继续使用内存聚合（更准确的时区处理）
+    const trendOrders = await prisma.order.findMany({
+      where,
+      select: { createdAt: true, totalPrice: true, subtotalPrice: true, aiSource: true },
+      orderBy: { createdAt: "asc" },
+    });
+
+    const buildTrendLocal = () => {
+      const bucketMap = new Map<string, TrendPoint & { sortKey: number }>();
+      
+      let bucket: "day" | "week" | "month" = "day";
+      if (range.days > 60) bucket = "month";
+      else if (range.days > 14) bucket = "week";
+
+      trendOrders.forEach(o => {
+         const date = new Date(o.createdAt);
+         let key = "";
+         let sortKey = 0;
+         
+         if (bucket === "day") {
+           key = formatDateOnly(date, timezone);
+           sortKey = startOfDay(date, timezone).getTime();
+         } else if (bucket === "week") {
+           const start = startOfDay(date, timezone);
+           const day = start.getUTCDay();
+           const diff = (day + 6) % 7;
+           start.setUTCDate(start.getUTCDate() - diff);
+           key = `${formatDateOnly(start, timezone)} · 周`;
+           sortKey = start.getTime();
+         } else {
+           key = new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit" }).format(date);
+           const start = startOfDay(date, timezone);
+           start.setUTCDate(1); 
+           sortKey = start.getTime();
+         }
+
+         if (!bucketMap.has(key)) {
+           bucketMap.set(key, {
+             label: key,
+             aiGMV: 0, aiOrders: 0, overallGMV: 0, overallOrders: 0,
+             byChannel: {},
+             sortKey: sortKey
+           });
+         }
+         
+         const entry = bucketMap.get(key)!;
+         const val = metric === "subtotal_price" ? toNumber(o.subtotalPrice) : toNumber(o.totalPrice);
+         
+         entry.overallGMV += val;
+         entry.overallOrders += 1;
+         entry.sortKey = Math.min(entry.sortKey, sortKey);
+         
+         if (o.aiSource) {
+           const channel = fromPrismaAiSource(o.aiSource);
+           if (channel) {
+             entry.aiGMV += val;
+             entry.aiOrders += 1;
+             if (!entry.byChannel![channel]) entry.byChannel![channel] = { gmv: 0, orders: 0 };
+             entry.byChannel![channel]!.gmv += val;
+             entry.byChannel![channel]!.orders += 1;
+           }
+         }
+      });
+      
+      return Array.from(bucketMap.values())
+        .sort((a, b) => a.sortKey - b.sortKey)
+        .map(({ sortKey: _sortKey, ...rest }) => rest);
+    };
+    
+    trend = buildTrendLocal();
+  }
 
   // 4. Top Products (需要查询 OrderProduct)
   // 为了性能，我们只查询 AI 相关的 OrderProduct 来计算 AI GMV 和 Top Channel
@@ -481,13 +544,6 @@ async function buildDashboardFromDb(
       channelMap.set(row.customerId, prevCount + row._count._all);
     }
   });
-  
-  // 计算复购率的辅助函数
-  const computeRepeatRate = (orderCountMap: Map<string, number>): number => {
-    if (orderCountMap.size === 0) return 0;
-    const repeatCustomers = Array.from(orderCountMap.values()).filter(count => count > 1).length;
-    return repeatCustomers / orderCountMap.size;
-  };
   
   const overallRepeatRate = computeRepeatRate(customerOrderCounts);
   
@@ -752,7 +808,7 @@ export const getAiDashboardData = async (
         );
 
   const language = settings.languages && settings.languages[0] ? settings.languages[0] : "中文";
-  const clampedNote = language === "English" ? "Data is a truncated sample; consider shortening the time range." : "数据为截断样本，建议缩短时间范围";
+  const clampedNote = t(language as Lang, "data_truncated_sample");
   const localizeNote = (note: string | null): string | null => {
     if (!note || language !== "English") return note;
     let out = note;

@@ -3,37 +3,10 @@
  * 统一处理数据库记录和应用层类型之间的转换
  */
 
-import { Prisma, type Order, type OrderProduct, type AiSource } from "@prisma/client";
+import { type Order, type OrderProduct, type AiSource } from "@prisma/client";
 import type { OrderRecord, OrderLine } from "../aiTypes";
 import { fromPrismaAiSource } from "../aiSourceMapper";
-
-/**
- * 将 Prisma Decimal/number/string 统一转换为 number
- * - Decimal：用于金额字段（NUMERIC/DECIMAL）
- * - string：兼容部分 JSON/序列化场景
- */
-const toNumber = (value: unknown): number => {
-  if (value === null || value === undefined) return 0;
-  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
-  if (typeof value === "string") {
-    const n = Number(value);
-    return Number.isFinite(n) ? n : 0;
-  }
-  // Prisma.Decimal (decimal.js) 兼容
-  if (value instanceof Prisma.Decimal) {
-    return value.toNumber();
-  }
-  const maybe = value as { toNumber?: () => number; toString?: () => string };
-  if (typeof maybe?.toNumber === "function") {
-    const n = maybe.toNumber();
-    return Number.isFinite(n) ? n : 0;
-  }
-  if (typeof maybe?.toString === "function") {
-    const n = Number(maybe.toString());
-    return Number.isFinite(n) ? n : 0;
-  }
-  return 0;
-};
+import { toNumber } from "../queries/helpers";
 
 /**
  * 数据库订单类型（带 products 关系）

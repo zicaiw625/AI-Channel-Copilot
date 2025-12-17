@@ -5,6 +5,8 @@ import { copilotAnswer } from "../lib/copilot.server";
 import { authenticate } from "../shopify.server";
 import { requireFeature, FEATURES } from "../lib/access.server";
 import { enforceRateLimit, RateLimitRules } from "../lib/security/rateLimit.server";
+import { apiSuccess, apiBadRequest, apiError } from "../lib/apiResponse.server";
+import { ErrorCode } from "../lib/errors";
 
 // 请求体大小限制（10KB）
 const MAX_REQUEST_BODY_SIZE = 10 * 1024;
@@ -41,16 +43,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   await requireFeature(shopDomain, FEATURES.COPILOT);
 
   if (request.method !== "POST") {
-    return Response.json({ ok: false, message: "Method not allowed" }, { status: 405 });
+    return apiError(ErrorCode.INVALID_INPUT, "Method not allowed", 405);
   }
 
   // 检查请求体大小，防止大请求消耗过多内存
   const contentLength = parseInt(request.headers.get("content-length") || "0", 10);
   if (contentLength > MAX_REQUEST_BODY_SIZE) {
-    return Response.json(
-      { ok: false, message: "Request body too large (max 10KB)" }, 
-      { status: 413 }
-    );
+    return apiBadRequest("Request body too large (max 10KB)");
   }
 
   const contentType = request.headers.get("content-type") || "";
@@ -61,34 +60,22 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       payload = await request.json();
       // 验证解析结果是对象
       if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
-        return Response.json(
-          { ok: false, message: "Invalid JSON: expected an object" },
-          { status: 400 }
-        );
+        return apiBadRequest("Invalid JSON: expected an object");
       }
-    } catch (error) {
+    } catch {
       // 不再静默失败，返回明确的错误响应
-      return Response.json(
-        { ok: false, message: "Invalid JSON body: failed to parse request" },
-        { status: 400 }
-      );
+      return apiBadRequest("Invalid JSON body: failed to parse request");
     }
   } else if (contentType.includes("multipart/form-data") || contentType.includes("application/x-www-form-urlencoded")) {
     try {
       const form = await request.formData();
       payload = Object.fromEntries(Array.from(form.entries()));
-    } catch (error) {
-      return Response.json(
-        { ok: false, message: "Invalid form data: failed to parse request" },
-        { status: 400 }
-      );
+    } catch {
+      return apiBadRequest("Invalid form data: failed to parse request");
     }
   } else {
     // 不支持的 Content-Type
-    return Response.json(
-      { ok: false, message: "Unsupported Content-Type. Use application/json or form data." },
-      { status: 415 }
-    );
+    return apiError(ErrorCode.INVALID_INPUT, "Unsupported Content-Type. Use application/json or form data.", 415);
   }
 
   const allowedIntents = new Set(["ai_performance", "ai_vs_all_aov", "ai_top_products"]);
@@ -98,13 +85,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const question = (payload.question as string | undefined) || undefined;
 
   if (intent && !allowedIntents.has(intent)) {
-    return Response.json({ ok: false, message: "invalid intent" }, { status: 400 });
+    return apiBadRequest("Invalid intent", { allowedIntents: Array.from(allowedIntents) });
   }
   if (range && !allowedRanges.has(range)) {
-    return Response.json({ ok: false, message: "invalid range" }, { status: 400 });
+    return apiBadRequest("Invalid range", { allowedRanges: Array.from(allowedRanges) });
   }
   if (question && question.length > 500) {
-    return Response.json({ ok: false, message: "question too long" }, { status: 400 });
+    return apiBadRequest("Question too long (max 500 characters)");
   }
 
   // 验证自定义日期范围参数
@@ -114,17 +101,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   // 如果是 custom 范围，必须提供有效的 from/to
   if (range === "custom") {
     if (!fromDate || !toDate) {
-      return Response.json({ 
-        ok: false, 
-        message: "Custom range requires valid 'from' and 'to' dates (YYYY-MM-DD format)" 
-      }, { status: 400 });
+      return apiBadRequest("Custom range requires valid 'from' and 'to' dates (YYYY-MM-DD format)");
     }
     // 验证 from <= to
     if (new Date(fromDate) > new Date(toDate)) {
-      return Response.json({ 
-        ok: false, 
-        message: "'from' date must be before or equal to 'to' date" 
-      }, { status: 400 });
+      return apiBadRequest("'from' date must be before or equal to 'to' date");
     }
   }
 
@@ -136,5 +117,5 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     to: toDate,
   });
 
-  return Response.json(result);
+  return apiSuccess(result);
 };

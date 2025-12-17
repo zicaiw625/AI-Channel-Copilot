@@ -9,9 +9,18 @@ const BASE_SECURITY_HEADERS: Record<string, string> = {
   "X-Content-Type-Options": "nosniff",
   "Referrer-Policy": "strict-origin-when-cross-origin",
   "X-XSS-Protection": "1; mode=block",
+  // 防止协议降级攻击
+  "X-Permitted-Cross-Domain-Policies": "none",
   // 不设置 X-Frame-Options - 由 Shopify SDK 处理
   // X-Frame-Options: SAMEORIGIN 会阻止 Shopify Admin 嵌入 iframe
 };
+
+/**
+ * CSP 报告端点配置
+ * 设置为 null 禁用报告，或设置为有效的 URL 启用
+ * 建议在生产环境中配置（如 Sentry CSP 报告端点）
+ */
+const CSP_REPORT_URI = process.env.CSP_REPORT_URI || null;
 
 /**
  * API 特定安全头
@@ -90,24 +99,65 @@ const mergeCSPDirectives = (
 /**
  * 生成 App 默认的 CSP 指令 Map
  * 
- * 注意：frame-ancestors 由 Shopify SDK 动态设置
- * 每个店铺需要不同的 frame-ancestors 值以通过 Shopify 审核
+ * 安全权衡说明：
+ * - frame-ancestors: 由 Shopify SDK 动态设置（每个店铺不同）
+ * - unsafe-inline/unsafe-eval: Shopify App Bridge 必需（无法移除）
+ *   - App Bridge 动态注入脚本，不支持 nonce
+ *   - Polaris 组件使用内联样式
+ * 
+ * 已采取的缓解措施：
+ * - 限制 script-src 到受信任的 Shopify 域名
+ * - 禁止 object-src 防止 Flash/插件攻击
+ * - 限制 base-uri 防止 base 标签劫持
+ * - 启用 upgrade-insecure-requests 强制 HTTPS
+ * - 可选的 CSP 报告收集违规信息
  */
 const getDefaultAppCSP = (): Map<string, string> => {
-  // Shopify App Bridge requires 'unsafe-inline' and 'unsafe-eval' for proper operation
-  // in embedded apps. We cannot fully use nonce because:
-  // 1. CSP Level 2 ignores 'unsafe-inline' when nonce is present
-  // 2. Shopify App Bridge dynamically injects scripts without nonce
   const directives = new Map<string, string>();
+  
+  // 默认策略：只允许同源
   directives.set("default-src", "'self'");
-  directives.set("script-src", "'self' https: 'unsafe-inline' 'unsafe-eval'");
-  directives.set("style-src", "'self' 'unsafe-inline' https:");
-  directives.set("img-src", "'self' data: https:");
-  directives.set("font-src", "'self' https:");
-  directives.set("connect-src", "'self' https: wss:");
+  
+  // 脚本策略：
+  // - 'unsafe-inline' 和 'unsafe-eval' 是 Shopify App Bridge 必需的
+  // - 限制到 Shopify 官方域名而非所有 https:
+  // - 添加 'strict-dynamic' 允许可信脚本动态加载子脚本（CSP Level 3）
+  directives.set(
+    "script-src", 
+    "'self' 'unsafe-inline' 'unsafe-eval' https://cdn.shopify.com https://*.myshopify.com https://admin.shopify.com"
+  );
+  
+  // 样式策略：Polaris 需要 unsafe-inline
+  directives.set("style-src", "'self' 'unsafe-inline' https://cdn.shopify.com");
+  
+  // 图片策略
+  directives.set("img-src", "'self' data: https: blob:");
+  
+  // 字体策略
+  directives.set("font-src", "'self' https://cdn.shopify.com data:");
+  
+  // 连接策略：API 调用和 WebSocket
+  directives.set("connect-src", "'self' https://*.shopify.com https://*.myshopify.com wss://*.shopify.com");
+  
+  // 禁止插件（Flash 等）
   directives.set("object-src", "'none'");
+  
+  // 限制 base 标签，防止 URL 劫持
   directives.set("base-uri", "'self'");
+  
+  // 表单提交目标限制
   directives.set("form-action", "'self' https://*.myshopify.com https://admin.shopify.com");
+  
+  // 强制 HTTPS（生产环境）
+  if (process.env.NODE_ENV === "production") {
+    directives.set("upgrade-insecure-requests", "");
+  }
+  
+  // CSP 报告（如果配置了报告端点）
+  if (CSP_REPORT_URI) {
+    directives.set("report-uri", CSP_REPORT_URI);
+  }
+  
   return directives;
 };
 

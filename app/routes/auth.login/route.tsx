@@ -7,6 +7,7 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { login } from "../../shopify.server";
 import { loginErrorMessage } from "./error.server";
 import { requireEnv, isProduction } from "../../lib/env.server";
+import { t, type Lang } from "../../lib/i18n";
 
 /**
  * 生产环境禁止访问此页面
@@ -48,14 +49,16 @@ export default function Auth() {
   const [shop, setShop] = useState("");
   const { errors, language, apiKey } = actionData || loaderData;
 
+  const lang = language as Lang;
+  
   return (
     <AppProvider embedded apiKey={apiKey}>
       <div style={{ maxWidth: 400, margin: "40px auto", padding: 20, fontFamily: "system-ui, sans-serif", border: "1px solid #e1e3e5", borderRadius: 8, boxShadow: "0 4px 6px rgba(0,0,0,0.05)" }}>
         <Form method="post" replace>
-        <h1 style={{ fontSize: 24, marginBottom: 20 }}>{language === "English" ? "Log in" : "登录"}</h1>
+        <h1 style={{ fontSize: 24, marginBottom: 20 }}>{t(lang, "login_title")}</h1>
           <div style={{ marginBottom: 16 }}>
             <label style={{ display: "block", marginBottom: 8, fontWeight: 600 }}>
-              {language === "English" ? "Shop domain" : "店铺域名"}
+              {t(lang, "shop_domain_label")}
             </label>
             <input
               name="shop"
@@ -81,7 +84,7 @@ export default function Auth() {
               cursor: "pointer" 
             }}
           >
-            {language === "English" ? "Log in" : "登录"}
+            {t(lang, "login_title")}
           </button>
         </Form>
       </div>

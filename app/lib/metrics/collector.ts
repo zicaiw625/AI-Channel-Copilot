@@ -507,3 +507,6 @@ export function recordDbMetrics(
 // 导出单例实例
 export const metrics = MetricsCollector.getInstance();
 
+// Re-export slow query monitor for convenience
+export { slowQueryMonitor, withQueryMonitoring, createQueryTimer } from "./slowQueryMonitor";
+

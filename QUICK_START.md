@@ -2,6 +2,11 @@
 
 这是一个快速参考指南，帮助你立即开始使用新的优化模块。
 
+## 📚 API 文档
+
+- **OpenAPI 规范**: [docs/openapi.yaml](./docs/openapi.yaml)
+- **交互式文档**: 在浏览器中打开 [docs/api-docs.html](./docs/api-docs.html)
+
 ---
 
 ## 🚀 5分钟快速集成

@@ -43,3 +43,7 @@ export const LLMS_CACHE_UPDATE_COOLDOWN_MS = fromEnv("LLMS_CACHE_UPDATE_COOLDOWN
 
 // AI 优化报告相关常量
 export const MAX_ORDER_PRODUCTS = fromEnv("MAX_ORDER_PRODUCTS", 10000); // 用于优化报告查询的最大订单产品数
+
+// Dashboard 趋势数据相关常量
+// 当订单数超过此阈值时，使用数据库层面聚合以提高性能
+export const TREND_DATA_DB_AGGREGATION_THRESHOLD = fromEnv("TREND_DATA_DB_AGGREGATION_THRESHOLD", 10000);

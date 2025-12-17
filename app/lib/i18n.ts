@@ -1,6 +1,28 @@
-type Lang = "中文" | "English";
+/**
+ * 国际化 (i18n) 模块
+ * 
+ * 提供类型安全的翻译函数和词典
+ * 支持中文和英文两种语言
+ * 
+ * 使用方式:
+ * ```ts
+ * import { t, type TranslationKey } from "~/lib/i18n";
+ * const message = t(language, "hint_zero_ai");
+ * ```
+ */
 
-const dict: Record<string, { zh: string; en: string }> = {
+export type Lang = "中文" | "English";
+
+export type TranslationEntry = { zh: string; en: string };
+
+/**
+ * 翻译词典
+ * 所有 UI 文本都应该在此定义，避免硬编码
+ */
+const dict: Record<string, TranslationEntry> = {
+  // ============================================================================
+  // 提示和警告
+  // ============================================================================
   hint_zero_ai: { zh: "选定区间内有订单但未识别到 AI 渠道。建议前往「设置 / 规则 & 导出」补充 AI 域名或 utm_source 规则。", en: "Orders exist in the selected window but no AI channel was detected. Please configure AI domains or utm_source rules in Settings." },
   goto_settings: { zh: "前往设置", en: "Go to Settings" },
   top_customers_title: { zh: "Top Customers by LTV（窗口）", en: "Top Customers by LTV (Window)" },
@@ -162,10 +184,122 @@ const dict: Record<string, { zh: string; en: string }> = {
   processing: { zh: "处理中", en: "Processing" },
   completed: { zh: "已完成", en: "Completed" },
   failed: { zh: "失败", en: "Failed" },
+  
+  // ============================================================================
+  // 登录页面
+  // ============================================================================
+  login_title: { zh: "登录", en: "Log in" },
+  shop_domain_label: { zh: "店铺域名", en: "Shop domain" },
+  login_to_shopify: { zh: "登录 Shopify 店铺", en: "Log in to Shopify" },
+  
+  // ============================================================================
+  // 首页/落地页
+  // ============================================================================
+  landing_badge: { zh: "AI Discovery & Attribution Copilot · v0.1", en: "AI Discovery & Attribution Copilot · v0.1" },
+  landing_heading: { zh: "发现被忽略的 AI 渠道 GMV，基于 Shopify 订单的保守归因", en: "Discover overlooked AI channel GMV with conservative Shopify order attribution" },
+  landing_text: { zh: "自动识别来自 ChatGPT / Perplexity / Gemini / Copilot 的订单，提供基础仪表盘、调试视图、规则配置与 CSV 导出，帮助中高阶 DTC 商家判断 AI 渠道是否值得投入。", en: "Automatically detects orders from ChatGPT / Perplexity / Gemini / Copilot. Provides dashboard, debug view, rules, and CSV export to help DTC brands evaluate whether AI channels are worth investing in." },
+  shop_placeholder: { zh: "your-store.myshopify.com", en: "your-store.myshopify.com" },
+  chip_conservative: { zh: "Referrer + UTM 保守识别", en: "Conservative: Referrer + UTM" },
+  chip_ai_gmv: { zh: "AI 渠道 GMV / 订单 / 新客", en: "AI GMV / Orders / New Customers" },
+  chip_top_products: { zh: "AI 渠道热销产品", en: "Top Products from AI Channels" },
+  chip_export: { zh: "标签写回 & CSV 导出", en: "Tag write-back & CSV export" },
+  switch_to_chinese: { zh: "切换为中文", en: "切换为中文" },
+  switch_to_english: { zh: "Switch to English", en: "Switch to English" },
+  features_v01: { zh: "v0.1 功能覆盖", en: "Features (v0.1)" },
+  feature_data_ingress: { zh: "数据接入：Shopify Admin API + orders/create webhook + 90 天补拉。", en: "Data ingress: Shopify Admin API + orders/create webhook + 90-day backfill." },
+  feature_ai_attribution: { zh: "AI 渠道识别：预置 ChatGPT / Perplexity / Gemini / Copilot 域名 & UTM。", en: "AI attribution: preset ChatGPT / Perplexity / Gemini / Copilot domains & UTM." },
+  feature_dashboard: { zh: "基础仪表盘：GMV、订单、新客、AOV、复购，对比 AI vs Overall。", en: "Dashboard: GMV, Orders, New Customers, AOV, Repeat; AI vs Overall." },
+  feature_debug: { zh: "调试视图：最近订单的 referrer / UTM / 解析结果，便于核验规则。", en: "Debug view: recent orders' referrer/UTM/detection for rule verification." },
+  feature_settings: { zh: "设置 & 导出：域名/UTM 规则、标签写回、语言时区、订单/产品 CSV。", en: "Settings & Export: domain/UTM rules, tag write-back, language/timezone, order/product CSV." },
+  who_is_it_for: { zh: "适合谁？", en: "Who is it for?" },
+  target_audience: { zh: "年 GMV 20万-500万美金的 DTC 品牌主 / 增长负责人 / 数据分析师，希望量化 AI 助手带来的真实 GMV 与客单表现。", en: "DTC brands with annual GMV of $200k–$5M; growth leads and analysts who want to quantify real GMV and AOV from AI assistants." },
+  stat_ai_new_customer_share: { zh: "AI 新客占比", en: "AI New Customer Share" },
+  stat_ai_aov_vs_overall: { zh: "AI AOV 对比", en: "AI AOV vs Overall" },
+  stat_attribution: { zh: "识别口径", en: "Attribution" },
+  stat_conservative: { zh: "保守估计", en: "Conservative" },
+  getting_started: { zh: "快速上手（安装后即可看到基础数据）", en: "Getting Started (basic data visible after install)" },
+  step_1: { zh: "安装 Shopify 应用并授权，后台会自动补拉最近 90 天订单。", en: "Install and authorize the Shopify app; the backend auto backfills the last 90 days." },
+  step_2: { zh: "Dashboard 查看 AI GMV / 订单 / 新客，默认规则已覆盖 chat.openai.com、perplexity.ai、gemini.google.com、copilot.microsoft.com 与 utm_source=chatgpt/perplexity/gemini/copilot。", en: "Open Dashboard for AI GMV/Orders/New Customers. Default rules cover chat.openai.com, perplexity.ai, gemini.google.com, copilot.microsoft.com and utm_source=chatgpt/perplexity/gemini/copilot." },
+  step_3: { zh: "在 Settings 调整识别规则、开启标签写回（默认关闭）并下载 CSV 导出。", en: "In Settings, adjust rules, enable tag write-back (off by default) and download CSV exports." },
+  
+  // ============================================================================
+  // 设置页面
+  // ============================================================================
+  invalid_domain_format: { zh: "域名格式不合法，请输入如 chat.openai.com", en: "Invalid domain format, e.g. chat.openai.com" },
+  domain_already_exists: { zh: "该域名已存在于列表中。", en: "This domain already exists in the list." },
+  custom_domain_added: { zh: "已添加自定义 AI 域名，点击保存后生效", en: "Custom AI domain added. Click Save to apply." },
+  invalid_utm_source: { zh: "utm_source 仅支持字母/数字/中划线/下划线", en: "utm_source supports letters/numbers/dash/underscore only" },
+  utm_source_exists: { zh: "该 utm_source 值已存在于列表中。", en: "This utm_source value already exists in the list." },
+  utm_source_added: { zh: "新增 utm_source 规则，保存后应用到识别逻辑", en: "utm_source rule added. Save to apply to detection." },
+  rules_reset: { zh: "已恢复默认规则，点击保存后生效", en: "Rules reset to defaults. Click Save to apply." },
+  upgrade_to_export: { zh: "升级到 Pro 版以导出数据。", en: "Upgrade to Pro to export data." },
+  download_failed: { zh: "下载失败，请重试。", en: "Download failed. Please try again." },
+  tag_writeback_triggered: { zh: "标签写回已触发（基于最近 60 天 AI 订单）", en: "Tag write-back triggered (based on last 60 days AI orders)" },
+  
+  // ============================================================================
+  // 数据相关
+  // ============================================================================
+  data_truncated_sample: { zh: "数据为截断样本，建议缩短时间范围", en: "Data is a truncated sample; consider shortening the time range." },
+  
+  // ============================================================================
+  // llms.txt 相关
+  // ============================================================================
+  llms_no_content: { zh: "# llms.txt · AI 爬取偏好\n# 此店铺尚未启用任何 AI 爬取内容。\n# 如需了解更多，请联系店铺管理员。", en: "# llms.txt · AI crawling preferences\n# This store has not enabled any content for AI crawling.\n# Contact the store owner for more information." },
 };
 
-export const t = (language: Lang, key: keyof typeof dict) => {
+// 导出词典键类型，用于类型安全检查
+export type TranslationKey = keyof typeof dict;
+
+/**
+ * 获取翻译文本
+ * @param language 语言 ("中文" | "English")
+ * @param key 翻译键
+ * @returns 翻译后的文本，如果键不存在则返回键名
+ */
+export const t = (language: Lang, key: TranslationKey): string => {
   const item = dict[key];
-  if (!item) return key;
+  if (!item) return key as string;
   return language === "English" ? item.en : item.zh;
 };
+
+/**
+ * 带参数的翻译函数
+ * 支持 {param} 格式的占位符
+ * @param language 语言
+ * @param key 翻译键
+ * @param params 参数对象
+ * @returns 替换参数后的文本
+ * 
+ * @example
+ * ```ts
+ * tp(language, "trial_days_left", { n: 7 }); // "试用剩余 7 天"
+ * ```
+ */
+export const tp = (language: Lang, key: TranslationKey, params: Record<string, string | number>): string => {
+  let text = t(language, key);
+  for (const [param, value] of Object.entries(params)) {
+    text = text.replace(new RegExp(`\\{${param}\\}`, 'g'), String(value));
+  }
+  return text;
+};
+
+/**
+ * 检查语言是否为英文
+ * @param language 语言
+ * @returns true 如果语言是英文
+ */
+export const isEnglish = (language: Lang | string): boolean => {
+  return language === "English";
+};
+
+/**
+ * 获取当前语言的 locale 字符串
+ * @param language 语言
+ * @returns locale 字符串 (如 "en-US" 或 "zh-CN")
+ */
+export const getLocale = (language: Lang | string): string => {
+  return language === "English" ? "en-US" : "zh-CN";
+};
+
+// 为服务端使用导出词典（用于同步 i18n.server.ts）
+export { dict as translationDict };

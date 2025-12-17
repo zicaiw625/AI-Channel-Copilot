@@ -9,10 +9,13 @@ import { isDemoMode } from "../lib/runtime.server";
 import { enforceRateLimit, RateLimitRules } from "../lib/security/rateLimit.server";
 import { logger } from "../lib/logger.server";
 import { extractAdminClient } from "../lib/graphqlSdk.server";
+import { apiSuccess, apiError, apiBadRequest } from "../lib/apiResponse.server";
+import { ErrorCode } from "../lib/errors";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  if (request.method !== "POST")
-    return Response.json({ ok: false, message: "Method not allowed" }, { status: 405 });
+  if (request.method !== "POST") {
+    return apiError(ErrorCode.INVALID_INPUT, "Method not allowed", 405);
+  }
 
   let _admin = null; // admin client from original request (may become invalid in async context)
   let session = null;
@@ -32,11 +35,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
   // In demo mode, if no shop domain, we can't trigger backfill
   if (!shopDomain && isDemoMode()) {
-    return Response.json({
-      ok: false,
-      queued: false,
-      reason: "Demo mode: cannot trigger backfill without shop session",
-    });
+    return apiBadRequest("Demo mode: cannot trigger backfill without shop session");
   }
 
   const formData = await request.formData();
@@ -75,8 +74,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     ).catch((err) => {
       logger.error("[api.backfill] processBackfillQueue failed for existing job", { shopDomain, error: (err as Error).message });
     });
-    return Response.json({
-      ok: true,
+    return apiSuccess({
       queued: true,
       reason: "processing-existing",
       startedAt: existing.startedAt,
@@ -85,8 +83,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
   
   if (existing) {
-    return Response.json({
-      ok: true,
+    return apiSuccess({
       queued: false,
       reason: "in-flight",
       startedAt: existing.startedAt,
@@ -130,8 +127,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     logger.error("[api.backfill] processBackfillQueue failed", { shopDomain, error: (err as Error).message });
   });
 
-  return Response.json({
-    ok: true,
+  return apiSuccess({
     queued: result.queued,
     reason: result.queued ? undefined : result.reason,
     range: dateRange.label,

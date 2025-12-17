@@ -216,7 +216,12 @@ export default function Index() {
     setCustomTo((dateRange.toParam as string | undefined) || dateRange.end.slice(0, 10));
   }, [dateRange.end, dateRange.fromParam, dateRange.start, dateRange.toParam]);
 
-  const backfillFetcher = useFetcher<{ ok: boolean; queued: boolean; reason?: string; range?: string }>();
+  // apiSuccess 包装响应为 { ok: true, data: { queued, reason, range } }
+  type BackfillData = { queued: boolean; reason?: string; range?: string };
+  type BackfillResponse = { ok: boolean; data?: BackfillData; error?: { code: string; message: string } };
+  const backfillFetcher = useFetcher<BackfillResponse>();
+  // 解包 apiSuccess 的 data 字段
+  const backfillData = backfillFetcher.data?.ok ? backfillFetcher.data.data : undefined;
   const jobFetcher = useFetcher<JobSnapshot>();
   const revalidator = useRevalidator();
   
@@ -541,11 +546,11 @@ export default function Index() {
                       {uiLanguage === "English" ? "A backfill task is running in background" : "后台补拉任务进行中"}
                     </span>
                   )}
-                  {backfillFetcher.data && (
+                  {backfillData && (
                     <span className={styles.backfillStatus}>
-                      {backfillFetcher.data.queued
-                        ? (uiLanguage === "English" ? `Background task triggered (${backfillFetcher.data.range})` : `已触发后台任务（${backfillFetcher.data.range}）`)
-                        : backfillFetcher.data.reason === "in-flight"
+                      {backfillData.queued
+                        ? (uiLanguage === "English" ? `Background task triggered (${backfillData.range})` : `已触发后台任务（${backfillData.range}）`)
+                        : backfillData.reason === "in-flight"
                           ? (uiLanguage === "English" ? "A backfill is already running; refresh later" : "已有补拉在进行中，稍后刷新")
                           : (uiLanguage === "English" ? "Cannot trigger backfill; check shop session" : "无法触发补拉，请确认店铺会话")}
                     </span>

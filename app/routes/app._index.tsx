@@ -294,16 +294,25 @@ export default function Index() {
     };
   }, [jobFetcher]);
   const triggerBackfill = useCallback(() => {
-    // 【优化】支持自定义日期范围的 backfill
-    // 当 range=custom 时，使用当前输入框的 from/to（而非 URL 参数），确保用户选择的日期被正确提交
-    const payload: Record<string, string> = { range };
-    if (range === "custom") {
-      // 优先使用用户输入的 customFrom/customTo，否则用 URL 参数
-      if (customFrom) payload.from = customFrom;
-      if (customTo) payload.to = customTo;
+    // 【优化 5】支持自定义日期范围的 backfill
+    // 当 range=custom 时，传递 from/to 参数给后端
+    if (range === "custom" && dateRange.fromParam && dateRange.toParam) {
+      backfillFetcher.submit(
+        { 
+          range: "custom",
+          from: dateRange.fromParam as string,
+          to: dateRange.toParam as string,
+        },
+        { method: "post", action: "/api/backfill" },
+      );
+    } else {
+      // 预设范围（7d/30d/90d）
+      backfillFetcher.submit(
+        { range },
+        { method: "post", action: "/api/backfill" },
+      );
     }
-    backfillFetcher.submit(payload, { method: "post", action: "/api/backfill" });
-  }, [backfillFetcher, range, customFrom, customTo]);
+  }, [backfillFetcher, range, dateRange.fromParam, dateRange.toParam]);
 
   const {
     overview,
@@ -488,11 +497,8 @@ export default function Index() {
                             ? styles.statusWarning
                             : styles.statusInfo
                       }`}
-                      title={item.detail || ""}
-                      style={{ cursor: item.detail ? "help" : "default" }}
                     >
                         {displayTitle}: {displayStatus}
-                        {item.detail && <span className={styles.detailIndicator}> ⓘ</span>}
                     </span>
                     );
                   })}
@@ -528,17 +534,14 @@ export default function Index() {
             {dataSource === "demo" && (
               <div className={styles.callout}>
                 <span>{t(lang, "hint_title")}</span>
-                {uiLanguage === "English" 
-                  ? "No identifiable AI orders found. Showing demo data. Note: Shopify's default API only returns orders from the last 60 days. If your store has older orders, you may need to request 'read_all_orders' access." 
-                  : "当前店铺暂无可识别的 AI 渠道订单，以下为演示数据。注意：Shopify API 默认只能读取最近 60 天订单。如订单在 60 天之前，需申请 read_all_orders 权限。"}
+                {uiLanguage === "English" ? "No identifiable AI orders in this shop. Showing demo data. Check time range, referrer/UTM rules, or extend the window and retry." : "当前店铺暂无可识别的 AI 渠道订单，以下为演示数据。可检查时间范围、referrer/UTM 规则，或延长观测窗口后再试。"}
               </div>
             )}
             {dataSource === "empty" && (
               <div className={styles.warning}>
-                <strong>{uiLanguage === "English" ? "⚠️ No Data: " : "⚠️ 无数据："}</strong>
                 {uiLanguage === "English" 
-                  ? "No orders found in the last 60 days (Shopify default limit). Possible reasons: (1) New store with no orders; (2) Orders are older than 60 days. To access older orders, request 'read_all_orders' scope in Partner Dashboard → API access → Access requests, then re-authorize this app." 
-                  : "最近 60 天内暂无订单（Shopify 默认限制）。可能原因：(1) 新店铺尚无订单；(2) 订单都在 60 天之前。如需访问更早订单，请在 Partner Dashboard → API access → Access requests 中申请 read_all_orders 权限，然后重新授权应用。"}
+                  ? "No qualifying orders found in the last 60 days (Shopify default limit). This may be a new store, or orders are older than 60 days. To access older orders, request 'read_all_orders' scope and re-authorize." 
+                  : "最近 60 天内暂无符合条件的订单（Shopify 默认限制）。可能是新店铺，或订单都在 60 天之前。如需访问更早订单，请申请 read_all_orders 权限并重新授权。"}
                 <Link to="/app/additional" className={styles.link} style={{ marginLeft: 8 }}>
                   {uiLanguage === "English" ? "Check Settings" : "查看设置"}
                 </Link>

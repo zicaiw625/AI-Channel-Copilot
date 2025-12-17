@@ -131,15 +131,22 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     await saveSettings(shopDomain, merged);
     
-    // Refresh llms.txt cache when exposure preferences or language may have changed
-    // Use force=true to bypass cooldown since this is a user-initiated save
-    if (admin && shopDomain) {
+    // 只在 llms.txt 相关设置变化时刷新缓存：
+    // 1. exposurePreferences 变化
+    // 2. 语言设置变化（llms.txt 内容是多语言的）
+    // 3. 用户明确请求刷新（intent === "save_llms"）
+    const exposureChanged = JSON.stringify(existing.exposurePreferences) !== JSON.stringify(merged.exposurePreferences);
+    const languageChanged = existing.languages?.[0] !== merged.languages?.[0];
+    const shouldRefreshLlms = intent === "save_llms" || exposureChanged || languageChanged;
+    
+    if (shouldRefreshLlms && admin && shopDomain) {
       try {
         const targetLanguage = merged.languages?.[0] || "中文";
         logger.info("[settings] Refreshing llms.txt cache", { 
           shopDomain, 
           targetLanguage,
           exposurePreferences: merged.exposurePreferences,
+          reason: intent === "save_llms" ? "user_request" : exposureChanged ? "exposure_changed" : "language_changed",
         });
         
         const llmsText = await buildLlmsTxt(shopDomain, merged, {

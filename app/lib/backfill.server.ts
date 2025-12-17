@@ -11,6 +11,10 @@ import { MAX_BACKFILL_DURATION_MS, MAX_BACKFILL_ORDERS, BACKFILL_TIMEOUT_MINUTES
 // 【修复】更新标题以反映实际的 60 天限制
 const BACKFILL_STATUS_TITLE = "Hourly backfill (last 60 days)";
 
+// 【修复】任务活动阈值（分钟）- 超过此时间的任务被认为已卡住，用户可以重新触发
+// 这个值应该比 BACKFILL_TIMEOUT_MINUTES 小，让用户可以更快地重试
+const BACKFILL_STALE_THRESHOLD_MINUTES = 2;
+
 const setBackfillStatus = async (
   shopDomain: string,
   status: "healthy" | "warning" | "info",
@@ -224,8 +228,70 @@ const processQueue = async (
   }
 };
 
-export const isBackfillRunning = (shopDomain: string) =>
-  prisma.backfillJob.count({ where: { shopDomain, status: { in: ["queued", "processing"] } } });
+/**
+ * 清理特定店铺的卡住任务
+ * 【修复】在检查/启动任务前调用，确保用户不会被卡住的任务阻塞
+ */
+const cleanupStaleJobsForShop = async (shopDomain: string): Promise<number> => {
+  const staleThreshold = new Date(Date.now() - BACKFILL_STALE_THRESHOLD_MINUTES * 60 * 1000);
+  const now = new Date();
+
+  // 清理卡住的 queued 任务
+  const queuedResult = await prisma.backfillJob.updateMany({
+    where: {
+      shopDomain,
+      status: "queued",
+      createdAt: { lt: staleThreshold },
+    },
+    data: {
+      status: "failed",
+      finishedAt: now,
+      error: `Auto-cleaned: stuck in queue for more than ${BACKFILL_STALE_THRESHOLD_MINUTES} minutes`,
+    },
+  });
+
+  // 清理卡住的 processing 任务
+  const processingResult = await prisma.backfillJob.updateMany({
+    where: {
+      shopDomain,
+      status: "processing",
+      OR: [
+        { startedAt: { lt: staleThreshold } },
+        { startedAt: null, createdAt: { lt: staleThreshold } },
+      ],
+    },
+    data: {
+      status: "failed",
+      finishedAt: now,
+      error: `Auto-cleaned: processing stuck for more than ${BACKFILL_STALE_THRESHOLD_MINUTES} minutes`,
+    },
+  });
+
+  const cleaned = queuedResult.count + processingResult.count;
+  if (cleaned > 0) {
+    logger.info("[backfill] Auto-cleaned stale jobs for shop", {
+      shopDomain,
+      queued: queuedResult.count,
+      processing: processingResult.count,
+      thresholdMinutes: BACKFILL_STALE_THRESHOLD_MINUTES,
+    });
+  }
+  return cleaned;
+};
+
+/**
+ * 检查是否有活动的补拉任务
+ * 【修复】先清理卡住的任务，再检查是否有真正活动的任务
+ */
+export const isBackfillRunning = async (shopDomain: string): Promise<boolean> => {
+  // 先清理卡住的任务，确保用户不会被阻塞
+  await cleanupStaleJobsForShop(shopDomain);
+  
+  const count = await prisma.backfillJob.count({ 
+    where: { shopDomain, status: { in: ["queued", "processing"] } } 
+  });
+  return count > 0;
+};
 
 export const describeBackfill = (shopDomain: string) =>
   prisma.backfillJob.findFirst({
@@ -239,6 +305,9 @@ export const startBackfill = async (
   options?: { maxOrders?: number; maxDurationMs?: number },
 ) => {
   if (!shopDomain) return { queued: false, reason: "missing shop domain" } as const;
+
+  // 【修复】先清理卡住的任务，确保用户可以重新触发
+  await cleanupStaleJobsForShop(shopDomain);
 
   const existing = await prisma.backfillJob.findFirst({
     where: { shopDomain, status: { in: ["queued", "processing"] } },
@@ -271,25 +340,65 @@ export const processBackfillQueue = async (
 /**
  * 清理超时的补拉任务
  * 将卡在 queued 或 processing 状态超过指定时间的任务标记为失败
+ * 
+ * 【修复】分别处理 queued 和 processing 状态：
+ * - queued 状态：基于 createdAt 判断（排队超时）
+ * - processing 状态：基于 startedAt 判断（处理超时）
  */
 export const cleanupStaleBackfillJobs = async () => {
   const timeoutThreshold = new Date(Date.now() - BACKFILL_TIMEOUT_MINUTES * 60 * 1000);
+  const now = new Date();
   
-  const result = await prisma.backfillJob.updateMany({
+  // 1. 清理排队超时的任务（queued 状态，基于 createdAt）
+  const queuedResult = await prisma.backfillJob.updateMany({
     where: {
-      status: { in: ["queued", "processing"] },
+      status: "queued",
       createdAt: { lt: timeoutThreshold },
     },
     data: {
       status: "failed",
-      finishedAt: new Date(),
-      error: `Timed out: stuck for more than ${BACKFILL_TIMEOUT_MINUTES} minutes`,
+      finishedAt: now,
+      error: `Timed out: stuck in queue for more than ${BACKFILL_TIMEOUT_MINUTES} minutes`,
     },
   });
 
-  if (result.count > 0) {
-    logger.info("[backfill] Cleaned up stale jobs", { count: result.count, timeoutMinutes: BACKFILL_TIMEOUT_MINUTES });
+  // 2. 清理处理超时的任务（processing 状态，基于 startedAt）
+  const processingResult = await prisma.backfillJob.updateMany({
+    where: {
+      status: "processing",
+      startedAt: { lt: timeoutThreshold },
+    },
+    data: {
+      status: "failed",
+      finishedAt: now,
+      error: `Timed out: processing for more than ${BACKFILL_TIMEOUT_MINUTES} minutes`,
+    },
+  });
+
+  // 3. 清理 processing 状态但 startedAt 为空的异常任务（理论上不应该存在）
+  const orphanResult = await prisma.backfillJob.updateMany({
+    where: {
+      status: "processing",
+      startedAt: null,
+      createdAt: { lt: timeoutThreshold },
+    },
+    data: {
+      status: "failed",
+      finishedAt: now,
+      error: `Timed out: orphan processing job without startedAt`,
+    },
+  });
+
+  const totalCleaned = queuedResult.count + processingResult.count + orphanResult.count;
+  
+  if (totalCleaned > 0) {
+    logger.info("[backfill] Cleaned up stale jobs", { 
+      queued: queuedResult.count, 
+      processing: processingResult.count, 
+      orphan: orphanResult.count,
+      timeoutMinutes: BACKFILL_TIMEOUT_MINUTES,
+    });
   }
 
-  return result.count;
+  return totalCleaned;
 };

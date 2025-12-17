@@ -647,6 +647,7 @@ async function buildDashboardFromDb(
     tags: [],
     products: o.products.map(p => ({
       id: p.productId,
+      lineItemId: p.lineItemId,
       title: p.title,
       handle: p.handle || "",
       url: p.url || "",

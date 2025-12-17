@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 
-let captured: Request | null = null;
+// Track captured requests for mock verification (used in login mock)
+let _captured: Request | null = null;
 
 vi.mock("../../shopify.server", () => {
   return {
@@ -10,7 +11,7 @@ vi.mock("../../shopify.server", () => {
       },
     },
     login: async (req: Request) => {
-      captured = req;
+      _captured = req;
       return new Response(null, { status: 202, headers: { Location: "https://admin.shopify.com/store/test/oauth/install?client_id=abc" } });
     },
   };
@@ -44,7 +45,7 @@ describe("app.billing action auth fallback", () => {
   });
 
   it("returns 400 when shop missing", async () => {
-    captured = null;
+    _captured = null;
     const form = new FormData();
     const headers = new Headers({ Cookie: "sid=abc" });
     const req = new Request("https://example.com/app/billing", { method: "POST", body: form, headers });

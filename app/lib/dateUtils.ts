@@ -94,7 +94,7 @@ const zonedTimeToUtc = (
   );
 
   // 一次校正：根据猜测时间点的时区偏移量修正
-  let offset = getTimeZoneOffsetMs(timeZone, utcGuess);
+  const offset = getTimeZoneOffsetMs(timeZone, utcGuess);
   let utc = new Date(utcGuess.getTime() - offset);
 
   // 二次校正：处理 DST 边界情况

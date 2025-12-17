@@ -74,7 +74,7 @@ export const loadOrdersFromDb = async (
 
     // 转换数据格式，包括 AI 来源枚举转换
     const orderRecords: OrderRecord[] = orders.map((order) => {
-      const orderWithProducts = order as typeof order & { products?: Array<{ productId: string; title: string; handle: string | null; url: string | null; price: number; currency: string; quantity: number }> };
+      const orderWithProducts = order as typeof order & { products?: Array<{ productId: string; lineItemId: string; title: string; handle: string | null; url: string | null; price: number; currency: string; quantity: number }> };
       const totalPrice = toNumber(order.totalPrice);
       const subtotal = order.subtotalPrice !== null && order.subtotalPrice !== undefined ? toNumber(order.subtotalPrice) : totalPrice;
       return {
@@ -98,6 +98,7 @@ export const loadOrdersFromDb = async (
         products: includeProducts && orderWithProducts.products
           ? orderWithProducts.products.map((p) => ({
             id: p.productId,
+            lineItemId: p.lineItemId,
             title: p.title,
             handle: p.handle || "",
             url: p.url || "",

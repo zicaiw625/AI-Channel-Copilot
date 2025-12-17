@@ -304,10 +304,10 @@ export function getAppEmbedDeepLink(shopDomain: string, themeId?: string): strin
 /**
  * 获取主题编辑器的手动路径说明
  * 
- * @param language - 语言设置
+ * @param _language - 语言设置（预留参数，用于未来根据语言返回不同格式）
  * @returns 手动路径说明（双语）
  */
-export function getAppEmbedManualPath(language: string = "中文"): {
+export function getAppEmbedManualPath(_language: string = "中文"): {
   en: string;
   zh: string;
 } {

@@ -2,7 +2,11 @@ import { describe, it, expect } from 'vitest'
 import { buildOverview, buildChannelBreakdown, buildComparison, buildTrend, buildProducts, buildTopCustomers } from '../app/lib/aiAggregation'
 import type { OrderRecord } from '../app/lib/aiData'
 
-const mkOrder = (o: Partial<OrderRecord>): OrderRecord => ({
+// Helper type for partial products without lineItemId
+type PartialProduct = Omit<OrderRecord['products'][number], 'lineItemId'> & { lineItemId?: string };
+type PartialOrderRecord = Omit<Partial<OrderRecord>, 'products'> & { products?: PartialProduct[] };
+
+const mkOrder = (o: PartialOrderRecord): OrderRecord => ({
   id: o.id || 'oid',
   name: o.name || 'O-1',
   createdAt: o.createdAt || new Date().toISOString(),
@@ -18,7 +22,11 @@ const mkOrder = (o: Partial<OrderRecord>): OrderRecord => ({
   tags: o.tags || [],
   customerId: o.customerId || 'c1',
   isNewCustomer: o.isNewCustomer ?? true,
-  products: o.products || [],
+  // Auto-generate lineItemId for test products
+  products: (o.products || []).map((p, idx) => ({
+    ...p,
+    lineItemId: p.lineItemId || `line-${o.id || 'oid'}-${idx}`,
+  })),
   detection: o.detection || '',
   signals: o.signals || [],
   currency: o.currency || 'USD',

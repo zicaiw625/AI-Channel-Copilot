@@ -10,7 +10,14 @@ const daysAgoISO = (days: number): string => new Date(DEMO_NOW - days * 86_400_0
 // 🔧 辅助函数：为 mock 产品生成 lineItemId
 const mockLineItemId = (orderId: string, idx: number) => `gid://shopify/LineItem/${orderId}-${idx}`;
 
-const seedOrders: (Omit<OrderRecord, "signals"> & { signals?: string[] })[] = [
+// 定义 seed 数据的类型，允许 lineItemId 为可选
+type SeedOrderProduct = Omit<OrderRecord["products"][number], "lineItemId"> & { lineItemId?: string };
+type SeedOrder = Omit<OrderRecord, "signals" | "products"> & { 
+  signals?: string[];
+  products: SeedOrderProduct[];
+};
+
+const seedOrders: SeedOrder[] = [
   {
     id: "4310",
     name: "#4310",

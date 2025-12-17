@@ -695,6 +695,9 @@ export default function SettingsAndExport() {
             className={styles.sectionHeader} 
             style={{ cursor: "pointer" }}
             onClick={() => setAdvancedExpanded(!advancedExpanded)}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setAdvancedExpanded(!advancedExpanded); } }}
+            role="button"
+            tabIndex={0}
           >
             <div>
               <p className={styles.sectionLabel}>{language === "English" ? "Debugging" : "排错工具"}</p>
@@ -1646,14 +1649,15 @@ function LlmsPreview({ language, canExport, lastSavedAt }: { language: string; c
               ? (language === "English" ? "Copied" : "已复制") 
               : (language === "English" ? "Copy" : "复制")}
         </button>
-        <a 
-          href={canExport && !isLoading ? "/api/llms-txt-preview?download=1" : "#"}
+        <button
+          type="button"
           className={styles.primaryButton}
-          onClick={(e) => handleDownload(e, "/api/llms-txt-preview?download=1", "llms.txt")}
-          style={!canExport || isLoading ? { opacity: 0.6, pointerEvents: isLoading ? "none" : "auto" } : {}}
+          onClick={(e) => handleDownload(e as unknown as React.MouseEvent<HTMLAnchorElement>, "/api/llms-txt-preview?download=1", "llms.txt")}
+          disabled={!canExport || isLoading}
+          style={!canExport || isLoading ? { opacity: 0.6 } : {}}
         >
           {language === "English" ? "Download llms.txt" : "下载 llms.txt"}
-        </a>
+        </button>
       </div>
     </div>
   );

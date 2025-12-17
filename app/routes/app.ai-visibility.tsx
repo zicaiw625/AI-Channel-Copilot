@@ -351,7 +351,9 @@ function EmbedStatusCard({
 // Schema Preview - 预览自动生成的 JSON-LD（仅用于排查）
 // ============================================================================
 
-function SchemaPreview({ shopInfo, en }: { shopInfo: { name: string; url: string }; en: boolean }) {
+function SchemaPreview({ shopInfo: _shopInfo, en }: { shopInfo: { name: string; url: string }; en: boolean }) {
+  // Note: _shopInfo is intentionally unused here as this preview uses Liquid template syntax
+  // that references shop.* variables at render time, not the React props
   const previewCode = useMemo(() => {
     const schema = {
       "@context": "https://schema.org",

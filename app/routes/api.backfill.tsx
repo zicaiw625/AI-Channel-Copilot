@@ -13,11 +13,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   if (request.method !== "POST")
     return Response.json({ ok: false, message: "Method not allowed" }, { status: 405 });
 
-  let admin = null;
+  let _admin = null; // admin client from original request (may become invalid in async context)
   let session = null;
   try {
     const auth = await authenticate.admin(request);
-    admin = auth.admin;
+    _admin = auth.admin;
     session = auth.session;
   } catch (error) {
     if (!isDemoMode()) throw error;

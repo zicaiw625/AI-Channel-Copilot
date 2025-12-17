@@ -50,11 +50,11 @@ export const applyAiTags = async (
   }
 
   const orderPrefix = settings.tagging.orderTagPrefix || "AI-Source";
-  const customerTag = settings.tagging.customerTag || "AI-Customer";
+  const _customerTag = settings.tagging.customerTag || "AI-Customer"; // Reserved for future customer tagging
   const dryRun = settings.tagging.dryRun;
   const orderTagTargets: { id: string; tags: string[] }[] = [];
   const customerTagTargets: { id: string; tags: string[] }[] = [];
-  const seenCustomers = new Set<string>();
+  const _seenCustomers = new Set<string>(); // Reserved for future customer deduplication
 
   const runInBatches = async (targets: { id: string; tags: string[] }[]) => {
     const batchSize = BACKFILL_TAGGING_BATCH_SIZE;

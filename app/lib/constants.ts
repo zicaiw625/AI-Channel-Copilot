@@ -14,7 +14,10 @@ export const MAX_BACKFILL_DAYS = fromEnv("MAX_BACKFILL_DAYS", 60);
 export const MAX_BACKFILL_DURATION_MS = fromEnv("MAX_BACKFILL_DURATION_MS", 15000);
 export const BACKFILL_TAGGING_BATCH_SIZE = fromEnv("BACKFILL_TAGGING_BATCH_SIZE", 25);
 export const BACKFILL_COOLDOWN_MINUTES = fromEnv("BACKFILL_COOLDOWN_MINUTES", 30);
-export const BACKFILL_TIMEOUT_MINUTES = fromEnv("BACKFILL_TIMEOUT_MINUTES", 10); // 超时取消阈值
+export const BACKFILL_TIMEOUT_MINUTES = fromEnv("BACKFILL_TIMEOUT_MINUTES", 10); // 超时取消阈值（定时清理用）
+// 任务活动阈值（秒）- 超过此时间的任务被认为已卡住，用户可以重新触发
+// MAX_BACKFILL_DURATION_MS 是 15 秒，加上一些缓冲时间（网络、数据库写入），30 秒足够
+export const BACKFILL_STALE_THRESHOLD_SECONDS = fromEnv("BACKFILL_STALE_THRESHOLD_SECONDS", 30);
 export const MAX_DETECTION_LENGTH = 200;
 export const LANGUAGE_STORAGE_KEY = "aicc_language";
 export const LANGUAGE_EVENT = "aicc_language_change";

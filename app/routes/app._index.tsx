@@ -16,6 +16,7 @@ import {
   DEFAULT_RANGE_KEY,
   DEFAULT_RETENTION_MONTHS,
   MAX_DASHBOARD_ORDERS,
+  BACKFILL_STALE_THRESHOLD_SECONDS,
 } from "../lib/constants";
 import { loadDashboardContext } from "../lib/dashboardContext.server";
 import { t } from "../lib/i18n";
@@ -124,6 +125,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     isFreePlan,
     canViewFull,
     showDebugPanels, // 控制是否显示调试面板
+    backfillStaleThresholdSeconds: BACKFILL_STALE_THRESHOLD_SECONDS, // 供前端判断任务是否卡住
   };
 };
 
@@ -154,7 +156,8 @@ export default function Index() {
     dataLastUpdated,
     isFreePlan,
     canViewFull,
-    showDebugPanels
+    showDebugPanels,
+    backfillStaleThresholdSeconds,
   } = useLoaderData<typeof loader>();
   
   const uiLanguage = useUILanguage(language);
@@ -217,15 +220,35 @@ export default function Index() {
   const jobFetcher = useFetcher<JobSnapshot>();
   const revalidator = useRevalidator();
   
+  // 【修复】动态计算 backfill 是否可用，基于轮询数据而非 loader 静态数据
+  // 这样用户不需要刷新页面，按钮会自动恢复可用
+  const backfills = jobFetcher.data?.backfills?.recent || [];
+  
+  // 【修复】检查任务是否真的在活动（而不是卡住了）
+  // 后端已在 api.jobs 返回前清理卡住任务，这里是前端的保底判断
+  const isJobActive = (job: { status?: unknown; createdAt?: unknown; startedAt?: unknown }) => {
+    if (job.status !== "processing" && job.status !== "queued") return false;
+    const now = Date.now();
+    const staleMs = backfillStaleThresholdSeconds * 1000;
+    // processing 状态检查 startedAt，queued 状态检查 createdAt
+    const timestampStr = job.status === "processing" 
+      ? (job.startedAt as string | null) || (job.createdAt as string)
+      : (job.createdAt as string);
+    if (!timestampStr) return false;
+    const timestamp = new Date(timestampStr).getTime();
+    return now - timestamp < staleMs;
+  };
+  
+  const isBackfillProcessing = backfills.some(isJobActive);
+  // 如果 jobFetcher 有数据，用它判断；否则用 loader 的初始值
+  const dynamicBackfillAvailable = jobFetcher.data ? !isBackfillProcessing : backfillAvailable;
+  
   // 【优化 4】追踪 backfill 任务状态，完成后自动刷新
   const [prevBackfillProcessing, setPrevBackfillProcessing] = useState(false);
   
   useEffect(() => {
-    const backfills = jobFetcher.data?.backfills?.recent || [];
-    const isProcessing = backfills.some(job => job.status === "processing" || job.status === "queued");
-    
     // 检测从 processing/queued 变为 completed 的状态变化
-    if (prevBackfillProcessing && !isProcessing && backfills.length > 0) {
+    if (prevBackfillProcessing && !isBackfillProcessing && backfills.length > 0) {
       const latestJob = backfills[0];
       if (latestJob.status === "completed" && latestJob.ordersFetched > 0) {
         // 有新数据，触发页面刷新
@@ -233,8 +256,8 @@ export default function Index() {
       }
     }
     
-    setPrevBackfillProcessing(isProcessing);
-  }, [jobFetcher.data, prevBackfillProcessing, revalidator]);
+    setPrevBackfillProcessing(isBackfillProcessing);
+  }, [backfills, isBackfillProcessing, prevBackfillProcessing, revalidator]);
 
   useEffect(() => {
     let lastPollTime = 0;
@@ -439,7 +462,7 @@ export default function Index() {
               <span>
                 {t(lang, "meta_updated_at")}{dataLastUpdated ? timeFormatter.format(new Date(dataLastUpdated)) : (uiLanguage === "English" ? "None" : "暂无")}
                 {backfillSuppressed && (uiLanguage === "English" ? " (Backfilled within 30 minutes; using cached data)" : "（30 分钟内已补拉，复用缓存数据）")}
-                {backfillAvailable && (uiLanguage === "English" ? " (Manual backfill available)" : "（可手动触发后台补拉）")}
+                {dynamicBackfillAvailable && (uiLanguage === "English" ? " (Manual backfill available)" : "（可手动触发后台补拉）")}
               </span>
               <span>{t(lang, "meta_range")}{dateRange.label}</span>
               <span>
@@ -507,15 +530,15 @@ export default function Index() {
                   <button
                     className={styles.primaryButton}
                     onClick={triggerBackfill}
-                    disabled={backfillFetcher.state !== "idle" || !backfillAvailable}
+                    disabled={backfillFetcher.state !== "idle" || !dynamicBackfillAvailable}
                   >
-                    {backfillFetcher.state === "idle" 
-                      ? (uiLanguage === "English" ? "Backfill in background" : "后台补拉") 
+                    {backfillFetcher.state === "idle"
+                      ? (uiLanguage === "English" ? "Backfill in background" : "后台补拉")
                       : (uiLanguage === "English" ? "Backfilling..." : "后台补拉中...")}
                   </button>
-                  {!backfillAvailable && backfillFetcher.state === "idle" && (
+                  {!dynamicBackfillAvailable && backfillFetcher.state === "idle" && (
                     <span className={styles.backfillStatus}>
-                      {uiLanguage === "English" ? "A backfill task is running in background" : "后台补拉任务进行中，请稍后刷新"}
+                      {uiLanguage === "English" ? "A backfill task is running in background" : "后台补拉任务进行中"}
                     </span>
                   )}
                   {backfillFetcher.data && (

@@ -6,14 +6,10 @@ import { persistOrders, removeDeletedOrders } from "./persistence.server";
 import prisma from "../db.server";
 import { withAdvisoryLock } from "./locks.server";
 import { logger } from "./logger.server";
-import { MAX_BACKFILL_DURATION_MS, MAX_BACKFILL_ORDERS, BACKFILL_TIMEOUT_MINUTES } from "./constants";
+import { MAX_BACKFILL_DURATION_MS, MAX_BACKFILL_ORDERS, BACKFILL_TIMEOUT_MINUTES, BACKFILL_STALE_THRESHOLD_SECONDS } from "./constants";
 
 // 【修复】更新标题以反映实际的 60 天限制
 const BACKFILL_STATUS_TITLE = "Hourly backfill (last 60 days)";
-
-// 【修复】任务活动阈值（分钟）- 超过此时间的任务被认为已卡住，用户可以重新触发
-// 这个值应该比 BACKFILL_TIMEOUT_MINUTES 小，让用户可以更快地重试
-const BACKFILL_STALE_THRESHOLD_MINUTES = 2;
 
 const setBackfillStatus = async (
   shopDomain: string,
@@ -231,9 +227,10 @@ const processQueue = async (
 /**
  * 清理特定店铺的卡住任务
  * 【修复】在检查/启动任务前调用，确保用户不会被卡住的任务阻塞
+ * 导出供 api.jobs.tsx 和 api.backfill.tsx 使用
  */
-const cleanupStaleJobsForShop = async (shopDomain: string): Promise<number> => {
-  const staleThreshold = new Date(Date.now() - BACKFILL_STALE_THRESHOLD_MINUTES * 60 * 1000);
+export const cleanupStaleJobsForShop = async (shopDomain: string): Promise<number> => {
+  const staleThreshold = new Date(Date.now() - BACKFILL_STALE_THRESHOLD_SECONDS * 1000);
   const now = new Date();
 
   // 清理卡住的 queued 任务
@@ -246,7 +243,7 @@ const cleanupStaleJobsForShop = async (shopDomain: string): Promise<number> => {
     data: {
       status: "failed",
       finishedAt: now,
-      error: `Auto-cleaned: stuck in queue for more than ${BACKFILL_STALE_THRESHOLD_MINUTES} minutes`,
+      error: `Auto-cleaned: stuck in queue for more than ${BACKFILL_STALE_THRESHOLD_SECONDS}s`,
     },
   });
 
@@ -263,7 +260,7 @@ const cleanupStaleJobsForShop = async (shopDomain: string): Promise<number> => {
     data: {
       status: "failed",
       finishedAt: now,
-      error: `Auto-cleaned: processing stuck for more than ${BACKFILL_STALE_THRESHOLD_MINUTES} minutes`,
+      error: `Auto-cleaned: processing stuck for more than ${BACKFILL_STALE_THRESHOLD_SECONDS}s`,
     },
   });
 
@@ -273,7 +270,7 @@ const cleanupStaleJobsForShop = async (shopDomain: string): Promise<number> => {
       shopDomain,
       queued: queuedResult.count,
       processing: processingResult.count,
-      thresholdMinutes: BACKFILL_STALE_THRESHOLD_MINUTES,
+      thresholdSeconds: BACKFILL_STALE_THRESHOLD_SECONDS,
     });
   }
   return cleaned;

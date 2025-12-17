@@ -1,7 +1,7 @@
 import type { ActionFunctionArgs } from "react-router";
 
 import { resolveDateRange, type TimeRangeKey } from "../lib/aiData";
-import { describeBackfill, processBackfillQueue, startBackfill } from "../lib/backfill.server";
+import { cleanupStaleJobsForShop, describeBackfill, processBackfillQueue, startBackfill } from "../lib/backfill.server";
 import { getSettings } from "../lib/settings.server";
 import { authenticate, unauthenticated } from "../shopify.server";
 import { DEFAULT_RANGE_KEY, MAX_BACKFILL_DURATION_MS, MAX_BACKFILL_ORDERS } from "../lib/constants";
@@ -50,6 +50,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const settings = await getSettings(shopDomain);
   const timezone = settings.timezones[0] || "UTC";
   const dateRange = resolveDateRange(rangeKey, new Date(), from, to, timezone);
+
+  // 【修复】先清理卡住的任务，确保用户可以重新触发
+  await cleanupStaleJobsForShop(shopDomain);
 
   const existing = await describeBackfill(shopDomain);
   

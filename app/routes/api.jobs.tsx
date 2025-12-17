@@ -4,6 +4,7 @@ import prisma from "../db.server";
 import { authenticate } from "../shopify.server";
 import { isDemoMode } from "../lib/runtime.server";
 import { enforceRateLimit, RateLimitRules } from "../lib/security/rateLimit.server";
+import { cleanupStaleJobsForShop } from "../lib/backfill.server";
 
 type JobStatus = "queued" | "processing" | "completed" | "failed";
 interface JobSnapshot {
@@ -62,6 +63,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   if (cached && now - cachedAt < TTL_MS && cached.shopDomain === shopDomain) {
     return Response.json(cached.payload);
   }
+
+  // 【修复】在返回数据前先清理卡住的任务，确保前端获取到准确的状态
+  await cleanupStaleJobsForShop(shopDomain);
 
   const [backfillRows, webhookRows, backfillCounts, webhookCounts] = await Promise.all([
     prisma.backfillJob.findMany({

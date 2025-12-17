@@ -103,7 +103,10 @@ export default function Billing() {
   
   // Modal state for downgrade confirmation
   const [showDowngradeModal, setShowDowngradeModal] = useState(false);
-  const downgradeFetcher = useFetcher();
+  const downgradeFetcher = useFetcher<{ ok: boolean; message?: string }>();
+  
+  // 显示降级操作的反馈消息
+  const downgradeResult = downgradeFetcher.data;
   
   // Format trial end date
   const formattedTrialEndDate = trialEndDate
@@ -135,6 +138,21 @@ export default function Billing() {
       {actionData && actionData.ok === false && (
         <div style={{ marginBottom: 20, padding: 10, background: "#fff2e8", color: "#b25b1a", borderRadius: 4 }}>
           {actionData.message}
+        </div>
+      )}
+      
+      {/* 降级操作反馈 */}
+      {downgradeResult && (
+        <div style={{ 
+          marginBottom: 20, 
+          padding: 10, 
+          background: downgradeResult.ok ? "#e6f7ff" : "#fff2e8", 
+          color: downgradeResult.ok ? "#0050b3" : "#b25b1a", 
+          borderRadius: 4 
+        }}>
+          {downgradeResult.ok 
+            ? (en ? "Successfully downgraded to Free plan." : "已成功降级到免费版。")
+            : (downgradeResult.message || (en ? "Downgrade failed. Please try again." : "降级失败，请重试。"))}
         </div>
       )}
       

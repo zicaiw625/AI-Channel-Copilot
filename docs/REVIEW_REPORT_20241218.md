@@ -1,8 +1,12 @@
-# 全功能端到端深度审查报告
+# 全功能端到端深度审查报告 (第二轮)
 
 **审查日期**: 2024-12-18  
-**审查范围**: 全部功能模块的前端-API-后端数据流一致性  
-**核心检查点**: 前端类型定义、`apiSuccess()` 包装访问、`apiError()` 错误处理
+**审查范围**: 全部功能模块的前端-API-后端数据流一致性 + **副作用链分析**  
+**核心检查点**: 
+1. 前端类型定义、`apiSuccess()` 包装访问、`apiError()` 错误处理
+2. **保存操作的副作用链** - 保存 A 会不会意外触发 B
+3. **注释与代码一致性** - 验证代码是否按注释描述执行
+4. **用户反馈完整性** - 操作完成后是否有反馈
 
 ---
 
@@ -11,15 +15,15 @@
 | 类别 | 数量 |
 |------|------|
 | 已审查模块 | 14 |
-| 发现并修复的 Bug | 2 |
-| 潜在 UI/UX 改进 | 1 |
-| 通过审查的模块 | 12 |
+| 发现并修复的 Bug | **5** |
+| 架构问题 | 1 |
+| 通过审查的模块 | 9 |
 
 ---
 
-## 🐛 已修复的 Bug
+## 🐛 已修复的 Bug (共 5 个)
 
-### Bug #1: Copilot 前端数据访问错误
+### Bug #1: Copilot 前端数据访问错误 (第一轮发现)
 
 **位置**: `app/routes/app.copilot.tsx`  
 **严重程度**: 🔴 高 (功能完全不可用)  
@@ -44,7 +48,7 @@ const errorMessage = !rawResponse?.ok && rawResponse?.error ? rawResponse.error.
 
 ---
 
-### Bug #2: Dashboard Backfill Fetcher 数据访问错误
+### Bug #2: Dashboard Backfill Fetcher 数据访问错误 (第一轮发现)
 
 **位置**: `app/routes/app._index.tsx`  
 **严重程度**: 🟠 中 (部分功能受影响)  
@@ -65,6 +69,49 @@ const backfillFetcher = useFetcher<BackfillResponse>();
 const backfillData = backfillFetcher.data?.ok ? backfillFetcher.data.data : undefined;
 // 正确访问 backfillData?.queued
 ```
+
+**状态**: ✅ 已修复
+
+---
+
+### Bug #3: Settings 保存无条件刷新 llms.txt (第二轮发现)
+
+**位置**: `app/routes/app.additional.tsx`  
+**严重程度**: 🟠 中 (性能和用户体验问题)  
+**问题描述**:  
+action 中的 llms.txt 缓存刷新逻辑被放在检查 `intent` 之前，且没有任何条件判断。这意味着**无论用户保存什么设置**（标签写回、AI 域名规则、时区等），都会无条件触发 llms.txt 生成。
+
+**注释声称**: `// Refresh llms.txt cache when exposure preferences or language may have changed`
+
+**实际代码**: 没有任何条件判断，总是执行
+
+**修复**: 添加条件判断，只在 `exposurePreferences` 或语言变化时，或 `intent === "save_llms"` 时才刷新
+
+**状态**: ✅ 已修复
+
+---
+
+### Bug #4: llms.txt 保存按钮未设置 intent (第二轮发现)
+
+**位置**: `app/routes/app.additional.tsx`  
+**严重程度**: 🟡 低 (功能部分受影响)  
+**问题描述**:  
+llms.txt 保存按钮调用 `submitSettings()` 函数，但该函数没有设置 `intent` 参数，导致后端无法识别这是 llms.txt 相关的保存请求。
+
+**修复**: 为 llms.txt 保存按钮单独设置 `intent: "save_llms"`
+
+**状态**: ✅ 已修复
+
+---
+
+### Bug #5: Billing 降级操作无用户反馈 (第二轮发现)
+
+**位置**: `app/routes/app.billing.tsx`  
+**严重程度**: 🟡 低 (用户体验问题)  
+**问题描述**:  
+`downgradeFetcher.data` 从未被使用，用户点击降级按钮后，无论成功还是失败，都不会收到任何反馈。
+
+**修复**: 添加类型参数和 UI 反馈显示
 
 **状态**: ✅ 已修复
 
@@ -215,10 +262,29 @@ return Response.json({ ok: true, queued: true, range: "30d" });
 
 ## 结论
 
-本次端到端深度审查发现并修复了 **2 个关键 Bug**，均源于 `apiSuccess()` 包装响应与前端数据访问不匹配的问题。建议后续：
+本次两轮端到端深度审查共发现并修复了 **5 个 Bug**：
 
-1. 统一 API 响应格式，消除混用带来的认知负担
-2. 为 Billing 降级操作添加用户反馈
-3. 考虑添加 TypeScript 类型生成工具 (如 zod + zodios) 确保前后端类型同步
+### 第一轮发现 (2 个)
+- Bug #1: Copilot 前端数据访问错误 (`apiSuccess` 包装问题)
+- Bug #2: Dashboard Backfill Fetcher 数据访问错误 (`apiSuccess` 包装问题)
 
-**审查完成时间**: 2024-12-18
+### 第二轮发现 (3 个)
+- Bug #3: Settings 保存无条件刷新 llms.txt (副作用链问题)
+- Bug #4: llms.txt 保存按钮未设置 intent (前后端参数不一致)
+- Bug #5: Billing 降级操作无用户反馈 (用户体验问题)
+
+### 关键教训
+
+1. **不能只检查数据合约** - 第一轮审查只关注了 `apiSuccess` 包装问题，遗漏了副作用链问题
+2. **不能信任注释** - Bug #3 的注释说"只在设置变化时刷新"，但代码实际无条件执行
+3. **必须验证用户操作的完整闭环** - Bug #5 说明操作完成后必须有反馈
+
+### 建议后续
+
+1. 统一 API 响应格式，消除 `apiSuccess` 和 `Response.json` 混用
+2. 为每个用户操作添加完整的成功/失败反馈
+3. 建立代码审查清单，包含"副作用链分析"和"注释验证"
+4. 考虑添加端到端测试，覆盖关键用户流程
+
+**第一轮审查完成时间**: 2024-12-18  
+**第二轮审查完成时间**: 2024-12-18

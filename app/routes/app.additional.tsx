@@ -1081,7 +1081,30 @@ export default function SettingsAndExport() {
               <h3 className={styles.sectionTitle}>{language === "English" ? "Site Types to Expose to AI" : "希望向 AI 暴露的站点类型"}</h3>
             </div>
             <div className={styles.inlineActions}>
-              <button type="button" className={styles.secondaryButton} onClick={submitSettings} data-action="llms-save">
+              <button 
+                type="button" 
+                className={styles.secondaryButton} 
+                onClick={() => {
+                  // llms.txt 保存需要设置 intent 以强制刷新缓存
+                  const payload = {
+                    aiDomains: sanitizedDomains,
+                    utmSources: sanitizedUtmSources,
+                    utmMediumKeywords,
+                    gmvMetric,
+                    primaryCurrency: settings.primaryCurrency,
+                    tagging,
+                    exposurePreferences,
+                    languages: [language, ...settings.languages.filter((l) => l !== language)],
+                    timezones: [timezone, ...settings.timezones.filter((t) => t !== timezone)],
+                    pipelineStatuses: settings.pipelineStatuses,
+                  };
+                  fetcher.submit(
+                    { settings: JSON.stringify(payload), intent: "save_llms" },
+                    { method: "post", encType: "application/x-www-form-urlencoded" },
+                  );
+                }} 
+                data-action="llms-save"
+              >
                 {t(language as Lang, "btn_save")}
               </button>
               <span className={styles.badge}>{t(language as Lang, "badge_experiment")}</span>

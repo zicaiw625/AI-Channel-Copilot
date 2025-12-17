@@ -11,9 +11,9 @@ import { hasFeature, FEATURES } from "../lib/access.server";
 import { isDemoMode } from "../lib/runtime.server";
 
 /**
- * Copilot API 响应类型定义
+ * Copilot API 内部数据类型
  */
-type CopilotResponse = {
+type CopilotData = {
   ok: boolean;
   answer?: string;
   message?: string;
@@ -22,6 +22,16 @@ type CopilotResponse = {
   range?: string;
   suggestions?: string[];
   error?: string;
+};
+
+/**
+ * Copilot API 响应类型定义
+ * 注意：apiSuccess 会将数据包装在 { ok: true, data: ... } 中
+ */
+type CopilotResponse = {
+  ok: boolean;
+  data?: CopilotData;
+  error?: { code: string; message: string };
 };
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -78,7 +88,10 @@ export default function Copilot() {
   const isLoading = fetcher.state !== "idle";
   
   // 类型安全的响应数据访问
-  const responseData = fetcher.data;
+  // apiSuccess 返回 { ok: true, data: ... }，apiError 返回 { ok: false, error: ... }
+  const rawResponse = fetcher.data;
+  const responseData = rawResponse?.ok ? rawResponse.data : undefined;
+  const errorMessage = !rawResponse?.ok && rawResponse?.error ? rawResponse.error.message : undefined;
 
   const ask = (intent?: string) => {
     if (readOnly) return;
@@ -198,11 +211,13 @@ export default function Copilot() {
           </button>
         </div>
 
-        {responseData && (
+        {(responseData || errorMessage) && (
           <div className={styles.answerCard}>
             <div className={styles.answerHeader}>{language === "English" ? "Answer" : "回答"}</div>
-            <div className={styles.answerBody}>{responseData.answer || responseData.message}</div>
-            {responseData.footnote && <div className={styles.footnote}>{responseData.footnote}</div>}
+            <div className={styles.answerBody}>
+              {responseData?.answer || responseData?.message || errorMessage}
+            </div>
+            {responseData?.footnote && <div className={styles.footnote}>{responseData.footnote}</div>}
           </div>
         )}
 

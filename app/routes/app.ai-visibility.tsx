@@ -15,6 +15,8 @@ import {
   getAppEmbedDeepLink, 
   getAppEmbedManualPath 
 } from "../lib/themeEmbedStatus.server";
+import { requireEnv } from "../lib/env.server";
+import { getEmbedCopy, toEmbedStatus, MANUAL_PATH_COPY } from "../lib/productSchemaEmbedCopy";
 
 // ============================================================================
 // Loader
@@ -33,17 +35,20 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   // 检测 Product Schema App Embed 是否已启用
   const embedEnabled = admin ? await isProductSchemaEmbedEnabled(admin, shopDomain) : null;
   
-  // 生成 App Embed 启用的 deep link
-  const embedDeepLink = getAppEmbedDeepLink(shopDomain);
+  // 生成 App Embed 启用的 deep link（带 activateAppId 以直接触发激活流程）
+  const apiKey = requireEnv("SHOPIFY_API_KEY");
+  const embedDeepLink = getAppEmbedDeepLink(shopDomain, { apiKey });
   
   // 获取手动路径说明
   const embedManualPath = getAppEmbedManualPath(language);
 
-  // 获取优化报告
+  // 获取优化报告（复用已检测的 embedEnabled，避免重复 GraphQL 调用）
   const report = await generateAIOptimizationReport(shopDomain, admin, {
     range: "30d",
     language,
     exposurePreferences: settings.exposurePreferences,
+    embedEnabled, // ✅ 复用上面已检测的结果
+    apiKey, // ✅ 用于生成带 activateAppId 的 deep link
   });
 
   // 获取店铺基本信息用于生成代码
@@ -184,163 +189,108 @@ function CopyButton({ text, en, label, disabled }: { text: string; en: boolean; 
 
 // ============================================================================
 // Embed Status Card - 显示 App Embed 启用状态
+// 使用公共文案模块确保与 Optimization 页面的文案一致
 // ============================================================================
 
 function EmbedStatusCard({
   embedEnabled,
   embedDeepLink,
-  embedManualPath,
   en,
 }: {
   embedEnabled: boolean | null;
   embedDeepLink: string;
-  embedManualPath: { en: string; zh: string };
+  embedManualPath: { en: string; zh: string }; // 保留参数以保持 API 兼容，但使用公共文案
   en: boolean;
 }) {
-  // embedEnabled: true = 已启用, false = 未启用/未找到, null = 无法确定（权限不足等）
+  // 使用公共文案模块
+  const status = toEmbedStatus(embedEnabled);
+  const copy = getEmbedCopy(status);
+  const manualPath = en ? MANUAL_PATH_COPY.en : MANUAL_PATH_COPY.zh;
   
-  if (embedEnabled === true) {
-    // ✅ 已启用状态
-    return (
-      <div style={{
-        background: "#e6f7ed",
-        border: "1px solid #b7eb8f",
-        borderRadius: 8,
-        padding: 20,
-        marginBottom: 20,
-      }}>
-        <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
-          <span style={{ fontSize: 24 }}>✅</span>
-          <div style={{ flex: 1 }}>
-            <h4 style={{ margin: "0 0 8px", fontSize: 16, fontWeight: 600, color: "#389e0d" }}>
-              {en ? "Product Schema is Active" : "Product Schema 已启用"}
-            </h4>
-            <p style={{ margin: 0, fontSize: 14, color: "#52c41a" }}>
-              {en 
-                ? "Your product pages are automatically outputting structured data (JSON-LD) to help AI assistants and search engines understand your products."
-                : "您的产品页面正在自动输出结构化数据 (JSON-LD)，帮助 AI 助手和搜索引擎更好地理解您的产品。"}
-            </p>
-            <div style={{ marginTop: 12, display: "flex", gap: 12, flexWrap: "wrap" }}>
-              <a
-                href={embedDeepLink}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{
-                  padding: "8px 16px",
-                  background: "#fff",
-                  color: "#389e0d",
-                  border: "1px solid #b7eb8f",
-                  borderRadius: 4,
-                  fontSize: 13,
-                  fontWeight: 500,
-                  textDecoration: "none",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 6,
-                }}
-              >
-                ⚙️ {en ? "View Theme Settings" : "查看主题设置"}
-              </a>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (embedEnabled === false) {
-    // ⚠️ 未启用状态
-    return (
-      <div style={{
-        background: "#fff7e6",
-        border: "1px solid #ffd591",
-        borderRadius: 8,
-        padding: 20,
-        marginBottom: 20,
-      }}>
-        <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
-          <span style={{ fontSize: 24 }}>⚠️</span>
-          <div style={{ flex: 1 }}>
-            <h4 style={{ margin: "0 0 8px", fontSize: 16, fontWeight: 600, color: "#d46b08" }}>
-              {en ? "Product Schema Not Enabled" : "Product Schema 未启用"}
-            </h4>
-            <p style={{ margin: "0 0 12px", fontSize: 14, color: "#8a6116" }}>
-              {en 
-                ? "Enable Product Schema in your theme to automatically add structured data to all product pages. No code changes required!"
-                : "在主题中启用 Product Schema，即可自动为所有产品页面添加结构化数据。无需修改代码！"}
-            </p>
-            <a
-              href={embedDeepLink}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                padding: "12px 24px",
-                background: "#008060",
-                color: "#fff",
-                border: "none",
-                borderRadius: 6,
-                fontSize: 14,
-                fontWeight: 600,
-                textDecoration: "none",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 8,
-              }}
-            >
-              🚀 {en ? "Enable Product Schema Now" : "立即启用 Product Schema"}
-            </a>
-            <p style={{ margin: "12px 0 0", fontSize: 12, color: "#8a6116" }}>
-              📍 {en ? "Manual path:" : "手动路径："}{en ? embedManualPath.en : embedManualPath.zh}
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // ❓ 无法确定状态（权限不足等）
+  // 根据状态配置样式
+  const styleConfig = {
+    enabled: {
+      bg: "#e6f7ed",
+      border: "#b7eb8f",
+      titleColor: "#389e0d",
+      textColor: "#52c41a",
+      icon: "✅",
+      buttonBg: "#fff",
+      buttonColor: "#389e0d",
+      buttonBorder: "1px solid #b7eb8f",
+      buttonIcon: "⚙️",
+    },
+    disabled: {
+      bg: "#fff7e6",
+      border: "#ffd591",
+      titleColor: "#d46b08",
+      textColor: "#8a6116",
+      icon: "⚠️",
+      buttonBg: "#008060",
+      buttonColor: "#fff",
+      buttonBorder: "none",
+      buttonIcon: "🚀",
+    },
+    unknown: {
+      bg: "#f0f7ff",
+      border: "#91d5ff",
+      titleColor: "#0050b3",
+      textColor: "#096dd9",
+      icon: "ℹ️",
+      buttonBg: "#1890ff",
+      buttonColor: "#fff",
+      buttonBorder: "none",
+      buttonIcon: "🔍",
+    },
+  };
+  
+  const style = styleConfig[status];
+  const isEnabled = status === "enabled";
+  
   return (
     <div style={{
-      background: "#f0f7ff",
-      border: "1px solid #91d5ff",
+      background: style.bg,
+      border: `1px solid ${style.border}`,
       borderRadius: 8,
       padding: 20,
       marginBottom: 20,
     }}>
       <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
-        <span style={{ fontSize: 24 }}>ℹ️</span>
+        <span style={{ fontSize: 24 }}>{style.icon}</span>
         <div style={{ flex: 1 }}>
-          <h4 style={{ margin: "0 0 8px", fontSize: 16, fontWeight: 600, color: "#0050b3" }}>
-            {en ? "Check Your Theme Settings" : "请检查主题设置"}
+          <h4 style={{ margin: "0 0 8px", fontSize: 16, fontWeight: 600, color: style.titleColor }}>
+            {en ? copy.title.en : copy.title.zh}
           </h4>
-          <p style={{ margin: "0 0 12px", fontSize: 14, color: "#096dd9" }}>
-            {en 
-              ? "We couldn't detect the current status. Please check if Product Schema is enabled in your theme settings."
-              : "无法检测当前状态。请检查主题设置中是否已启用 Product Schema。"}
+          <p style={{ margin: isEnabled ? 0 : "0 0 12px", fontSize: 14, color: style.textColor }}>
+            {en ? copy.description.en : copy.description.zh}
           </p>
-          <a
-            href={embedDeepLink}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{
-              padding: "12px 24px",
-              background: "#1890ff",
-              color: "#fff",
-              border: "none",
-              borderRadius: 6,
-              fontSize: 14,
-              fontWeight: 600,
-              textDecoration: "none",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 8,
-            }}
-          >
-            🔍 {en ? "Check Theme Settings" : "检查主题设置"}
-          </a>
-          <p style={{ margin: "12px 0 0", fontSize: 12, color: "#096dd9" }}>
-            📍 {en ? "Path:" : "路径："}{en ? embedManualPath.en : embedManualPath.zh}
-          </p>
+          <div style={{ marginTop: 12, display: "flex", gap: 12, flexWrap: "wrap" }}>
+            <a
+              href={embedDeepLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                padding: isEnabled ? "8px 16px" : "12px 24px",
+                background: style.buttonBg,
+                color: style.buttonColor,
+                border: style.buttonBorder,
+                borderRadius: isEnabled ? 4 : 6,
+                fontSize: isEnabled ? 13 : 14,
+                fontWeight: isEnabled ? 500 : 600,
+                textDecoration: "none",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: isEnabled ? 6 : 8,
+              }}
+            >
+              {style.buttonIcon} {en ? copy.buttonLabel.en : copy.buttonLabel.zh}
+            </a>
+          </div>
+          {!isEnabled && (
+            <p style={{ margin: "12px 0 0", fontSize: 12, color: style.textColor }}>
+              📍 {en ? "Manual path:" : "手动路径："}{manualPath}
+            </p>
+          )}
         </div>
       </div>
     </div>

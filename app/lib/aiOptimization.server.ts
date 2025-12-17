@@ -11,6 +11,7 @@ import type { AdminGraphqlClient } from "./graphqlSdk.server";
 import { createGraphqlSdk } from "./graphqlSdk.server";
 import { MAX_ORDER_PRODUCTS } from "./constants";
 import { isProductSchemaEmbedEnabled, getAppEmbedDeepLink, getAppEmbedManualPath } from "./themeEmbedStatus.server";
+import { getEmbedCopy, toEmbedStatus, MANUAL_PATH_COPY } from "./productSchemaEmbedCopy";
 
 // ============================================================================
 // Types
@@ -644,6 +645,7 @@ function generateFAQSuggestions(
  * @param hasFAQContent - 是否有 FAQ 内容
  * @param isSchemaEmbedEnabled - App Embed 是否已启用（true/false/null）
  * @param shopDomain - 店铺域名（用于生成 deep link）
+ * @param apiKey - App 的 API Key（用于生成带 activateAppId 的 deep link）
  */
 function generateSuggestions(
   products: ProductAIPerformance[],
@@ -652,6 +654,7 @@ function generateSuggestions(
   hasFAQContent: boolean = false,
   isSchemaEmbedEnabled: boolean | null = null,
   shopDomain: string = "",
+  apiKey: string = "",
 ): OptimizationSuggestion[] {
   const suggestions: OptimizationSuggestion[] = [];
   const isEnglish = language === "English";
@@ -668,35 +671,23 @@ function generateSuggestions(
   // - 只有 isSchemaEmbedEnabled === true 时才不显示此建议
   // ============================================================================
   if (isSchemaEmbedEnabled !== true) {
-    const manualPath = getAppEmbedManualPath(language);
-    const deepLink = shopDomain ? getAppEmbedDeepLink(shopDomain) : "";
+    const deepLink = shopDomain ? getAppEmbedDeepLink(shopDomain, { apiKey }) : "";
     
-    // 根据检测结果调整文案
-    const isUncertain = isSchemaEmbedEnabled === null;
+    // 使用公共文案模块获取对应状态的文案
+    const status = toEmbedStatus(isSchemaEmbedEnabled);
+    const copy = getEmbedCopy(status);
     
     suggestions.push({
       id: "schema-embed-disabled",
       category: "schema_markup",
       priority: "high",
-      title: {
-        en: "Enable Product Schema App Embed",
-        zh: "启用产品 Schema App Embed",
-      },
-      description: {
-        en: isUncertain
-          ? "Please verify that the Product Schema (JSON-LD) app embed is enabled in your theme. This adds structured data to your product pages for better AI discoverability."
-          : "The Product Schema (JSON-LD) app embed is installed but not enabled in your theme. Enable it to add structured data to your product pages.",
-        zh: isUncertain
-          ? "请确认产品 Schema (JSON-LD) App Embed 已在主题中启用。这将为产品页面添加结构化数据，提升 AI 可发现性。"
-          : "产品 Schema (JSON-LD) App Embed 已安装但未在主题中启用。启用后可为产品页面添加结构化数据。",
-      },
-      impact: isEnglish 
-        ? "Schema markup helps AI assistants understand and recommend your products more accurately."
-        : "Schema 标记帮助 AI 助手更准确地理解和推荐您的产品。",
+      title: copy.title,
+      description: copy.description,
+      impact: isEnglish ? copy.impact.en : copy.impact.zh,
       action: isEnglish
-        ? `${manualPath.en}${deepLink ? `\n\nOr use this direct link: ${deepLink}` : ""}`
-        : `${manualPath.zh}${deepLink ? `\n\n或使用此直达链接：${deepLink}` : ""}`,
-      estimatedLift: "+15-25% AI visibility",
+        ? `${MANUAL_PATH_COPY.en}${deepLink ? ` Or use this direct link: ${deepLink}` : ""}`
+        : `${MANUAL_PATH_COPY.zh}${deepLink ? ` 或使用此直达链接：${deepLink}` : ""}`,
+      estimatedLift: copy.estimatedLift,
     });
   }
   
@@ -905,6 +896,16 @@ function calculateScores(products: ProductAIPerformance[]): {
 
 /**
  * 生成 AI 优化报告
+ * 
+ * @param shopDomain - 店铺域名
+ * @param admin - Shopify Admin GraphQL 客户端
+ * @param options - 配置选项
+ * @param options.embedEnabled - 外部传入的 embed 状态（避免重复检测）
+ *   - true: 已启用
+ *   - false: 未启用
+ *   - null: 无法确定
+ *   - undefined: 未传入，函数内部会自行检测
+ * @param options.apiKey - App 的 API Key（用于生成带 activateAppId 的 deep link）
  */
 export async function generateAIOptimizationReport(
   shopDomain: string,
@@ -917,6 +918,10 @@ export async function generateAIOptimizationReport(
       exposeCollections: boolean;
       exposeBlogs: boolean;
     };
+    /** 外部传入的 embed 状态，传入后不再重复检测 */
+    embedEnabled?: boolean | null;
+    /** App 的 API Key（用于生成带 activateAppId 的 deep link） */
+    apiKey?: string;
   } = {},
 ): Promise<AIOptimizationReport> {
   const rangeKey = options.range || "30d";
@@ -1090,7 +1095,10 @@ export async function generateAIOptimizationReport(
   const hasFAQContent = suggestedFAQs.length > 0;
   
   // 检测 App Embed 是否已启用
-  const embedEnabled = admin ? await isProductSchemaEmbedEnabled(admin, shopDomain) : null;
+  // 如果外部传入了 embedEnabled，则复用；否则自行检测
+  const embedEnabled = "embedEnabled" in options
+    ? options.embedEnabled
+    : (admin ? await isProductSchemaEmbedEnabled(admin, shopDomain) : null);
   
   const suggestions = generateSuggestions(
     productsForScoring, 
@@ -1098,7 +1106,8 @@ export async function generateAIOptimizationReport(
     hasLlmsTxtEnabled, 
     hasFAQContent,
     embedEnabled,
-    shopDomain
+    shopDomain,
+    options.apiKey || ""
   );
   
   // llms.txt 增强建议

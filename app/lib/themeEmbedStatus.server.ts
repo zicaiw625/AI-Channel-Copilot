@@ -232,21 +232,19 @@ export async function isProductSchemaEmbedEnabled(
     });
 
     // 查找我们的 product-schema-embed block
-    // 匹配模式：
-    // 1. shopify://apps/ai-channel-copilot/blocks/product-schema-embed/...
-    // 2. shopify://apps/.../blocks/product-schema-embed/...
-    // 3. product-schema-embed
-    // 4. product-schema
-    // 5. 包含 "ai-channel-copilot" 和 "product-schema" 的组合
+    // 
+    // Shopify settings_data.json 中 block type 格式：
+    // "shopify://apps/{app-handle}/blocks/{block-handle}/{uuid}"
+    // 
+    // 精确匹配 "/blocks/product-schema-embed/" 以避免误匹配其他 app 的 schema block
+    // 例如：shopify://apps/ai-channel-copilot/blocks/product-schema-embed/abc123
+    const BLOCK_HANDLE = "product-schema-embed";
+    const BLOCK_PATTERN = `/blocks/${BLOCK_HANDLE}/`;
+    
     const hit = entries.find(b => {
       if (typeof b.type !== "string") return false;
-      const typeLower = b.type.toLowerCase();
-      return (
-        typeLower.includes("product-schema-embed") ||
-        typeLower.includes("product-schema") ||
-        (typeLower.includes("ai-channel-copilot") && typeLower.includes("schema")) ||
-        (typeLower.includes("ai_channel_copilot") && typeLower.includes("schema"))
-      );
+      // 精确匹配我们的 block handle
+      return b.type.includes(BLOCK_PATTERN);
     });
 
     if (!hit) {
@@ -254,7 +252,7 @@ export async function isProductSchemaEmbedEnabled(
         shopDomain,
         themeId,
         blockCount: entries.length,
-        // 记录所有可能相关的 block（包含 schema 或 embed 关键字）
+        // 记录所有可能相关的 block（包含 schema 或 embed 关键字）以便调试
         relatedBlocks: allBlockTypes.filter(t => 
           t.toLowerCase().includes("schema") || 
           t.toLowerCase().includes("embed") ||
@@ -266,13 +264,22 @@ export async function isProductSchemaEmbedEnabled(
     }
 
     // 检查 block 是否被禁用
-    const isEnabled = hit.disabled !== true;
+    // 1. block.disabled !== true：block 本身未被禁用
+    // 2. block.settings.enable_product_schema !== false：block 内部的开关未被关闭
+    //    注意：如果 settings 不存在或 enable_product_schema 不存在，默认视为启用
+    //    因为 liquid 模板中 default 值是 true
+    const isBlockDisabled = hit.disabled === true;
+    const isSettingDisabled = hit.settings?.enable_product_schema === false;
+    const isEnabled = !isBlockDisabled && !isSettingDisabled;
     
     logger.info("[themeEmbedStatus] Product schema embed status", {
       shopDomain,
       themeId,
       isEnabled,
       blockType: hit.type,
+      blockDisabled: isBlockDisabled,
+      settingDisabled: isSettingDisabled,
+      settings: hit.settings,
     });
 
     return isEnabled;
@@ -288,17 +295,51 @@ export async function isProductSchemaEmbedEnabled(
 
 /**
  * 生成 App Embed 启用的 deep link
- * 注意：Deep link 在某些店铺/时段可能不稳定，应该同时提供手动路径作为备选
+ * 
+ * 支持两种模式：
+ * 1. 带 activateAppId：直接触发 embed 激活流程（推荐）
+ * 2. 仅 context=apps：打开 App embeds 面板（fallback）
  * 
  * @param shopDomain - 店铺域名
- * @param themeId - 主题 ID（可选，不提供则使用当前主题）
+ * @param options - 配置选项
+ * @param options.themeId - 主题 ID（可选，不提供则使用当前主题）
+ * @param options.apiKey - App 的 API Key（用于生成 activateAppId 链接）
+ * @param options.blockHandle - Embed block handle（默认 product-schema-embed）
  * @returns Deep link URL
+ * 
+ * @see https://shopify.dev/docs/apps/build/online-store/theme-app-extensions/configuration
  */
-export function getAppEmbedDeepLink(shopDomain: string, themeId?: string): string {
-  // 格式: https://{shop}/admin/themes/{theme_id}/editor?context=apps
+export function getAppEmbedDeepLink(
+  shopDomain: string, 
+  options: {
+    themeId?: string;
+    apiKey?: string;
+    blockHandle?: string;
+  } = {}
+): string {
+  const { themeId, apiKey, blockHandle = "product-schema-embed" } = options;
+  
   // 如果没有 themeId，使用 current 指代当前激活主题
-  const themeParam = themeId ? themeId.replace(/^gid:\/\/shopify\/OnlineStoreTheme\//, "") : "current";
-  return `https://${shopDomain}/admin/themes/${themeParam}/editor?context=apps`;
+  const themeParam = themeId 
+    ? themeId.replace(/^gid:\/\/shopify\/OnlineStoreTheme\//, "") 
+    : "current";
+  
+  // 基础 URL
+  const baseUrl = `https://${shopDomain}/admin/themes/${themeParam}/editor`;
+  
+  // 构建查询参数
+  const params = new URLSearchParams();
+  params.set("context", "apps");
+  
+  // 如果提供了 apiKey，添加 activateAppId 参数以直接触发激活流程
+  // 格式: activateAppId={api_key}/{block_handle}
+  // 同时添加 template=product 以在产品页上下文中预览
+  if (apiKey) {
+    params.set("template", "product");
+    params.set("activateAppId", `${apiKey}/${blockHandle}`);
+  }
+  
+  return `${baseUrl}?${params.toString()}`;
 }
 
 /**

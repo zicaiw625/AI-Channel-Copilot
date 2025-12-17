@@ -8,6 +8,7 @@ import { authenticate } from "../shopify.server";
 import { getSettings } from "../lib/settings.server";
 import { generateAIOptimizationReport, type OptimizationSuggestion } from "../lib/aiOptimization.server";
 import { useUILanguage } from "../lib/useUILanguage";
+import { requireEnv } from "../lib/env.server";
 import styles from "../styles/app.dashboard.module.css";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -33,10 +34,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   // 获取店铺货币设置
   const currency = settings.primaryCurrency || "USD";
 
+  // 获取 API Key 用于生成带 activateAppId 的 deep link
+  const apiKey = requireEnv("SHOPIFY_API_KEY");
+
   const report = await generateAIOptimizationReport(shopDomain, admin, {
     range: "30d",
     language,
     exposurePreferences: settings.exposurePreferences,
+    apiKey,
   });
 
   return {

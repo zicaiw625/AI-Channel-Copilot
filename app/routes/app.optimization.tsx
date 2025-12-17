@@ -333,7 +333,7 @@ const SuggestionCard = ({
       {(isSchemaEmbedSuggestion || isLlmsTxtSuggestion) && (
         <div style={{ marginTop: 12 }}>
           <Link
-            to={isSchemaEmbedSuggestion ? "/app/ai-visibility" : "/app/additional"}
+            to={isSchemaEmbedSuggestion ? "/app/ai-visibility" : "/app/additional#llms-txt-settings"}
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -901,7 +901,7 @@ export default function AIOptimization() {
             </p>
           )}
           
-          <Link to="/app/additional" className={styles.primaryButton}>
+          <Link to="/app/additional#llms-txt-settings" className={styles.primaryButton}>
             {isEnglish ? "Configure llms.txt Settings" : "配置 llms.txt 设置"}
           </Link>
         </div>

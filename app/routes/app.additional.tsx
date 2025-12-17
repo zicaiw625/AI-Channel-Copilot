@@ -373,6 +373,24 @@ export default function SettingsAndExport() {
       }
     } catch { /* ignore */ }
   }, []);
+
+  // 监听 URL hash 并滚动到目标元素（用于从其他页面跳转后定位到具体设置）
+  useEffect(() => {
+    const hash = location.hash;
+    if (hash) {
+      // 延迟执行以确保 DOM 已渲染
+      const timer = setTimeout(() => {
+        const element = document.querySelector(hash);
+        if (element) {
+          element.scrollIntoView({ behavior: "smooth", block: "start" });
+          // 添加高亮效果
+          element.classList.add("highlight-target");
+          setTimeout(() => element.classList.remove("highlight-target"), 2000);
+        }
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [location.hash]);
   const [exportWindow, setExportWindow] = useState<TimeRangeKey>(exportRange as TimeRangeKey);
 
   // Modal state for confirming removal of default domain
@@ -1049,7 +1067,7 @@ export default function SettingsAndExport() {
         </div>
 
         {/* llms.txt 完整卡片 - 合并偏好设置和预览 */}
-        <div className={styles.card}>
+        <div id="llms-txt-settings" className={styles.card}>
           <div className={styles.sectionHeader}>
             <div>
               <p className={styles.sectionLabel}>{language === "English" ? "llms.txt Preferences" : "llms.txt 偏好"}</p>

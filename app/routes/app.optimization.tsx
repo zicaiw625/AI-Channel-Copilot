@@ -265,8 +265,9 @@ const SuggestionCard = ({
     ai_visibility: { en: "AI Visibility", zh: "AI 可见性" },
   };
 
-  // 特殊处理：Schema Embed 建议直接跳转到 AI Visibility 页面
+  // 特殊处理：某些建议直接跳转到对应页面
   const isSchemaEmbedSuggestion = suggestion.id === "schema-embed-disabled";
+  const isLlmsTxtSuggestion = suggestion.id === "llms-txt-optimization";
   
   return (
     <div
@@ -323,11 +324,11 @@ const SuggestionCard = ({
         )}
       </div>
 
-      {/* Schema Embed 建议：显示快速操作按钮 */}
-      {isSchemaEmbedSuggestion && (
+      {/* 特殊建议：显示快速操作按钮 */}
+      {(isSchemaEmbedSuggestion || isLlmsTxtSuggestion) && (
         <div style={{ marginTop: 12 }}>
           <Link
-            to="/app/ai-visibility"
+            to={isSchemaEmbedSuggestion ? "/app/ai-visibility" : "/app/additional"}
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -342,7 +343,10 @@ const SuggestionCard = ({
               textDecoration: "none",
             }}
           >
-            🚀 {isEnglish ? "Enable Now" : "立即启用"}
+            {isSchemaEmbedSuggestion 
+              ? `🚀 ${isEnglish ? "Enable Now" : "立即启用"}`
+              : `⚙️ ${isEnglish ? "Configure Now" : "立即配置"}`
+            }
           </Link>
         </div>
       )}

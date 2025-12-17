@@ -277,6 +277,8 @@ export type SettingsDefaults = {
   retentionMonths?: number;
   lastOrdersWebhookAt?: string | null;
   lastBackfillAt?: string | null;
+  lastBackfillAttemptAt?: string | null;  // 最后一次 backfill 尝试完成时间
+  lastBackfillOrdersFetched?: number | null;  // 最后一次 backfill 拉取订单数
   lastTaggingAt?: string | null;
   lastCleanupAt?: string | null;
 };

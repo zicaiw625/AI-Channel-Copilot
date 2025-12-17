@@ -149,21 +149,34 @@ const processQueue = async (
           continue;
         }
 
+        // 【优化 1】无论拉到多少单，都更新 lastBackfillAttemptAt 和 lastBackfillOrdersFetched
+        const now = new Date();
+        const activityUpdate: Parameters<typeof markActivity>[1] = {
+          lastBackfillAttemptAt: now,
+          lastBackfillOrdersFetched: fetched.orders.length,
+        };
+        
+        // 只在有订单时更新 lastBackfillAt
         if (fetched.orders.length > 0) {
           await persistOrders(job.shopDomain, fetched.orders);
-          await markActivity(job.shopDomain, { lastBackfillAt: new Date() });
+          activityUpdate.lastBackfillAt = now;
         }
+        
+        await markActivity(job.shopDomain, activityUpdate);
 
         // 【修复】删除数据库中存在但 Shopify 已删除的订单
         const shopifyOrderIds = new Set(fetched.orders.map(o => o.id));
         const deletedCount = await removeDeletedOrders(job.shopDomain, range, shopifyOrderIds);
 
         await updateJobStatus(job.id, "completed", { ordersFetched: fetched.orders.length });
-        await setBackfillStatus(
-          job.shopDomain,
-          "healthy",
-          `Last completed at ${new Date().toISOString()} · ${fetched.orders.length} orders`,
-        );
+        
+        // 【优化 2】0 单时显示 info 而非 healthy，让用户明确知道"任务成功但无数据"
+        const statusLevel = fetched.orders.length > 0 ? "healthy" : "info";
+        const statusDetail = fetched.orders.length > 0
+          ? `Last completed at ${now.toISOString()} · ${fetched.orders.length} orders`
+          : `Completed at ${now.toISOString()} · 0 orders in last 60 days (Shopify default limit)`;
+        
+        await setBackfillStatus(job.shopDomain, statusLevel, statusDetail);
         logger.info("[backfill] job completed", {
           jobType: "backfill",
           jobId: job.id,

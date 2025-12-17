@@ -180,6 +180,8 @@ export const markActivity = async (
   updates: Partial<{
     lastOrdersWebhookAt: Date;
     lastBackfillAt: Date;
+    lastBackfillAttemptAt: Date;
+    lastBackfillOrdersFetched: number;
     lastTaggingAt: Date;
     lastCleanupAt: Date;
     pipelineStatuses: PipelineStatus[];

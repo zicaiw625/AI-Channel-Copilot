@@ -153,7 +153,9 @@ model ShopSettings {
   retentionMonths       Int      @default(6)
   lastOrdersWebhookAt   DateTime?
   lastCleanupAt         DateTime?
-  lastBackfillAt        DateTime?
+  lastBackfillAt        DateTime?  // 最后一次拉到订单的时间
+  lastBackfillAttemptAt DateTime?  // 最后一次 backfill 尝试完成的时间（无论是否有订单）
+  lastBackfillOrdersFetched Int?   // 最后一次 backfill 拉取到的订单数
   lastTaggingAt         DateTime?
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt

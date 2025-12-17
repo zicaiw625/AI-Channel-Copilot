@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
-import { Link, useFetcher, useLoaderData, useLocation, useNavigate } from "react-router";
+import { Link, useFetcher, useLoaderData, useLocation, useNavigate, useRevalidator } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 
@@ -112,6 +112,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     pipeline: {
       lastOrdersWebhookAt: settings.lastOrdersWebhookAt || null,
       lastBackfillAt: settings.lastBackfillAt || null,
+      lastBackfillAttemptAt: settings.lastBackfillAttemptAt || null,
+      lastBackfillOrdersFetched: settings.lastBackfillOrdersFetched ?? null,
       lastTaggingAt: settings.lastTaggingAt || null,
       statuses:
         settings.pipelineStatuses && settings.pipelineStatuses.length
@@ -213,6 +215,26 @@ export default function Index() {
 
   const backfillFetcher = useFetcher<{ ok: boolean; queued: boolean; reason?: string; range?: string }>();
   const jobFetcher = useFetcher<JobSnapshot>();
+  const revalidator = useRevalidator();
+  
+  // 【优化 4】追踪 backfill 任务状态，完成后自动刷新
+  const [prevBackfillProcessing, setPrevBackfillProcessing] = useState(false);
+  
+  useEffect(() => {
+    const backfills = jobFetcher.data?.backfills?.recent || [];
+    const isProcessing = backfills.some(job => job.status === "processing" || job.status === "queued");
+    
+    // 检测从 processing/queued 变为 completed 的状态变化
+    if (prevBackfillProcessing && !isProcessing && backfills.length > 0) {
+      const latestJob = backfills[0];
+      if (latestJob.status === "completed" && latestJob.ordersFetched > 0) {
+        // 有新数据，触发页面刷新
+        revalidator.revalidate();
+      }
+    }
+    
+    setPrevBackfillProcessing(isProcessing);
+  }, [jobFetcher.data, prevBackfillProcessing, revalidator]);
 
   useEffect(() => {
     let lastPollTime = 0;
@@ -272,14 +294,25 @@ export default function Index() {
     };
   }, [jobFetcher]);
   const triggerBackfill = useCallback(() => {
-    // 补位始终使用当前 Dashboard 显示的预设范围（7d/30d/90d），不传递自定义日期
-    // 这确保补位查询的是"最近X天"（包含今天），而不是旧的自定义日期范围
-    const backfillRange = range === "custom" ? "7d" : range;
-    backfillFetcher.submit(
-      { range: backfillRange },
-      { method: "post", action: "/api/backfill" },
-    );
-  }, [backfillFetcher, range]);
+    // 【优化 5】支持自定义日期范围的 backfill
+    // 当 range=custom 时，传递 from/to 参数给后端
+    if (range === "custom" && dateRange.fromParam && dateRange.toParam) {
+      backfillFetcher.submit(
+        { 
+          range: "custom",
+          from: dateRange.fromParam as string,
+          to: dateRange.toParam as string,
+        },
+        { method: "post", action: "/api/backfill" },
+      );
+    } else {
+      // 预设范围（7d/30d/90d）
+      backfillFetcher.submit(
+        { range },
+        { method: "post", action: "/api/backfill" },
+      );
+    }
+  }, [backfillFetcher, range, dateRange.fromParam, dateRange.toParam]);
 
   const {
     overview,
@@ -432,7 +465,12 @@ export default function Index() {
               <summary>{t(lang, "status_ops")}</summary>
               <div className={styles.pipelineRow}>
                 <span>{uiLanguage === "English" ? "Webhook:" : "Webhook："}{fmtTime(pipeline.lastOrdersWebhookAt)}</span>
-                <span>{uiLanguage === "English" ? "Backfill:" : "补拉："}{fmtTime(pipeline.lastBackfillAt)}</span>
+                <span>
+                  {uiLanguage === "English" ? "Backfill:" : "补拉："}
+                  {pipeline.lastBackfillAttemptAt 
+                    ? `${fmtTime(pipeline.lastBackfillAttemptAt)} (${pipeline.lastBackfillOrdersFetched ?? 0} ${uiLanguage === "English" ? "orders" : "笔"})`
+                    : (uiLanguage === "English" ? "None" : "暂无")}
+                </span>
                 <span>{uiLanguage === "English" ? "Tagging:" : "标签："}{fmtTime(pipeline.lastTaggingAt)}</span>
                 <div className={styles.statusChips}>
                   {(pipeline.statuses || []).map((item) => {
@@ -501,7 +539,12 @@ export default function Index() {
             )}
             {dataSource === "empty" && (
               <div className={styles.warning}>
-                {uiLanguage === "English" ? "No qualifying orders found and demo is disabled. Wait for webhook/backfill or extend the time range and retry." : "暂未检索到符合条件的订单，且已关闭演示数据。可等待 webhook/backfill 完成或延长时间范围后重试。"}
+                {uiLanguage === "English" 
+                  ? "No qualifying orders found in the last 60 days (Shopify default limit). This may be a new store, or orders are older than 60 days. To access older orders, request 'read_all_orders' scope and re-authorize." 
+                  : "最近 60 天内暂无符合条件的订单（Shopify 默认限制）。可能是新店铺，或订单都在 60 天之前。如需访问更早订单，请申请 read_all_orders 权限并重新授权。"}
+                <Link to="/app/additional" className={styles.link} style={{ marginLeft: 8 }}>
+                  {uiLanguage === "English" ? "Check Settings" : "查看设置"}
+                </Link>
               </div>
             )}
             {overview.aiOrders === 0 && overview.totalOrders > 0 && (

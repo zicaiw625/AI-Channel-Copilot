@@ -219,6 +219,10 @@ export const mapRecordToSettings = (record?: Partial<ShopSettings> | null): Sett
     pipelineStatuses: validatePipelineStatuses(record.pipelineStatuses),
     lastOrdersWebhookAt: toISOStringOrNull(record.lastOrdersWebhookAt),
     lastBackfillAt: toISOStringOrNull(record.lastBackfillAt),
+    lastBackfillAttemptAt: toISOStringOrNull((record as any).lastBackfillAttemptAt),
+    lastBackfillOrdersFetched: typeof (record as any).lastBackfillOrdersFetched === 'number' 
+      ? (record as any).lastBackfillOrdersFetched 
+      : null,
     lastTaggingAt: toISOStringOrNull(record.lastTaggingAt),
     lastCleanupAt: toISOStringOrNull(record.lastCleanupAt),
   };
@@ -269,6 +273,8 @@ export const buildActivityUpdates = (
   updates: Partial<{
     lastOrdersWebhookAt: Date;
     lastBackfillAt: Date;
+    lastBackfillAttemptAt: Date;
+    lastBackfillOrdersFetched: number;
     lastTaggingAt: Date;
     lastCleanupAt: Date;
     pipelineStatuses: PipelineStatus[];
@@ -277,6 +283,8 @@ export const buildActivityUpdates = (
   omitUndefined({
     ...(updates.lastOrdersWebhookAt ? { lastOrdersWebhookAt: updates.lastOrdersWebhookAt } : {}),
     ...(updates.lastBackfillAt ? { lastBackfillAt: updates.lastBackfillAt } : {}),
+    ...(updates.lastBackfillAttemptAt ? { lastBackfillAttemptAt: updates.lastBackfillAttemptAt } : {}),
+    ...(typeof updates.lastBackfillOrdersFetched === 'number' ? { lastBackfillOrdersFetched: updates.lastBackfillOrdersFetched } : {}),
     ...(updates.lastTaggingAt ? { lastTaggingAt: updates.lastTaggingAt } : {}),
     ...(updates.lastCleanupAt ? { lastCleanupAt: updates.lastCleanupAt } : {}),
     ...(updates.pipelineStatuses ? { pipelineStatuses: updates.pipelineStatuses } : {}),

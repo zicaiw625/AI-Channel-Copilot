@@ -57,11 +57,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       logger.warn("[app] ensureWebhooks failed", { shopDomain }, { error: (e as Error).message });
     }
     
-    // 首次安装时自动触发 backfill（检查 lastBackfillAt 为空）
-    // 🔧 代码简化：仅首次安装时触发，后续由 scheduler 或用户手动触发
-    const lastBackfillAt = settings.lastBackfillAt ? new Date(settings.lastBackfillAt) : null;
+    // 【优化 1】首次安装时自动触发 backfill
+    // 使用 lastBackfillAttemptAt 而非 lastBackfillAt 判断是否首次安装
+    // 因为 lastBackfillAt 只在有订单时更新，0 单店铺会导致每次进 app 都触发 backfill
+    const lastBackfillAttemptAt = settings.lastBackfillAttemptAt ? new Date(settings.lastBackfillAttemptAt) : null;
     
-    if (!lastBackfillAt) {
+    if (!lastBackfillAttemptAt) {
       logger.info("[app] First install detected, triggering initial backfill", { shopDomain });
       const calculationTimezone = settings.timezones[0] || "UTC";
       const range = resolveDateRange("90d", new Date(), undefined, undefined, calculationTimezone);

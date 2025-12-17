@@ -9,6 +9,7 @@ import { logger } from "./logger.server";
 import { readAppFlags } from "./env.server";
 import { withAdvisoryLock } from "./locks.server";
 import { wakeupDueWebhookJobs } from "./webhookQueue.server";
+import { extractAdminClient } from "./graphqlSdk.server";
 
 // 锁 ID 常量（需要在整个应用中唯一）
 const SCHEDULER_LOCK_RETENTION = 2001;
@@ -99,24 +100,22 @@ const runBackfillSweep = async () => {
           shopsQueued++;
         }
 
-        void processBackfillQueue(
+        processBackfillQueue(
           async () => {
-            let resolvedAdmin: { graphql: (query: string, options: { variables?: Record<string, unknown> }) => Promise<Response> } | null = null;
+            let resolvedAdmin = null;
             try {
               const unauthResult = await unauthenticated.admin(shopDomain);
-              // 尝试直接使用返回值，或者从返回值中获取 admin
-              if (unauthResult && typeof (unauthResult as any).graphql === "function") {
-                resolvedAdmin = unauthResult as any;
-              } else if (unauthResult && typeof (unauthResult as any).admin?.graphql === "function") {
-                resolvedAdmin = (unauthResult as any).admin;
-              }
+              // 使用统一的类型安全辅助函数提取 admin 客户端
+              resolvedAdmin = extractAdminClient(unauthResult);
             } catch {
               resolvedAdmin = null;
             }
             return { admin: resolvedAdmin, settings };
           },
           { shopDomain },
-        );
+        ).catch((err) => {
+          logger.error("[scheduler] processBackfillQueue failed", { shopDomain, error: (err as Error).message });
+        });
       }
       
       logger.info("[scheduler] Backfill sweep completed", { shopsChecked: shops.length, shopsQueued });

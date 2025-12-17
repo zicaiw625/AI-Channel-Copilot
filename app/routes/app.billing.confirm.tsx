@@ -8,6 +8,7 @@ import { requireEnv } from "../lib/env.server";
 import { enforceRateLimit, RateLimitRules, buildRateLimitKey } from "../lib/security/rateLimit.server";
 import { logger } from "../lib/logger.server";
 import prisma from "../db.server";
+import { extractAdminClient } from "../lib/graphqlSdk.server";
 
 /**
  * 🔒 Shop 域名格式校验
@@ -177,11 +178,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   // 直接用 offline token（unauthenticated.admin）去 Shopify 拉取并同步订阅状态。
   try {
     const unauth = await unauthenticated.admin(shopDomain);
-    const admin =
-      unauth && typeof (unauth as any).graphql === "function"
-        ? (unauth as any)
-        : (unauth as any)?.admin;
-    if (admin && typeof admin.graphql === "function") {
+    // 使用统一的类型安全辅助函数提取 admin 客户端
+    const admin = extractAdminClient(unauth);
+    if (admin) {
       await syncSubscriptionFromShopify(admin, shopDomain);
     }
   } catch {

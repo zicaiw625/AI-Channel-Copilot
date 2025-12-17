@@ -8,7 +8,7 @@ import { enqueueWebhookJob, getWebhookQueueSize, registerWebhookHandler, checkWe
 import { logger } from "./logger.server";
 import { enforceRateLimit, RateLimitRules, buildRateLimitKey } from "./security/rateLimit.server";
 import { WEBHOOK_TAGGING_THRESHOLD_MS } from "./constants";
-import type { AdminGraphqlClient } from "./graphqlSdk.server";
+import { type AdminGraphqlClient, extractAdminClient } from "./graphqlSdk.server";
 
 const WEBHOOK_STATUS_TITLE = "orders/create webhook";
 
@@ -283,45 +283,6 @@ export const handleOrderWebhook = async (request: Request, expectedTopic: string
     }
     return new Response("Webhook processing failed", { status: 500 });
   }
-};
-
-/**
- * 类型守卫：检查对象是否具有 graphql 方法
- */
-const isAdminClient = (obj: unknown): obj is AdminGraphqlClient => {
-  return (
-    obj !== null &&
-    typeof obj === "object" &&
-    "graphql" in obj &&
-    typeof (obj as Record<string, unknown>).graphql === "function"
-  );
-};
-
-/**
- * 类型守卫：检查对象是否具有 admin 属性且 admin 具有 graphql 方法
- */
-const hasAdminProperty = (obj: unknown): obj is { admin: AdminGraphqlClient } => {
-  return (
-    obj !== null &&
-    typeof obj === "object" &&
-    "admin" in obj &&
-    isAdminClient((obj as Record<string, unknown>).admin)
-  );
-};
-
-/**
- * 从 unauthenticated.admin 的返回值中提取 AdminGraphqlClient
- */
-const extractAdminClient = (unauthResult: unknown): AdminGraphqlClient | null => {
-  // 直接返回的是 AdminGraphqlClient
-  if (isAdminClient(unauthResult)) {
-    return unauthResult;
-  }
-  // 返回的是包含 admin 属性的对象
-  if (hasAdminProperty(unauthResult)) {
-    return unauthResult.admin;
-  }
-  return null;
 };
 
 export const registerDefaultOrderWebhookHandlers = () => {

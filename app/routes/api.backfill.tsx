@@ -8,6 +8,7 @@ import { DEFAULT_RANGE_KEY, MAX_BACKFILL_DURATION_MS, MAX_BACKFILL_ORDERS } from
 import { isDemoMode } from "../lib/runtime.server";
 import { enforceRateLimit, RateLimitRules } from "../lib/security/rateLimit.server";
 import { logger } from "../lib/logger.server";
+import { extractAdminClient } from "../lib/graphqlSdk.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   if (request.method !== "POST")
@@ -59,23 +60,21 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   // 如果有已存在的 queued 作业，直接处理它
   if (existing && existing.status === "queued") {
     logger.info("[api.backfill] processing existing queued job", { shopDomain, jobId: existing.id });
-    void processBackfillQueue(
+    processBackfillQueue(
       async () => {
-        let resolvedAdmin: { graphql: (query: string, options: { variables?: Record<string, unknown> }) => Promise<Response> } | null = null;
+        let resolvedAdmin = null;
         try {
           const unauthResult = await unauthenticated.admin(shopDomain);
-          if (unauthResult && typeof (unauthResult as any).graphql === "function") {
-            resolvedAdmin = unauthResult as any;
-          } else if (unauthResult && typeof (unauthResult as any).admin?.graphql === "function") {
-            resolvedAdmin = (unauthResult as any).admin;
-          }
+          resolvedAdmin = extractAdminClient(unauthResult);
         } catch (err) {
           logger.warn("[api.backfill] unauthenticated.admin failed", { shopDomain, error: (err as Error).message });
         }
         return { admin: resolvedAdmin, settings };
       },
       { shopDomain },
-    );
+    ).catch((err) => {
+      logger.error("[api.backfill] processBackfillQueue failed for existing job", { shopDomain, error: (err as Error).message });
+    });
     return Response.json({
       ok: true,
       queued: true,
@@ -100,10 +99,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     maxDurationMs: MAX_BACKFILL_DURATION_MS,
   });
 
-  void processBackfillQueue(
+  processBackfillQueue(
     async () => {
       // 在异步回调中重新获取 admin 客户端，因为原始请求上下文可能已失效
-      let resolvedAdmin: { graphql: (query: string, options: { variables?: Record<string, unknown> }) => Promise<Response> } | null = null;
+      let resolvedAdmin = null;
       try {
         const unauthResult = await unauthenticated.admin(shopDomain);
         logger.info("[api.backfill] unauthenticated.admin resolved", { 
@@ -111,15 +110,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           hasResult: Boolean(unauthResult),
           resultType: typeof unauthResult,
           resultKeys: unauthResult ? Object.keys(unauthResult as object) : [],
-          hasGraphqlDirect: typeof (unauthResult as any)?.graphql,
         });
         
-        // 尝试直接使用返回值，或者从返回值中获取 admin
-        if (unauthResult && typeof (unauthResult as any).graphql === "function") {
-          resolvedAdmin = unauthResult as any;
-        } else if (unauthResult && typeof (unauthResult as any).admin?.graphql === "function") {
-          resolvedAdmin = (unauthResult as any).admin;
-        }
+        // 使用统一的类型安全辅助函数提取 admin 客户端
+        resolvedAdmin = extractAdminClient(unauthResult);
       } catch (err) {
         logger.warn("[api.backfill] unauthenticated.admin failed", { shopDomain, error: (err as Error).message });
       }
@@ -132,7 +126,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       return { admin: resolvedAdmin, settings };
     },
     { shopDomain },
-  );
+  ).catch((err) => {
+    logger.error("[api.backfill] processBackfillQueue failed", { shopDomain, error: (err as Error).message });
+  });
 
   return Response.json({
     ok: true,

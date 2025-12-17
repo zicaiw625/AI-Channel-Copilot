@@ -15,6 +15,7 @@ import { startBackfill, processBackfillQueue } from "../lib/backfill.server";
 import { resolveDateRange } from "../lib/aiData";
 import { MAX_BACKFILL_DURATION_MS, MAX_BACKFILL_ORDERS } from "../lib/constants";
 import { ensureWebhooks } from "../lib/webhooks.server";
+import { extractAdminClient } from "../lib/graphqlSdk.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { demoMode, enableBilling } = readAppFlags();
@@ -76,23 +77,22 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         if (queued.queued) {
           logger.info("[app] Initial backfill queued successfully", { shopDomain, range: range.label });
           // 异步处理 backfill，不阻塞请求
-          void processBackfillQueue(
+          // 使用 .catch() 确保异步错误被正确处理
+          processBackfillQueue(
             async () => {
-              let resolvedAdmin: { graphql: (query: string, options: { variables?: Record<string, unknown> }) => Promise<Response> } | null = null;
+              let resolvedAdmin = null;
               try {
                 const unauthResult = await unauthenticated.admin(shopDomain);
-                if (unauthResult && typeof (unauthResult as any).graphql === "function") {
-                  resolvedAdmin = unauthResult as any;
-                } else if (unauthResult && typeof (unauthResult as any).admin?.graphql === "function") {
-                  resolvedAdmin = (unauthResult as any).admin;
-                }
+                resolvedAdmin = extractAdminClient(unauthResult);
               } catch (err) {
                 logger.warn("[app] unauthenticated.admin failed for backfill", { shopDomain, error: (err as Error).message });
               }
               return { admin: resolvedAdmin, settings };
             },
             { shopDomain },
-          );
+          ).catch((err) => {
+            logger.error("[app] processBackfillQueue failed", { shopDomain, error: (err as Error).message });
+          });
         }
       } catch (e) {
         logger.warn("[app] Failed to trigger initial backfill", { shopDomain }, { error: (e as Error).message });

@@ -37,6 +37,10 @@ const MAX_HANDLERS = 100; // handlers Map 最大容量
 let isShuttingDown = false;
 let activeJobCount = 0;
 
+// 🔧 内存保护：全局 Set/Map 最大容量限制
+const MAX_PROCESSING_KEYS = 10000;
+const MAX_SCHEDULED_TIMERS = 10000;
+
 // 清理所有 scheduled timers（用于优雅关闭）
 const cleanupAllTimers = () => {
   for (const [key, timer] of scheduledTimers.entries()) {
@@ -44,7 +48,53 @@ const cleanupAllTimers = () => {
     scheduledTimers.delete(key);
   }
   lastRecoveryTime.clear();
-  logger.info("[webhook] All scheduled timers cleaned up", { count: scheduledTimers.size });
+  processingKeys.clear(); // 🔧 也清理 processingKeys
+  logger.info("[webhook] All scheduled timers and state cleaned up", { 
+    timersCleared: scheduledTimers.size,
+    processingKeysCleared: processingKeys.size,
+  });
+};
+
+/**
+ * 🔧 内存保护：定期清理陈旧的 processingKeys
+ * 正常情况下 processingKeys 会在 finally 中删除，但如果进程异常退出可能会残留
+ * 通过超时机制清理可能卡住的键
+ */
+const processingKeyTimestamps = new Map<string, number>();
+
+const cleanupStaleProcessingKeys = () => {
+  const now = Date.now();
+  const staleThreshold = STUCK_JOB_TIMEOUT_MS * 2; // 2倍卡住任务超时时间
+  let cleaned = 0;
+  
+  for (const [key, timestamp] of processingKeyTimestamps.entries()) {
+    if (now - timestamp > staleThreshold) {
+      processingKeys.delete(key);
+      processingKeyTimestamps.delete(key);
+      cleaned++;
+    }
+  }
+  
+  if (cleaned > 0) {
+    logger.warn("[webhook] Cleaned stale processing keys", { cleaned });
+  }
+  
+  // 紧急清理：如果超过最大容量，删除最旧的 20%
+  if (processingKeys.size > MAX_PROCESSING_KEYS) {
+    const entries = Array.from(processingKeyTimestamps.entries())
+      .sort((a, b) => a[1] - b[1]);
+    const toDelete = Math.floor(entries.length * 0.2);
+    
+    for (let i = 0; i < toDelete; i++) {
+      processingKeys.delete(entries[i][0]);
+      processingKeyTimestamps.delete(entries[i][0]);
+    }
+    
+    logger.warn("[webhook] Emergency cleanup of processing keys", {
+      deleted: toDelete,
+      remaining: processingKeys.size,
+    });
+  }
 };
 
 /**
@@ -578,6 +628,12 @@ export const processWebhookQueueForShop = async (
   }
   
   processingKeys.add(key);
+  processingKeyTimestamps.set(key, Date.now()); // 🔧 记录添加时间用于清理
+  
+  // 🔧 定期清理陈旧的 processing keys
+  if (processingKeys.size > MAX_PROCESSING_KEYS * 0.8) {
+    cleanupStaleProcessingKeys();
+  }
   
   // 清理已有的定时器
   const existingTimer = scheduledTimers.get(key);
@@ -677,6 +733,7 @@ export const processWebhookQueueForShop = async (
     });
   } finally {
     processingKeys.delete(key);
+    processingKeyTimestamps.delete(key); // 🔧 同时清理时间戳记录
   }
   
   // 如果正在关闭，不调度新的处理（移出 finally 块避免 no-unsafe-finally）
@@ -689,6 +746,16 @@ export const processWebhookQueueForShop = async (
     });
     
     if (pending > 0) {
+      // 🔧 内存保护：限制 scheduledTimers 大小
+      if (scheduledTimers.size > MAX_SCHEDULED_TIMERS) {
+        logger.warn("[webhook] scheduledTimers at capacity, skipping new timer", {
+          shopDomain,
+          currentSize: scheduledTimers.size,
+          maxSize: MAX_SCHEDULED_TIMERS,
+        });
+        return;
+      }
+      
       const dynamicDelay = Math.min(
         PENDING_COOLDOWN_MS + Math.floor(pending / Math.max(1, MAX_BATCH)) * 50, 
         PENDING_MAX_COOLDOWN_MS

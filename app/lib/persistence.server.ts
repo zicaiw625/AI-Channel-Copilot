@@ -254,6 +254,8 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
             // 收集批量操作
             const toCreate: Prisma.OrderProductCreateManyInput[] = [];
             const toDeleteIds: number[] = [];
+            // 🔧 优化：收集更新操作，改为并行执行，减少 N+1 查询
+            const toUpdate: Array<{ id: number; data: Prisma.OrderProductUpdateInput }> = [];
 
             for (const line of newLines) {
               // 🔧 使用 lineItemId 查找现有记录
@@ -272,8 +274,9 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
                   prev.currency !== (line.currency || prev.currency) ||
                   prev.quantity !== line.quantity;
                 if (changed) {
-                  await tx.orderProduct.update({
-                    where: { id: prev.id },
+                  // 🔧 优化：收集更新而不是立即执行
+                  toUpdate.push({
+                    id: prev.id,
                     data: {
                       productId: line.id,  // 更新 productId（以防产品被替换）
                       title: line.title,
@@ -305,6 +308,16 @@ export const persistOrders = async (shopDomain: string, orders: OrderRecord[]) =
               if (!nextByLineItemId.has(prev.lineItemId)) {
                 toDeleteIds.push(prev.id);
               }
+            }
+
+            // 🔧 优化：并行执行更新操作
+            // 在事务内并行执行仍然是安全的，可以显著减少总延迟
+            if (toUpdate.length > 0) {
+              await Promise.all(
+                toUpdate.map(({ id, data }) =>
+                  tx.orderProduct.update({ where: { id }, data })
+                )
+              );
             }
 
             // 批量创建新产品（唯一约束现在基于 orderId + lineItemId）

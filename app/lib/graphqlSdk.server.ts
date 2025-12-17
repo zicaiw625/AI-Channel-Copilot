@@ -9,6 +9,50 @@ export type AdminGraphqlClient = {
   ) => Promise<Response>;
 };
 
+/**
+ * 类型守卫：检查对象是否具有 graphql 方法
+ * 用于安全地检查 unauthenticated.admin 的返回值
+ */
+export const isAdminGraphqlClient = (obj: unknown): obj is AdminGraphqlClient => {
+  return (
+    obj !== null &&
+    typeof obj === "object" &&
+    "graphql" in obj &&
+    typeof (obj as Record<string, unknown>).graphql === "function"
+  );
+};
+
+/**
+ * 类型守卫：检查对象是否具有 admin 属性且 admin 具有 graphql 方法
+ */
+const hasAdminProperty = (obj: unknown): obj is { admin: AdminGraphqlClient } => {
+  return (
+    obj !== null &&
+    typeof obj === "object" &&
+    "admin" in obj &&
+    isAdminGraphqlClient((obj as Record<string, unknown>).admin)
+  );
+};
+
+/**
+ * 从 unauthenticated.admin 的返回值中提取 AdminGraphqlClient
+ * 统一处理 Shopify SDK 不同版本可能返回的不同结构
+ * 
+ * @param unauthResult - unauthenticated.admin() 的返回值
+ * @returns AdminGraphqlClient 或 null
+ */
+export const extractAdminClient = (unauthResult: unknown): AdminGraphqlClient | null => {
+  // 直接返回的是 AdminGraphqlClient
+  if (isAdminGraphqlClient(unauthResult)) {
+    return unauthResult;
+  }
+  // 返回的是包含 admin 属性的对象
+  if (hasAdminProperty(unauthResult)) {
+    return unauthResult.admin;
+  }
+  return null;
+};
+
 type RequestOptions = {
   maxRetries?: number;
   timeoutMs?: number;

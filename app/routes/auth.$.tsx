@@ -8,6 +8,7 @@ import { startBackfill, processBackfillQueue } from "../lib/backfill.server";
 import { MAX_BACKFILL_DURATION_MS, MAX_BACKFILL_ORDERS } from "../lib/constants";
 import { ensureWebhooks } from "../lib/webhooks.server";
 import { logger } from "../lib/logger.server";
+import { extractAdminClient } from "../lib/graphqlSdk.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const result = await authenticate.admin(request);
@@ -33,10 +34,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           maxDurationMs: MAX_BACKFILL_DURATION_MS,
         });
         if (queued.queued) {
-          void processBackfillQueue(
+          processBackfillQueue(
             async () => {
               // 在异步回调中重新获取 admin 客户端，因为原始请求上下文可能已失效
-              let resolvedAdmin: { graphql: (query: string, options: { variables?: Record<string, unknown> }) => Promise<Response> } | null = null;
+              let resolvedAdmin = null;
               try {
                 const unauthResult = await unauthenticated.admin(shopDomain);
                 logger.info("[auth] unauthenticated.admin resolved", { 
@@ -44,15 +45,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
                   hasResult: Boolean(unauthResult),
                   resultType: typeof unauthResult,
                   resultKeys: unauthResult ? Object.keys(unauthResult as object) : [],
-                  hasGraphqlDirect: typeof (unauthResult as any)?.graphql,
                 });
                 
-                // 尝试直接使用返回值，或者从返回值中获取 admin
-                if (unauthResult && typeof (unauthResult as any).graphql === "function") {
-                  resolvedAdmin = unauthResult as any;
-                } else if (unauthResult && typeof (unauthResult as any).admin?.graphql === "function") {
-                  resolvedAdmin = (unauthResult as any).admin;
-                }
+                // 使用统一的类型安全辅助函数提取 admin 客户端
+                resolvedAdmin = extractAdminClient(unauthResult);
               } catch (err) {
                 logger.warn("[auth] unauthenticated.admin failed", { shopDomain, error: (err as Error).message });
               }
@@ -65,7 +61,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
               return { admin: resolvedAdmin, settings };
             },
             { shopDomain },
-          );
+          ).catch((err) => {
+            logger.error("[auth] processBackfillQueue failed", { shopDomain, error: (err as Error).message });
+          });
         }
       }
 

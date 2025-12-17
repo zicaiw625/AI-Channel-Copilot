@@ -9,11 +9,32 @@ import { z } from 'zod';
 // 基础类型 Schema
 // ============================================================================
 
+/**
+ * Shopify 店铺域名验证
+ * 与 billing.server.ts 中的 SHOP_DOMAIN_REGEX 保持一致
+ * 
+ * 有效格式:
+ * - xxx.myshopify.com (标准 Shopify 域名)
+ * - xxx-xxx.myshopify.com (带连字符的 Shopify 域名)
+ * - custom-domain.com (自定义域名，需要单独验证)
+ */
+const SHOPIFY_DOMAIN_REGEX = /^[a-zA-Z0-9][a-zA-Z0-9-]*\.myshopify\.com$/;
+const CUSTOM_DOMAIN_REGEX = /^[a-zA-Z0-9][a-zA-Z0-9.-]*\.[a-zA-Z]{2,}$/;
+
 export const ShopDomainSchema = z.string()
-  .min(1)
+  .min(4) // 最短自定义域名: a.co = 4 字符
   .max(255)
-  .regex(/^[a-z0-9-]+\.myshopify\.com$/, 'Invalid Shopify domain format')
-  .or(z.string().min(1).max(255)); // 允许自定义域名
+  .refine(
+    (domain) => {
+      // 优先检查标准 Shopify 域名
+      if (SHOPIFY_DOMAIN_REGEX.test(domain)) return true;
+      // 允许自定义域名（但需要符合基本域名格式）
+      return CUSTOM_DOMAIN_REGEX.test(domain);
+    },
+    {
+      message: 'Invalid domain format. Expected: xxx.myshopify.com or valid custom domain',
+    }
+  );
 
 export const DateStringSchema = z.string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format');
@@ -420,6 +441,39 @@ export function createValidator<T extends z.ZodTypeAny>(schema: T) {
   return (data: unknown): z.infer<T> => {
     return schema.parse(data);
   };
+}
+
+// ============================================================================
+// Shop Domain 验证辅助函数
+// ============================================================================
+
+/**
+ * 验证是否为有效的 Shopify 店铺域名
+ * 统一验证逻辑，可在整个代码库中复用
+ * 
+ * @param domain - 待验证的域名
+ * @returns 是否为有效域名
+ */
+export function isValidShopDomain(domain: unknown): domain is string {
+  if (!domain || typeof domain !== 'string') return false;
+  if (domain.length < 4 || domain.length > 255) return false;
+  
+  // 优先检查标准 Shopify 域名
+  if (SHOPIFY_DOMAIN_REGEX.test(domain)) return true;
+  // 允许自定义域名
+  return CUSTOM_DOMAIN_REGEX.test(domain);
+}
+
+/**
+ * 验证并返回标准化的 Shopify 域名
+ * 如果无效则抛出 ValidationError
+ */
+export function validateShopDomain(domain: unknown): string {
+  const result = ShopDomainSchema.safeParse(domain);
+  if (!result.success) {
+    throw new Error(`Invalid shop domain: ${result.error.message}`);
+  }
+  return result.data;
 }
 
 // ============================================================================

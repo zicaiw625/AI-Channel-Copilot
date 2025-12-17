@@ -10,6 +10,20 @@ import styles from "../styles/app.copilot.module.css";
 import { hasFeature, FEATURES } from "../lib/access.server";
 import { isDemoMode } from "../lib/runtime.server";
 
+/**
+ * Copilot API 响应类型定义
+ */
+type CopilotResponse = {
+  ok: boolean;
+  answer?: string;
+  message?: string;
+  footnote?: string;
+  intent?: string;
+  range?: string;
+  suggestions?: string[];
+  error?: string;
+};
+
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const demo = isDemoMode();
   let session;
@@ -55,13 +69,16 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
 export default function Copilot() {
   const { settings, dateRange, range, readOnly, demo } = useLoaderData<typeof loader>();
-  const fetcher = useFetcher();
+  const fetcher = useFetcher<CopilotResponse>();
   const [question, setQuestion] = useState("");
   const [activeIntent, setActiveIntent] = useState<string | null>(null);
   // 使用 useUILanguage 保持语言设置的客户端一致性
   const language = useUILanguage(settings.languages[0] || "中文");
   
   const isLoading = fetcher.state !== "idle";
+  
+  // 类型安全的响应数据访问
+  const responseData = fetcher.data;
 
   const ask = (intent?: string) => {
     if (readOnly) return;
@@ -181,11 +198,11 @@ export default function Copilot() {
           </button>
         </div>
 
-        {fetcher.data && (
+        {responseData && (
           <div className={styles.answerCard}>
             <div className={styles.answerHeader}>{language === "English" ? "Answer" : "回答"}</div>
-            <div className={styles.answerBody}>{fetcher.data.answer || fetcher.data.message}</div>
-            {fetcher.data.footnote && <div className={styles.footnote}>{fetcher.data.footnote}</div>}
+            <div className={styles.answerBody}>{responseData.answer || responseData.message}</div>
+            {responseData.footnote && <div className={styles.footnote}>{responseData.footnote}</div>}
           </div>
         )}
 

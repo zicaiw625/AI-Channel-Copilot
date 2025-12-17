@@ -7,6 +7,7 @@ import { requireFeature, FEATURES } from "../lib/access.server";
 import { enforceRateLimit, RateLimitRules } from "../lib/security/rateLimit.server";
 import { apiSuccess, apiBadRequest, apiError } from "../lib/apiResponse.server";
 import { ErrorCode } from "../lib/errors";
+import { isDemoMode } from "../lib/runtime.server";
 
 // 请求体大小限制（10KB）
 const MAX_REQUEST_BODY_SIZE = 10 * 1024;
@@ -34,13 +35,21 @@ const validateDateParam = (value: unknown): string | null => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
-  const shopDomain = session?.shop || "";
+  const demo = isDemoMode();
+  let shopDomain = "";
   
-  // Rate limiting: 20 requests per minute per shop
-  await enforceRateLimit(`copilot:${shopDomain}`, RateLimitRules.COPILOT);
+  // Demo 模式下跳过认证，允许未登录访问
+  if (!demo) {
+    const { session } = await authenticate.admin(request);
+    shopDomain = session?.shop || "";
+    
+    // 非 Demo 模式下，检查功能权限
+    await requireFeature(shopDomain, FEATURES.COPILOT);
+  }
   
-  await requireFeature(shopDomain, FEATURES.COPILOT);
+  // Rate limiting: 20 requests per minute per shop (Demo 模式使用固定 key)
+  const rateLimitKey = demo ? "copilot:demo" : `copilot:${shopDomain}`;
+  await enforceRateLimit(rateLimitKey, RateLimitRules.COPILOT);
 
   if (request.method !== "POST") {
     return apiError(ErrorCode.INVALID_INPUT, "Method not allowed", 405);

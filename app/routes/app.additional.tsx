@@ -1522,15 +1522,18 @@ export const headers: HeadersFunction = (headersArgs) => {
 
 function LlmsPreview({ language, canExport, lastSavedAt }: { language: string; canExport: boolean; lastSavedAt?: number }) {
   const shopify = useAppBridge();
-  const fetcher = useFetcher<{ ok: boolean; text: string }>();
+  const fetcher = useFetcher<{ ok: boolean; text?: string; message?: string }>();
   const [copied, setCopied] = useState(false);
+  const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
-  // Store fetcher.load in a ref to avoid dependency issues
-  // fetcher.load is stable but the fetcher object itself changes on each render
-  const fetcherLoadRef = useRef(fetcher.load);
+  // 清理 copy 状态的 timer
   useEffect(() => {
-    fetcherLoadRef.current = fetcher.load;
-  }, [fetcher.load]);
+    return () => {
+      if (copyTimeoutRef.current) {
+        clearTimeout(copyTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const handleDownload = useCallback(async (e: React.MouseEvent<HTMLAnchorElement>, url: string, fallbackFilename: string) => {
     e.preventDefault();
@@ -1548,46 +1551,106 @@ function LlmsPreview({ language, canExport, lastSavedAt }: { language: string; c
     }
   }, [canExport, language, shopify]);
 
+  // 使用 useEffect 直接调用 fetcher.load，避免 ref 导致的时序问题
   useEffect(() => {
     // Only load if user has export permission to avoid 403 errors
     if (canExport) {
       // Pass current language to API to ensure preview matches UI language selection
-      fetcherLoadRef.current(`/api/llms-txt-preview?ts=${Date.now()}&lang=${encodeURIComponent(language)}`);
+      fetcher.load(`/api/llms-txt-preview?ts=${Date.now()}&lang=${encodeURIComponent(language)}`);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fetcher.load 是稳定的，但添加到 deps 会导致无限循环
   }, [language, canExport, lastSavedAt]);
 
   const upgradeMessage = language === "English" 
     ? "# Upgrade to Pro to preview llms.txt\n\nThis feature requires a Pro subscription."
     : "# 升级到 Pro 版以预览 llms.txt\n\n此功能需要 Pro 订阅。";
   
-  const text = !canExport 
-    ? upgradeMessage 
-    : (fetcher.data?.text || (language === "English" ? "# Generating..." : "# 生成中..."));
+  // 根据 fetcher 状态确定显示内容
+  const isLoading = fetcher.state === "loading";
+  const hasError = fetcher.data && !fetcher.data.ok;
+  
+  let text: string;
+  if (!canExport) {
+    text = upgradeMessage;
+  } else if (isLoading) {
+    text = language === "English" ? "# Loading..." : "# 加载中...";
+  } else if (hasError) {
+    // API 返回错误（如 403 权限不足、429 速率限制）
+    const errorMsg = fetcher.data?.message || (language === "English" ? "Failed to load" : "加载失败");
+    text = language === "English" 
+      ? `# Error: ${errorMsg}\n\n# Please try again or check your subscription.`
+      : `# 错误：${errorMsg}\n\n# 请重试或检查您的订阅状态。`;
+  } else if (fetcher.data?.text) {
+    text = fetcher.data.text;
+  } else {
+    // 初始状态，尚未加载
+    text = language === "English" ? "# Generating..." : "# 生成中...";
+  }
+
+  // 按钮状态：加载中或没有有效内容时禁用
+  const isButtonDisabled = !canExport || isLoading || hasError || !fetcher.data?.text;
 
   const copy = async () => {
-    if (!canExport) {
-      shopify.toast.show?.(language === "English" ? "Upgrade to Pro to copy." : "升级到 Pro 版以复制。");
+    if (isButtonDisabled) {
+      if (!canExport) {
+        shopify.toast.show?.(language === "English" ? "Upgrade to Pro to copy." : "升级到 Pro 版以复制。");
+      }
       return;
+    }
+    // 清理之前的 timer
+    if (copyTimeoutRef.current) {
+      clearTimeout(copyTimeoutRef.current);
     }
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
-    } catch { void 0; }
+      copyTimeoutRef.current = setTimeout(() => setCopied(false), 2000);
+    } catch { 
+      // 回退方案
+      try {
+        const textarea = document.createElement("textarea");
+        textarea.value = text;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textarea);
+        setCopied(true);
+        copyTimeoutRef.current = setTimeout(() => setCopied(false), 2000);
+      } catch {
+        shopify.toast.show?.(language === "English" ? "Copy failed" : "复制失败");
+      }
+    }
   };
 
   return (
     <div>
-      <textarea readOnly className={styles.textarea} value={text} rows={10} style={!canExport ? { opacity: 0.6 } : {}} />
+      <textarea 
+        readOnly 
+        className={styles.textarea} 
+        value={text} 
+        rows={10} 
+        style={!canExport || hasError ? { opacity: 0.6 } : {}} 
+      />
       <div className={styles.inlineActions}>
-        <button type="button" className={styles.secondaryButton} onClick={copy} data-action="llms-copy">
-          {copied ? (language === "English" ? "Copied" : "已复制") : (language === "English" ? "Copy" : "复制")}
+        <button 
+          type="button" 
+          className={styles.secondaryButton} 
+          onClick={copy} 
+          disabled={isButtonDisabled}
+          style={isButtonDisabled ? { opacity: 0.6, cursor: "not-allowed" } : {}}
+          data-action="llms-copy"
+        >
+          {isLoading 
+            ? (language === "English" ? "Loading..." : "加载中...") 
+            : copied 
+              ? (language === "English" ? "Copied" : "已复制") 
+              : (language === "English" ? "Copy" : "复制")}
         </button>
         <a 
-          href={canExport ? "/api/llms-txt-preview?download=1" : "#"}
+          href={canExport && !isLoading ? "/api/llms-txt-preview?download=1" : "#"}
           className={styles.primaryButton}
           onClick={(e) => handleDownload(e, "/api/llms-txt-preview?download=1", "llms.txt")}
-          style={!canExport ? { opacity: 0.6 } : {}}
+          style={!canExport || isLoading ? { opacity: 0.6, pointerEvents: isLoading ? "none" : "auto" } : {}}
         >
           {language === "English" ? "Download llms.txt" : "下载 llms.txt"}
         </a>

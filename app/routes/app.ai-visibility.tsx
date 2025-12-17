@@ -1050,10 +1050,10 @@ function LlmsTxtGenerator({ shopInfo, en }: { shopInfo: { name: string; url: str
       <div style={{ marginTop: 12, padding: 12, background: "#f6ffed", borderRadius: 6, fontSize: 13 }}>
         <strong>✅ {en ? "Auto-hosted:" : "自动托管："}</strong>{" "}
         {en
-          ? "Your llms.txt is automatically hosted at your store's /a/llms/llms.txt URL via our App Proxy."
-          : "您的 llms.txt 已通过我们的 App Proxy 自动托管在您店铺的 /a/llms/llms.txt 地址。"}
+          ? "Your llms.txt is automatically hosted at your store's /a/llms URL via our App Proxy."
+          : "您的 llms.txt 已通过我们的 App Proxy 自动托管在您店铺的 /a/llms 地址。"}
         <a
-          href={`${shopInfo.url}/a/llms/llms.txt`}
+          href={`${shopInfo.url}/a/llms`}
           target="_blank"
           rel="noreferrer"
           style={{ marginLeft: 8, color: "#008060" }}

@@ -18,7 +18,7 @@ type OverviewShape = {
 
 export const buildOverviewShape = (
   data: DashboardData,
-  language: string = "中文"
+  language: string = "English"
 ): OverviewShape => {
   const aiAov = data.overview.aiOrders ? data.overview.aiGMV / data.overview.aiOrders : 0;
   const allAov = data.overview.totalOrders ? data.overview.totalGMV / data.overview.totalOrders : 0;
@@ -89,4 +89,3 @@ export const INTENT_TEMPLATES: Record<CopilotIntent, (ctx: TemplateContext) => s
       ? INTENT_TEMPLATES_EN.ai_top_products(ctx) 
       : INTENT_TEMPLATES_ZH.ai_top_products(ctx),
 };
-

@@ -498,7 +498,7 @@ export async function getFunnelData(
 ): Promise<FunnelData> {
   const rangeKey = options.range || "30d";
   const timezone = options.timezone || "UTC";
-  const language = options.language || "中文";
+  const language = options.language || "English";
   const isEnglish = language === "English";
   // 修复：传递时区参数确保日期范围计算正确
   const range = resolveDateRange(rangeKey, new Date(), undefined, undefined, timezone);

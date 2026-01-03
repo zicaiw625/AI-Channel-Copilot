@@ -299,7 +299,7 @@ export const defaultSettings: SettingsDefaults = {
     exposeBlogs: false,
   },
   retentionMonths: 6,
-  languages: ["中文", "English"],
+  languages: ["English", "中文"],
   timezones: ["UTC", "America/Los_Angeles", "Asia/Shanghai", "Europe/London"],
   pipelineStatuses: defaultPipelineStatuses,
 };

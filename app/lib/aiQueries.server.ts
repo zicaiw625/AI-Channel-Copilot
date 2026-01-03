@@ -807,7 +807,7 @@ export const getAiDashboardData = async (
           undefined,
         );
 
-  const language = settings.languages && settings.languages[0] ? settings.languages[0] : "中文";
+  const language = settings.languages && settings.languages[0] ? settings.languages[0] : "English";
   const clampedNote = t(language as Lang, "data_truncated_sample");
   const localizeNote = (note: string | null): string | null => {
     if (!note || language !== "English") return note;

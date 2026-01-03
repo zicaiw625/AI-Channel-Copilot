@@ -442,7 +442,7 @@ async function fetchRecentProducts(
 function productNodeToPerformance(
   product: ProductNode, 
   shopDomain: string, 
-  language: string = "中文"
+  language: string = "English"
 ): ProductAIPerformance {
   const description = product.description || "";
   const hasDescription = Boolean(description.trim());
@@ -537,7 +537,7 @@ const PRODUCT_SUGGESTION_TEXTS = {
 /**
  * 生成产品级改进建议（支持双语）
  */
-function generateProductSuggestions(product: ProductNode, language: string = "中文"): string[] {
+function generateProductSuggestions(product: ProductNode, language: string = "English"): string[] {
   const suggestions: string[] = [];
   const isEnglish = language === "English";
   const lang = isEnglish ? "en" : "zh";
@@ -925,7 +925,7 @@ export async function generateAIOptimizationReport(
   } = {},
 ): Promise<AIOptimizationReport> {
   const rangeKey = options.range || "30d";
-  const language = options.language || "中文";
+  const language = options.language || "English";
   const range = resolveDateRange(rangeKey, new Date());
   const exposurePrefs = options.exposurePreferences;
   

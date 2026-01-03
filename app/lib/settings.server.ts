@@ -43,7 +43,7 @@ const buildDefaultSettingsCreateData = (
   writeOrderTags: defaultSettings.tagging.writeOrderTags,
   writeCustomerTags: defaultSettings.tagging.writeCustomerTags,
   taggingDryRun: defaultSettings.tagging.dryRun ?? false,
-  language: defaultSettings.languages[0] || "中文",
+  language: defaultSettings.languages[0] || "English",
   timezone: defaultSettings.timezones[0] || "UTC",
   gmvMetric: defaultSettings.gmvMetric,
   retentionMonths: normalizeRetentionMonths(

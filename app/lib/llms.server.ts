@@ -400,7 +400,7 @@ export const buildLlmsTxt = async (
   const includeProductDetails = options?.includeProductDetails ?? true;
   const includeFAQs = options?.includeFAQs ?? true;
   const lines: string[] = [];
-  const language = (settings.languages && settings.languages[0]) || "中文";
+  const language = (settings.languages && settings.languages[0]) || "English";
   const isEnglish = language === "English";
 
   // === Header ===

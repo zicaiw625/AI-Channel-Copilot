@@ -9,7 +9,7 @@
  */
 
 import { logger } from "../logger.server";
-import { metrics, MetricNames, recordDbMetrics } from "./collector";
+import { metrics, recordDbMetrics } from "./collector";
 
 // ============================================================================
 // Types

@@ -16,7 +16,7 @@
  */
 
 import { logger } from '../logger.server';
-import { getRedisRateLimitStore, isRedisRateLimitEnabled } from './redisRateLimit.server';
+import { getRedisRateLimitStore } from './redisRateLimit.server';
 
 interface RateLimitRule {
   maxRequests: number;

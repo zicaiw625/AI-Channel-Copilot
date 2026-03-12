@@ -22,7 +22,6 @@ import { startOfDay, formatDateOnly } from "../dateUtils";
 import { loadCustomersByIdsLegacy as loadCustomersByIds } from "../persistence.server";
 import { buildOrdersCsv, buildProductsCsv, buildCustomersCsv } from "../export";
 import {
-  SOURCE_NAME_FILTER,
   CHANNEL_COLORS,
   toNumber,
   computeRepeatRate,

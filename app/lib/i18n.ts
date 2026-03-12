@@ -66,7 +66,7 @@ const dict: Record<string, TranslationEntry> = {
   badge_conservative_orders: { zh: "保守识别 · Shopify Orders", en: "Conservative · Shopify Orders" },
   dashboard_title: { zh: "AI 渠道基础仪表盘", en: "AI Channels Dashboard" },
   dashboard_subheading: { zh: "自动识别来自 ChatGPT / Perplexity / Gemini / Copilot 等 AI 助手的订单，给出保守 GMV 估计与差异洞察。", en: "Automatically detects orders from ChatGPT / Perplexity / Gemini / Copilot and provides conservative GMV estimate and insights." },
-  dashboard_warning: { zh: "说明：AI 渠道识别为保守估计，依赖 referrer / UTM / 标签，部分 AI 会隐藏来源；仅统计站外 AI 点击 → 到站 → 完成订单的链路，不含 AI 应用内曝光或自然流量。", en: "Note: AI attribution is conservative, relies on referrer/UTM/tags, some AI hide referrer; counts only offsite AI click → land → order, excludes in-app exposure or generic traffic." },
+  dashboard_warning: { zh: "AI 渠道识别为保守估计，依赖 referrer / UTM / 标签，部分 AI 会隐藏来源；仅统计站外 AI 点击 → 到站 → 完成订单的链路，不含 AI 应用内曝光或自然流量。", en: "AI attribution is conservative, relies on referrer/UTM/tags, some AI hide referrer; counts only offsite AI click → land → order, excludes in-app exposure or generic traffic." },
   meta_synced_at: { zh: "同步时间：", en: "Synced: " },
   meta_updated_at: { zh: "数据最近更新：", en: "Last Updated: " },
   meta_range: { zh: "区间：", en: "Range: " },

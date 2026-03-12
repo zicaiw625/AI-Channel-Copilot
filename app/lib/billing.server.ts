@@ -76,9 +76,8 @@ export {
 
 export {
   type PlanId,
-  type PlanTier,
   type PlanConfig,
-  PLAN_CONFIGS,
+  BILLING_PLANS,
   PRIMARY_BILLABLE_PLAN_ID,
   getPlanConfig,
   resolvePlanByShopifyName,

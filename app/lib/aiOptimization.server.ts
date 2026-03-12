@@ -10,7 +10,7 @@ import { logger } from "./logger.server";
 import type { AdminGraphqlClient } from "./graphqlSdk.server";
 import { createGraphqlSdk } from "./graphqlSdk.server";
 import { MAX_ORDER_PRODUCTS } from "./constants";
-import { isProductSchemaEmbedEnabled, getAppEmbedDeepLink, getAppEmbedManualPath } from "./themeEmbedStatus.server";
+import { isProductSchemaEmbedEnabled, getAppEmbedDeepLink } from "./themeEmbedStatus.server";
 import { getEmbedCopy, toEmbedStatus, MANUAL_PATH_COPY } from "./productSchemaEmbedCopy";
 
 // ============================================================================

@@ -140,8 +140,11 @@ export class RedisRateLimitStore implements RateLimitStore {
         logger.info('[RedisRateLimit] Connected to Redis');
       });
       
-      this.client.on('error', (err: Error) => {
-        logger.error('[RedisRateLimit] Redis error', { error: err.message });
+      this.client.on('error', (...args: unknown[]) => {
+        const err = args[0];
+        logger.error('[RedisRateLimit] Redis error', {
+          error: err instanceof Error ? err.message : String(err),
+        });
       });
       
       this.client.on('close', () => {

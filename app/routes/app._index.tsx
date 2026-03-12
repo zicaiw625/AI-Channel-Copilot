@@ -227,7 +227,7 @@ export default function Index() {
   
   // 【修复】动态计算 backfill 是否可用，基于轮询数据而非 loader 静态数据
   // 这样用户不需要刷新页面，按钮会自动恢复可用
-  const backfills = jobFetcher.data?.backfills?.recent || [];
+  const backfills = useMemo(() => jobFetcher.data?.backfills?.recent || [], [jobFetcher.data]);
   
   // 【修复】检查任务是否真的在活动（而不是卡住了）
   // 后端已在 api.jobs 返回前清理卡住任务，这里是前端的保底判断
@@ -353,7 +353,8 @@ export default function Index() {
     sampleNote,
     exports: exportData,
   } = data;
-  const isLowSample = overview.aiOrders < LOW_SAMPLE_THRESHOLD;
+  const hasAnyData = dataSource === "live" || dataSource === "stored" || dataSource === "demo";
+  const isLowSample = hasAnyData && overview.aiOrders > 0 && overview.aiOrders < LOW_SAMPLE_THRESHOLD;
 
   const filteredRecentOrders = useMemo(() => {
     const keyword = debugOrderFilter.trim().toLowerCase();

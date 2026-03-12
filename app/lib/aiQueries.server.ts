@@ -30,7 +30,6 @@ import {
   toNumber,
   getSum,
   computeRepeatRate,
-  type OrderAggregateResult,
 } from "./queries/helpers";
 import { TREND_DATA_DB_AGGREGATION_THRESHOLD } from "./constants";
 import { createQueryTimer } from "./metrics/collector";

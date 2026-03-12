@@ -100,6 +100,10 @@ export default function Billing() {
   const activePlan = plans.find((plan) => plan.id === activePlanId) ?? plans[0];
   const priceLabel = activePlan.priceUsd === 0 ? "$0" : `$${activePlan.priceUsd}`;
   const showTrialBanner = isTrialing && activePlan.remainingTrialDays > 0 && !hasNoPlan;
+  const trialPlanName = activePlan?.name || BILLING_PLANS[PRIMARY_BILLABLE_PLAN_ID].name;
+  const trialBannerStyle = activePlanId === "growth"
+    ? { background: "#f6ffed", border: "1px solid #b7eb8f", color: "#389e0d" }
+    : { background: "#f4f5fa", border: "1px solid #e1e3e5", color: "#5c6ac4" };
   
   // Modal state for downgrade confirmation
   const [showDowngradeModal, setShowDowngradeModal] = useState(false);
@@ -212,15 +216,13 @@ export default function Billing() {
                 <div style={{ 
                   marginBottom: 16, 
                   padding: 12, 
-                  background: "#f4f5fa", 
-                  border: "1px solid #e1e3e5",
-                  borderRadius: 8, 
-                  color: "#5c6ac4" 
+                  borderRadius: 8,
+                  ...trialBannerStyle,
                 }}>
                   <div style={{ fontWeight: 500 }}>
                     ✨ {en
-                      ? `Enjoying your Pro trial · ${activePlan.remainingTrialDays} day${activePlan.remainingTrialDays === 1 ? '' : 's'} remaining`
-                      : `正在体验 Pro 全部功能 · 剩余 ${activePlan.remainingTrialDays} 天`}
+                      ? `Enjoying your ${trialPlanName} trial · ${activePlan.remainingTrialDays} day${activePlan.remainingTrialDays === 1 ? '' : 's'} remaining`
+                      : `正在体验 ${trialPlanName} 全部功能 · 剩余 ${activePlan.remainingTrialDays} 天`}
                   </div>
                   {formattedTrialEndDate && (
                     <div style={{ fontSize: 12, marginTop: 4, color: "#637381" }}>

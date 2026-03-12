@@ -3,7 +3,7 @@
  * 测试计费状态管理的核心逻辑
  */
 
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   isValidShopDomain,
   validateShopDomain,
@@ -19,7 +19,6 @@ import {
   validatePlanId,
   validateAndGetPlan,
   BILLING_PLANS,
-  type PlanId,
 } from "../app/lib/billing/plans";
 
 // Mock prisma to avoid database calls in unit tests

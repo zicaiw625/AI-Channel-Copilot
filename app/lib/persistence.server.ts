@@ -1,4 +1,5 @@
 import prisma from "../db.server";
+import { Prisma } from "@prisma/client";
 import { type DateRange, type OrderRecord } from "./aiData";
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 import { getPlatform, isDemoMode } from "./runtime.server";

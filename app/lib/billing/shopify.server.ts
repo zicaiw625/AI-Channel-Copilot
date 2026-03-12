@@ -18,6 +18,7 @@ import {
   upsertBillingState,
   setSubscriptionTrialState,
   setSubscriptionActiveState,
+  setSubscriptionExpiredState,
   DAY_IN_MS,
   toPlanId,
   type BillingState,
@@ -60,6 +61,22 @@ type CreateSubscriptionResponse = {
       appSubscription?: { id: string };
     };
   };
+};
+
+export type ActiveSubscriptionInfo = {
+  id: string;
+  name: string;
+  status: string;
+  trialDays: number | null;
+  createdAt: Date | null;
+  currentPeriodEnd: Date | null;
+};
+
+export type PaidSubscriptionInfo = {
+  id: string;
+  planId: PlanId;
+  status: string;
+  createdAt: Date | null;
 };
 
 // ============================================================================
@@ -238,6 +255,28 @@ const syncSubscriptionFromShopifyInternal = async (
         
         if (!activeSub) {
           logger.info("[billing] No active subscription found on Shopify", { shopDomain });
+          const existingState = await getBillingState(shopDomain);
+
+          const isFreePlan =
+            existingState?.billingPlan === "free" &&
+            existingState?.billingState === "FREE_ACTIVE";
+          const isNoPlan = existingState?.billingState === "NO_PLAN";
+
+          if (existingState && !isFreePlan && !isNoPlan) {
+            const planId = toPlanId(existingState.billingPlan);
+            if (planId) {
+              await setSubscriptionExpiredState(shopDomain, planId, "NONE");
+            } else {
+              await upsertBillingState(shopDomain, {
+                billingPlan: "NO_PLAN",
+                billingState: "EXPIRED_NO_SUBSCRIPTION",
+                lastSubscriptionStatus: "NONE",
+                lastTrialStartAt: null,
+                lastTrialEndAt: null,
+              });
+            }
+          }
+
           return { synced: true, status: "NONE" };
         }
         
@@ -267,7 +306,7 @@ const syncSubscriptionFromShopifyInternal = async (
         
         // Update local billing state
         if (isTrialing && plan.trialSupported) {
-          await setSubscriptionTrialState(shopDomain, plan.id, trialEnd, activeSub.status);
+          await setSubscriptionTrialState(shopDomain, plan.id, trialEnd, activeSub.status, createdAt);
         } else if (shouldGrantTrial) {
           const remainingTrialDays = plan.defaultTrialDays - (existingState?.usedTrialDays || 0);
           const localTrialEnd = new Date(Date.now() + remainingTrialDays * DAY_IN_MS);
@@ -393,6 +432,55 @@ export const getActiveSubscriptionDetails = async (
   if (!sub) return null;
   const currentPeriodEnd = sub.currentPeriodEnd ? new Date(sub.currentPeriodEnd) : null;
   return { id: sub.id, name: sub.name, status: sub.status || null, trialDays: sub.trialDays ?? null, currentPeriodEnd };
+};
+
+export const listActiveSubscriptions = async (
+  admin: AdminGraphqlClient,
+  shopDomain?: string,
+): Promise<ActiveSubscriptionInfo[]> => {
+  const sdk = createGraphqlSdk(admin, shopDomain);
+  const QUERY = `#graphql
+    query ActiveSubscriptionsList {
+      currentAppInstallation {
+        activeSubscriptions { id name status trialDays createdAt currentPeriodEnd }
+      }
+    }
+  `;
+  const resp = await sdk.request("activeSubscriptionsList", QUERY, {});
+  if (!resp.ok) {
+    throw new Error("Failed to fetch active subscriptions");
+  }
+  const json = (await resp.json()) as {
+    data?: { currentAppInstallation?: { activeSubscriptions?: { id: string; name: string; status: string; trialDays?: number | null; createdAt?: string | null; currentPeriodEnd?: string | null }[] } };
+  };
+  const subs = json.data?.currentAppInstallation?.activeSubscriptions || [];
+  return subs.map((s) => ({
+    id: s.id,
+    name: s.name,
+    status: s.status,
+    trialDays: s.trialDays ?? null,
+    createdAt: s.createdAt ? new Date(s.createdAt) : null,
+    currentPeriodEnd: s.currentPeriodEnd ? new Date(s.currentPeriodEnd) : null,
+  }));
+};
+
+export const listPaidSubscriptions = async (
+  admin: AdminGraphqlClient,
+  shopDomain?: string,
+): Promise<PaidSubscriptionInfo[]> => {
+  const subs = await listActiveSubscriptions(admin, shopDomain);
+  const paid: PaidSubscriptionInfo[] = [];
+  for (const sub of subs) {
+    const plan = resolvePlanByShopifyName(sub.name);
+    if (!plan || plan.priceUsd <= 0) continue;
+    paid.push({
+      id: sub.id,
+      planId: plan.id,
+      status: sub.status,
+      createdAt: sub.createdAt,
+    });
+  }
+  return paid;
 };
 
 // ============================================================================

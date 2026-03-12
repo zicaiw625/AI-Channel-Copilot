@@ -9,6 +9,8 @@ import {
   calculateRemainingTrialDays,
   requestSubscription,
   activateFreePlan,
+  listPaidSubscriptions,
+  cancelSubscription,
   getBillingState,
 } from "../lib/billing.server";
 import { getSettings, syncShopPreferences } from "../lib/settings.server";
@@ -722,6 +724,40 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           ok: false,
           message: plan.status === "coming_soon" ? "Plan is coming soon" : "Plan unavailable",
         }, { status: 400 });
+      }
+
+      // 防止重复订阅：先清理已存在的付费订阅（含重复/旧计划）
+      try {
+        const paidSubs = await listPaidSubscriptions(admin, shopDomain);
+        const targetSubs = paidSubs.filter((sub) => sub.planId === planId);
+        const pendingTarget = targetSubs.find((sub) => sub.status === "PENDING");
+        if (pendingTarget) {
+          return Response.json({
+            ok: false,
+            message: "Subscription pending in Shopify. Please complete it in Shopify before upgrading again.",
+          }, { status: 409 });
+        }
+
+        let keepTarget: typeof paidSubs[number] | null = null;
+        const activeTarget = targetSubs.filter((sub) => sub.status === "ACTIVE");
+        if (activeTarget.length > 0) {
+          activeTarget.sort((a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0));
+          keepTarget = activeTarget[0];
+        }
+
+        const toCancel = paidSubs.filter((sub) => !keepTarget || sub.id !== keepTarget.id);
+        for (const sub of toCancel) {
+          await cancelSubscription(admin, sub.id, true);
+        }
+
+        if (keepTarget) {
+          return Response.json({ ok: true });
+        }
+      } catch (_e) {
+        return Response.json({
+          ok: false,
+          message: "Failed to cancel existing subscription in Shopify. Please try again or manage it in Shopify.",
+        }, { status: 500 });
       }
 
       // 关键：在创建订阅前刷新开发店标记，避免 dev store 误发 real charge（会在 approve 时被 Shopify 拒绝）

@@ -12,6 +12,7 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["tests/**/*.test.{ts,tsx}", "app/routes/__tests__/**/*.test.ts"],
+    setupFiles: ["tests/setup.ts"],
     // Use vmThreads to avoid tinypool stack overflow issues
     pool: "vmThreads",
     sequence: {

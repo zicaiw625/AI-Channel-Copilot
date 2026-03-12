@@ -12,7 +12,7 @@ import {
   requestSubscription,
   calculateRemainingTrialDays,
   activateFreePlan,
-  getActiveSubscriptionDetails,
+  listPaidSubscriptions,
   cancelSubscription,
   getBillingState,
 } from "../lib/billing.server";
@@ -560,6 +560,40 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         return Response.json({ ok: true });
       }
 
+      // 防止重复订阅：先清理已存在的付费订阅（含重复/旧计划）
+      try {
+        const paidSubs = await listPaidSubscriptions(admin!, shopDomain);
+        const targetSubs = paidSubs.filter((sub) => sub.planId === planId);
+        const pendingTarget = targetSubs.find((sub) => sub.status === "PENDING");
+        if (pendingTarget) {
+          return Response.json({
+            ok: false,
+            message: "Subscription pending in Shopify. Please complete it in Shopify before upgrading again.",
+          }, { status: 409 });
+        }
+
+        let keepTarget: typeof paidSubs[number] | null = null;
+        const activeTarget = targetSubs.filter((sub) => sub.status === "ACTIVE");
+        if (activeTarget.length > 0) {
+          activeTarget.sort((a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0));
+          keepTarget = activeTarget[0];
+        }
+
+        const toCancel = paidSubs.filter((sub) => !keepTarget || sub.id !== keepTarget.id);
+        for (const sub of toCancel) {
+          await cancelSubscription(admin!, sub.id, true);
+        }
+
+        if (keepTarget) {
+          return Response.json({ ok: true });
+        }
+      } catch (_e) {
+        return Response.json({
+          ok: false,
+          message: "Failed to cancel existing subscription in Shopify. Please try again or manage it in Shopify.",
+        }, { status: 500 });
+      }
+
       // 关键：在创建订阅前刷新开发店标记，避免 dev store 误发 real charge（会在 approve 时被 Shopify 拒绝）
       try {
         await detectAndPersistDevShop(admin!, shopDomain);
@@ -585,34 +619,23 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
 
     if (intent === "downgrade") {
-      const paidPlans = Object.values(BILLING_PLANS).filter((plan) => plan.priceUsd > 0);
-      let activeDetails: { id: string; planId: PlanId } | null = null;
-      
-      // Step 1: 查找当前活跃的付费订阅
-      for (const plan of paidPlans) {
-        const details = await getActiveSubscriptionDetails(admin!, plan.shopifyName);
-        if (details?.id) { 
-          activeDetails = { id: details.id, planId: plan.id }; 
-          break; 
-        }
-      }
-      
-      // Step 2: 如果有活跃订阅，先在 Shopify 取消
+      // Step 1: 查找并取消所有活跃的付费订阅（防止遗留重复订阅）
       let shopifyCancelled = false;
-      if (activeDetails) {
-        try { 
-          await cancelSubscription(admin!, activeDetails.id, true);
-          shopifyCancelled = true;
-        } catch (_cancelError) {
-          // Shopify 取消失败，不继续操作本地状态
-          return Response.json({ 
-            ok: false, 
-            message: "Failed to cancel subscription in Shopify. Please try again or contact support." 
-          }, { status: 500 });
+      try {
+        const paidSubs = await listPaidSubscriptions(admin!, shopDomain);
+        for (const sub of paidSubs) {
+          await cancelSubscription(admin!, sub.id, true);
         }
+        shopifyCancelled = paidSubs.length > 0;
+      } catch (_cancelError) {
+        // Shopify 取消失败，不继续操作本地状态
+        return Response.json({ 
+          ok: false, 
+          message: "Failed to cancel subscription in Shopify. Please try again or contact support." 
+        }, { status: 500 });
       }
       
-      // Step 3: Shopify 取消成功（或无订阅需要取消），更新本地状态
+      // Step 2: Shopify 取消成功（或无订阅需要取消），更新本地状态
       try {
         await activateFreePlan(shopDomain);
       } catch (_localError) {

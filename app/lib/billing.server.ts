@@ -61,6 +61,8 @@ export {
   requestSubscription,
   
   // Helper Functions
+  listActiveSubscriptions,
+  listPaidSubscriptions,
   computeIsTestMode,
   shouldSkipBillingForPath,
   calculateRemainingTrialDays,

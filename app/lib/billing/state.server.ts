@@ -309,13 +309,14 @@ export const setSubscriptionTrialState = async (
   planId: PlanId,
   trialEnd: Date | null,
   status = "ACTIVE",
+  trialStart?: Date | null,
 ): Promise<void> => {
   const plan = getPlanConfig(planId);
   if (!plan.trialSupported) {
     await setSubscriptionActiveState(shopDomain, planId, status);
     return;
   }
-  const now = new Date();
+  const now = trialStart ?? new Date();
   const computedTrialEnd =
     trialEnd ?? new Date(now.getTime() + plan.defaultTrialDays * DAY_IN_MS);
   await upsertBillingState(shopDomain, {

@@ -10,6 +10,7 @@ import {
   toPlanId,
   planStateKey,
   computeIncrementalTrialUsage,
+  upsertBillingState,
   DAY_IN_MS,
   type BillingState,
 } from "../app/lib/billing/state.server";
@@ -267,6 +268,42 @@ describe("Plan Configuration", () => {
 describe("Billing State Constants", () => {
   it("DAY_IN_MS is correct", () => {
     expect(DAY_IN_MS).toBe(24 * 60 * 60 * 1000);
+  });
+});
+
+describe("Billing State Upsert", () => {
+  it("does not clear trial timestamps on partial updates", async () => {
+    const prismaMock = (await import("../app/db.server")).default as {
+      shopBillingState: {
+        upsert: ReturnType<typeof vi.fn>;
+      };
+    };
+
+    const trialStart = new Date("2026-03-10T00:00:00.000Z");
+    const trialEnd = new Date("2026-03-24T00:00:00.000Z");
+
+    prismaMock.shopBillingState.upsert.mockResolvedValue({
+      isDevShop: false,
+      billingPlan: "pro",
+      billingState: "PRO_TRIALING",
+      firstInstalledAt: null,
+      usedTrialDays: 0,
+      hasEverSubscribed: true,
+      lastSubscriptionStatus: "ACTIVE",
+      lastTrialStartAt: trialStart,
+      lastTrialEndAt: trialEnd,
+      lastCheckedAt: new Date(),
+      lastUninstalledAt: null,
+      lastReinstalledAt: null,
+    });
+
+    await upsertBillingState("test-store.myshopify.com", { isDevShop: true });
+
+    const callArg = prismaMock.shopBillingState.upsert.mock.calls.at(-1)?.[0] as {
+      update: Record<string, unknown>;
+    };
+    expect(callArg.update.lastTrialStartAt).toBeUndefined();
+    expect(callArg.update.lastTrialEndAt).toBeUndefined();
   });
 });
 

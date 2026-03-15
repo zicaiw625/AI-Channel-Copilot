@@ -189,8 +189,12 @@ export const upsertBillingState = async (
     throw new Error(`Invalid shop domain: ${shopDomain?.slice(0, 50) || "(empty)"}`);
   }
   
+  const hasUpdate = (key: keyof BillingState): boolean =>
+    Object.prototype.hasOwnProperty.call(updates, key);
+
   // 重要：不要给 isDevShop 和 hasEverSubscribed 设置默认值 (如 ?? false)
   // 因为调用方可能只想更新部分字段，如果设为 false 会覆盖数据库中的正确值
+  // 同理：nullable 字段只有在调用方明确传入时才写入，避免无意清空已有值。
   const payload: BillingStatePayload = {
     isDevShop: updates.isDevShop,
     billingPlan: updates.billingPlan,
@@ -198,12 +202,22 @@ export const upsertBillingState = async (
     firstInstalledAt: updates.firstInstalledAt,
     usedTrialDays: updates.usedTrialDays,
     hasEverSubscribed: updates.hasEverSubscribed,
-    lastSubscriptionStatus: updates.lastSubscriptionStatus,
-    lastTrialStartAt: updates.lastTrialStartAt || null,
-    lastTrialEndAt: updates.lastTrialEndAt || null,
+    lastSubscriptionStatus: hasUpdate("lastSubscriptionStatus")
+      ? (updates.lastSubscriptionStatus ?? null)
+      : undefined,
+    lastTrialStartAt: hasUpdate("lastTrialStartAt")
+      ? (updates.lastTrialStartAt ?? null)
+      : undefined,
+    lastTrialEndAt: hasUpdate("lastTrialEndAt")
+      ? (updates.lastTrialEndAt ?? null)
+      : undefined,
     lastCheckedAt: updates.lastCheckedAt || new Date(),
-    lastUninstalledAt: updates.lastUninstalledAt || null,
-    lastReinstalledAt: updates.lastReinstalledAt || null,
+    lastUninstalledAt: hasUpdate("lastUninstalledAt")
+      ? (updates.lastUninstalledAt ?? null)
+      : undefined,
+    lastReinstalledAt: hasUpdate("lastReinstalledAt")
+      ? (updates.lastReinstalledAt ?? null)
+      : undefined,
   };
   
   // Clean undefined values - use type-safe approach

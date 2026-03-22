@@ -1067,8 +1067,8 @@ export default function AIVisibility() {
     <s-page heading={en ? "AI Visibility Suite" : "AI 可见性套件"}>
       <div className={styles.page}>
         {/* 顶部导航 */}
-        <div style={{ marginBottom: 16, display: "flex", gap: 12, justifyContent: "space-between" }}>
-          <div style={{ display: "flex", gap: 12 }}>
+        <div style={{ marginBottom: 16, display: "flex", gap: 12, justifyContent: "space-between", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
             <Link to="/app" className={styles.secondaryButton}>
               ← {en ? "Back to Dashboard" : "返回仪表盘"}
             </Link>
@@ -1099,24 +1099,50 @@ export default function AIVisibility() {
         </div>
 
         {/* 介绍卡片 */}
-        <div className={styles.card}>
+        <div className={`${styles.card} ${styles.heroCard}`}>
           <div className={styles.sectionHeader}>
             <div>
-              <p className={styles.sectionLabel}>{en ? "One-Click AI Optimization" : "一键 AI 优化"}</p>
+              <p className={styles.sectionLabel}>{en ? "Revenue-to-Visibility Workflow" : "从收入验证到可见性优化"}</p>
               <h3 className={styles.sectionTitle}>
-                {en ? "Make Your Store AI-Ready" : "让你的店铺更容易被 AI 推荐"}
+                {en ? "Make Your Store Easier for AI to Understand and Recommend" : "让你的店铺更容易被 AI 理解并推荐"}
               </h3>
             </div>
             <span className={styles.badge} style={{ background: "#f6ffed", color: "#389e0d" }}>
               {en ? "Growth Feature" : "Growth 功能"}
             </span>
           </div>
-          
-          <p className={styles.helpText}>
+
+          <p className={styles.heroLead}>
             {en
-              ? "Generate Schema markup, FAQ structured data, and llms.txt to help AI assistants understand and recommend your products."
-              : "生成 Schema 标记、FAQ 结构化数据和 llms.txt，帮助 AI 助手理解和推荐您的产品。"}
+              ? "After validating AI revenue in the dashboard, use this page to improve discovery with Schema, FAQ and llms.txt. Think of it as the optimization layer that sits on top of your attribution data."
+              : "当你已经在 Dashboard 里验证 AI 流量能带单之后，这一页就是下一步的优化层：用 Schema、FAQ 和 llms.txt 提升 AI 对店铺的理解和推荐概率。"}
           </p>
+
+          <div className={styles.summaryGrid}>
+            <div className={styles.summaryItem}>
+              <span className={styles.summaryLabel}>{en ? "Schema Embed" : "Schema Embed"}</span>
+              <span className={styles.summaryValue}>
+                {embedEnabled === true ? (en ? "Active" : "已启用") : embedEnabled === false ? (en ? "Needs enabling" : "待启用") : (en ? "Need to verify" : "待检查")}
+              </span>
+            </div>
+            <div className={styles.summaryItem}>
+              <span className={styles.summaryLabel}>llms.txt</span>
+              <span className={styles.summaryValue}>{report.llmsEnhancements.currentCoverage}% {en ? "coverage" : "覆盖率"}</span>
+            </div>
+            <div className={styles.summaryItem}>
+              <span className={styles.summaryLabel}>{en ? "Priority suggestions" : "优先建议"}</span>
+              <span className={styles.summaryValue}>{report.suggestions.length}</span>
+            </div>
+          </div>
+
+          <div className={styles.heroActions}>
+            <Link to="/app/additional#llms-txt-settings" className={styles.secondaryButton}>
+              {en ? "Open llms.txt Settings" : "打开 llms.txt 设置"}
+            </Link>
+            <Link to="/app/optimization" className={styles.secondaryButton}>
+              {en ? "Open Full Optimization Report" : "打开完整优化报告"}
+            </Link>
+          </div>
         </div>
 
         {/* 选项卡 */}
@@ -1124,6 +1150,7 @@ export default function AIVisibility() {
           display: "flex", 
           gap: 4, 
           marginBottom: 20,
+          flexWrap: "wrap",
           background: "#f4f6f8",
           padding: 4,
           borderRadius: 8,

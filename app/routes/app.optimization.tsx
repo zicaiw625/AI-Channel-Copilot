@@ -530,13 +530,52 @@ export default function AIOptimization() {
     <s-page heading={isEnglish ? "AI Optimization" : "AI 优化建议"}>
       <div className={styles.page}>
         {/* 顶部导航 */}
-        <div style={{ marginBottom: 16, display: "flex", gap: 12 }}>
+        <div style={{ marginBottom: 16, display: "flex", gap: 12, flexWrap: "wrap" }}>
           <Link to="/app" className={styles.secondaryButton}>
             ← {isEnglish ? "Back to Dashboard" : "返回仪表盘"}
           </Link>
           <Link to="/app/funnel" className={styles.primaryButton}>
             {isEnglish ? "View Funnel Analysis" : "查看漏斗分析"} →
           </Link>
+        </div>
+
+        <div className={`${styles.card} ${styles.heroCard}`}>
+          <div className={styles.sectionHeader}>
+            <div>
+              <p className={styles.sectionLabel}>{isEnglish ? "Optimization Control Center" : "优化控制台"}</p>
+              <h3 className={styles.sectionTitle}>
+                {isEnglish ? "Turn attribution signals into AI visibility actions" : "把归因结果变成可执行的 AI 可见性动作"}
+              </h3>
+            </div>
+            <span className={styles.badge}>{report.overallScore}/100</span>
+          </div>
+          <p className={styles.heroLead}>
+            {isEnglish
+              ? "This page explains what to fix next after you confirm AI traffic is valuable. Prioritize the highest-impact items first, then move into AI Visibility or llms.txt settings to apply them."
+              : "这一页负责告诉你，在确认 AI 流量有价值之后，下一步最该修什么。先处理最高优先级的问题，再进入 AI Visibility 或 llms.txt 设置页去落地。"}
+          </p>
+          <div className={styles.summaryGrid}>
+            <div className={styles.summaryItem}>
+              <span className={styles.summaryLabel}>{isEnglish ? "Overall score" : "总体评分"}</span>
+              <span className={styles.summaryValue}>{report.overallScore}/100</span>
+            </div>
+            <div className={styles.summaryItem}>
+              <span className={styles.summaryLabel}>llms.txt</span>
+              <span className={styles.summaryValue}>{report.llmsEnhancements.currentCoverage}% {isEnglish ? "coverage" : "覆盖率"}</span>
+            </div>
+            <div className={styles.summaryItem}>
+              <span className={styles.summaryLabel}>{isEnglish ? "High priority items" : "高优先级问题"}</span>
+              <span className={styles.summaryValue}>{highPrioritySuggestions.length}</span>
+            </div>
+          </div>
+          <div className={styles.heroActions}>
+            <Link to="/app/ai-visibility" className={styles.secondaryButton}>
+              {isEnglish ? "Open AI Visibility Suite" : "打开 AI 可见性套件"}
+            </Link>
+            <Link to="/app/additional#llms-txt-settings" className={styles.secondaryButton}>
+              {isEnglish ? "Configure llms.txt" : "配置 llms.txt"}
+            </Link>
+          </div>
         </div>
 
         {/* 总览分数 */}

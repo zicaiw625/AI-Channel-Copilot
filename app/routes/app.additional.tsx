@@ -442,6 +442,10 @@ export default function SettingsAndExport() {
       return true;
     });
   }, [utmMappings]);
+  const activeExposureCount = useMemo(
+    () => [exposurePreferences.exposeProducts, exposurePreferences.exposeCollections, exposurePreferences.exposeBlogs].filter(Boolean).length,
+    [exposurePreferences],
+  );
 
   const addDomain = () => {
     if (!newDomain.trim()) return;
@@ -621,8 +625,13 @@ export default function SettingsAndExport() {
     <s-page heading={language === "English" ? "Settings / Rules & Export" : "设置 / 规则 & 导出"}>
       <div className={styles.page}>
       <div className={styles.lede}>
-        <h1>{language === "English" ? "AI Channel Rules & Data Export" : "AI 渠道识别规则 & 数据导出"}</h1>
+        <h1>{language === "English" ? "Attribution Rules, llms.txt & Export" : "归因规则、llms.txt 与数据导出"}</h1>
         <p>{t(language as Lang, "settings_lede_desc")}</p>
+        <p className={styles.helpText}>
+          {language === "English"
+            ? "Use this page as the operations center for both sides of the product: attribution accuracy on one side, and llms.txt exposure / public output on the other."
+            : "这一页现在承担两条产品线的中控台角色：一边管 AI 归因是否准确，另一边管 llms.txt 的暴露范围和公开输出。"}
+        </p>
         <div className={styles.alert}>{t(language as Lang, "ai_conservative_alert")}</div>
         <p className={styles.helpText}>{t(language as Lang, "default_rules_help")}</p>
         <p className={styles.helpText}>{t(language as Lang, "tag_prefix_help")}</p>
@@ -687,6 +696,111 @@ export default function SettingsAndExport() {
         <div className={styles.alert}>{t(language as Lang, "backfill_protect_alert")}</div>
         <p className={styles.helpText}>{t(language as Lang, "backfill_help")}</p>
       </div>
+
+        <div className={styles.card}>
+          <div className={styles.sectionHeader}>
+            <div>
+              <p className={styles.sectionLabel}>{language === "English" ? "Quick Actions" : "快捷入口"}</p>
+              <h3 className={styles.sectionTitle}>
+                {language === "English" ? "Jump to the right workflow fast" : "快速进入当前最需要的操作"}
+              </h3>
+            </div>
+            <span className={styles.badge}>{language === "English" ? "Ops" : "运营"}</span>
+          </div>
+          <p className={styles.helpText}>
+            {language === "English"
+              ? "If you're tuning attribution, start with UTM and referrer rules. If you're working on AI SEO, go straight to llms.txt exposure settings."
+              : "如果你在排查归因准确率，优先看 UTM 和 referrer 规则；如果你在做 AI SEO，就直接进入 llms.txt 暴露设置。"}
+          </p>
+          <div className={styles.inlineActions}>
+            <button
+              type="button"
+              className={styles.primaryButton}
+              onClick={() => navigate("/app/utm-wizard")}
+            >
+              {language === "English" ? "Open UTM Wizard" : "打开 UTM 向导"}
+            </button>
+            <button
+              type="button"
+              className={styles.secondaryButton}
+              onClick={() => {
+                const element = document.querySelector("#llms-txt-settings");
+                element?.scrollIntoView({ behavior: "smooth", block: "start" });
+              }}
+            >
+              {language === "English" ? "Jump to llms.txt" : "跳转到 llms.txt"}
+            </button>
+            <button
+              type="button"
+              className={styles.secondaryButton}
+              onClick={() => setAdvancedExpanded(true)}
+            >
+              {language === "English" ? "Open Troubleshooting" : "打开排错工具"}
+            </button>
+          </div>
+        </div>
+
+        <div className={styles.controlGrid}>
+          <div className={`${styles.overviewCard} ${styles.overviewCardAttribution}`}>
+            <p className={styles.sectionLabel}>{language === "English" ? "Attribution Workspace" : "归因工作区"}</p>
+            <h3 className={styles.overviewTitle}>
+              {language === "English" ? "Rules, UTM, backfill and tagging live here" : "归因规则、UTM、补拉和标签都在这一侧"}
+            </h3>
+            <ul className={styles.overviewList}>
+              <li>
+                {language === "English"
+                  ? `Referrer domains: ${sanitizedDomains.length} rules`
+                  : `Referrer 域名规则：${sanitizedDomains.length} 条`}
+              </li>
+              <li>
+                {language === "English"
+                  ? `UTM sources: ${sanitizedUtmSources.length} mappings`
+                  : `UTM 来源映射：${sanitizedUtmSources.length} 条`}
+              </li>
+              <li>
+                {language === "English"
+                  ? `Tag write-back: ${tagging.writeOrderTags ? "enabled" : "off"}`
+                  : `标签回写：${tagging.writeOrderTags ? "已开启" : "关闭"}`}
+              </li>
+            </ul>
+          </div>
+
+          <div className={`${styles.overviewCard} ${styles.overviewCardVisibility}`}>
+            <p className={styles.sectionLabel}>{language === "English" ? "AI Visibility Workspace" : "AI 可见性工作区"}</p>
+            <h3 className={styles.overviewTitle}>
+              {language === "English" ? "llms.txt exposure, public URL and refresh happen here" : "llms.txt 暴露范围、公开地址和刷新都在这一侧"}
+            </h3>
+            <ul className={styles.overviewList}>
+              <li>
+                {language === "English"
+                  ? `Enabled content types: ${activeExposureCount}/3`
+                  : `已启用内容类型：${activeExposureCount}/3`}
+              </li>
+              <li>
+                {language === "English"
+                  ? `Public URL: ${shopDomain ? "/a/llms" : "Unavailable"}`
+                  : `公开地址：${shopDomain ? "/a/llms" : "不可用"}`}
+              </li>
+              <li>
+                {language === "English"
+                  ? "Language changes also refresh llms.txt immediately"
+                  : "切换语言时也会立即刷新 llms.txt"}
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <div className={styles.sectionDivider}>
+          <p className={styles.sectionLabel}>{language === "English" ? "Section 1" : "第 1 区"}</p>
+          <h2 className={styles.sectionDividerTitle}>
+            {language === "English" ? "Attribution Operations" : "归因运营与识别规则"}
+          </h2>
+          <p className={styles.sectionDividerText}>
+            {language === "English"
+              ? "Start here when you want cleaner attribution data: generate better UTM links, adjust referrer rules, and manage tag write-back or backfill behavior."
+              : "如果你的目标是让归因更准，就从这里开始：生成更规范的 UTM 链接、调整 referrer 规则，并管理补拉和标签写回。"}
+          </p>
+        </div>
 
         {/* 引导文案 - 推荐使用 UTM 链接 */}
         <div className={styles.card} style={{ background: "#f0f9ff", borderColor: "#0ea5e9" }}>
@@ -1073,6 +1187,18 @@ export default function SettingsAndExport() {
           </div>
         </div>
 
+        <div className={styles.sectionDivider}>
+          <p className={styles.sectionLabel}>{language === "English" ? "Section 2" : "第 2 区"}</p>
+          <h2 className={styles.sectionDividerTitle}>
+            {language === "English" ? "AI Visibility / llms.txt" : "AI 可见性 / llms.txt"}
+          </h2>
+          <p className={styles.sectionDividerText}>
+            {language === "English"
+              ? "Use this block when you want AI systems to discover more of your store. It controls what llms.txt exposes, where it is publicly hosted, and what the current output looks like."
+              : "当你的目标是让 AI 系统更容易发现店铺内容时，就看这一块。这里控制 llms.txt 暴露哪些内容、公开地址在哪里，以及当前输出长什么样。"}
+          </p>
+        </div>
+
         {/* llms.txt 完整卡片 - 合并偏好设置和预览 */}
         <div id="llms-txt-settings" className={styles.card}>
           <div className={styles.sectionHeader}>
@@ -1198,6 +1324,18 @@ export default function SettingsAndExport() {
           </div>
           
           <p className={styles.helpText}>{t(language as Lang, "llms_preview_help")}</p>
+        </div>
+
+        <div className={styles.sectionDivider}>
+          <p className={styles.sectionLabel}>{language === "English" ? "Section 3" : "第 3 区"}</p>
+          <h2 className={styles.sectionDividerTitle}>
+            {language === "English" ? "Export, Diagnostics & Monitoring" : "导出、诊断与监控"}
+          </h2>
+          <p className={styles.sectionDividerText}>
+            {language === "English"
+              ? "After rules and llms.txt are configured, use this last section to inspect samples, export proof for analysis, and monitor webhook / backfill health."
+              : "在归因规则和 llms.txt 配置完成后，用最后这一组来抽样检查、导出分析证据，并监控 webhook 和补拉健康度。"}
+          </p>
         </div>
 
         {/* 调试面板 - 仅在 SHOW_DEBUG_PANELS=true 时显示 */}

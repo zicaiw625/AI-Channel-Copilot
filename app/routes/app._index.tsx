@@ -24,6 +24,8 @@ import { getEffectivePlan, hasFeature, FEATURES } from "../lib/access.server";
 import { isDemoMode } from "../lib/runtime.server";
 import { readAppFlags } from "../lib/env.server";
 import { logger } from "../lib/logger.server";
+import { generateAIOptimizationReport } from "../lib/aiOptimization.server";
+import { isProductSchemaEmbedEnabled } from "../lib/themeEmbedStatus.server";
 
 // Dashboard 子组件
 import { 
@@ -90,6 +92,31 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   });
 
   const { showDebugPanels } = readAppFlags();
+  const visibilityLanguage = settings.languages?.[0] || "中文";
+  const visibilityEmbedEnabled =
+    admin && shopDomain && !authFailed ? await isProductSchemaEmbedEnabled(admin, shopDomain) : null;
+  const visibilityReport = shopDomain
+    ? await generateAIOptimizationReport(shopDomain, admin ?? undefined, {
+        range: "30d",
+        language: visibilityLanguage,
+        exposurePreferences: settings.exposurePreferences,
+        embedEnabled: visibilityEmbedEnabled,
+      })
+    : null;
+  const visibilityEnabledTypes = [
+    settings.exposurePreferences.exposeProducts ? "products" : null,
+    settings.exposurePreferences.exposeCollections ? "collections" : null,
+    settings.exposurePreferences.exposeBlogs ? "blogs" : null,
+  ].filter((value): value is string => Boolean(value));
+  const llmsCoverage = visibilityReport?.llmsEnhancements.currentCoverage ?? 0;
+  const llmsStatus: VisibilityStatus =
+    llmsCoverage >= 100 ? "active" : llmsCoverage > 0 ? "partial" : "inactive";
+  const schemaStatus: VisibilityStatus =
+    visibilityEmbedEnabled === true ? "active" : visibilityEmbedEnabled === false ? "inactive" : "unknown";
+  const visibilityTopSuggestion =
+    visibilityReport?.suggestions.find((suggestion) => suggestion.priority === "high") ??
+    visibilityReport?.suggestions[0] ??
+    null;
 
   return {
     range: context.dateRange.key,
@@ -126,6 +153,23 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     canViewFull,
     showDebugPanels, // 控制是否显示调试面板
     backfillStaleThresholdSeconds: BACKFILL_STALE_THRESHOLD_SECONDS, // 供前端判断任务是否卡住
+    visibility: {
+      overallScore: visibilityReport?.overallScore ?? 0,
+      llmsCoverage,
+      llmsStatus,
+      schemaStatus,
+      enabledTypes: visibilityEnabledTypes,
+      llmsPublicUrl: shopDomain ? `https://${shopDomain}/a/llms` : null,
+      topSuggestion: visibilityTopSuggestion
+        ? {
+            title:
+              visibilityLanguage === "English"
+                ? visibilityTopSuggestion.title.en
+                : visibilityTopSuggestion.title.zh,
+            priority: visibilityTopSuggestion.priority,
+          }
+        : null,
+    },
   };
 };
 
@@ -137,6 +181,7 @@ const fmtPercent = (value: number, fractionDigits = 1) =>
   `${(value * 100).toFixed(fractionDigits)}%`;
 
 type JobStatus = "queued" | "processing" | "completed" | "failed";
+type VisibilityStatus = "active" | "partial" | "inactive" | "unknown";
 
 export default function Index() {
   const {
@@ -158,6 +203,7 @@ export default function Index() {
     canViewFull,
     showDebugPanels,
     backfillStaleThresholdSeconds,
+    visibility,
   } = useLoaderData<typeof loader>();
   
   const uiLanguage = useUILanguage(language);
@@ -209,6 +255,36 @@ export default function Index() {
   const fmtTime = useCallback(
     (iso?: string | null) => (iso ? timeFormatter.format(new Date(iso)) : (uiLanguage === "English" ? "None" : "暂无")),
     [timeFormatter, uiLanguage],
+  );
+  const visibilityStatusMeta = useMemo<Record<VisibilityStatus, { label: string; className: string }>>(
+    () => ({
+      active: {
+        label: uiLanguage === "English" ? "Active" : "已启用",
+        className: styles.visibilityStatusActive,
+      },
+      partial: {
+        label: uiLanguage === "English" ? "Partial" : "部分启用",
+        className: styles.visibilityStatusPartial,
+      },
+      inactive: {
+        label: uiLanguage === "English" ? "Not configured" : "未配置",
+        className: styles.visibilityStatusInactive,
+      },
+      unknown: {
+        label: uiLanguage === "English" ? "Needs check" : "待检查",
+        className: styles.visibilityStatusUnknown,
+      },
+    }),
+    [uiLanguage],
+  );
+  const visibleTypeLabels = useMemo(
+    () =>
+      visibility.enabledTypes.map((type) => {
+        if (type === "products") return uiLanguage === "English" ? "Products" : "产品页";
+        if (type === "collections") return uiLanguage === "English" ? "Collections" : "合集页";
+        return uiLanguage === "English" ? "Blogs" : "博客页";
+      }),
+    [uiLanguage, visibility.enabledTypes],
   );
 
   useEffect(() => {
@@ -424,7 +500,7 @@ export default function Index() {
   // 使用新的 UpgradePrompt 组件替代原有的 UpgradeOverlay
 
   return (
-    <s-page heading={uiLanguage === "English" ? "AI SEO & Discovery" : "AI SEO & Discovery Dashboard"}>
+    <s-page heading={uiLanguage === "English" ? "AI Revenue & Visibility" : "AI 收入归因与可见性"}>
       <div className={styles.page}>
         
         {isFreePlan && (
@@ -458,8 +534,14 @@ export default function Index() {
                 </span>
               )}
             </div>
-            <h1 className={styles.heading}>{t(lang, "dashboard_title")}</h1>
-            <p className={styles.subheading}>{t(lang, "dashboard_subheading")}</p>
+            <h1 className={styles.heading}>
+              {uiLanguage === "English" ? "See AI revenue first, then improve AI visibility" : "先看 AI 带单，再继续提升 AI 可见性"}
+            </h1>
+            <p className={styles.subheading}>
+              {uiLanguage === "English"
+                ? "Use this dashboard to prove GMV, orders and channel quality from AI traffic, then jump straight into llms.txt, Schema and FAQ optimization when you're ready to increase discovery."
+                : "先用这个 Dashboard 证明 AI 流量带来了多少 GMV、订单和高意图转化；确认有效后，再直接进入 llms.txt、Schema 和 FAQ 优化，提升被 AI 推荐的概率。"}
+            </p>
             <div className={styles.warning}>
               <strong>{uiLanguage === "English" ? "Note:" : "说明："}</strong>{t(lang, "dashboard_warning")}
             </div>
@@ -682,6 +764,98 @@ export default function Index() {
             <li>{uiLanguage === "English" ? "AI GMV: only orders identified as AI channel." : "AI GMV：仅统计被识别为 AI 渠道的订单 GMV。"}</li>
             <li>{uiLanguage === "English" ? "LTV (if shown): historical accumulated GMV within window, no prediction." : "LTV（如展示）：当前为历史累积 GMV，不含预测。"}</li>
             </ul>
+          </div>
+        </div>
+
+        <div className={styles.card}>
+          <div className={styles.visibilitySummary}>
+            <div className={styles.visibilityIntro}>
+              <div className={styles.sectionHeader}>
+                <div>
+                  <p className={styles.sectionLabel}>{uiLanguage === "English" ? "AI Visibility Snapshot" : "AI 可见性概览"}</p>
+                  <h3 className={styles.sectionTitle}>
+                    {uiLanguage === "English" ? "Track Revenue, Then Improve Discovery" : "先看 AI 带单，再提升 AI 推荐概率"}
+                  </h3>
+                </div>
+                <span className={styles.smallBadge} style={{ background: "#eef6ff", color: "#1d4ed8" }}>
+                  {uiLanguage === "English" ? "Homepage Summary" : "首页总览"}
+                </span>
+              </div>
+              <p className={styles.helpText} style={{ marginTop: 0 }}>
+                {uiLanguage === "English"
+                  ? "This app already includes both AI attribution and AI SEO tooling. Use this block to move from revenue proof to llms.txt / Schema / FAQ optimization without leaving the dashboard context."
+                  : "这个应用已经同时覆盖 AI 归因和 AI SEO 两条能力线。这个区块把“先证明 AI 带单”与“继续做 llms.txt / Schema / FAQ 优化”串在一起，避免首页只看到分析。"}
+              </p>
+              <div className={styles.visibilityBadges}>
+                <span className={`${styles.statusChip} ${visibilityStatusMeta[visibility.llmsStatus].className}`}>
+                  llms.txt: {visibilityStatusMeta[visibility.llmsStatus].label}
+                </span>
+                <span className={`${styles.statusChip} ${visibilityStatusMeta[visibility.schemaStatus].className}`}>
+                  {uiLanguage === "English" ? "Schema Embed" : "Schema Embed"}: {visibilityStatusMeta[visibility.schemaStatus].label}
+                </span>
+                <span className={styles.statusChip}>
+                  {uiLanguage === "English" ? "AI Visibility Score" : "AI 可见性评分"}: {visibility.overallScore}/100
+                </span>
+              </div>
+              <div className={styles.visibilityKpis}>
+                <div className={styles.visibilityStat}>
+                  <span className={styles.visibilityStatLabel}>{uiLanguage === "English" ? "llms Coverage" : "llms 覆盖率"}</span>
+                  <strong className={styles.visibilityStatValue}>{visibility.llmsCoverage}%</strong>
+                </div>
+                <div className={styles.visibilityStat}>
+                  <span className={styles.visibilityStatLabel}>{uiLanguage === "English" ? "Exposed Types" : "已暴露内容"}</span>
+                  <strong className={styles.visibilityStatValue}>
+                    {visibleTypeLabels.length
+                      ? visibleTypeLabels.join(" / ")
+                      : uiLanguage === "English"
+                        ? "None yet"
+                        : "尚未开启"}
+                  </strong>
+                </div>
+                <div className={styles.visibilityStat}>
+                  <span className={styles.visibilityStatLabel}>{uiLanguage === "English" ? "Public llms.txt" : "公开 llms.txt"}</span>
+                  <strong className={styles.visibilityStatValue}>
+                    {visibility.llmsPublicUrl ? "/a/llms" : uiLanguage === "English" ? "Unavailable" : "不可用"}
+                  </strong>
+                </div>
+              </div>
+            </div>
+            <div className={styles.visibilityActions}>
+              <div className={styles.visibilityLinks}>
+                <Link to="/app/ai-visibility" className={styles.primaryButton}>
+                  {uiLanguage === "English" ? "Open AI Visibility Suite" : "打开 AI 可见性套件"}
+                </Link>
+                <Link to="/app/additional#llms-txt-settings" className={styles.secondaryButton}>
+                  {uiLanguage === "English" ? "Configure llms.txt" : "配置 llms.txt"}
+                </Link>
+                <Link to="/app/optimization" className={styles.secondaryButton}>
+                  {uiLanguage === "English" ? "View Optimization Report" : "查看优化报告"}
+                </Link>
+                {visibility.llmsPublicUrl && (
+                  <a
+                    className={styles.secondaryButton}
+                    href={visibility.llmsPublicUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {uiLanguage === "English" ? "Open Live llms.txt" : "查看线上 llms.txt"}
+                  </a>
+                )}
+              </div>
+              {visibility.topSuggestion && (
+                <div className={styles.visibilityRecommendation}>
+                  <span className={styles.visibilityRecommendationLabel}>
+                    {uiLanguage === "English" ? "Next best action" : "建议优先处理"}
+                  </span>
+                  <strong>
+                    {visibility.topSuggestion.priority === "high"
+                      ? `${uiLanguage === "English" ? "High" : "高优先级"}: `
+                      : ""}
+                    {visibility.topSuggestion.title}
+                  </strong>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 

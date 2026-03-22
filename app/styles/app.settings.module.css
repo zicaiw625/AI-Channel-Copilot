@@ -17,6 +17,70 @@
   line-height: 1.6;
 }
 
+.sectionDivider {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-top: 0.35rem;
+}
+
+.sectionDividerTitle {
+  margin: 0;
+  color: #0b1324;
+  font-size: 1.25rem;
+}
+
+.sectionDividerText {
+  margin: 0;
+  color: #64748b;
+  line-height: 1.6;
+  max-width: 860px;
+}
+
+.controlGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 0.9rem;
+}
+
+.overviewCard {
+  padding: 1rem;
+  border-radius: 14px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.05);
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.overviewCardAttribution {
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  border-color: #bfdbfe;
+}
+
+.overviewCardVisibility {
+  background: linear-gradient(180deg, #f6fff9 0%, #ffffff 100%);
+  border-color: #bbf7d0;
+}
+
+.overviewTitle {
+  margin: 0;
+  color: #0b1324;
+  font-size: 1.05rem;
+}
+
+.overviewList {
+  margin: 0;
+  padding-left: 1.1rem;
+  color: #475569;
+  line-height: 1.6;
+}
+
+.overviewList li {
+  margin: 0.15rem 0;
+}
+
 .gridTwo {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));

@@ -127,7 +127,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
             (path.startsWith("/app/") &&
                 !path.includes("/app/onboarding") &&
                 !path.includes("/app/billing") &&
-                !path.includes("/app/additional") &&
                 !path.includes("/app/redirect"));
 
         if (isProtected && plan === "none") {

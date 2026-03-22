@@ -425,7 +425,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       timestamp: new Date().toISOString(),
       shopDomain,
       data: {
-        message: "This is a test webhook from AI Channel Copilot",
+        message: "This is a test webhook from AI SEO & Discovery",
         testId: Math.random().toString(36).substring(7),
       },
     };

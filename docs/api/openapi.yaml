@@ -1,8 +1,8 @@
 openapi: 3.0.3
 info:
-  title: AI Channel Copilot API
+  title: AI SEO & Discovery API
   description: |
-    AI Channel Copilot 是一个 Shopify 应用，用于追踪和分析来自 AI 渠道（ChatGPT、Perplexity、Gemini、Copilot 等）的订单归因和 GMV 贡献。
+    AI SEO & Discovery 是一个 Shopify 应用，用于追踪和分析来自 AI 渠道（ChatGPT、Perplexity、Gemini、Copilot 等）的订单归因和 GMV 贡献。
 
     ## 认证
     所有 API 端点都需要通过 Shopify OAuth 认证。请求必须包含有效的 Shopify session。
@@ -15,7 +15,7 @@ info:
     - `Retry-After`: 建议重试等待秒数
   version: 1.0.0
   contact:
-    name: AI Channel Copilot Support
+    name: AI SEO & Discovery Support
     email: support@aicc.app
   license:
     name: Proprietary

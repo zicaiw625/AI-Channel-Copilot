@@ -11,7 +11,7 @@ const prisma = new PrismaClient();
 
 async function diagnose() {
   console.log('\n========================================');
-  console.log('🔍 AI Channel Copilot 订单诊断工具');
+  console.log('🔍 AI SEO & Discovery 订单诊断工具');
   console.log('========================================\n');
 
   // 1. 检查所有店铺的设置

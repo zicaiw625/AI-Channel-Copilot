@@ -606,8 +606,8 @@ function AddStorePrompt({ en }: { en: boolean }) {
       </h3>
       <p style={{ margin: "0 0 16px", fontSize: 14, color: "#637381" }}>
         {en
-          ? "Install AI Channel Copilot on your other Shopify stores using the same account email to see aggregated data here."
-          : "在您的其他 Shopify 店铺上安装 AI Channel Copilot（使用相同的账户邮箱），即可在此查看汇总数据。"}
+          ? "Install AI SEO & Discovery on your other Shopify stores using the same account email to see aggregated data here."
+          : "在您的其他 Shopify 店铺上安装 AI SEO & Discovery（使用相同的账户邮箱），即可在此查看汇总数据。"}
       </p>
       <a
         href="https://apps.shopify.com/ai-channel-copilot"

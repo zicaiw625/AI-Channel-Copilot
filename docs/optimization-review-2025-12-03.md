@@ -1,4 +1,4 @@
-# AI Channel Copilot - 深度优化重构审查报告
+# AI SEO & Discovery - 深度优化重构审查报告
 
 **审查日期**: 2025-12-03  
 **应用类型**: Shopify App (Remix/React Router v7)  

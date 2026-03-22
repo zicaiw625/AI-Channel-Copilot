@@ -8,7 +8,7 @@ type AdminGraphqlClient = {
   ) => Promise<Response>;
 };
 
-const planName = "AI Channel Copilot Basic";
+const planName = "AI SEO & Discovery Basic";
 
 describe("billing.server", () => {
   it("hasActiveSubscription returns true when active subscription matches", async () => {

@@ -171,8 +171,8 @@ export default function Billing() {
                 </div>
                 <div style={{ color: "#666", marginBottom: 20 }}>
                   {en 
-                    ? "Choose a plan below to start using AI Channel Copilot" 
-                    : "请从下方选择一个计划以开始使用 AI Channel Copilot"}
+                    ? "Choose a plan below to start using AI SEO & Discovery" 
+                    : "请从下方选择一个计划以开始使用 AI SEO & Discovery"}
                 </div>
                 <Link 
                   to="/app/billing"

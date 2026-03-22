@@ -751,20 +751,6 @@ export default function Index() {
         </div>
         </div>
 
-          <div className={styles.card}>
-            <div className={styles.sectionHeader}>
-              <div>
-                <p className={styles.sectionLabel}>{t(lang, "metrics_section_label")}</p>
-                <h3 className={styles.sectionTitle}>{t(lang, "metrics_section_title")}</h3>
-              </div>
-              <span className={styles.smallBadge}>{uiLanguage === "English" ? "Reference" : "参考"}</span>
-            </div>
-            <ul className={styles.helpList}>
-            <li>{uiLanguage === "English" ? `GMV: aggregated by ${gmvMetric} (${gmvMetric === "subtotal_price" ? "excluding tax/shipping" : "including tax/shipping"}).` : `GMV：按设置的 ${gmvMetric} 字段汇总（当前为 ${gmvMetric === "subtotal_price" ? "不含税/运费" : "含税/运费"}）。`}</li>
-            <li>{uiLanguage === "English" ? "AI GMV: only orders identified as AI channel." : "AI GMV：仅统计被识别为 AI 渠道的订单 GMV。"}</li>
-            <li>{uiLanguage === "English" ? "LTV (if shown): historical accumulated GMV within window, no prediction." : "LTV（如展示）：当前为历史累积 GMV，不含预测。"}</li>
-            </ul>
-          </div>
         </div>
 
         <div className={styles.card}>
@@ -857,6 +843,21 @@ export default function Index() {
               )}
             </div>
           </div>
+        </div>
+
+        <div className={styles.card}>
+          <div className={styles.sectionHeader}>
+            <div>
+              <p className={styles.sectionLabel}>{t(lang, "metrics_section_label")}</p>
+              <h3 className={styles.sectionTitle}>{t(lang, "metrics_section_title")}</h3>
+            </div>
+            <span className={styles.smallBadge}>{uiLanguage === "English" ? "Reference" : "参考"}</span>
+          </div>
+          <ul className={styles.helpList}>
+          <li>{uiLanguage === "English" ? `GMV: aggregated by ${gmvMetric} (${gmvMetric === "subtotal_price" ? "excluding tax/shipping" : "including tax/shipping"}).` : `GMV：按设置的 ${gmvMetric} 字段汇总（当前为 ${gmvMetric === "subtotal_price" ? "不含税/运费" : "含税/运费"}）。`}</li>
+          <li>{uiLanguage === "English" ? "AI GMV: only orders identified as AI channel." : "AI GMV：仅统计被识别为 AI 渠道的订单 GMV。"}</li>
+          <li>{uiLanguage === "English" ? "LTV (if shown): historical accumulated GMV within window, no prediction." : "LTV（如展示）：当前为历史累积 GMV，不含预测。"}</li>
+          </ul>
         </div>
 
         {/* KPI 卡片组件 */}

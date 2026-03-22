@@ -697,49 +697,6 @@ export default function SettingsAndExport() {
         <p className={styles.helpText}>{t(language as Lang, "backfill_help")}</p>
       </div>
 
-        <div className={styles.card}>
-          <div className={styles.sectionHeader}>
-            <div>
-              <p className={styles.sectionLabel}>{language === "English" ? "Quick Actions" : "快捷入口"}</p>
-              <h3 className={styles.sectionTitle}>
-                {language === "English" ? "Jump to the right workflow fast" : "快速进入当前最需要的操作"}
-              </h3>
-            </div>
-            <span className={styles.badge}>{language === "English" ? "Ops" : "运营"}</span>
-          </div>
-          <p className={styles.helpText}>
-            {language === "English"
-              ? "If you're tuning attribution, start with UTM and referrer rules. If you're working on AI SEO, go straight to llms.txt exposure settings."
-              : "如果你在排查归因准确率，优先看 UTM 和 referrer 规则；如果你在做 AI SEO，就直接进入 llms.txt 暴露设置。"}
-          </p>
-          <div className={styles.inlineActions}>
-            <button
-              type="button"
-              className={styles.primaryButton}
-              onClick={() => navigate("/app/utm-wizard")}
-            >
-              {language === "English" ? "Open UTM Wizard" : "打开 UTM 向导"}
-            </button>
-            <button
-              type="button"
-              className={styles.secondaryButton}
-              onClick={() => {
-                const element = document.querySelector("#llms-txt-settings");
-                element?.scrollIntoView({ behavior: "smooth", block: "start" });
-              }}
-            >
-              {language === "English" ? "Jump to llms.txt" : "跳转到 llms.txt"}
-            </button>
-            <button
-              type="button"
-              className={styles.secondaryButton}
-              onClick={() => setAdvancedExpanded(true)}
-            >
-              {language === "English" ? "Open Troubleshooting" : "打开排错工具"}
-            </button>
-          </div>
-        </div>
-
         <div className={styles.controlGrid}>
           <div className={`${styles.overviewCard} ${styles.overviewCardAttribution}`}>
             <p className={styles.sectionLabel}>{language === "English" ? "Attribution Workspace" : "归因工作区"}</p>
@@ -800,6 +757,22 @@ export default function SettingsAndExport() {
               ? "Start here when you want cleaner attribution data: generate better UTM links, adjust referrer rules, and manage tag write-back or backfill behavior."
               : "如果你的目标是让归因更准，就从这里开始：生成更规范的 UTM 链接、调整 referrer 规则，并管理补拉和标签写回。"}
           </p>
+          <div className={styles.inlineActions}>
+            <button
+              type="button"
+              className={styles.primaryButton}
+              onClick={() => navigate("/app/utm-wizard")}
+            >
+              {language === "English" ? "Open UTM Wizard" : "打开 UTM 向导"}
+            </button>
+            <button
+              type="button"
+              className={styles.secondaryButton}
+              onClick={() => setAdvancedExpanded(true)}
+            >
+              {language === "English" ? "Open Troubleshooting" : "打开排错工具"}
+            </button>
+          </div>
         </div>
 
         {/* 引导文案 - 推荐使用 UTM 链接 */}
@@ -1197,6 +1170,18 @@ export default function SettingsAndExport() {
               ? "Use this block when you want AI systems to discover more of your store. It controls what llms.txt exposes, where it is publicly hosted, and what the current output looks like."
               : "当你的目标是让 AI 系统更容易发现店铺内容时，就看这一块。这里控制 llms.txt 暴露哪些内容、公开地址在哪里，以及当前输出长什么样。"}
           </p>
+          <div className={styles.inlineActions}>
+            <button
+              type="button"
+              className={styles.secondaryButton}
+              onClick={() => {
+                const element = document.querySelector("#llms-txt-settings");
+                element?.scrollIntoView({ behavior: "smooth", block: "start" });
+              }}
+            >
+              {language === "English" ? "Jump to llms.txt" : "跳转到 llms.txt"}
+            </button>
+          </div>
         </div>
 
         {/* llms.txt 完整卡片 - 合并偏好设置和预览 */}

@@ -1070,7 +1070,6 @@ export default function AIVisibility() {
       }, 150);
       return () => clearTimeout(timer);
     }
-    }
   }, [location.hash, location.search]);
 
   const llmsSaveMessage = llmsFetcher.data?.ok

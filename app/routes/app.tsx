@@ -167,7 +167,6 @@ export default function App() {
     <AppProvider embedded apiKey={apiKey}>
       <NavMenu>
         <a href="/app" rel="home">{uiLanguage === "English" ? "AI Dashboard" : "AI 仪表盘"}</a>
-        <a href="/app/ai-visibility">{uiLanguage === "English" ? "AI Visibility" : "AI 可见性"}</a>
         <a href="/app/additional">{uiLanguage === "English" ? "Settings / Rules & Export" : "设置 / 规则 & 导出"}</a>
         <a href="/app/billing">{uiLanguage === "English" ? "Subscription" : "订阅管理"}</a>
       </NavMenu>

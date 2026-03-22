@@ -1,6 +1,6 @@
-# AI Discovery & Attribution Copilot
+# AI SEO & Discovery Copilot
 
- AI Discovery & Attribution Copilot 帮助 Shopify 商家识别来自 ChatGPT、Perplexity、Gemini、Copilot 等 AI 助手带来的真实 GMV。应用默认以保守口径统计“站外 AI 点击 → 到站 → 完成订单”的链路，并提供仪表盘、调试视图、标签写回与 CSV 导出。
+ AI SEO & Discovery Copilot 帮助 Shopify 商家识别来自 ChatGPT、Perplexity、Gemini、Copilot 等 AI 助手带来的真实 GMV。应用默认以保守口径统计“站外 AI 点击 → 到站 → 完成订单”的链路，并提供仪表盘、调试视图、标签写回与 CSV 导出。
 
  ## 指标口径（统一）
  - GMV：可选择 `current_total_price`（含税/运费）或 `subtotal_price`（不含税/运费）。

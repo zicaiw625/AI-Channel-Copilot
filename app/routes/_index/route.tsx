@@ -24,14 +24,14 @@ export default function App() {
   return (
     <div className={styles.index}>
       <div className={styles.hero}>
-        <div className={styles.badge}>{language === "English" ? "AI Discovery & Attribution Copilot · v0.1" : "AI Discovery & Attribution Copilot · v0.1"}</div>
+        <div className={styles.badge}>{language === "English" ? "AI SEO & Discovery · v0.1" : "AI SEO & Discovery · v0.1"}</div>
         <h1 className={styles.heading}>
-          {language === "English" ? "Discover overlooked AI channel GMV with conservative Shopify order attribution" : "发现被忽略的 AI 渠道 GMV，基于 Shopify 订单的保守归因"}
+          {language === "English" ? "Get your products recommended by ChatGPT, Perplexity & Gemini" : "让你的商品被 ChatGPT、Perplexity 和 Gemini 推荐"}
         </h1>
         <p className={styles.text}>
           {language === "English"
-            ? "Automatically detects orders from ChatGPT / Perplexity / Gemini / Copilot. Provides dashboard, debug view, rules, and CSV export to help DTC brands evaluate whether AI channels are worth investing in."
-            : "自动识别来自 ChatGPT / Perplexity / Gemini / Copilot 的订单，提供基础仪表盘、调试视图、规则配置与\n          CSV 导出，帮助中高阶 DTC 商家判断 AI 渠道是否值得投入。"}
+            ? "Traditional SEO is dead. Auto-generate llms.txt to feed your products to AI bots, increase your visibility in AI chats, and track the exact GMV driven by AI tools."
+            : "传统 SEO 已经不够用了。通过自动生成 llms.txt 并优化 AI 爬虫抓取，让你的独立站商品在 AI 搜索中脱颖而出，并追踪 AI 带来的真实销量。"}
         </p>
         <div className={styles.actions}>
           {showForm && (

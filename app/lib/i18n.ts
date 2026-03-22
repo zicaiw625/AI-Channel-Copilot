@@ -195,9 +195,9 @@ const dict: Record<string, TranslationEntry> = {
   // ============================================================================
   // 首页/落地页
   // ============================================================================
-  landing_badge: { zh: "AI Discovery & Attribution Copilot · v0.1", en: "AI Discovery & Attribution Copilot · v0.1" },
-  landing_heading: { zh: "发现被忽略的 AI 渠道 GMV，基于 Shopify 订单的保守归因", en: "Discover overlooked AI channel GMV with conservative Shopify order attribution" },
-  landing_text: { zh: "自动识别来自 ChatGPT / Perplexity / Gemini / Copilot 的订单，提供基础仪表盘、调试视图、规则配置与 CSV 导出，帮助中高阶 DTC 商家判断 AI 渠道是否值得投入。", en: "Automatically detects orders from ChatGPT / Perplexity / Gemini / Copilot. Provides dashboard, debug view, rules, and CSV export to help DTC brands evaluate whether AI channels are worth investing in." },
+  landing_badge: { zh: "AI SEO & Discovery · v0.1", en: "AI SEO & Discovery · v0.1" },
+  landing_heading: { zh: "让你的商品被 ChatGPT、Perplexity 和 Gemini 推荐", en: "Get your products recommended by ChatGPT, Perplexity & Gemini" },
+  landing_text: { zh: "自动识别来自 ChatGPT / Perplexity / Gemini / Copilot 的订单，提供基础仪表盘、调试视图、规则配置与 CSV 导出，帮助中高阶 DTC 商家判断 AI 渠道是否值得投入。", en: "Traditional SEO is dead. Auto-generate llms.txt to feed your products to AI bots, increase your visibility in AI chats, and track the exact GMV driven by AI tools." },
   shop_placeholder: { zh: "your-store.myshopify.com", en: "your-store.myshopify.com" },
   chip_conservative: { zh: "Referrer + UTM 保守识别", en: "Conservative: Referrer + UTM" },
   chip_ai_gmv: { zh: "AI 渠道 GMV / 订单 / 新客", en: "AI GMV / Orders / New Customers" },

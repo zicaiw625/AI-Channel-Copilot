@@ -291,8 +291,8 @@ function GrowthValueBanner({ en }: { en: boolean }) {
         </span>
         <span style={{ fontSize: 13, color: "#637381" }}>
           {en 
-            ? "One-click fixes: llms.txt + Schema + FAQ — Complete AI Discovery Toolkit" 
-            : "一键落地：llms.txt + Schema + FAQ — 完整 AI 发现优化工具箱"}
+            ? "One-click fixes: llms.txt + Schema + FAQ — Complete AI Visibility Suite" 
+            : "一键落地：llms.txt + Schema + FAQ — 完整 AI 可见性套件"}
         </span>
       </div>
       
@@ -413,13 +413,13 @@ export default function Onboarding() {
       <div style={{ textAlign: "center", marginBottom: 32 }}>
         <h1 style={{ fontSize: 28, marginBottom: 12, color: "#212b36", lineHeight: 1.3 }}>
           {en 
-            ? "Prove AI Revenue First, Then Optimize for More AI Discovery" 
-            : "先验证 AI 是否带单，再继续优化 AI 推荐曝光"}
+            ? "Prove AI is Driving Sales — In Just 7 Days" 
+            : "7 天内验证：AI 是否在给你带单"}
         </h1>
         <p style={{ fontSize: 16, color: "#637381", marginBottom: 20, maxWidth: 600, margin: "0 auto 20px" }}>
           {en 
-            ? "Start by measuring GMV and conversion quality from ChatGPT, Perplexity and other assistants, then unlock llms.txt, Schema and FAQ optimization as you scale." 
-            : "先衡量 ChatGPT、Perplexity 等 AI 助手带来的 GMV 和转化质量，再按需开启 llms.txt、Schema 和 FAQ 优化能力。"}
+            ? "Find out if ChatGPT, Perplexity & AI assistants are sending you high-intent traffic." 
+            : "发现 ChatGPT、Perplexity 等 AI 助手是否在推荐你的产品。"}
         </p>
         
         {/* 3个核心价值点 - 紧凑版 */}
@@ -434,11 +434,6 @@ export default function Onboarding() {
           <ValuePill icon="📊" label={en ? "Compare Conversion" : "对比转化率"} sublabel={en ? "AI vs Other traffic" : "AI vs 其他流量"} />
           <ValuePill icon="🚀" label={en ? "Get AI-Ready" : "AI 优化建议"} sublabel={en ? "One-click fixes" : "一键落地"} />
         </div>
-        <p style={{ fontSize: 13, color: "#64748b", margin: "0 auto", maxWidth: 680, lineHeight: 1.6 }}>
-          {en
-            ? "Free helps you verify whether AI traffic is real. Pro proves the funnel. Growth adds the visibility toolkit that helps AI recommend you more often."
-            : "Free 版先帮你验证 AI 流量是否真实存在；Pro 版继续证明漏斗和转化；Growth 再补上可见性工具，帮助 AI 更频繁地推荐你。"}
-        </p>
         
         {/* 如果有数据，显示简要预览 */}
         {snapshot.hasData && (

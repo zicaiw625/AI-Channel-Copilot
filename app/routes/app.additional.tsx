@@ -403,6 +403,9 @@ export default function SettingsAndExport() {
   // Modal state for confirming removal of default domain
   const [confirmModal, setConfirmModal] = useState<{ open: boolean; rule: AiDomainRule | null }>({ open: false, rule: null });
 
+  // Track last save time to trigger llms.txt preview refresh
+  const [lastSavedAt, setLastSavedAt] = useState<number>(0);
+
   // Modal state for confirming removal of default UTM rule
   const [confirmUtmModal, setConfirmUtmModal] = useState<{ open: boolean; rule: UtmSourceRule | null }>({ open: false, rule: null });
 
@@ -439,10 +442,6 @@ export default function SettingsAndExport() {
       return true;
     });
   }, [utmMappings]);
-  const activeExposureCount = useMemo(
-    () => [exposurePreferences.exposeProducts, exposurePreferences.exposeCollections, exposurePreferences.exposeBlogs].filter(Boolean).length,
-    [exposurePreferences],
-  );
 
   const addDomain = () => {
     if (!newDomain.trim()) return;
@@ -585,6 +584,8 @@ export default function SettingsAndExport() {
               ? (language === "English" ? "Backfilled last 60 days (including AI detection)" : "已补拉最近 60 天订单（含 AI 识别）")
               : (language === "English" ? "Settings saved" : "设置已保存");
         shopify.toast.show?.(message);
+        // Trigger llms.txt preview refresh after successful save
+        setLastSavedAt(Date.now());
       } else {
         // 将技术错误转换为用户友好的消息
         let friendlyMessage = data.message || "";
@@ -617,16 +618,11 @@ export default function SettingsAndExport() {
   }, [fetcher.data, shopify, language]);
 
   return (
-    <s-page heading={language === "English" ? "Attribution Settings" : "归因设置"}>
+    <s-page heading={language === "English" ? "Settings / Rules & Export" : "设置 / 规则 & 导出"}>
       <div className={styles.page}>
       <div className={styles.lede}>
-        <h1>{language === "English" ? "Attribution Settings & Data Operations" : "归因设置与数据运维"}</h1>
+        <h1>{language === "English" ? "AI Channel Rules & Data Export" : "AI 渠道识别规则 & 数据导出"}</h1>
         <p>{t(language as Lang, "settings_lede_desc")}</p>
-        <p className={styles.helpText}>
-          {language === "English"
-            ? "Use this page to make attribution data cleaner: tune UTM and referrer rules, control backfill and tagging, export proof, and inspect pipeline health."
-            : "这一页主要负责让归因数据更干净：调整 UTM 和 referrer 规则，控制补拉和标签写回，导出分析数据，并检查采集链路健康度。"}
-        </p>
         <div className={styles.alert}>{t(language as Lang, "ai_conservative_alert")}</div>
         <p className={styles.helpText}>{t(language as Lang, "default_rules_help")}</p>
         <p className={styles.helpText}>{t(language as Lang, "tag_prefix_help")}</p>
@@ -691,84 +687,6 @@ export default function SettingsAndExport() {
         <div className={styles.alert}>{t(language as Lang, "backfill_protect_alert")}</div>
         <p className={styles.helpText}>{t(language as Lang, "backfill_help")}</p>
       </div>
-
-        <div className={styles.controlGrid}>
-          <div className={`${styles.overviewCard} ${styles.overviewCardAttribution}`}>
-            <p className={styles.sectionLabel}>{language === "English" ? "Attribution Workspace" : "归因工作区"}</p>
-            <h3 className={styles.overviewTitle}>
-              {language === "English" ? "Rules, UTM, backfill and tagging live here" : "归因规则、UTM、补拉和标签都在这一侧"}
-            </h3>
-            <ul className={styles.overviewList}>
-              <li>
-                {language === "English"
-                  ? `Referrer domains: ${sanitizedDomains.length} rules`
-                  : `Referrer 域名规则：${sanitizedDomains.length} 条`}
-              </li>
-              <li>
-                {language === "English"
-                  ? `UTM sources: ${sanitizedUtmSources.length} mappings`
-                  : `UTM 来源映射：${sanitizedUtmSources.length} 条`}
-              </li>
-              <li>
-                {language === "English"
-                  ? `Tag write-back: ${tagging.writeOrderTags ? "enabled" : "off"}`
-                  : `标签回写：${tagging.writeOrderTags ? "已开启" : "关闭"}`}
-              </li>
-            </ul>
-          </div>
-
-          <div className={`${styles.overviewCard} ${styles.overviewCardVisibility}`}>
-            <p className={styles.sectionLabel}>{language === "English" ? "AI Visibility Workspace" : "AI 可见性工作区"}</p>
-            <h3 className={styles.overviewTitle}>
-              {language === "English" ? "llms.txt exposure, public URL and refresh happen here" : "llms.txt 暴露范围、公开地址和刷新都在这一侧"}
-            </h3>
-            <ul className={styles.overviewList}>
-              <li>
-                {language === "English"
-                  ? `Enabled content types: ${activeExposureCount}/3`
-                  : `已启用内容类型：${activeExposureCount}/3`}
-              </li>
-              <li>
-                {language === "English"
-                  ? `Public URL: ${shopDomain ? "/a/llms" : "Unavailable"}`
-                  : `公开地址：${shopDomain ? "/a/llms" : "不可用"}`}
-              </li>
-              <li>
-                {language === "English"
-                  ? "Language changes also refresh llms.txt immediately"
-                  : "切换语言时也会立即刷新 llms.txt"}
-              </li>
-            </ul>
-          </div>
-        </div>
-
-        <div className={styles.sectionDivider}>
-          <p className={styles.sectionLabel}>{language === "English" ? "Section 1" : "第 1 区"}</p>
-          <h2 className={styles.sectionDividerTitle}>
-            {language === "English" ? "Attribution Operations" : "归因运营与识别规则"}
-          </h2>
-          <p className={styles.sectionDividerText}>
-            {language === "English"
-              ? "Start here when you want cleaner attribution data: generate better UTM links, adjust referrer rules, and manage tag write-back or backfill behavior."
-              : "如果你的目标是让归因更准，就从这里开始：生成更规范的 UTM 链接、调整 referrer 规则，并管理补拉和标签写回。"}
-          </p>
-          <div className={styles.inlineActions}>
-            <button
-              type="button"
-              className={styles.primaryButton}
-              onClick={() => navigate("/app/utm-wizard")}
-            >
-              {language === "English" ? "Open UTM Wizard" : "打开 UTM 向导"}
-            </button>
-            <button
-              type="button"
-              className={styles.secondaryButton}
-              onClick={() => setAdvancedExpanded(true)}
-            >
-              {language === "English" ? "Open Troubleshooting" : "打开排错工具"}
-            </button>
-          </div>
-        </div>
 
         {/* 引导文案 - 推荐使用 UTM 链接 */}
         <div className={styles.card} style={{ background: "#f0f9ff", borderColor: "#0ea5e9" }}>
@@ -1153,72 +1071,133 @@ export default function SettingsAndExport() {
             </label>
             <p className={styles.helpText}>{t(language as Lang, "gmv_metric_help")}</p>
           </div>
+          
+          <p className={styles.helpText}>{t(language as Lang, "llms_preview_help")}</p>
         </div>
 
-        <div className={styles.sectionDivider}>
-          <p className={styles.sectionLabel}>{language === "English" ? "Section 2" : "第 2 区"}</p>
-          <h2 className={styles.sectionDividerTitle}>
-            {language === "English" ? "AI Visibility / llms.txt" : "AI 可见性 / llms.txt"}
-          </h2>
-          <p className={styles.sectionDividerText}>
-            {language === "English"
-              ? "The main AI visibility workflow now lives in Discovery. This section keeps the lower-level llms.txt exposure controls and public output preview."
-              : "现在 AI 可见性优化的主工作台在「发现优化」页；这里保留 llms.txt 的底层暴露控制和公开输出预览。"}
-          </p>
-          <div className={styles.inlineActions}>
-            <Link to="/app/discovery" className={styles.secondaryButton}>
-              {language === "English" ? "Open Discovery Workspace" : "打开发现优化工作台"}
-            </Link>
-          </div>
-        </div>
-
-        {/* llms.txt 迁移说明卡片 */}
+        {/* llms.txt 完整卡片 - 合并偏好设置和预览 */}
         <div id="llms-txt-settings" className={styles.card}>
           <div className={styles.sectionHeader}>
             <div>
-              <p className={styles.sectionLabel}>llms.txt</p>
-              <h3 className={styles.sectionTitle}>{language === "English" ? "Manage llms.txt in Discovery" : "在发现优化页管理 llms.txt"}</h3>
+              <p className={styles.sectionLabel}>{language === "English" ? "llms.txt Preferences" : "llms.txt 偏好"}</p>
+              <h3 className={styles.sectionTitle}>{language === "English" ? "Site Types to Expose to AI" : "希望向 AI 暴露的站点类型"}</h3>
             </div>
-            <span className={styles.badge}>{language === "English" ? "Discovery" : "发现优化"}</span>
+            <div className={styles.inlineActions}>
+              <button 
+                type="button" 
+                className={styles.secondaryButton} 
+                onClick={() => {
+                  // llms.txt 保存需要设置 intent 以强制刷新缓存
+                  const payload = {
+                    aiDomains: sanitizedDomains,
+                    utmSources: sanitizedUtmSources,
+                    utmMediumKeywords,
+                    gmvMetric,
+                    primaryCurrency: settings.primaryCurrency,
+                    tagging,
+                    exposurePreferences,
+                    languages: [language, ...settings.languages.filter((l) => l !== language)],
+                    timezones: [timezone, ...settings.timezones.filter((t) => t !== timezone)],
+                    pipelineStatuses: settings.pipelineStatuses,
+                  };
+                  fetcher.submit(
+                    { settings: JSON.stringify(payload), intent: "save_llms" },
+                    { method: "post", encType: "application/x-www-form-urlencoded" },
+                  );
+                }} 
+                data-action="llms-save"
+              >
+                {t(language as Lang, "btn_save")}
+              </button>
+              <span className={styles.badge}>{t(language as Lang, "badge_experiment")}</span>
+            </div>
           </div>
-
-          <p className={styles.helpText}>
-            {language === "English"
-              ? "llms.txt exposure controls and recommendations now live in Discovery so merchants can handle visibility work in one place. Keep this page focused on attribution accuracy and data operations."
-              : "llms.txt 的暴露控制和优化建议现在统一放在「发现优化」页处理，这样商家可以在一个主工作台里完成可见性优化；本页则继续聚焦归因准确率与数据运维。"}
-          </p>
-
+          
           {shopDomain && (
             <div className={styles.alert} style={{ background: "#e3f1df", borderColor: "#50b83c" }}>
-              {language === "English" ? "Current public URL: " : "当前公开地址："}
-              <a
-                href={`https://${shopDomain}/a/llms`}
-                target="_blank"
+              {language === "English" ? "Public URL: " : "公开访问地址："}
+              <a 
+                href={`https://${shopDomain}/a/llms`} 
+                target="_blank" 
                 rel="noopener noreferrer"
                 style={{ color: "#006d3a", fontWeight: 500 }}
               >
                 https://{shopDomain}/a/llms
               </a>
+              <span style={{ marginLeft: 8, color: "#637381", fontSize: 12 }}>
+                {language === "English" ? "(AI crawlers can access this URL)" : "（AI 爬虫可访问此地址）"}
+              </span>
             </div>
           )}
-
-          <div className={styles.inlineActions}>
-            <Link to="/app/discovery" className={styles.primaryButton}>
-              {language === "English" ? "Open Discovery Workspace" : "打开发现优化工作台"}
-            </Link>
+          
+          <p className={styles.helpText}>{language === "English" ? "Configure which content types AI crawlers (ChatGPT, Perplexity, etc.) can discover via llms.txt. Changes take effect after saving." : "配置 AI 爬虫（ChatGPT、Perplexity 等）可通过 llms.txt 发现哪些内容类型。更改保存后生效。"}</p>
+          
+          <div className={styles.gridTwo}>
+            {/* 左侧：偏好设置 */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+              <div className={styles.checkboxRow}>
+                <input
+                  type="checkbox"
+                  checked={exposurePreferences.exposeProducts}
+                  onChange={(event) =>
+                    setExposurePreferences((prev) => ({
+                      ...prev,
+                      exposeProducts: event.target.checked,
+                    }))
+                  }
+                />
+                <div>
+                  <div className={styles.ruleTitle}>{language === "English" ? "Allow AI to access product pages" : "允许 AI 访问产品页"}</div>
+                  <div className={styles.ruleMeta}>{language === "English" ? "product_url / handle" : "product_url / handle"}</div>
+                </div>
+              </div>
+              <div className={styles.checkboxRow}>
+                <input
+                  type="checkbox"
+                  checked={exposurePreferences.exposeCollections}
+                  onChange={(event) =>
+                    setExposurePreferences((prev) => ({
+                      ...prev,
+                      exposeCollections: event.target.checked,
+                    }))
+                  }
+                />
+                <div>
+                  <div className={styles.ruleTitle}>{language === "English" ? "Allow AI to access collections/categories" : "允许 AI 访问合集/分类页"}</div>
+                  <div className={styles.ruleMeta}>{language === "English" ? "Reserved for curated collections in future" : "未来用于生成精选集合"}</div>
+                </div>
+              </div>
+              <div className={styles.checkboxRow}>
+                <input
+                  type="checkbox"
+                  checked={exposurePreferences.exposeBlogs}
+                  onChange={(event) =>
+                    setExposurePreferences((prev) => ({
+                      ...prev,
+                      exposeBlogs: event.target.checked,
+                    }))
+                  }
+                />
+                <div>
+                  <div className={styles.ruleTitle}>{language === "English" ? "Allow AI to access blog content" : "允许 AI 访问博客内容"}</div>
+                  <div className={styles.ruleMeta}>{language === "English" ? "Blog/content pages optional" : "博客/内容页可选暴露"}</div>
+                </div>
+              </div>
+            </div>
+            
+            {/* 右侧：预览 */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.25rem" }}>
+                <span className={styles.fieldLabel}>{language === "English" ? "Preview" : "预览"}</span>
+                <span className={styles.helpText} style={{ fontSize: "0.8rem" }}>
+                  {language === "English" 
+                    ? "Click \"Save\" to update public URL"
+                    : "点击「保存」以更新公开 URL"}
+                </span>
+              </div>
+              <LlmsPreview language={language} canExport={canExport} lastSavedAt={lastSavedAt} />
+            </div>
           </div>
-        </div>
-
-        <div className={styles.sectionDivider}>
-          <p className={styles.sectionLabel}>{language === "English" ? "Section 3" : "第 3 区"}</p>
-          <h2 className={styles.sectionDividerTitle}>
-            {language === "English" ? "Export, Diagnostics & Monitoring" : "导出、诊断与监控"}
-          </h2>
-          <p className={styles.sectionDividerText}>
-            {language === "English"
-              ? "After rules and llms.txt are configured, use this last section to inspect samples, export proof for analysis, and monitor webhook / backfill health."
-              : "在归因规则和 llms.txt 配置完成后，用最后这一组来抽样检查、导出分析证据，并监控 webhook 和补拉健康度。"}
-          </p>
         </div>
 
         {/* 调试面板 - 仅在 SHOW_DEBUG_PANELS=true 时显示 */}

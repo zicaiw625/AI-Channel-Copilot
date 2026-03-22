@@ -145,8 +145,8 @@ export default function Copilot() {
       <div className={styles.page}>
         {/* 顶部导航 */}
         <div style={{ marginBottom: 16, display: "flex", gap: 12 }}>
-          <Link to="/app" className={styles.secondaryButton}>
-            ← {language === "English" ? "Back to Dashboard" : "返回仪表盘"}
+          <Link to="/app/analytics" className={styles.secondaryButton}>
+            ← {language === "English" ? "Back to Analytics" : "返回分析"}
           </Link>
         </div>
 

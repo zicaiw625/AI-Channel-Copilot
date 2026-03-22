@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 // useRef is used for: timer cleanup in CopyButton, and storing latest searchParams/navigate refs
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
-import { Link, useLoaderData, useNavigate, useSearchParams } from "react-router";
+import { Link, redirect, useLoaderData, useNavigate, useSearchParams } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 
 import { authenticate } from "../shopify.server";
@@ -12,6 +12,9 @@ import { requireEnv } from "../lib/env.server";
 import styles from "../styles/app.dashboard.module.css";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
+  const url = new URL(request.url);
+  throw redirect(`/app/discovery?tab=recommendations${url.searchParams.get("lang") ? `&lang=${encodeURIComponent(url.searchParams.get("lang") || "")}` : ""}`);
+
   const { admin, session } = await authenticate.admin(request);
 
   const shopDomain = session.shop;
@@ -333,7 +336,7 @@ const SuggestionCard = ({
       {(isSchemaEmbedSuggestion || isLlmsTxtSuggestion) && (
         <div style={{ marginTop: 12 }}>
           <Link
-            to={isSchemaEmbedSuggestion ? "/app/ai-visibility#product-schema-settings" : "/app/additional#llms-txt-settings"}
+            to={isSchemaEmbedSuggestion ? "/app/discovery#product-schema-settings" : "/app/discovery"}
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -494,7 +497,7 @@ export default function AIOptimization() {
       // 只有当 URL 中没有 lang 参数或参数值与 uiLanguage 不同时才导航
       const currentLangParam = searchParamsRef.current.get("lang");
       if (currentLangParam !== uiLanguage) {
-        navigateRef.current(`/app/optimization?lang=${encodeURIComponent(uiLanguage)}`, { replace: true });
+        navigateRef.current(`/app/discovery?tab=recommendations&lang=${encodeURIComponent(uiLanguage)}`, { replace: true });
       }
     }
   }, [uiLanguage, language]);
@@ -527,15 +530,15 @@ export default function AIOptimization() {
   );
 
   return (
-    <s-page heading={isEnglish ? "AI Optimization" : "AI 优化建议"}>
+    <s-page heading={isEnglish ? "Discovery Report" : "发现优化报告"}>
       <div className={styles.page}>
         {/* 顶部导航 */}
         <div style={{ marginBottom: 16, display: "flex", gap: 12, flexWrap: "wrap" }}>
-          <Link to="/app" className={styles.secondaryButton}>
-            ← {isEnglish ? "Back to Dashboard" : "返回仪表盘"}
+          <Link to="/app/discovery" className={styles.secondaryButton}>
+            ← {isEnglish ? "Back to Discovery" : "返回发现优化"}
           </Link>
-          <Link to="/app/funnel" className={styles.primaryButton}>
-            {isEnglish ? "View Funnel Analysis" : "查看漏斗分析"} →
+          <Link to="/app/analytics" className={styles.primaryButton}>
+            {isEnglish ? "View Analytics" : "查看分析"} →
           </Link>
         </div>
 
@@ -901,8 +904,8 @@ export default function AIOptimization() {
             </p>
           )}
           
-          <Link to="/app/additional#llms-txt-settings" className={styles.primaryButton}>
-            {isEnglish ? "Configure llms.txt Settings" : "配置 llms.txt 设置"}
+          <Link to="/app/discovery" className={styles.primaryButton}>
+            {isEnglish ? "Open Discovery Workspace" : "打开发现优化工作台"}
           </Link>
         </div>
       </div>

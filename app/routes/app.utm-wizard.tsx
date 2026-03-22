@@ -495,8 +495,8 @@ export default function UTMWizard() {
       <div className={styles.page}>
         {/* 顶部导航 */}
         <div style={{ marginBottom: 16, display: "flex", gap: 12 }}>
-          <Link to="/app" className={styles.secondaryButton}>
-            ← {en ? "Back to Dashboard" : "返回仪表盘"}
+          <Link to="/app/attribution" className={styles.secondaryButton}>
+            ← {en ? "Back to Attribution" : "返回归因设置"}
           </Link>
         </div>
 

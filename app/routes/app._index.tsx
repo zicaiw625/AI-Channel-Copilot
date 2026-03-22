@@ -653,8 +653,8 @@ export default function Index() {
                 {uiLanguage === "English" 
                   ? "No qualifying orders found in the last 60 days (Shopify default limit). This may be a new store, or orders are older than 60 days. To access older orders, request 'read_all_orders' scope and re-authorize." 
                   : "最近 60 天内暂无符合条件的订单（Shopify 默认限制）。可能是新店铺，或订单都在 60 天之前。如需访问更早订单，请申请 read_all_orders 权限并重新授权。"}
-                <Link to="/app/additional" className={styles.link} style={{ marginLeft: 8 }}>
-                  {uiLanguage === "English" ? "Check Settings" : "查看设置"}
+                <Link to="/app/attribution" className={styles.link} style={{ marginLeft: 8 }}>
+                  {uiLanguage === "English" ? "Fix Attribution" : "检查归因设置"}
                 </Link>
               </div>
             )}
@@ -662,7 +662,9 @@ export default function Index() {
               <div className={styles.callout}>
                 <span>{uiLanguage === "English" ? "Hint" : "提示"}</span>
                 {t(lang, "hint_zero_ai")}
-                <Link to="/app/additional" className={styles.link}>{t(lang, "goto_settings")}</Link>
+                <Link to="/app/attribution" className={styles.link}>
+                  {uiLanguage === "English" ? "Fix Attribution" : "检查归因设置"}
+                </Link>
               </div>
             )}
             </div>
@@ -707,32 +709,17 @@ export default function Index() {
                 </button>
               </div>
               <div className={styles.actionButtons}>
-                <Link to="/app/additional" className={styles.primaryButton}>
-                  {uiLanguage === "English" ? "Settings / Rules & Export" : "设置 / 规则 & 导出"}
+                <Link to="/app/analytics" className={styles.primaryButton}>
+                  {uiLanguage === "English" ? "View Analytics" : "查看分析"}
                 </Link>
-                <Link to="/app/optimization" className={styles.secondaryButton} style={{ background: "#635bff", color: "white", border: "none" }}>
-                  {uiLanguage === "English" ? "🚀 AI Optimization" : "🚀 AI 优化建议"}
+                <Link to="/app/discovery" className={styles.secondaryButton} style={{ background: "#f0f4ff", border: "1px solid #adc6ff", color: "#2f54eb" }}>
+                  {uiLanguage === "English" ? "Improve Discovery" : "提升 AI 发现"}
                 </Link>
-                <Link to="/app/funnel" className={styles.secondaryButton}>
-                  {uiLanguage === "English" ? "📊 Funnel Analysis" : "📊 漏斗分析"}
+                <Link to="/app/attribution" className={styles.secondaryButton} style={{ background: "#fff7e6", border: "1px solid #ffd591", color: "#d46b08" }}>
+                  {uiLanguage === "English" ? "Fix Attribution" : "调整归因设置"}
                 </Link>
-                <Link to="/app/copilot" className={styles.secondaryButton}>
-                  {uiLanguage === "English" ? "Copilot Q&A" : "Copilot 分析问答"}
-                </Link>
-                <Link to="/app/utm-wizard" className={styles.secondaryButton} style={{ background: "#fff7e6", border: "1px solid #ffd591", color: "#d46b08" }}>
-                  {uiLanguage === "English" ? "🔗 UTM Setup" : "🔗 UTM 设置向导"}
-                </Link>
-                <Link to="/app/multi-store" className={styles.secondaryButton} style={{ background: "#f6ffed", border: "1px solid #b7eb8f", color: "#389e0d" }}>
-                  {uiLanguage === "English" ? "🏪 Multi-Store" : "🏪 多店铺汇总"}
-                </Link>
-                <Link to="/app/ai-visibility" className={styles.secondaryButton} style={{ background: "#f0f4ff", border: "1px solid #adc6ff", color: "#2f54eb" }}>
-                  {uiLanguage === "English" ? "🚀 AI Visibility Suite" : "🚀 AI 可见性套件"}
-                </Link>
-                <Link to="/app/webhook-export" className={styles.secondaryButton} style={{ background: "#fff0f6", border: "1px solid #ffadd2", color: "#c41d7f" }}>
-                  {uiLanguage === "English" ? "🔌 Webhook Export" : "🔌 Webhook 导出"}
-                </Link>
-                <Link to="/app/team" className={styles.secondaryButton} style={{ background: "#f9f0ff", border: "1px solid #d3adf7", color: "#722ed1" }}>
-                  {uiLanguage === "English" ? "👥 Team" : "👥 团队"}
+                <Link to="/app/discovery?tab=recommendations" className={styles.secondaryButton}>
+                  {uiLanguage === "English" ? "Full Discovery Report" : "完整发现优化报告"}
                 </Link>
                 <a
                   className={styles.secondaryButton}
@@ -808,14 +795,14 @@ export default function Index() {
             </div>
             <div className={styles.visibilityActions}>
               <div className={styles.visibilityLinks}>
-                <Link to="/app/ai-visibility" className={styles.primaryButton}>
-                  {uiLanguage === "English" ? "Open AI Visibility Suite" : "打开 AI 可见性套件"}
+                <Link to="/app/discovery" className={styles.primaryButton}>
+                  {uiLanguage === "English" ? "Open Discovery Workspace" : "打开发现优化工作台"}
                 </Link>
-                <Link to="/app/additional#llms-txt-settings" className={styles.secondaryButton}>
+                <Link to="/app/discovery" className={styles.secondaryButton}>
                   {uiLanguage === "English" ? "Configure llms.txt" : "配置 llms.txt"}
                 </Link>
-                <Link to="/app/optimization" className={styles.secondaryButton}>
-                  {uiLanguage === "English" ? "View Optimization Report" : "查看优化报告"}
+                <Link to="/app/discovery?tab=recommendations" className={styles.secondaryButton}>
+                  {uiLanguage === "English" ? "View Discovery Report" : "查看发现优化报告"}
                 </Link>
                 {visibility.llmsPublicUrl && (
                   <a
@@ -1227,7 +1214,7 @@ export default function Index() {
             </table>
           </div>
           <p className={styles.helpText}>
-            {uiLanguage === "English" ? "If attribution looks off, adjust AI domains and UTM mapping in Settings / Rules & Export. All results are conservative estimates." : "若识别结果与预期不符，可在「设置 / 规则 & 导出」中调整 AI 域名与 UTM 映射；所有结果均为保守估计。"}
+            {uiLanguage === "English" ? "If attribution looks off, open Attribution Settings to adjust AI domains and UTM mapping. All results are conservative estimates." : "若识别结果与预期不符，可前往「归因设置」调整 AI 域名与 UTM 映射；所有结果均为保守估计。"}
           </p>
         </div>
         )}

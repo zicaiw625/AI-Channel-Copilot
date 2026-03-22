@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import type { HeadersFunction, LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
-import { Link, useLoaderData, useLocation } from "react-router";
+import { Link, useFetcher, useLoaderData, useLocation } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 
 import { authenticate } from "../shopify.server";
@@ -94,6 +94,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   return {
     language,
     shopDomain,
+    settings,
     isGrowth,
     report,
     shopInfo,
@@ -1022,11 +1023,12 @@ function LlmsTxtGenerator({ shopInfo, en }: { shopInfo: { name: string; url: str
 // ============================================================================
 
 // Tab 类型定义
-type TabId = "schema" | "faq" | "llmstxt";
+type TabId = "schema" | "faq" | "llmstxt" | "recommendations";
 
 export default function AIVisibility() {
   const { 
     language, 
+    settings,
     isGrowth, 
     shopInfo, 
     report,
@@ -1038,12 +1040,19 @@ export default function AIVisibility() {
   const en = uiLanguage === "English";
   const location = useLocation();
 
+  const llmsFetcher = useFetcher<{ ok: boolean; intent?: string; message?: string }>();
   const [activeTab, setActiveTab] = useState<TabId>("schema");
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [exposurePreferences, setExposurePreferences] = useState(settings.exposurePreferences);
 
   // 监听 URL hash 并滚动到目标元素（用于从其他页面跳转后定位到具体设置）
   useEffect(() => {
     const hash = location.hash;
+    const searchParams = new URLSearchParams(location.search);
+    const tabParam = searchParams.get("tab");
+    if (tabParam === "schema" || tabParam === "faq" || tabParam === "llmstxt" || tabParam === "recommendations") {
+      setActiveTab(tabParam);
+    }
     if (hash) {
       // 如果 hash 指向 product-schema-settings，确保切换到 schema tab
       if (hash === "#product-schema-settings") {
@@ -1061,19 +1070,44 @@ export default function AIVisibility() {
       }, 150);
       return () => clearTimeout(timer);
     }
-  }, [location.hash]);
+    }
+  }, [location.hash, location.search]);
+
+  const llmsSaveMessage = llmsFetcher.data?.ok
+    ? (en ? "llms.txt settings saved." : "llms.txt 设置已保存。")
+    : llmsFetcher.data?.message || null;
+
+  const saveLlmsSettings = () => {
+    const payload = {
+      aiDomains: settings.aiDomains,
+      utmSources: settings.utmSources,
+      utmMediumKeywords: settings.utmMediumKeywords,
+      gmvMetric: settings.gmvMetric,
+      primaryCurrency: settings.primaryCurrency,
+      tagging: settings.tagging,
+      exposurePreferences,
+      languages: settings.languages,
+      timezones: settings.timezones,
+      pipelineStatuses: settings.pipelineStatuses,
+    };
+
+    llmsFetcher.submit(
+      { settings: JSON.stringify(payload), intent: "save_llms" },
+      { method: "post", action: "/app/additional", encType: "application/x-www-form-urlencoded" },
+    );
+  };
 
   return (
-    <s-page heading={en ? "AI Visibility Suite" : "AI 可见性套件"}>
+    <s-page heading={en ? "Discovery" : "发现优化"}>
       <div className={styles.page}>
         {/* 顶部导航 */}
         <div style={{ marginBottom: 16, display: "flex", gap: 12, justifyContent: "space-between", flexWrap: "wrap" }}>
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
             <Link to="/app" className={styles.secondaryButton}>
-              ← {en ? "Back to Dashboard" : "返回仪表盘"}
+              ← {en ? "Back to Overview" : "返回总览"}
             </Link>
-            <Link to="/app/optimization" className={styles.primaryButton}>
-              {en ? "View AI Score" : "查看 AI 评分"} →
+            <Link to="/app/analytics" className={styles.primaryButton}>
+              {en ? "View Analytics" : "查看分析"} →
             </Link>
           </div>
           
@@ -1102,9 +1136,9 @@ export default function AIVisibility() {
         <div className={`${styles.card} ${styles.heroCard}`}>
           <div className={styles.sectionHeader}>
             <div>
-              <p className={styles.sectionLabel}>{en ? "Revenue-to-Visibility Workflow" : "从收入验证到可见性优化"}</p>
+              <p className={styles.sectionLabel}>{en ? "Discovery Workspace" : "发现优化工作区"}</p>
               <h3 className={styles.sectionTitle}>
-                {en ? "Make Your Store Easier for AI to Understand and Recommend" : "让你的店铺更容易被 AI 理解并推荐"}
+                {en ? "Improve how AI systems understand and recommend your store" : "提升 AI 系统理解并推荐你店铺的能力"}
               </h3>
             </div>
             <span className={styles.badge} style={{ background: "#f6ffed", color: "#389e0d" }}>
@@ -1114,8 +1148,8 @@ export default function AIVisibility() {
 
           <p className={styles.heroLead}>
             {en
-              ? "After validating AI revenue in the dashboard, use this page to improve discovery with Schema, FAQ and llms.txt. Think of it as the optimization layer that sits on top of your attribution data."
-              : "当你已经在 Dashboard 里验证 AI 流量能带单之后，这一页就是下一步的优化层：用 Schema、FAQ 和 llms.txt 提升 AI 对店铺的理解和推荐概率。"}
+              ? "This is the main workspace for AI visibility. Use Schema, FAQ, llms.txt, and recommendations here after Analytics confirms AI traffic is worth scaling."
+              : "这里就是 AI 可见性优化的主工作台。当分析页确认 AI 流量值得继续投入后，就在这里集中处理 Schema、FAQ、llms.txt 和优化建议。"}
           </p>
 
           <div className={styles.summaryGrid}>
@@ -1136,11 +1170,17 @@ export default function AIVisibility() {
           </div>
 
           <div className={styles.heroActions}>
-            <Link to="/app/additional#llms-txt-settings" className={styles.secondaryButton}>
-              {en ? "Open llms.txt Settings" : "打开 llms.txt 设置"}
-            </Link>
-            <Link to="/app/optimization" className={styles.secondaryButton}>
-              {en ? "Open Full Optimization Report" : "打开完整优化报告"}
+            <button type="button" className={styles.secondaryButton} onClick={() => setActiveTab("llmstxt")}>
+              {en ? "Open llms.txt" : "打开 llms.txt"}
+            </button>
+            <button type="button" className={styles.secondaryButton} onClick={() => setActiveTab("schema")}>
+              {en ? "Open Schema" : "打开 Schema"}
+            </button>
+            <button type="button" className={styles.secondaryButton} onClick={() => setActiveTab("recommendations")}>
+              {en ? "Open Recommendations" : "打开优化建议"}
+            </button>
+            <Link to="/app/attribution" className={styles.secondaryButton}>
+              {en ? "Need attribution fixes?" : "归因不准？去调整设置"}
             </Link>
           </div>
         </div>
@@ -1159,6 +1199,7 @@ export default function AIVisibility() {
             { id: "schema" as const, label: en ? "🏷️ Product Schema" : "🏷️ 产品 Schema" },
             { id: "faq" as const, label: en ? "❓ FAQ Schema" : "❓ FAQ Schema" },
             { id: "llmstxt" as const, label: "📝 llms.txt" },
+            { id: "recommendations" as const, label: en ? "📋 Recommendations" : "📋 优化建议" },
           ] satisfies { id: TabId; label: string }[]).map((tab) => (
             <button
               key={tab.id}
@@ -1294,49 +1335,121 @@ export default function AIVisibility() {
                     {en ? "AI Crawling Preferences" : "AI 爬取偏好设置"}
                   </h3>
                 </div>
+                <div className={styles.inlineActions}>
+                  <button
+                    type="button"
+                    className={styles.secondaryButton}
+                    onClick={saveLlmsSettings}
+                    disabled={llmsFetcher.state !== "idle"}
+                  >
+                    {llmsFetcher.state !== "idle"
+                      ? (en ? "Saving..." : "保存中...")
+                      : (en ? "Save Exposure Settings" : "保存暴露设置")}
+                  </button>
+                </div>
+              </div>
+              <p className={styles.helpText} style={{ marginBottom: 16 }}>
+                {en
+                  ? "Configure which content types AI systems can discover, then save to refresh the public llms.txt output."
+                  : "配置 AI 系统可发现的内容类型，然后保存以刷新公开的 llms.txt 输出。"}
+              </p>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <input
+                      type="checkbox"
+                      checked={exposurePreferences.exposeProducts}
+                      onChange={(event) =>
+                        setExposurePreferences((prev) => ({ ...prev, exposeProducts: event.target.checked }))
+                      }
+                    />
+                    <span>{en ? "Expose product pages" : "暴露产品页"}</span>
+                  </label>
+                  <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <input
+                      type="checkbox"
+                      checked={exposurePreferences.exposeCollections}
+                      onChange={(event) =>
+                        setExposurePreferences((prev) => ({ ...prev, exposeCollections: event.target.checked }))
+                      }
+                    />
+                    <span>{en ? "Expose collections" : "暴露合集页"}</span>
+                  </label>
+                  <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <input
+                      type="checkbox"
+                      checked={exposurePreferences.exposeBlogs}
+                      onChange={(event) =>
+                        setExposurePreferences((prev) => ({ ...prev, exposeBlogs: event.target.checked }))
+                      }
+                    />
+                    <span>{en ? "Expose blog content" : "暴露博客内容"}</span>
+                  </label>
+                  <p style={{ margin: "8px 0 0", fontSize: 13, color: "#637381" }}>
+                    {en ? "Public URL:" : "公开地址："} <a href={`${shopInfo.url}/a/llms`} target="_blank" rel="noreferrer">{shopInfo.url}/a/llms</a>
+                  </p>
+                  {llmsSaveMessage && (
+                    <p style={{ margin: 0, fontSize: 13, color: llmsFetcher.data?.ok ? "#166534" : "#b91c1c" }}>
+                      {llmsSaveMessage}
+                    </p>
+                  )}
+                </div>
+                <div style={{ padding: 12, background: "#f8fafc", borderRadius: 8, border: "1px solid #e5e7eb" }}>
+                  <p style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 600, color: "#0f172a" }}>
+                    {en ? "When to use this" : "什么时候改这里"}
+                  </p>
+                  <p style={{ margin: 0, fontSize: 13, color: "#637381", lineHeight: 1.6 }}>
+                    {en
+                      ? "Use these toggles when you want to change what AI crawlers can discover. Attribution and data cleanup still belong in Attribution Settings."
+                      : "当你想控制 AI 爬虫能发现哪些内容时，就修改这里。归因准确率和数据清洗仍然放在「归因设置」里处理。"}
+                  </p>
+                </div>
               </div>
               <LlmsTxtGenerator shopInfo={shopInfo} en={en} />
             </>
           )}
-        </div>
 
-        {/* AI 优化建议摘要 */}
-        {report.suggestions.length > 0 && (
-          <div className={styles.card} style={{ marginTop: 20 }}>
-            <div className={styles.sectionHeader}>
-              <div>
-                <p className={styles.sectionLabel}>{en ? "Recommendations" : "优化建议"}</p>
-                <h3 className={styles.sectionTitle}>
-                  {en ? "Based on Your Store Analysis" : "基于店铺分析的建议"}
-                </h3>
-              </div>
-              <Link to="/app/optimization" style={{ color: "#008060", fontSize: 13, fontWeight: 500 }}>
-                {en ? "View All →" : "查看全部 →"}
-              </Link>
-            </div>
-            
-            <div className={styles.suggestionList} role="list" aria-label={en ? "Optimization suggestions" : "优化建议列表"}>
-              {report.suggestions.slice(0, 3).map((suggestion) => (
-                <div
-                  key={suggestion.id}
-                  role="listitem"
-                  aria-label={en ? suggestion.title.en : suggestion.title.zh}
-                  className={`${styles.suggestionCard} ${suggestion.priority === "high" ? styles.suggestionCardHigh : ""}`}
-                >
-                  <div className={styles.suggestionTitle}>
-                    {suggestion.priority === "high" && (
-                      <span className={styles.suggestionPriorityIcon} aria-label={en ? "High priority" : "高优先级"}>⚠️</span>
-                    )}
-                    {en ? suggestion.title.en : suggestion.title.zh}
-                  </div>
-                  <div className={styles.suggestionDescription}>
-                    {en ? suggestion.description.en : suggestion.description.zh}
-                  </div>
+          {activeTab === "recommendations" && (
+            <>
+              <div className={styles.sectionHeader}>
+                <div>
+                  <p className={styles.sectionLabel}>{en ? "Recommendations" : "优化建议"}</p>
+                  <h3 className={styles.sectionTitle}>
+                    {en ? "Prioritized discovery improvements" : "按优先级排序的发现优化建议"}
+                  </h3>
                 </div>
-              ))}
-            </div>
-          </div>
-        )}
+                <Link to="/app/analytics" className={styles.secondaryButton}>
+                  {en ? "Back to Analytics" : "返回分析"}
+                </Link>
+              </div>
+              <p className={styles.helpText} style={{ marginBottom: 16 }}>
+                {en
+                  ? "Handle the highest-impact fixes first. If the traffic evidence itself looks wrong, go back to Attribution Settings before optimizing visibility."
+                  : "优先处理影响最大的建议。如果连流量证据本身都不可信，请先回到「归因设置」修正数据，再来做可见性优化。"}
+              </p>
+              <div className={styles.suggestionList} role="list" aria-label={en ? "Optimization suggestions" : "优化建议列表"}>
+                {report.suggestions.map((suggestion) => (
+                  <div
+                    key={suggestion.id}
+                    role="listitem"
+                    aria-label={en ? suggestion.title.en : suggestion.title.zh}
+                    className={`${styles.suggestionCard} ${suggestion.priority === "high" ? styles.suggestionCardHigh : ""}`}
+                  >
+                    <div className={styles.suggestionTitle}>
+                      {suggestion.priority === "high" && (
+                        <span className={styles.suggestionPriorityIcon} aria-label={en ? "High priority" : "高优先级"}>⚠️</span>
+                      )}
+                      {en ? suggestion.title.en : suggestion.title.zh}
+                    </div>
+                    <div className={styles.suggestionDescription}>
+                      {en ? suggestion.description.en : suggestion.description.zh}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </s-page>
   );

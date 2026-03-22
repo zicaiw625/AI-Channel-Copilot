@@ -218,8 +218,8 @@ export default function Team() {
       <s-page heading={en ? "Team Access" : "团队访问"}>
         <div className={styles.page}>
           <div style={{ marginBottom: 16 }}>
-            <Link to="/app" className={styles.secondaryButton}>
-              ← {en ? "Back to Dashboard" : "返回仪表盘"}
+            <Link to="/app/billing" className={styles.secondaryButton}>
+              ← {en ? "Back to Billing" : "返回订阅管理"}
             </Link>
           </div>
           
@@ -267,8 +267,8 @@ export default function Team() {
       <div className={styles.page}>
         {/* 顶部导航 */}
         <div style={{ marginBottom: 16, display: "flex", gap: 12, justifyContent: "space-between" }}>
-          <Link to="/app" className={styles.secondaryButton}>
-            ← {en ? "Back to Dashboard" : "返回仪表盘"}
+          <Link to="/app/billing" className={styles.secondaryButton}>
+            ← {en ? "Back to Billing" : "返回订阅管理"}
           </Link>
           
           <div

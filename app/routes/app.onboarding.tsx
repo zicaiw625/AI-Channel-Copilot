@@ -291,8 +291,8 @@ function GrowthValueBanner({ en }: { en: boolean }) {
         </span>
         <span style={{ fontSize: 13, color: "#637381" }}>
           {en 
-            ? "One-click fixes: llms.txt + Schema + FAQ — Complete AI Visibility Suite" 
-            : "一键落地：llms.txt + Schema + FAQ — 完整 AI 可见性套件"}
+            ? "One-click fixes: llms.txt + Schema + FAQ — Complete AI Discovery Toolkit" 
+            : "一键落地：llms.txt + Schema + FAQ — 完整 AI 发现优化工具箱"}
         </span>
       </div>
       

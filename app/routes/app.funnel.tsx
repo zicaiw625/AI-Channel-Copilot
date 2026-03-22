@@ -312,16 +312,16 @@ export default function FunnelAnalysis() {
   };
 
   return (
-    <s-page heading={isEnglish ? "Funnel Analysis" : "漏斗分析"}>
+    <s-page heading={isEnglish ? "Analytics" : "分析"}>
       <div className={styles.page}>
         {/* 顶部导航 */}
         <div style={{ marginBottom: 16, display: "flex", gap: 12, justifyContent: "space-between" }}>
           <div style={{ display: "flex", gap: 12 }}>
             <Link to="/app" className={styles.secondaryButton}>
-              ← {isEnglish ? "Back to Dashboard" : "返回仪表盘"}
+              ← {isEnglish ? "Back to Overview" : "返回总览"}
             </Link>
-            <Link to="/app/optimization" className={styles.primaryButton}>
-              {isEnglish ? "AI Optimization Tips" : "AI 优化建议"} →
+            <Link to="/app/discovery" className={styles.primaryButton}>
+              {isEnglish ? "Open Discovery" : "进入发现优化"} →
             </Link>
           </div>
           
@@ -338,6 +338,34 @@ export default function FunnelAnalysis() {
                   : timeRanges[key].label}
               </button>
             ))}
+          </div>
+        </div>
+
+        <div className={`${styles.card} ${styles.heroCard}`}>
+          <div className={styles.sectionHeader}>
+            <div>
+              <p className={styles.sectionLabel}>{isEnglish ? "Analytics Workspace" : "分析工作区"}</p>
+              <h3 className={styles.sectionTitle}>
+                {isEnglish ? "Validate whether AI traffic converts better than the rest" : "验证 AI 流量是否比其他渠道更容易转化"}
+              </h3>
+            </div>
+            <span className={styles.smallBadge}>{isEnglish ? "Stage 2" : "第 2 阶段"}</span>
+          </div>
+          <p className={styles.heroLead}>
+            {isEnglish
+              ? "Use funnel data to decide whether AI traffic is worth scaling. Once the conversion story looks solid, continue into Discovery to improve Schema, FAQ, and llms.txt."
+              : "先用漏斗分析判断 AI 流量值不值得继续放大；如果转化质量成立，再进入发现优化，继续完善 Schema、FAQ 和 llms.txt。"}
+          </p>
+          <div className={styles.heroActions}>
+            <Link to="/app/copilot" className={styles.secondaryButton}>
+              {isEnglish ? "Ask Copilot" : "查看 Copilot 问答"}
+            </Link>
+            <Link to="/app/multi-store" className={styles.secondaryButton}>
+              {isEnglish ? "Multi-store View" : "查看多店铺汇总"}
+            </Link>
+            <Link to="/app/attribution" className={styles.secondaryButton}>
+              {isEnglish ? "Need cleaner attribution?" : "归因不准？去调整设置"}
+            </Link>
           </div>
         </div>
 

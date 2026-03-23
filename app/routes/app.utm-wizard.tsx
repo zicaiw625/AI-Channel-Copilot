@@ -11,14 +11,16 @@ import { getSettings } from "../lib/settings.server";
 import { useUILanguage } from "../lib/useUILanguage";
 import { resolveUILanguageFromRequest } from "../lib/language.server";
 import styles from "../styles/app.dashboard.module.css";
-import { buildEmbeddedAppPath } from "../lib/navigation";
+import { buildUTMWizardBackHref, parseBackTo } from "../lib/navigation";
 
 // ============================================================================
 // Loader
 // ============================================================================
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const auth = await authenticate.admin(request);
+  if (auth instanceof Response) throw auth;
+  const { session } = auth;
   const shopDomain = session.shop;
   const settings = await getSettings(shopDomain);
 
@@ -43,10 +45,8 @@ export default function UTMWizard() {
   const en = uiLanguage === "English";
 
   const location = useLocation();
-  const backTo = new URLSearchParams(location.search).get("backTo");
-  const additionalHref = buildEmbeddedAppPath("/app/additional/attribution", location.search, { backTo: null });
-  const dashboardHref = buildEmbeddedAppPath("/app", location.search, { backTo: null });
-  const backHref = backTo === "dashboard" ? dashboardHref : additionalHref;
+  const backTo = parseBackTo(new URLSearchParams(location.search).get("backTo"));
+  const backHref = buildUTMWizardBackHref(location.search);
   const backLabel = backTo === "dashboard"
     ? (en ? "Back to Dashboard" : "返回仪表盘")
     : (en ? "Back to Attribution & Advanced Settings" : "返回归因与高级设置");

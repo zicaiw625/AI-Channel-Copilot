@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
 import { Link, useLocation } from "react-router";
 
-import { buildEmbeddedAppPath } from "../../lib/navigation";
+import { buildAiVisibilityHref } from "../../lib/navigation";
 import type { OptimizationSuggestion } from "../../lib/aiOptimization.server";
 
 const STATUS_CONFIG = {
@@ -207,8 +207,8 @@ export const SuggestionCard = ({
   const isSchemaEmbedSuggestion = suggestion.id === "schema-embed-disabled";
   const isLlmsTxtSuggestion = suggestion.id === "llms-txt-optimization";
   const quickActionHref = isSchemaEmbedSuggestion
-    ? buildEmbeddedAppPath("/app/ai-visibility", location.search, { tab: "schema" }, "#product-schema-settings")
-    : buildEmbeddedAppPath("/app/ai-visibility", location.search, { tab: "llms" });
+    ? buildAiVisibilityHref(location.search, { tab: "schema", fromTab: null, backTo: null, hash: "#product-schema-settings" })
+    : buildAiVisibilityHref(location.search, { tab: "llms", fromTab: null, backTo: null });
 
   return (
     <div

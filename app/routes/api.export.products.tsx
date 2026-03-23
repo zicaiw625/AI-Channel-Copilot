@@ -13,7 +13,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   let session;
   try {
     const auth = await authenticate.admin(request);
-    session = auth.session;
+    if (auth instanceof Response) {
+      if (!isDemoMode()) throw auth;
+      session = undefined;
+    } else {
+      session = auth.session;
+    }
   } catch (error) {
     if (!isDemoMode()) throw error;
   }

@@ -31,7 +31,13 @@ import { downloadFromApi } from "../../lib/downloadUtils";
 import { t } from "../../lib/i18n";
 import {
   buildEmbeddedAppPath,
+  buildAdditionalBackHref,
+  buildAiVisibilityHref,
+  buildDashboardHref,
   getPreservedSearchParams,
+  buildUTMWizardHref,
+  parseBackTo,
+  parseWorkspaceTab,
 } from "../../lib/navigation";
 import { LlmsTxtPanel } from "../seo/LlmsTxtPanel";
 import styles from "../../styles/app.settings.module.css";
@@ -193,11 +199,15 @@ export function useAdditionalController(data: AdditionalLoaderData): AdditionalC
   const [advancedExpanded, setAdvancedExpanded] = useState(false);
 
   const locale = language === "English" ? "en-US" : "zh-CN";
-  const backTo = location.search ? new URLSearchParams(location.search).get("backTo") : null;
-  const dashboardHref = buildEmbeddedAppPath("/app", location.search, { backTo: null });
-  const workspaceHref = buildEmbeddedAppPath("/app/ai-visibility", location.search, { tab: "llms", backTo: null });
-  const utmWizardHref = buildEmbeddedAppPath("/app/utm-wizard", location.search, { backTo: "additional" });
-  const backHref = backTo === "dashboard" ? dashboardHref : workspaceHref;
+  const backTo = location.search ? parseBackTo(new URLSearchParams(location.search).get("backTo")) : null;
+  const dashboardHref = buildDashboardHref(location.search);
+  const activeWorkspaceTab = parseWorkspaceTab(
+    new URLSearchParams(location.search).get("tab") ?? new URLSearchParams(location.search).get("fromTab"),
+    "llms",
+  );
+  const workspaceHref = buildAiVisibilityHref(location.search, { tab: activeWorkspaceTab, fromTab: null, backTo: null });
+  const utmWizardHref = buildUTMWizardHref(location.search, { backTo: "additional" });
+  const backHref = buildAdditionalBackHref(location.search);
   const backLabel = backTo === "dashboard"
     ? (language === "English" ? "Back to Dashboard" : "返回仪表盘")
     : (language === "English" ? "Back to AI SEO Workspace" : "返回 AI SEO 工作台");

@@ -79,7 +79,9 @@ async function fetchStoreData(shop: string, range: DateRange): Promise<StoreSnap
 }
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const auth = await authenticate.admin(request);
+  if (auth instanceof Response) throw auth;
+  const { session } = auth;
   const shopDomain = session.shop;
   const isGrowth = await hasFeature(shopDomain, FEATURES.MULTI_STORE);
   const settings = await getSettings(shopDomain);

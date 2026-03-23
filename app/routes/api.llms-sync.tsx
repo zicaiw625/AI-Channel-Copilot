@@ -6,7 +6,9 @@ import { getLlmsStatus, syncLlmsTxt } from "../lib/llms.server";
 import { logger } from "../lib/logger.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { admin, session } = await authenticate.admin(request);
+  const auth = await authenticate.admin(request);
+  if (auth instanceof Response) throw auth;
+  const { admin, session } = auth;
   const shopDomain = session?.shop || "";
 
   if (!shopDomain || !admin) {

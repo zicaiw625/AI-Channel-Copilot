@@ -21,8 +21,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   let session = null;
   try {
     const auth = await authenticate.admin(request);
-    _admin = auth.admin;
-    session = auth.session;
+    if (auth instanceof Response) {
+      if (!isDemoMode()) throw auth;
+      _admin = null;
+      session = null;
+    } else {
+      _admin = auth.admin;
+      session = auth.session;
+    }
   } catch (error) {
     if (!isDemoMode()) throw error;
   }

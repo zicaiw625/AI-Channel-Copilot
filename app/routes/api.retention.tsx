@@ -10,7 +10,9 @@ import {
 import { enforceRateLimit, RateLimitRules } from "../lib/security/rateLimit.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const auth = await authenticate.admin(request);
+  if (auth instanceof Response) throw auth;
+  const { session } = auth;
   const shopDomain = session?.shop || "";
   if (!shopDomain) {
     return Response.json({ ok: false, message: "unauthorized" }, { status: 401 });

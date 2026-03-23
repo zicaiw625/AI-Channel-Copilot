@@ -10,7 +10,9 @@ import { resolveUILanguageFromRequest } from "../lib/language.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const url = new URL(request.url);
-  const { admin, session } = await authenticate.admin(request);
+  const auth = await authenticate.admin(request);
+  if (auth instanceof Response) throw auth;
+  const { admin, session } = auth;
   const shopDomain = session?.shop || "";
   if (!shopDomain) {
     return Response.json({ ok: false, message: "Unauthorized" }, { status: 401 });

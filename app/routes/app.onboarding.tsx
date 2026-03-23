@@ -46,7 +46,14 @@ interface AISnapshot {
 // ============================================================================
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { admin, session } = await authenticate.admin(request);
+  const demo = isDemoMode();
+  const auth = await authenticate.admin(request);
+  if (auth instanceof Response) {
+    if (!demo) throw auth;
+    // Demo 模式下允许继续渲染引导页（缺少 session 时显示未授权）。
+    return { language: resolveUILanguageFromRequest(request, "中文"), authorized: false };
+  }
+  const { admin, session } = auth;
   if (!session?.shop) {
     // 正常情况下 Shopify SDK 会在缺少 session 时触发 OAuth 并返回 Response
     // 这里兜底：避免渲染出 “Unauthorized” 导致新安装用户看不到订阅引导。
@@ -222,7 +229,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
   
   try {
-    const { admin, session } = await authenticate.admin(request);
+    const auth = await authenticate.admin(request);
+    if (auth instanceof Response) throw auth;
+    const { admin, session } = auth;
     const shopDomain = session?.shop || "";
     const url = new URL(request.url);
     const returnUrlContext = {

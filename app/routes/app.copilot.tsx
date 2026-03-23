@@ -44,6 +44,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const auth = await authenticate.admin(request);
     session = auth.session;
   } catch (error) {
+    // authenticate.admin 在缺少会话/需要 OAuth 时可能通过抛出 Response 触发重定向；
+    // 仅在非 demo 模式放行，否则 demo 流程会被 OAuth/redirect 打断。
+    if (error instanceof Response) {
+      if (!demo) throw error;
+    }
     if (!demo) {
       const redirectUrl = buildEmbeddedAppPath("/app", new URL(request.url).search, { backTo: null, fromTab: null, tab: null });
       throw new Response(null, { 

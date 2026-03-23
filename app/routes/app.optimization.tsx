@@ -3,18 +3,20 @@ import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { Link, useLoaderData, useLocation, useNavigate, useSearchParams } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 
-import { CopyButton, OptimizationStatusBadge, ScoreGauge, SuggestionCard, WORKSPACE_TABS, formatOptimizationCurrency } from "../components/optimization/OptimizationPanels";
+import { CopyButton, OptimizationStatusBadge, ScoreGauge, SuggestionCard, formatOptimizationCurrency } from "../components/optimization/OptimizationPanels";
 import { authenticate } from "../shopify.server";
 import { getSettings } from "../lib/settings.server";
 import { generateAIOptimizationReport } from "../lib/aiOptimization.server";
 import { useUILanguage } from "../lib/useUILanguage";
 import { requireEnv } from "../lib/env.server";
-import { buildEmbeddedAppPath, getPreservedSearchParams } from "../lib/navigation";
+import { buildAiVisibilityHref, buildFunnelHref, buildOptimizationBackHref, getPreservedSearchParams, parseBackTo, parseWorkspaceTab } from "../lib/navigation";
 import { resolveUILanguageFromRequest } from "../lib/language.server";
 import styles from "../styles/app.dashboard.module.css";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { admin, session } = await authenticate.admin(request);
+  const auth = await authenticate.admin(request);
+  if (auth instanceof Response) throw auth;
+  const { admin, session } = auth;
 
   const shopDomain = session.shop;
   const settings = await getSettings(shopDomain);
@@ -73,13 +75,15 @@ export default function AIOptimization() {
   
   // 使用后端返回的语言来保证 UI 和数据内容一致
   const isEnglish = language === "English";
-  const backTo = searchParams.get("backTo");
-  const funnelHref = buildEmbeddedAppPath("/app/funnel", location.search, { backTo: "optimization" });
-  const fromTab = searchParams.get("fromTab");
-  const workspaceTab = WORKSPACE_TABS.has(fromTab ?? "") ? fromTab : "llms";
-  const workspaceLlmsHref = buildEmbeddedAppPath("/app/ai-visibility", location.search, { tab: workspaceTab, fromTab: null, backTo: null });
-  const dashboardHref = buildEmbeddedAppPath("/app", location.search, { fromTab: null, backTo: null });
-  const backHref = backTo === "dashboard" ? dashboardHref : workspaceLlmsHref;
+  const backTo = parseBackTo(searchParams.get("backTo"));
+  const workspaceTab = parseWorkspaceTab(searchParams.get("fromTab"), "llms");
+  const funnelHref = buildFunnelHref(location.search, {
+    backTo: "optimization",
+    fromTab: workspaceTab,
+    optimizationBackTo: backTo,
+  });
+  const backHref = buildOptimizationBackHref(location.search);
+  const workspaceLlmsHref = buildAiVisibilityHref(location.search, { tab: workspaceTab, fromTab: null, backTo: null });
   const backLabel = backTo === "dashboard"
     ? (isEnglish ? "Back to Dashboard" : "返回仪表盘")
     : (isEnglish ? "Back to AI SEO Workspace" : "返回 AI SEO 工作台");

@@ -42,6 +42,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     admin = auth.admin;
     session = auth.session;
   } catch (e) {
+    // authenticate.admin 在缺少会话/需要 OAuth 时可能通过抛出 Response 触发重定向；
+    // 仅在非 demo 模式放行，否则 demo 流程会被 OAuth/redirect 打断。
+    if (e instanceof Response) {
+      if (!demo) throw e;
+    }
     authFailed = true;
   }
   
@@ -217,6 +222,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     session = auth.session;
     shopDomain = session?.shop || "";
   } catch (authError) {
+    // 同步放行 authenticate.admin 可能抛出的 OAuth/重定向 Response
+    if (authError instanceof Response) throw authError;
     // 生产环境禁止 /auth/login（会返回 404）。这里直接走标准 /auth OAuth 流程。
     const originalForm = await request.formData().catch(() => new FormData());
     const shop = originalForm.get("shop") ? String(originalForm.get("shop")) : "";

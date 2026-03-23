@@ -109,7 +109,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           headers: { Location: url.toString(), "Set-Cookie": clearCookie("aicc_billing_ctx") },
         });
       }
-    } catch {
+    } catch (err) {
+      // 302 Response 也会作为异常被捕获；不要吞掉重定向，否则 cookie fallback 永远不会生效。
+      if (err instanceof Response) throw err;
       // ignore cookie parsing errors
     }
   }
@@ -182,7 +184,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     if (admin) {
       await syncSubscriptionFromShopify(admin, shopDomain);
     }
-  } catch {
+  } catch (error) {
+    // control flow: 不要吞掉 SDK 可能抛出的重定向 Response
+    if (error instanceof Response) throw error;
     // ignore — 即使同步失败，也继续把用户送回应用；应用内会再走正常鉴权/引导
   }
 

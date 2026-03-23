@@ -20,7 +20,12 @@ import { EmbedStatusCard, FAQGenerator, SchemaGenerator, SchemaPreview } from ".
 import { TabPanel, Tabs } from "../components/navigation/Tabs";
 import { LlmsTxtPanel } from "../components/seo/LlmsTxtPanel";
 import { Banner } from "../components/ui";
-import { buildEmbeddedAppPath, getPreservedSearchParams } from "../lib/navigation";
+import {
+  buildOptimizationHref,
+  getPreservedSearchParams,
+  parseAiVisibilityTab,
+  type WorkspaceTab,
+} from "../lib/navigation";
 import { resolveUILanguageFromRequest } from "../lib/language.server";
 
 // ============================================================================
@@ -28,7 +33,9 @@ import { resolveUILanguageFromRequest } from "../lib/language.server";
 // ============================================================================
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { admin, session } = await authenticate.admin(request);
+  const auth = await authenticate.admin(request);
+  if (auth instanceof Response) throw auth;
+  const { admin, session } = auth;
   const shopDomain = session.shop;
   const settings = await getSettings(shopDomain);
   // 优先使用服务端 cookie `aicc_language`，避免与前端切换语言产生中英混排
@@ -158,13 +165,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 // ============================================================================
 
 // Tab 类型定义
-type TabId = "schema" | "faq" | "llms";
-
-const VALID_TABS: TabId[] = ["schema", "faq", "llms"];
-
-function resolveTab(value: string | null): TabId {
-  return VALID_TABS.includes(value as TabId) ? (value as TabId) : "llms";
-}
+type TabId = WorkspaceTab;
 
 export default function AIVisibility() {
   const { 
@@ -184,14 +185,15 @@ export default function AIVisibility() {
   const location = useLocation();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = resolveTab(searchParams.get("tab"));
+  const activeTab = parseAiVisibilityTab(searchParams.get("tab"));
   const [showAdvanced, setShowAdvanced] = useState(false);
 
   useEffect(() => {
     const currentTab = searchParams.get("tab");
-    if (!VALID_TABS.includes(currentTab as TabId)) {
+    const resolvedTab = parseAiVisibilityTab(currentTab);
+    if (currentTab !== resolvedTab) {
       const next = getPreservedSearchParams(location.search);
-      next.set("tab", "llms");
+      next.set("tab", resolvedTab);
       setSearchParams(next, { replace: true });
     }
   }, [location.search, searchParams, setSearchParams]);
@@ -390,7 +392,7 @@ export default function AIVisibility() {
                   {en ? "Based on Your Store Analysis" : "基于店铺分析的建议"}
                 </h3>
               </div>
-              <Link to={buildEmbeddedAppPath("/app/optimization", location.search, { backTo: "workspace", fromTab: activeTab, tab: null })} style={{ color: "#008060", fontSize: 13, fontWeight: 500 }}>
+              <Link to={buildOptimizationHref(location.search, { backTo: "workspace", fromTab: activeTab })} style={{ color: "#008060", fontSize: 13, fontWeight: 500 }}>
                 {en ? "View All →" : "查看全部 →"}
               </Link>
             </div>

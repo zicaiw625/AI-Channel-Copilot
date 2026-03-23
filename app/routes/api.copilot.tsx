@@ -40,8 +40,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   
   // Demo 模式下跳过认证，允许未登录访问
   if (!demo) {
-    const { session } = await authenticate.admin(request);
-    shopDomain = session?.shop || "";
+    const auth = await authenticate.admin(request);
+    if (auth instanceof Response) throw auth;
+    shopDomain = auth.session?.shop || "";
     
     // 非 Demo 模式下，检查功能权限
     await requireFeature(shopDomain, FEATURES.COPILOT);

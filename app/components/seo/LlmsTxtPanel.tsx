@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useFetcher, useLocation } from "react-router";
 import type { SettingsDefaults } from "../../lib/aiData";
 import type { LlmsStatus } from "../../lib/llms.server";
-import { buildEmbeddedAppPath } from "../../lib/navigation";
+import { buildAiVisibilityHref, buildBillingHref } from "../../lib/navigation";
 
 type ExposurePreferences = SettingsDefaults["exposurePreferences"];
 
@@ -141,8 +141,8 @@ export function LlmsTxtPanel({
   const activeExposurePreferences = exposurePreferences ?? localExposurePreferences;
   const meta = statusMeta(language, statusInfo.status);
   const liveUrl = statusInfo.publicUrl || (shopDomain ? `https://${shopDomain}/a/llms` : "");
-  const billingHref = buildEmbeddedAppPath("/app/billing", location.search);
-  const defaultWorkspaceHref = workspaceHref || buildEmbeddedAppPath("/app/ai-visibility", location.search, { tab: "llms" });
+  const billingHref = buildBillingHref(location.search);
+  const defaultWorkspaceHref = workspaceHref || buildAiVisibilityHref(location.search, { tab: "llms", fromTab: null, backTo: null });
   const downloadHref = canUseAdvanced ? "/api/llms-txt-preview?download=1" : billingHref;
 
   const updateExposurePreferences = useCallback((next: ExposurePreferences) => {

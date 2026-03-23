@@ -9,7 +9,7 @@ import { Link, useLocation } from "react-router";
 import { t } from "../../lib/i18n";
 import type { DashboardOverview, FormatHelpers, Lang } from "./types";
 import styles from "../../styles/app.dashboard.module.css";
-import { buildEmbeddedAppPath } from "../../lib/navigation";
+import { buildUTMWizardHref } from "../../lib/navigation";
 
 // 低样本量阈值
 const LOW_SAMPLE_THRESHOLD = 10;
@@ -231,7 +231,7 @@ function DetectionCoverageCard({
   const statusColor = isLowCoverage ? "#de3618" : isMediumCoverage ? "#f4a623" : "#50b83c";
   const statusBg = isLowCoverage ? "#fef3f3" : isMediumCoverage ? "#fffbe6" : "#f6ffed";
   const statusBorder = isLowCoverage ? "#ffccc7" : isMediumCoverage ? "#ffe58f" : "#b7eb8f";
-  const utmWizardHref = buildEmbeddedAppPath("/app/utm-wizard", location.search, { backTo: "dashboard" });
+  const utmWizardHref = buildUTMWizardHref(location.search, { backTo: "dashboard" });
   
   return (
     <div

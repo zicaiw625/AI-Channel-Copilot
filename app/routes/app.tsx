@@ -16,7 +16,13 @@ import { resolveDateRange } from "../lib/aiData";
 import { MAX_BACKFILL_DURATION_MS, MAX_BACKFILL_ORDERS } from "../lib/constants";
 import { ensureWebhooks } from "../lib/webhooks.server";
 import { extractAdminClient } from "../lib/graphqlSdk.server";
-import { buildEmbeddedAppPath } from "../lib/navigation";
+import {
+  buildAiVisibilityHref,
+  buildAttributionHref,
+  buildDashboardHref,
+  buildOptimizationHref,
+  buildBillingHref,
+} from "../lib/navigation";
 import { resolveUILanguageFromRequest } from "../lib/language.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -29,15 +35,25 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   try {
     const auth = await authenticate.admin(request);
-    admin = auth.admin;
-    session = auth.session;
+    if (auth instanceof Response) {
+      authFailed = true;
+      const url = new URL(request.url);
+      const path = url.pathname.toLowerCase();
+      // 仅允许 redirect 页面在无 session 时继续（用于跳转到 Shopify 确认页）。
+      // onboarding / billing 必须有有效 session，否则应触发 Shopify OAuth 流程。
+      const allowUnauth = path.includes("/app/redirect") || path.includes("/app/billing/confirm");
+      if (!demo && !allowUnauth) throw auth;
+    } else {
+      admin = auth.admin;
+      session = auth.session;
+    }
   } catch (e) {
     authFailed = true;
     const url = new URL(request.url);
     const path = url.pathname.toLowerCase();
     // 仅允许 redirect 页面在无 session 时继续（用于跳转到 Shopify 确认页）。
     // onboarding / billing 必须有有效 session，否则应触发 Shopify OAuth 流程。
-    const allowUnauth = path.includes("/app/redirect");
+    const allowUnauth = path.includes("/app/redirect") || path.includes("/app/billing/confirm");
     if (!demo && !allowUnauth) throw e;
   }
 
@@ -129,6 +145,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
             (path.startsWith("/app/") &&
                 !path.includes("/app/onboarding") &&
                 !path.includes("/app/billing") &&
+                !path.includes("/app/billing/confirm") &&
                 !path.includes("/app/additional") &&
                 !path.includes("/app/redirect"));
 
@@ -165,15 +182,28 @@ export default function App() {
   const { apiKey, language, plan, trialDaysLeft, isDevShop } = useLoaderData<typeof loader>();
   const uiLanguage = useUILanguage(language);
   const location = useLocation();
+  const originIsDashboard = location.pathname.toLowerCase() === "/app";
 
   return (
     <AppProvider embedded apiKey={apiKey}>
       <NavMenu>
-        <a href={buildEmbeddedAppPath("/app", location.search, { backTo: null, fromTab: null, tab: null })} rel="home">{uiLanguage === "English" ? "Dashboard" : "仪表盘"}</a>
-        <a href={buildEmbeddedAppPath("/app/additional/attribution", location.search, { backTo: null, fromTab: null, tab: null })}>{uiLanguage === "English" ? "Attribution" : "归因规则"}</a>
-        <a href={buildEmbeddedAppPath("/app/ai-visibility", location.search, { backTo: null, fromTab: null, tab: "llms" })}>{uiLanguage === "English" ? "AI SEO Workspace" : "AI SEO 工作台"}</a>
-        <a href={buildEmbeddedAppPath("/app/optimization", location.search, { backTo: null, fromTab: null, tab: null })}>{uiLanguage === "English" ? "Optimization" : "优化建议"}</a>
-        <a href={buildEmbeddedAppPath("/app/billing", location.search, { backTo: null, fromTab: null, tab: null })}>{uiLanguage === "English" ? "Billing" : "计费管理"}</a>
+        <a href={buildDashboardHref(location.search)} rel="home">{uiLanguage === "English" ? "Dashboard" : "仪表盘"}</a>
+        <a
+          href={buildAttributionHref(location.search, { backTo: originIsDashboard ? "dashboard" : null })}
+        >
+          {uiLanguage === "English" ? "Attribution" : "归因规则"}
+        </a>
+        <a href={buildAiVisibilityHref(location.search, { tab: "llms", backTo: null, fromTab: null })}>
+          {uiLanguage === "English" ? "AI SEO Workspace" : "AI SEO 工作台"}
+        </a>
+        <a
+          href={buildOptimizationHref(location.search, { backTo: originIsDashboard ? "dashboard" : null, fromTab: null })}
+        >
+          {uiLanguage === "English" ? "Optimization" : "优化建议"}
+        </a>
+        <a href={buildBillingHref(location.search)}>
+          {uiLanguage === "English" ? "Billing" : "计费管理"}
+        </a>
       </NavMenu>
 
       <div style={{ padding: '10px 16px', background: '#f1f2f3', borderBottom: '1px solid #dfe3e8', display: 'flex', alignItems: 'center', gap: '12px', fontSize: '13px' }}>

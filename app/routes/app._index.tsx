@@ -26,7 +26,16 @@ import { readAppFlags } from "../lib/env.server";
 import { logger } from "../lib/logger.server";
 import { getLlmsStatus } from "../lib/llms.server";
 import { LlmsTxtPanel } from "../components/seo/LlmsTxtPanel";
-import { buildEmbeddedAppPath, getPreservedSearchParams } from "../lib/navigation";
+import {
+  buildAiVisibilityHref,
+  buildAttributionHref,
+  buildBillingHref,
+  buildEmbeddedAppPath,
+  buildFunnelHref,
+  buildOptimizationHref,
+  buildUTMWizardHref,
+  getPreservedSearchParams,
+} from "../lib/navigation";
 
 // Dashboard 子组件
 import { 
@@ -51,6 +60,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     admin = auth.admin;
     session = auth.session;
   } catch (error) {
+    // authenticate.admin 在缺少会话/需要 OAuth 时可能通过抛出 Response 触发重定向；
+    // 仅在非 demo 模式放行，否则 demo 流程会被 OAuth/redirect 打断。
+    if (error instanceof Response) {
+      if (!_demo) throw error;
+    }
     authFailed = true;
   }
 
@@ -227,17 +241,17 @@ export default function Index() {
     (iso?: string | null) => (iso ? timeFormatter.format(new Date(iso)) : (uiLanguage === "English" ? "None" : "暂无")),
     [timeFormatter, uiLanguage],
   );
-  const billingHref = buildEmbeddedAppPath("/app/billing", location.search);
-  const attributionHref = buildEmbeddedAppPath("/app/additional/attribution", location.search, { backTo: "dashboard" });
-  const diagnosticsHref = buildEmbeddedAppPath("/app/additional/diagnostics", location.search, { backTo: "dashboard" });
-  const exportsHref = buildEmbeddedAppPath("/app/additional/export", location.search, { backTo: "dashboard" });
-  const healthHref = buildEmbeddedAppPath("/app/additional/health", location.search, { backTo: "dashboard" });
-  const optimizationHref = buildEmbeddedAppPath("/app/optimization", location.search, { backTo: "dashboard" });
-  const funnelHref = buildEmbeddedAppPath("/app/funnel", location.search, { backTo: "dashboard" });
+  const billingHref = buildBillingHref(location.search);
+  const attributionHref = buildAttributionHref(location.search, { backTo: "dashboard" });
+  const diagnosticsHref = buildEmbeddedAppPath("/app/additional/diagnostics", location.search, { backTo: "dashboard", fromTab: null, tab: null });
+  const exportsHref = buildEmbeddedAppPath("/app/additional/export", location.search, { backTo: "dashboard", fromTab: null, tab: null });
+  const healthHref = buildEmbeddedAppPath("/app/additional/health", location.search, { backTo: "dashboard", fromTab: null, tab: null });
+  const optimizationHref = buildOptimizationHref(location.search, { backTo: "dashboard", fromTab: null });
+  const funnelHref = buildFunnelHref(location.search, { backTo: "dashboard" });
   const copilotHref = buildEmbeddedAppPath("/app/copilot", location.search);
-  const utmWizardHref = buildEmbeddedAppPath("/app/utm-wizard", location.search, { backTo: "dashboard" });
+  const utmWizardHref = buildUTMWizardHref(location.search, { backTo: "dashboard" });
   const multiStoreHref = buildEmbeddedAppPath("/app/multi-store", location.search);
-  const aiWorkspaceHref = buildEmbeddedAppPath("/app/ai-visibility", location.search, { tab: "llms" });
+  const aiWorkspaceHref = buildAiVisibilityHref(location.search, { tab: "llms", fromTab: null, backTo: null });
   const webhookExportHref = buildEmbeddedAppPath("/app/webhook-export", location.search);
   const teamHref = buildEmbeddedAppPath("/app/team", location.search);
 

@@ -3,6 +3,10 @@ import { describe, expect, it } from "vitest";
 import {
   buildEmbeddedAppPath,
   buildEmbeddedAppUrl,
+  buildAttributionHref,
+  buildAdditionalBackHref,
+  buildFunnelBackHref,
+  buildFunnelHref,
   getPreservedSearchParams,
   getShopifyContextParams,
 } from "../app/lib/navigation";
@@ -85,5 +89,79 @@ describe("navigation helpers", () => {
     params.set("tab", "faq");
 
     expect(params.toString()).toBe("host=abc&embedded=1&lang=en&foo=bar&tab=faq");
+  });
+
+  it("buildAttributionHref preserves ai visibility tab/fromTab context", () => {
+    const href = buildAttributionHref(
+      "?host=abc&embedded=1&locale=en&lang=English&tab=faq&fromTab=schema&foo=bar&backTo=optimization",
+      { backTo: "dashboard" },
+    );
+
+    const url = new URL(`https://example.com${href}`);
+    expect(url.pathname).toBe("/app/additional/attribution");
+    expect(url.searchParams.get("tab")).toBe("faq");
+    expect(url.searchParams.get("fromTab")).toBe("schema");
+    expect(url.searchParams.get("backTo")).toBe("dashboard");
+    expect(url.searchParams.get("foo")).toBe("bar");
+  });
+
+  it("buildAdditionalBackHref restores matching ai-visibility tab", () => {
+    const href = buildAdditionalBackHref(
+      "?host=abc&embedded=1&locale=en&lang=English&backTo=workspace&tab=schema&fromTab=faq&foo=bar",
+    );
+
+    const url = new URL(`https://example.com${href}`);
+    expect(url.pathname).toBe("/app/ai-visibility");
+    expect(url.searchParams.get("tab")).toBe("schema");
+    // 返回 workspace 时清空 return-state 参数
+    expect(url.searchParams.has("backTo")).toBe(false);
+    expect(url.searchParams.has("fromTab")).toBe(false);
+  });
+
+  it("buildAdditionalBackHref falls back to fromTab when tab missing", () => {
+    const href = buildAdditionalBackHref(
+      "?host=abc&embedded=1&locale=en&lang=English&backTo=workspace&fromTab=schema&foo=bar",
+    );
+
+    const url = new URL(`https://example.com${href}`);
+    expect(url.pathname).toBe("/app/ai-visibility");
+    expect(url.searchParams.get("tab")).toBe("schema");
+  });
+
+  it("buildFunnelHref preserves optimization fromTab context", () => {
+    const href = buildFunnelHref(
+      "?host=abc&embedded=1&locale=en&lang=English&fromTab=schema&foo=bar",
+      { backTo: "optimization", fromTab: "schema", optimizationBackTo: "dashboard" },
+    );
+
+    const url = new URL(`https://example.com${href}`);
+    expect(url.pathname).toBe("/app/funnel");
+    expect(url.searchParams.get("backTo")).toBe("optimization");
+    expect(url.searchParams.get("fromTab")).toBe("schema");
+    expect(url.searchParams.get("optimizationBackTo")).toBe("dashboard");
+    expect(url.searchParams.has("tab")).toBe(false);
+    expect(url.searchParams.get("foo")).toBe("bar");
+  });
+
+  it("buildFunnelBackHref restores matching optimization fromTab context", () => {
+    const href = buildFunnelBackHref(
+      "?host=abc&embedded=1&locale=en&lang=English&backTo=optimization&fromTab=faq&foo=bar",
+    );
+
+    const url = new URL(`https://example.com${href}`);
+    expect(url.pathname).toBe("/app/optimization");
+    expect(url.searchParams.has("backTo")).toBe(false);
+    expect(url.searchParams.get("fromTab")).toBe("faq");
+  });
+
+  it("buildFunnelBackHref preserves optimization backTo target", () => {
+    const href = buildFunnelBackHref(
+      "?host=abc&embedded=1&locale=en&lang=English&backTo=optimization&fromTab=faq&optimizationBackTo=dashboard&foo=bar",
+    );
+
+    const url = new URL(`https://example.com${href}`);
+    expect(url.pathname).toBe("/app/optimization");
+    expect(url.searchParams.get("backTo")).toBe("dashboard");
+    expect(url.searchParams.get("fromTab")).toBe("faq");
   });
 });

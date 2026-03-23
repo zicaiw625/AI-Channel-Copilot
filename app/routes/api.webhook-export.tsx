@@ -330,7 +330,9 @@ async function sendWebhook(
 // ============================================================================
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const auth = await authenticate.admin(request);
+  if (auth instanceof Response) throw auth;
+  const { session } = auth;
   const shopDomain = session.shop;
   
   await requireFeature(shopDomain, FEATURES.MULTI_STORE); // Growth only
@@ -356,7 +358,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 // ============================================================================
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const auth = await authenticate.admin(request);
+  if (auth instanceof Response) throw auth;
+  const { session } = auth;
   const shopDomain = session.shop;
   
   await requireFeature(shopDomain, FEATURES.MULTI_STORE); // Growth only

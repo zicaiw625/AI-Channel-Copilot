@@ -6,7 +6,7 @@
 import { Link, useLocation } from "react-router";
 import { t } from "../../lib/i18n";
 import type { Lang } from "./types";
-import { buildEmbeddedAppPath } from "../../lib/navigation";
+import { buildBillingHref } from "../../lib/navigation";
 
 export interface UpgradePromptProps {
   lang: Lang;
@@ -146,7 +146,7 @@ export const UpgradePrompt = ({
 }: UpgradePromptProps) => {
   const details = featureDetails[feature];
   const location = useLocation();
-  const billingHref = buildEmbeddedAppPath("/app/billing", location.search);
+  const billingHref = buildBillingHref(location.search);
   const localize = (copy: { en: string; zh: string }) => (lang === "English" ? copy.en : copy.zh);
 
   // Overlay 模式：极简紧凑版

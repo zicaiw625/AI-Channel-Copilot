@@ -30,7 +30,9 @@ interface TeamMember {
 // ============================================================================
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { admin, session } = await authenticate.admin(request);
+  const auth = await authenticate.admin(request);
+  if (auth instanceof Response) throw auth;
+  const { admin, session } = auth;
   const shopDomain = session.shop;
   
   const isGrowth = await hasFeature(shopDomain, FEATURES.MULTI_STORE);

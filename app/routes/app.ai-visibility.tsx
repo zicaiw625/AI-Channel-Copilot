@@ -79,7 +79,28 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           }
         }
       `);
-      const data = await response.json();
+      const data = await response.json() as {
+        data?: {
+          shop?: {
+            name?: string | null;
+            description?: string | null;
+            url?: string | null;
+            brand?: {
+              logo?: {
+                image?: {
+                  url?: string | null;
+                } | null;
+              } | null;
+            } | null;
+          } | null;
+        };
+        errors?: Array<{ message?: string }>;
+      };
+
+      if (data.errors?.length) {
+        throw new Error(data.errors.map((error) => error.message || "Unknown GraphQL error").join("; "));
+      }
+
       if (data?.data?.shop) {
         shopInfo = {
           name: data.data.shop.name || shopInfo.name,
@@ -87,10 +108,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           description: data.data.shop.description || "",
           logo: data.data.shop.brand?.logo?.image?.url || "",
         };
+      } else {
+        logger.warn("[ai-visibility] Shop info missing from GraphQL response", { shopDomain });
       }
     }
   } catch (e) {
-    logger.warn("[ai-visibility] Failed to fetch shop info", { shopDomain }, { error: e });
+    logger.warn("[ai-visibility] Failed to fetch shop info", { shopDomain }, {
+      error: e instanceof Error ? e.message : String(e),
+    });
   }
 
   return {

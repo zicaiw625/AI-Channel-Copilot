@@ -1,5 +1,5 @@
 import { useAppBridge } from "@shopify/app-bridge-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useFetcher, useLocation } from "react-router";
 import type { SettingsDefaults } from "../../lib/aiData";
 import type { LlmsStatus } from "../../lib/llms.server";
@@ -136,6 +136,7 @@ export function LlmsTxtPanel({
   const [previewText, setPreviewText] = useState("");
   const [copied, setCopied] = useState(false);
   const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const previewFetcherLoadRef = useRef(previewFetcher.load);
 
   const activeExposurePreferences = exposurePreferences ?? localExposurePreferences;
   const meta = statusMeta(language, statusInfo.status);
@@ -144,12 +145,12 @@ export function LlmsTxtPanel({
   const defaultWorkspaceHref = workspaceHref || buildEmbeddedAppPath("/app/ai-visibility", location.search, { tab: "llms" });
   const downloadHref = canUseAdvanced ? "/api/llms-txt-preview?download=1" : billingHref;
 
-  const updateExposurePreferences = (next: ExposurePreferences) => {
+  const updateExposurePreferences = useCallback((next: ExposurePreferences) => {
     if (!exposurePreferences) {
       setLocalExposurePreferences(next);
     }
     onExposurePreferencesChange?.(next);
-  };
+  }, [exposurePreferences, onExposurePreferencesChange]);
 
   useEffect(() => {
     setStatusInfo(initialStatus);
@@ -170,12 +171,20 @@ export function LlmsTxtPanel({
   }, []);
 
   useEffect(() => {
+    previewFetcherLoadRef.current = previewFetcher.load;
+  }, [previewFetcher.load]);
+
+  const requestPreview = useCallback(() => {
+    previewFetcherLoadRef.current(`/api/llms-txt-preview?lang=${encodeURIComponent(language)}`);
+  }, [language]);
+
+  useEffect(() => {
     if (!canUseAdvanced || !showPreview || !shopDomain) {
       return;
     }
 
-    previewFetcher.load(`/api/llms-txt-preview?ts=${Date.now()}&lang=${encodeURIComponent(language)}`);
-  }, [canUseAdvanced, language, previewFetcher, shopDomain, showPreview]);
+    requestPreview();
+  }, [canUseAdvanced, requestPreview, shopDomain, showPreview]);
 
   useEffect(() => {
     const data = syncFetcher.data;
@@ -204,7 +213,7 @@ export function LlmsTxtPanel({
     if (typeof data.text === "string") {
       setPreviewText(data.text);
     } else if (canUseAdvanced && showPreview) {
-      previewFetcher.load(`/api/llms-txt-preview?ts=${Date.now()}&lang=${encodeURIComponent(language)}`);
+      requestPreview();
     }
 
     shopify.toast.show?.(
@@ -212,7 +221,7 @@ export function LlmsTxtPanel({
         ? (en ? "Products were enabled and llms.txt is now live." : "已自动启用产品暴露，llms.txt 现已上线。")
         : (en ? "llms.txt synced successfully." : "llms.txt 已同步成功。"),
     );
-  }, [canUseAdvanced, en, language, liveUrl, previewFetcher, shopify, showPreview, syncFetcher.data]);
+  }, [canUseAdvanced, en, liveUrl, requestPreview, shopify, showPreview, syncFetcher.data, updateExposurePreferences]);
 
   useEffect(() => {
     const data = previewFetcher.data;
@@ -352,34 +361,43 @@ export function LlmsTxtPanel({
             ["exposeProducts", en ? "Product pages" : "产品页", en ? "Products and product details in llms.txt" : "在 llms.txt 中包含产品及产品详情"],
             ["exposeCollections", en ? "Collections" : "集合页", en ? "Collections and category landing pages" : "包含集合与分类落地页"],
             ["exposeBlogs", en ? "Blog content" : "博客内容", en ? "Blog and editorial content" : "包含博客与内容文章"],
-          ] as const).map(([key, label, help]) => (
-            <label
-              key={key}
-              style={{
-                display: "flex",
-                gap: 10,
-                padding: 12,
-                border: "1px solid #e1e3e5",
-                borderRadius: 10,
-                alignItems: "flex-start",
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={activeExposurePreferences[key]}
-                onChange={(event) =>
-                  updateExposurePreferences({
-                    ...activeExposurePreferences,
-                    [key]: event.target.checked,
-                  })
-                }
-              />
-              <span>
-                <strong style={{ display: "block", marginBottom: 4 }}>{label}</strong>
-                <span style={{ color: "#637381", fontSize: 13 }}>{help}</span>
-              </span>
-            </label>
-          ))}
+          ] as const).map(([key, label, help]) => {
+            const checkboxId = `llms-${context}-${key}`;
+            const helpId = `${checkboxId}-help`;
+
+            return (
+              <div
+                key={key}
+                style={{
+                  display: "flex",
+                  gap: 10,
+                  padding: 12,
+                  border: "1px solid #e1e3e5",
+                  borderRadius: 10,
+                  alignItems: "flex-start",
+                }}
+              >
+                <input
+                  id={checkboxId}
+                  type="checkbox"
+                  aria-describedby={helpId}
+                  checked={activeExposurePreferences[key]}
+                  onChange={(event) =>
+                    updateExposurePreferences({
+                      ...activeExposurePreferences,
+                      [key]: event.target.checked,
+                    })
+                  }
+                />
+                <span>
+                  <label htmlFor={checkboxId} style={{ display: "block", marginBottom: 4 }}>
+                    <strong>{label}</strong>
+                  </label>
+                  <span id={helpId} style={{ color: "#637381", fontSize: 13 }}>{help}</span>
+                </span>
+              </div>
+            );
+          })}
         </div>
       )}
 

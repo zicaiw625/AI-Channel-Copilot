@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { HeadersFunction, LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
-import { useLoaderData, useActionData, Form, useFetcher, Link } from "react-router";
+import { useLoaderData, useActionData, Form, useFetcher } from "react-router";
 import { useUILanguage } from "../lib/useUILanguage";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";

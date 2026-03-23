@@ -5,10 +5,10 @@ import { useAppBridge } from "@shopify/app-bridge-react";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 
 import { channelList, defaultSettings, timeRanges, type TimeRangeKey, LOW_SAMPLE_THRESHOLD } from "../lib/aiData";
-import { downloadFromApi } from "../lib/downloadUtils";
 import { getSettings, syncShopPreferences } from "../lib/settings.server";
 import { authenticate } from "../shopify.server";
 import { useUILanguage } from "../lib/useUILanguage";
+import { resolveUILanguageFromRequest } from "../lib/language.server";
 import styles from "../styles/app.dashboard.module.css";
 import { getAiDashboardData } from "../lib/aiQueries.server";
 import { ensureRetentionOncePerDay } from "../lib/retention.server";
@@ -19,7 +19,7 @@ import {
   BACKFILL_STALE_THRESHOLD_SECONDS,
 } from "../lib/constants";
 import { loadDashboardContext } from "../lib/dashboardContext.server";
-import { t } from "../lib/i18n";
+import { t, tp } from "../lib/i18n";
 import { getEffectivePlan, hasFeature, FEATURES } from "../lib/access.server";
 import { isDemoMode } from "../lib/runtime.server";
 import { readAppFlags } from "../lib/env.server";
@@ -77,6 +77,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const canUseLlmsAdvanced = await hasFeature(shopDomain, FEATURES.LLMS_ADVANCED);
   const llmsStatus = await getLlmsStatus(shopDomain, settings);
 
+  // 统一语言：优先使用 cookie `aicc_language`，避免首屏中英混排
+  const resolvedLanguage = resolveUILanguageFromRequest(request, settings.languages?.[0] || "中文");
+
   // Enforce 7d limit for Free plan
   const defaultRangeKey: TimeRangeKey = isFreePlan ? "7d" : DEFAULT_RANGE_KEY;
 
@@ -89,12 +92,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     url,
     defaultRangeKey,
     includeBackfillState: true,
+    language: resolvedLanguage,
   });
 
   const { data } = await getAiDashboardData(shopDomain, context.dateRange, settings, {
     timezone: context.displayTimezone,
     allowDemo: context.dataSource === "demo",
     orders: context.orders,
+    language: resolvedLanguage,
   });
 
   const { showDebugPanels } = readAppFlags();
@@ -112,7 +117,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     currency: context.currency,
     calculationTimezone: context.calculationTimezone,
     timezone: context.displayTimezone,
-    language: context.language,
+    language: resolvedLanguage,
     retentionMonths: settings.retentionMonths || DEFAULT_RETENTION_MONTHS,
     lastCleanupAt: settings.lastCleanupAt || null,
     backfillSuppressed: context.backfillSuppressed,
@@ -165,10 +170,8 @@ export default function Index() {
     dataSource,
     gmvMetric,
     currency,
-    calculationTimezone,
     timezone,
     language,
-    pipeline,
     clamped,
     backfillSuppressed,
     backfillAvailable,
@@ -191,18 +194,6 @@ export default function Index() {
   const navigate = useNavigate();
   const location = useLocation();
   const shopify = useAppBridge();
-
-  const handleDownload = async (e: React.MouseEvent<HTMLAnchorElement | HTMLButtonElement>, url: string, fallbackFilename: string) => {
-    e.preventDefault();
-    const success = await downloadFromApi(
-      url,
-      fallbackFilename,
-      () => shopify.idToken()
-    );
-    if (!success) {
-      shopify.toast.show?.(uiLanguage === "English" ? "Download failed. Please try again." : "下载失败，请重试。");
-    }
-  };
 
   // 注意：metricView, trendMetric, trendScope 已移至各子组件内部管理
   const [customFrom, setCustomFrom] = useState(
@@ -237,7 +228,10 @@ export default function Index() {
     [timeFormatter, uiLanguage],
   );
   const billingHref = buildEmbeddedAppPath("/app/billing", location.search);
-  const attributionHref = buildEmbeddedAppPath("/app/additional", location.search, { backTo: "dashboard" });
+  const attributionHref = buildEmbeddedAppPath("/app/additional/attribution", location.search, { backTo: "dashboard" });
+  const diagnosticsHref = buildEmbeddedAppPath("/app/additional/diagnostics", location.search, { backTo: "dashboard" });
+  const exportsHref = buildEmbeddedAppPath("/app/additional/export", location.search, { backTo: "dashboard" });
+  const healthHref = buildEmbeddedAppPath("/app/additional/health", location.search, { backTo: "dashboard" });
   const optimizationHref = buildEmbeddedAppPath("/app/optimization", location.search, { backTo: "dashboard" });
   const funnelHref = buildEmbeddedAppPath("/app/funnel", location.search, { backTo: "dashboard" });
   const copilotHref = buildEmbeddedAppPath("/app/copilot", location.search);
@@ -391,6 +385,51 @@ export default function Index() {
   } = data;
   const hasAnyData = dataSource === "live" || dataSource === "stored" || dataSource === "demo";
   const isLowSample = hasAnyData && overview.aiOrders > 0 && overview.aiOrders < LOW_SAMPLE_THRESHOLD;
+  const primaryAction = overview.aiOrders > 0
+    ? {
+        href: optimizationHref,
+        label: t(lang, "dashboard_go_to_optimization"),
+        description: t(lang, "dashboard_action_opt_description"),
+      }
+    : {
+        href: aiWorkspaceHref,
+        label: t(lang, "dashboard_fix_ai_visibility"),
+        description: t(lang, "dashboard_action_fix_description"),
+      };
+  const secondaryAction = overview.aiOrders > 0
+    ? {
+        href: aiWorkspaceHref,
+        label: t(lang, "dashboard_open_ai_workspace"),
+      }
+    : {
+        href: attributionHref,
+        label: t(lang, "dashboard_review_attribution_rules"),
+      };
+  const confidenceSummary = isLowSample
+    ? (uiLanguage === "English"
+        ? `Low sample: ${overview.aiOrders} AI orders collected so far.`
+        : `低样本：当前仅积累 ${overview.aiOrders} 笔 AI 订单。`)
+    : overview.aiOrders === 0
+      ? (uiLanguage === "English"
+          ? "No AI-attributed orders yet. Treat current signals as setup guidance."
+          : "当前还没有 AI 归因订单，现阶段更适合作为配置与排查参考。")
+      : (uiLanguage === "English"
+          ? `${overview.aiOrders} AI orders detected in the selected window.`
+          : `当前时间窗口内已识别 ${overview.aiOrders} 笔 AI 订单。`);
+  const sourceSummary = dataSource === "live"
+    ? (uiLanguage === "English" ? "Shopify live orders" : "Shopify 实时订单")
+    : dataSource === "stored"
+      ? (uiLanguage === "English" ? "Stored order cache" : "已缓存订单")
+      : dataSource === "demo"
+        ? (uiLanguage === "English" ? "Demo samples" : "演示样例")
+        : (uiLanguage === "English" ? "No data" : "暂无数据");
+  const resultSummary = overview.aiOrders > 0
+    ? (uiLanguage === "English"
+        ? `AI channels contributed ${fmtCurrency(overview.aiGMV)} and ${fmtPercent(overview.aiShare)} of GMV in this window.`
+        : `当前窗口内，AI 渠道贡献了 ${fmtCurrency(overview.aiGMV)}，占总 GMV 的 ${fmtPercent(overview.aiShare)}。`)
+    : (uiLanguage === "English"
+        ? "You can already inspect setup quality and attribution coverage, even before AI-attributed orders appear."
+        : "即使还没有 AI 归因订单，你也可以先检查配置质量和归因覆盖情况。");
 
   const filteredRecentOrders = useMemo(() => {
     const keyword = debugOrderFilter.trim().toLowerCase();
@@ -460,7 +499,7 @@ export default function Index() {
   // 使用新的 UpgradePrompt 组件替代原有的 UpgradeOverlay
 
   return (
-    <s-page heading={uiLanguage === "English" ? "AI SEO & Discovery" : "AI SEO 与发现仪表盘"}>
+    <s-page heading={t(lang, "dashboard_page_heading")}>
       <div className={styles.page}>
         
         {isFreePlan && (
@@ -475,7 +514,7 @@ export default function Index() {
                 alignItems: "center"
             }}>
                 <span style={{ color: "#0050b3" }}>
-                    {uiLanguage === "English" ? "You are on the Free plan (Limited to 7 days history)." : "当前为免费版（仅限查看最近 7 天数据）。"}
+                    {t(lang, "dashboard_free_plan_notice")}
                 </span>
                 <Link to={billingHref} style={{ color: "#0050b3", fontWeight: "bold", textDecoration: "underline" }}>
                     {uiLanguage === "English" ? "Upgrade plan" : "升级套餐"}
@@ -488,304 +527,256 @@ export default function Index() {
             <div className={styles.badgeRow}>
               <span className={styles.badge}>{t(lang, "badge_v01")}</span>
               <span className={styles.badgeSecondary}>{t(lang, "badge_conservative_orders")}</span>
-              {isLowSample && (
-                <span className={styles.badgeSecondary}>
-                  {uiLanguage === "English" ? `Sample < ${LOW_SAMPLE_THRESHOLD} · metrics for reference only` : `样本 < ${LOW_SAMPLE_THRESHOLD} · 指标仅供参考`}
-                </span>
-              )}
+              <span className={styles.badgeSecondary}>{dateRange.label}</span>
             </div>
             <h1 className={styles.heading}>{t(lang, "dashboard_title")}</h1>
             <p className={styles.subheading}>{t(lang, "dashboard_subheading")}</p>
             <div className={styles.warning}>
-              <strong>{uiLanguage === "English" ? "Note:" : "说明："}</strong>{t(lang, "dashboard_warning")}
+              <strong>{t(lang, "dashboard_focus_label")}</strong>
+              {resultSummary}
             </div>
-            <div className={styles.metaRow}>
-              <span>{t(lang, "meta_synced_at")}{timeFormatter.format(new Date(overview.lastSyncedAt))}</span>
-              <span>
-                {t(lang, "meta_updated_at")}{dataLastUpdated ? timeFormatter.format(new Date(dataLastUpdated)) : (uiLanguage === "English" ? "None" : "暂无")}
-                {backfillSuppressed && (uiLanguage === "English" ? " (Backfilled within 30 minutes; using cached data)" : "（30 分钟内已补拉，复用缓存数据）")}
-                {dynamicBackfillAvailable && (uiLanguage === "English" ? " (Manual backfill available)" : "（可手动触发后台补拉）")}
-              </span>
-              <span>{t(lang, "meta_range")}{dateRange.label}</span>
-              <span>
-                {t(lang, "meta_metric_scope")} {gmvMetric} · {uiLanguage === "English" ? "New Customers = first-order customers (window)" : "新客=首单客户（仅限当前时间范围）"} · {uiLanguage === "English" ? "GMV computed from order fields" : "GMV 仅基于订单字段"}
-              </span>
-              <span>
-                {t(lang, "meta_data_source")}
-                {dataSource === "live"
-                  ? (uiLanguage === "English" ? "Shopify Live Orders" : "Shopify 实时订单")
-                  : dataSource === "stored"
-                    ? (uiLanguage === "English" ? "Stored Orders" : "已缓存的店铺订单")
-                    : dataSource === "demo"
-                      ? (uiLanguage === "English" ? "Demo samples (no AI orders found)" : "Demo 样例（未检索到 AI 订单）")
-                      : (uiLanguage === "English" ? "No data (demo disabled)" : "暂无数据（未启用演示数据）")}
-                {uiLanguage === "English" ? " (live=API, stored=cached, demo=samples)" : "（live=实时 API，stored=本地缓存，demo=演示数据）"}
-              </span>
-              {clamped && <span>{uiLanguage === "English" ? `Hint: truncated to latest ${MAX_DASHBOARD_ORDERS} orders.` : `提示：已截断为最近 ${MAX_DASHBOARD_ORDERS} 笔订单样本。`}</span>}
-              <span>
-                {t(lang, "meta_timezones_currency")}{calculationTimezone} · {uiLanguage === "English" ? "Display TZ" : "展示时区"}：{timezone} · {uiLanguage === "English" ? "Currency" : "货币"}：{currency}
-              </span>
-            </div>
-            <details className={styles.statusBlock}>
-              <summary>{t(lang, "status_ops")}</summary>
-              <div className={styles.pipelineRow}>
-                <span>{uiLanguage === "English" ? "Webhook:" : "Webhook："}{fmtTime(pipeline.lastOrdersWebhookAt)}</span>
-                <span>
-                  {uiLanguage === "English" ? "Backfill:" : "补拉："}
-                  {pipeline.lastBackfillAttemptAt 
-                    ? `${fmtTime(pipeline.lastBackfillAttemptAt)} (${pipeline.lastBackfillOrdersFetched ?? 0} ${uiLanguage === "English" ? "orders" : "笔"})`
-                    : (uiLanguage === "English" ? "None" : "暂无")}
-                </span>
-                <span>{uiLanguage === "English" ? "Tagging:" : "标签："}{fmtTime(pipeline.lastTaggingAt)}</span>
-                <div className={styles.statusChips}>
-                  {(pipeline.statuses || []).map((item) => {
-                    // 状态标签的国际化翻译
-                    const titleTranslations: Record<string, string> = {
-                      "orders/create webhook": uiLanguage === "English" ? "orders/create webhook" : "订单创建 Webhook",
-                      "Hourly backfill (last 60 days)": uiLanguage === "English" ? "Hourly backfill (last 60 days)" : "每小时补拉（最近 60 天）",
-                      "AI tagging write-back": uiLanguage === "English" ? "AI tagging write-back" : "AI 标签回写",
-                    };
-                    const statusTranslations: Record<string, string> = {
-                      "healthy": uiLanguage === "English" ? "healthy" : "正常",
-                      "warning": uiLanguage === "English" ? "warning" : "警告",
-                      "info": uiLanguage === "English" ? "info" : "信息",
-                    };
-                    const displayTitle = titleTranslations[item.title] || item.title;
-                    const displayStatus = statusTranslations[item.status] || item.status;
-                    return (
-                    <span
-                      key={item.title}
-                      className={`${styles.statusChip} ${
-                        item.status === "healthy"
-                          ? styles.statusHealthy
-                          : item.status === "warning"
-                            ? styles.statusWarning
-                            : styles.statusInfo
-                      }`}
-                    >
-                        {displayTitle}: {displayStatus}
-                    </span>
-                    );
-                  })}
-                </div>
-                <div className={styles.backfillRow}>
-                  <button
-                    className={styles.primaryButton}
-                    onClick={triggerBackfill}
-                    disabled={backfillFetcher.state !== "idle" || !dynamicBackfillAvailable}
-                  >
-                    {backfillFetcher.state === "idle"
-                      ? (uiLanguage === "English" ? "Backfill in background" : "后台补拉")
-                      : (uiLanguage === "English" ? "Backfilling..." : "后台补拉中...")}
-                  </button>
-                  {!dynamicBackfillAvailable && backfillFetcher.state === "idle" && (
-                    <span className={styles.backfillStatus}>
-                      {uiLanguage === "English" ? "A backfill task is running in background" : "后台补拉任务进行中"}
-                    </span>
-                  )}
-                  {backfillData && (
-                    <span className={styles.backfillStatus}>
-                      {backfillData.queued
-                        ? (uiLanguage === "English" ? `Background task triggered (${backfillData.range})` : `已触发后台任务（${backfillData.range}）`)
-                        : backfillData.reason === "in-flight"
-                          ? (uiLanguage === "English" ? "A backfill is already running; refresh later" : "已有补拉在进行中，稍后刷新")
-                          : (uiLanguage === "English" ? "Cannot trigger backfill; check shop session" : "无法触发补拉，请确认店铺会话")}
-                    </span>
-                  )}
-                </div>
-              </div>
-            </details>
-            {/* 补拉提示移入系统状态折叠块，避免首页拥挤 */}
-            {dataSource === "demo" && (
-              <div className={styles.callout}>
-                <span>{t(lang, "hint_title")}</span>
-                {uiLanguage === "English" ? "No identifiable AI orders in this shop. Showing demo data. Check time range, referrer/UTM rules, or extend the window and retry." : "当前店铺暂无可识别的 AI 渠道订单，以下为演示数据。可检查时间范围、referrer/UTM 规则，或延长观测窗口后再试。"}
-              </div>
-            )}
-            {dataSource === "empty" && (
-              <div className={styles.warning}>
-                {uiLanguage === "English" 
-                  ? "No qualifying orders found in the last 60 days (Shopify default limit). This may be a new store, or orders are older than 60 days. To access older orders, request 'read_all_orders' scope and re-authorize." 
-                  : "最近 60 天内暂无符合条件的订单（Shopify 默认限制）。可能是新店铺，或订单都在 60 天之前。如需访问更早订单，请申请 read_all_orders 权限并重新授权。"}
-                <Link to={attributionHref} className={styles.link} style={{ marginLeft: 8 }}>
-                  {uiLanguage === "English" ? "Open Attribution & Advanced Settings" : "打开归因与高级设置"}
-                </Link>
-              </div>
-            )}
-            {overview.aiOrders === 0 && overview.totalOrders > 0 && (
-              <div className={styles.callout}>
-                <span>{uiLanguage === "English" ? "Hint" : "提示"}</span>
-                {t(lang, "hint_zero_ai")}
-                <Link to={attributionHref} className={styles.link}>{uiLanguage === "English" ? "Open Attribution & Advanced Settings" : "打开归因与高级设置"}</Link>
-              </div>
-            )}
-            </div>
-            <div className={styles.actions}>
-              <div className={styles.rangePills}>
-                {(Object.keys(timeRanges) as TimeRangeKey[]).map((key) => (
-                  <button
-                    key={key}
-                    className={`${styles.pill} ${range === key ? styles.pillActive : ""} ${isFreePlan && key !== "7d" ? styles.pillDisabled : ""}`}
-                    onClick={() => setRange(key)}
-                    type="button"
-                    disabled={isFreePlan && key !== "7d"}
-                    style={isFreePlan && key !== "7d" ? { opacity: 0.5, cursor: "not-allowed" } : {}}
-                  >
-                    {getRangeLabel(key)}{isFreePlan && key !== "7d" ? " 🔒" : ""}
-                  </button>
-                ))}
-              </div>
-              <div className={styles.customRange}>
-                <input
-                  type="date"
-                  className={styles.input}
-                  value={customFrom}
-                  onChange={(event) => setCustomFrom(event.target.value)}
-                  disabled={isFreePlan}
-                />
-                <span className={styles.rangeDivider}>{uiLanguage === "English" ? "to" : "至"}</span>
-                <input
-                  type="date"
-                  className={styles.input}
-                  value={customTo}
-                  onChange={(event) => setCustomTo(event.target.value)}
-                  disabled={isFreePlan}
-                />
+          </div>
+          <div className={styles.actions}>
+            <div className={styles.rangePills}>
+              {(Object.keys(timeRanges) as TimeRangeKey[]).map((key) => (
                 <button
+                  key={key}
+                  className={`${styles.pill} ${range === key ? styles.pillActive : ""} ${isFreePlan && key !== "7d" ? styles.pillDisabled : ""}`}
+                  onClick={() => setRange(key)}
                   type="button"
-                  className={styles.secondaryButton}
-                  onClick={applyCustomRange}
-                  disabled={isFreePlan}
+                  disabled={isFreePlan && key !== "7d"}
+                  style={isFreePlan && key !== "7d" ? { opacity: 0.5, cursor: "not-allowed" } : {}}
                 >
-                  {uiLanguage === "English" ? "Apply Custom" : "应用自定义"}
+                  {getRangeLabel(key)}{isFreePlan && key !== "7d" ? " 🔒" : ""}
                 </button>
-              </div>
-              <p className={styles.helpText} style={{ marginTop: 12 }}>
-                {uiLanguage === "English" ? "Need to adjust referrer or UTM rules? " : "需要调整 referrer 或 UTM 规则？"}
-                <Link to={attributionHref} className={styles.link}>
-                  {uiLanguage === "English" ? "Open Attribution & Advanced Settings" : "打开归因与高级设置"}
-                </Link>
-              </p>
-              <div className={styles.actionButtons}>
-                <Link to={aiWorkspaceHref} className={styles.primaryButton}>
-                  {uiLanguage === "English" ? "Open AI SEO Workspace" : "打开 AI SEO 工作台"}
-                </Link>
-                <Link to={optimizationHref} className={styles.secondaryButton} style={{ background: "#635bff", color: "white", border: "none" }}>
-                  {uiLanguage === "English" ? "View Optimization" : "查看优化建议"}
-                </Link>
-                <details style={{ position: "relative" }}>
-                  <summary className={styles.secondaryButton} style={{ listStyle: "none", cursor: "pointer" }}>
-                    {uiLanguage === "English" ? "More tools" : "更多工具"}
-                  </summary>
-                  <div
-                    style={{
-                      position: "absolute",
-                      right: 0,
-                      top: "calc(100% + 8px)",
-                      minWidth: 220,
-                      background: "#fff",
-                      border: "1px solid #dfe3e8",
-                      borderRadius: 12,
-                      boxShadow: "0 12px 24px rgba(33, 43, 54, 0.12)",
-                      padding: 8,
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: 4,
-                      zIndex: 10,
-                    }}
-                  >
-                    <Link to={funnelHref} className={styles.secondaryButton}>{uiLanguage === "English" ? "Funnel" : "漏斗分析"}</Link>
-                    <Link to={utmWizardHref} className={styles.secondaryButton}>{uiLanguage === "English" ? "UTM Wizard" : "UTM 向导"}</Link>
-                    {canUseCopilot ? (
-                      <Link to={copilotHref} className={styles.secondaryButton}>{uiLanguage === "English" ? "Copilot" : "Copilot"}</Link>
-                    ) : (
-                      <button
-                        type="button"
-                        className={styles.secondaryButton}
-                        style={{ width: "100%", display: "inline-flex", justifyContent: "space-between", alignItems: "center", opacity: 0.8 }}
-                        onClick={() => shopify.toast.show?.(uiLanguage === "English" ? "Upgrade to Pro or Growth to unlock Copilot." : "升级到 Pro 或 Growth 版以解锁 Copilot。")}
-                      >
-                        <span>{uiLanguage === "English" ? "Copilot" : "Copilot"}</span>
-                        <span>{uiLanguage === "English" ? "Pro/Growth" : "Pro/Growth"}</span>
-                      </button>
-                    )}
-                    {canUseGrowthTools ? (
-                      <Link to={multiStoreHref} className={styles.secondaryButton}>{uiLanguage === "English" ? "Multi-Store" : "多店铺汇总"}</Link>
-                    ) : (
-                      <button
-                        type="button"
-                        className={styles.secondaryButton}
-                        style={{ width: "100%", display: "inline-flex", justifyContent: "space-between", alignItems: "center", opacity: 0.8 }}
-                        onClick={() => shopify.toast.show?.(uiLanguage === "English" ? "Upgrade to Growth to unlock Multi-Store." : "升级到 Growth 版以解锁多店铺汇总。")}
-                      >
-                        <span>{uiLanguage === "English" ? "Multi-Store" : "多店铺汇总"}</span>
-                        <span>{uiLanguage === "English" ? "Growth" : "Growth"}</span>
-                      </button>
-                    )}
-                    {canUseGrowthTools ? (
-                      <Link to={teamHref} className={styles.secondaryButton}>{uiLanguage === "English" ? "Team" : "团队"}</Link>
-                    ) : (
-                      <button
-                        type="button"
-                        className={styles.secondaryButton}
-                        style={{ width: "100%", display: "inline-flex", justifyContent: "space-between", alignItems: "center", opacity: 0.8 }}
-                        onClick={() => shopify.toast.show?.(uiLanguage === "English" ? "Upgrade to Growth to unlock Team." : "升级到 Growth 版以解锁团队功能。")}
-                      >
-                        <span>{uiLanguage === "English" ? "Team" : "团队"}</span>
-                        <span>{uiLanguage === "English" ? "Growth" : "Growth"}</span>
-                      </button>
-                    )}
-                    {canUseGrowthTools ? (
-                      <Link to={webhookExportHref} className={styles.secondaryButton}>{uiLanguage === "English" ? "Webhook Export" : "Webhook 导出"}</Link>
-                    ) : (
-                      <button
-                        type="button"
-                        className={styles.secondaryButton}
-                        style={{ width: "100%", display: "inline-flex", justifyContent: "space-between", alignItems: "center", opacity: 0.8 }}
-                        onClick={() => shopify.toast.show?.(uiLanguage === "English" ? "Upgrade to Growth to unlock Webhook Export." : "升级到 Growth 版以解锁 Webhook 导出。")}
-                      >
-                        <span>{uiLanguage === "English" ? "Webhook Export" : "Webhook 导出"}</span>
-                        <span>{uiLanguage === "English" ? "Growth" : "Growth"}</span>
-                      </button>
-                    )}
-                    <a
-                      className={styles.secondaryButton}
-                      href={canViewFull ? `/api/export/orders?range=${range}&from=${encodeURIComponent(dateRange.fromParam || "")}&to=${encodeURIComponent(dateRange.toParam || "")}` : "#"}
-                      onClick={(e) => {
-                          if (!canViewFull) {
-                              e.preventDefault();
-                              shopify.toast.show?.(uiLanguage === "English" ? "Upgrade to Pro or Growth to export data." : "升级到 Pro 或 Growth 版以导出数据。");
-                              return;
-                          }
-                          handleDownload(e, `/api/export/orders?range=${range}&from=${encodeURIComponent(dateRange.fromParam || "")}&to=${encodeURIComponent(dateRange.toParam || "")}`, `ai-orders-${range}.csv`);
-                      }}
-                    >
-                      {t(lang, "export_orders_csv")}
-                    </a>
-                  </div>
-                </details>
-        </div>
+              ))}
+            </div>
+            <div className={styles.customRange}>
+              <input
+                type="date"
+                className={styles.input}
+                value={customFrom}
+                onChange={(event) => setCustomFrom(event.target.value)}
+                disabled={isFreePlan}
+              />
+              <span className={styles.rangeDivider}>{t(lang, "to_date")}</span>
+              <input
+                type="date"
+                className={styles.input}
+                value={customTo}
+                onChange={(event) => setCustomTo(event.target.value)}
+                disabled={isFreePlan}
+              />
+              <button
+                type="button"
+                className={styles.secondaryButton}
+                onClick={applyCustomRange}
+                disabled={isFreePlan}
+              >
+                {t(lang, "apply_custom")}
+              </button>
+            </div>
+          </div>
         </div>
 
+        <div className={styles.heroGrid}>
+          <div className={styles.card}>
+            <div className={styles.sectionHeader}>
+              <div>
+                <p className={styles.sectionLabel}>{t(lang, "dashboard_results_label")}</p>
+                <h3 className={styles.sectionTitle}>{t(lang, "dashboard_results_title")}</h3>
+              </div>
+              <span className={styles.smallBadge}>{t(lang, "dashboard_results_badge")}</span>
+            </div>
+            <div className={styles.summaryGrid}>
+              <div className={styles.summaryMetric}>
+                <span className={styles.summaryLabel}>{t(lang, "kpi_ai_gmv")}</span>
+                <strong className={styles.summaryValue}>{fmtCurrency(overview.aiGMV)}</strong>
+              </div>
+              <div className={styles.summaryMetric}>
+                <span className={styles.summaryLabel}>{t(lang, "dashboard_ai_orders_label")}</span>
+                <strong className={styles.summaryValue}>{fmtNumber(overview.aiOrders)}</strong>
+              </div>
+              <div className={styles.summaryMetric}>
+                <span className={styles.summaryLabel}>{t(lang, "dashboard_ai_share_label")}</span>
+                <strong className={styles.summaryValue}>{fmtPercent(overview.aiShare)}</strong>
+              </div>
+            </div>
+            <p className={styles.helpText}>{resultSummary}</p>
+          </div>
+
+          <div className={styles.card}>
+            <div className={styles.sectionHeader}>
+              <div>
+                <p className={styles.sectionLabel}>{t(lang, "dashboard_trust_label")}</p>
+                <h3 className={styles.sectionTitle}>{t(lang, "dashboard_trust_title")}</h3>
+              </div>
+              <span className={styles.smallBadge}>{isLowSample ? t(lang, "dashboard_low_sample_badge") : t(lang, "dashboard_reference_badge")}</span>
+            </div>
+            <p className={styles.helpText}>{confidenceSummary}</p>
+            <ul className={styles.helpList}>
+              <li>{t(lang, "dashboard_data_source_prefix")}{sourceSummary}</li>
+              <li>{t(lang, "dashboard_last_synced_prefix")}{timeFormatter.format(new Date(overview.lastSyncedAt))}</li>
+              <li>{t(lang, "dashboard_last_updated_prefix")}{dataLastUpdated ? timeFormatter.format(new Date(dataLastUpdated)) : fmtTime()}</li>
+              <li>{t(lang, "dashboard_metric_scope_prefix")}{gmvMetric} · {timezone} · {currency}</li>
+              {clamped && <li>{tp(lang, "dashboard_window_truncated", { n: MAX_DASHBOARD_ORDERS })}</li>}
+              {backfillSuppressed && <li>{t(lang, "dashboard_recent_backfill_reused")}</li>}
+            </ul>
+            <div className={styles.backfillRow}>
+              <button
+                className={styles.primaryButton}
+                onClick={triggerBackfill}
+                disabled={backfillFetcher.state !== "idle" || !dynamicBackfillAvailable}
+              >
+                {backfillFetcher.state === "idle"
+                  ? (uiLanguage === "English" ? "Backfill in background" : "后台补拉")
+                  : (uiLanguage === "English" ? "Backfilling..." : "后台补拉中...")}
+              </button>
+              {!dynamicBackfillAvailable && backfillFetcher.state === "idle" && (
+                <span className={styles.backfillStatus}>
+                  {t(lang, "dashboard_backfill_running")}
+                </span>
+              )}
+              {backfillData && (
+                <span className={styles.backfillStatus}>
+                  {backfillData.queued
+                    ? tp(lang, "dashboard_backfill_triggered", { range: backfillData.range || range })
+                    : backfillData.reason === "in-flight"
+                      ? t(lang, "dashboard_backfill_running_refresh")
+                      : t(lang, "dashboard_backfill_cannot_trigger")}
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className={styles.card}>
+            <div className={styles.sectionHeader}>
+              <div>
+                <p className={styles.sectionLabel}>{t(lang, "dashboard_next_step_label")}</p>
+                <h3 className={styles.sectionTitle}>{t(lang, "dashboard_next_step_title")}</h3>
+              </div>
+              <span className={styles.smallBadge}>{t(lang, "dashboard_action_badge")}</span>
+            </div>
+            <p className={styles.helpText}>{primaryAction.description}</p>
+            <div className={styles.actionButtons}>
+              <Link to={primaryAction.href} className={styles.primaryButton}>
+                {primaryAction.label}
+              </Link>
+              <Link to={secondaryAction.href} className={styles.secondaryButton}>
+                {secondaryAction.label}
+              </Link>
+            </div>
+            <p className={styles.helpText}>
+              {uiLanguage === "English"
+                ? t(lang, "dashboard_zero_ai_review_rules")
+                : t(lang, "dashboard_zero_ai_review_rules")}
+            </p>
+          </div>
+        </div>
+
+        {dataSource === "demo" && (
+          <div className={styles.callout}>
+            <span>{t(lang, "hint_title")}</span>
+            {t(lang, "dashboard_demo_callout")}
+          </div>
+        )}
+        {dataSource === "empty" && (
+          <div className={styles.warning}>
+            {t(lang, "dashboard_empty_callout")}
+            <Link to={attributionHref} className={styles.link} style={{ marginLeft: 8 }}>
+              {t(lang, "dashboard_open_attribution")}
+            </Link>
+          </div>
+        )}
+        {overview.aiOrders === 0 && overview.totalOrders > 0 && (
+          <div className={styles.callout}>
+            <span>{t(lang, "hint_title")}</span>
+            {t(lang, "hint_zero_ai")}
+            <Link to={attributionHref} className={styles.link}>{t(lang, "dashboard_open_attribution")}</Link>
+          </div>
+        )}
+
+        <div className={styles.heroGrid}>
           <div className={styles.card}>
             <div className={styles.sectionHeader}>
               <div>
                 <p className={styles.sectionLabel}>{t(lang, "metrics_section_label")}</p>
                 <h3 className={styles.sectionTitle}>{t(lang, "metrics_section_title")}</h3>
               </div>
-              <span className={styles.smallBadge}>{uiLanguage === "English" ? "Reference" : "参考"}</span>
+              <span className={styles.smallBadge}>{t(lang, "dashboard_reference_badge")}</span>
             </div>
             <ul className={styles.helpList}>
-            <li>{uiLanguage === "English" ? `GMV: aggregated by ${gmvMetric} (${gmvMetric === "subtotal_price" ? "excluding tax/shipping" : "including tax/shipping"}).` : `GMV：按设置的 ${gmvMetric} 字段汇总（当前为 ${gmvMetric === "subtotal_price" ? "不含税/运费" : "含税/运费"}）。`}</li>
-            <li>{uiLanguage === "English" ? "AI GMV: only orders identified as AI channel." : "AI GMV：仅统计被识别为 AI 渠道的订单 GMV。"}</li>
-            <li>{uiLanguage === "English" ? "LTV (if shown): historical accumulated GMV within window, no prediction." : "LTV（如展示）：当前为历史累积 GMV，不含预测。"}</li>
+              <li>{uiLanguage === "English" ? `GMV: aggregated by ${gmvMetric} (${gmvMetric === "subtotal_price" ? "excluding tax/shipping" : "including tax/shipping"}).` : `GMV：按设置的 ${gmvMetric} 字段汇总（当前为 ${gmvMetric === "subtotal_price" ? "不含税/运费" : "含税/运费"}）。`}</li>
+              <li>{uiLanguage === "English" ? "AI GMV: only orders identified as AI channel." : "AI GMV：仅统计被识别为 AI 渠道的订单 GMV。"}</li>
+              <li>{uiLanguage === "English" ? "LTV (if shown): historical accumulated GMV within window, no prediction." : "LTV（如展示）：当前为历史累积 GMV，不含预测。"}</li>
             </ul>
+          </div>
+
+          <div className={styles.card}>
+            <div className={styles.sectionHeader}>
+              <div>
+                <p className={styles.sectionLabel}>{t(lang, "dashboard_tools_label")}</p>
+                <h3 className={styles.sectionTitle}>{t(lang, "dashboard_tools_title")}</h3>
+              </div>
+              <span className={styles.smallBadge}>{t(lang, "dashboard_tools_badge")}</span>
+            </div>
+            <div className={styles.toolGrid}>
+              <Link to={attributionHref} className={styles.secondaryButton}>{t(lang, "dashboard_tool_attribution")}</Link>
+              <Link to={diagnosticsHref} className={styles.secondaryButton}>{t(lang, "dashboard_tool_diagnostics")}</Link>
+              <Link to={exportsHref} className={styles.secondaryButton}>{t(lang, "dashboard_tool_exports")}</Link>
+              <Link to={healthHref} className={styles.secondaryButton}>{t(lang, "dashboard_tool_system_health")}</Link>
+              <Link to={funnelHref} className={styles.secondaryButton}>{t(lang, "dashboard_tool_funnel")}</Link>
+              <Link to={utmWizardHref} className={styles.secondaryButton}>{t(lang, "dashboard_tool_utm_wizard")}</Link>
+              {canUseCopilot ? (
+                <Link to={copilotHref} className={styles.secondaryButton}>Copilot</Link>
+              ) : (
+                <button
+                  type="button"
+                  className={styles.secondaryButton}
+                  onClick={() => shopify.toast.show?.(uiLanguage === "English" ? "Upgrade to Pro or Growth to unlock Copilot." : "升级到 Pro 或 Growth 版以解锁 Copilot。")}
+                >
+                  {t(lang, "dashboard_tool_copilot_growth")}
+                </button>
+              )}
+              {canUseGrowthTools ? (
+                <>
+                  <Link to={multiStoreHref} className={styles.secondaryButton}>{t(lang, "dashboard_tool_multi_store")}</Link>
+                  <Link to={teamHref} className={styles.secondaryButton}>{t(lang, "dashboard_tool_team")}</Link>
+                  <Link to={webhookExportHref} className={styles.secondaryButton}>{t(lang, "dashboard_tool_webhook_export")}</Link>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className={styles.secondaryButton}
+                    onClick={() => shopify.toast.show?.(uiLanguage === "English" ? "Upgrade to Growth to unlock Multi-Store." : "升级到 Growth 版以解锁多店铺汇总。")}
+                  >
+                    {t(lang, "dashboard_tool_multi_store_growth")}
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.secondaryButton}
+                    onClick={() => shopify.toast.show?.(uiLanguage === "English" ? "Upgrade to Growth to unlock Team." : "升级到 Growth 版以解锁团队功能。")}
+                  >
+                    {t(lang, "dashboard_tool_team_growth")}
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.secondaryButton}
+                    onClick={() => shopify.toast.show?.(uiLanguage === "English" ? "Upgrade to Growth to unlock Webhook Export." : "升级到 Growth 版以解锁 Webhook 导出。")}
+                  >
+                    {t(lang, "dashboard_tool_webhook_export_growth")}
+                  </button>
+                </>
+              )}
+            </div>
           </div>
         </div>
 
         {/* KPI 卡片组件 */}
         <LlmsTxtPanel
-          language={language}
+          // 使用前端当前 UI 语言，避免与 loader 的语言造成中英混排
+          language={lang}
           shopDomain={shopDomain}
           initialStatus={llmsStatus}
           initialExposurePreferences={exposurePreferences}

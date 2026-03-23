@@ -4,6 +4,7 @@
  */
 
 import { Link, useLocation } from "react-router";
+import { t } from "../../lib/i18n";
 import type { Lang } from "./types";
 import { buildEmbeddedAppPath } from "../../lib/navigation";
 
@@ -143,10 +144,10 @@ export const UpgradePrompt = ({
   feature,
   variant = "overlay",
 }: UpgradePromptProps) => {
-  const en = lang === "English";
   const details = featureDetails[feature];
   const location = useLocation();
   const billingHref = buildEmbeddedAppPath("/app/billing", location.search);
+  const localize = (copy: { en: string; zh: string }) => (lang === "English" ? copy.en : copy.zh);
 
   // Overlay 模式：极简紧凑版
   if (variant === "overlay") {
@@ -187,7 +188,7 @@ export const UpgradePrompt = ({
               lineHeight: 1.3,
             }}
           >
-            {en ? details.title.en : details.title.zh}
+            {localize(details.title)}
           </h3>
           <Link
             to={billingHref}
@@ -202,10 +203,10 @@ export const UpgradePrompt = ({
               fontWeight: 600,
             }}
           >
-            {en ? "Upgrade plan" : "升级套餐"}
+            {t(lang, "upgrade_to_pro")}
           </Link>
           <div style={{ marginTop: 4, fontSize: 9, color: "#919eab" }}>
-            {en ? "14-day free trial" : "14 天免费试用"}
+            {t(lang, "free_trial_14_days")}
           </div>
         </div>
       </div>
@@ -236,10 +237,10 @@ export const UpgradePrompt = ({
               marginBottom: 2,
             }}
           >
-            {en ? details.title.en : details.title.zh}
+            {localize(details.title)}
           </div>
           <div style={{ fontSize: 12, color: "rgba(255,255,255,0.8)" }}>
-            {en ? details.description.en : details.description.zh}
+            {localize(details.description)}
           </div>
         </div>
         <Link
@@ -255,7 +256,7 @@ export const UpgradePrompt = ({
             flexShrink: 0,
           }}
         >
-          {en ? "Upgrade" : "升级"}
+          {t(lang, "upgrade_short")}
         </Link>
       </div>
     );
@@ -276,7 +277,7 @@ export const UpgradePrompt = ({
     >
       <span>{details.icon}</span>
       <span style={{ color: "#637381" }}>
-        {en ? details.title.en : details.title.zh}
+        {localize(details.title)}
       </span>
       <Link
         to={billingHref}
@@ -287,7 +288,7 @@ export const UpgradePrompt = ({
           fontWeight: 500,
         }}
       >
-        {en ? "Upgrade →" : "升级 →"}
+        {t(lang, "upgrade_short")} →
       </Link>
     </div>
   );

@@ -21,15 +21,14 @@ export function TrendChart({ trend, lang, formatters }: TrendChartProps) {
   const [trendMetric, setTrendMetric] = useState<TrendMetric>("gmv");
   const [trendScope, setTrendScope] = useState<TrendScope>("ai");
   const { fmtCurrency, fmtNumber } = formatters;
-  const uiLanguage = lang;
 
   const trendScopes = useMemo(
     () => [
-      { key: "overall" as TrendScope, label: uiLanguage === "English" ? "All Orders" : "全部订单" },
-      { key: "ai" as TrendScope, label: uiLanguage === "English" ? "AI Summary" : "AI 汇总" },
+      { key: "overall" as TrendScope, label: t(lang, "all_orders") },
+      { key: "ai" as TrendScope, label: t(lang, "ai_summary") },
       ...channelList.map((channel) => ({ key: channel as TrendScope, label: channel })),
     ],
-    [uiLanguage],
+    [lang],
   );
 
   const getTrendValue = useCallback(
@@ -49,7 +48,7 @@ export function TrendChart({ trend, lang, formatters }: TrendChartProps) {
 
   const trendScopeLabel =
     trendScopes.find((item) => item.key === trendScope)?.label || 
-    (uiLanguage === "English" ? "AI Summary" : "AI 汇总");
+    t(lang, "ai_summary");
 
   const trendMax = useMemo(
     () => Math.max(1, ...trend.map((point) => getTrendValue(point))),
@@ -60,14 +59,14 @@ export function TrendChart({ trend, lang, formatters }: TrendChartProps) {
     <div className={styles.card}>
       <div className={styles.sectionHeader}>
         <div>
-          <p className={styles.sectionLabel}>{uiLanguage === "English" ? "Trend" : "趋势"}</p>
+          <p className={styles.sectionLabel}>{t(lang, "trend_label")}</p>
           <h3 className={styles.sectionTitle}>{t(lang, "trend_section_title")}</h3>
         </div>
         <div className={styles.trendControls}>
           <div className={styles.toggleGroup}>
             {[
               { key: "gmv" as TrendMetric, label: "GMV" },
-              { key: "orders" as TrendMetric, label: uiLanguage === "English" ? "Orders" : "订单" },
+              { key: "orders" as TrendMetric, label: t(lang, "toggle_orders") },
             ].map(({ key, label }) => (
               <button
                 key={key}
@@ -97,7 +96,7 @@ export function TrendChart({ trend, lang, formatters }: TrendChartProps) {
       <div className={styles.legend}>
         <span className={styles.legendDot} />
         <span>
-          {trendScopeLabel} · {trendMetric === "gmv" ? "GMV" : (uiLanguage === "English" ? "Orders" : "订单数")}
+          {trendScopeLabel} · {trendMetric === "gmv" ? "GMV" : t(lang, "col_orders")}
         </span>
       </div>
       
@@ -107,11 +106,11 @@ export function TrendChart({ trend, lang, formatters }: TrendChartProps) {
           const secondary =
             trendScope === "overall"
               ? trendMetric === "gmv"
-                ? (uiLanguage === "English" ? `AI GMV ${fmtCurrency(point.aiGMV)}` : `AI GMV ${fmtCurrency(point.aiGMV)}`)
-                : (uiLanguage === "English" ? `AI Orders ${fmtNumber(point.aiOrders)}` : `AI 订单 ${fmtNumber(point.aiOrders)}`)
+                ? `${t(lang, "kpi_ai_gmv")} ${fmtCurrency(point.aiGMV)}`
+                : `${t(lang, "kpi_ai_orders")} ${fmtNumber(point.aiOrders)}`
               : trendMetric === "gmv"
-                ? (uiLanguage === "English" ? `Total GMV ${fmtCurrency(point.overallGMV)}` : `总 GMV ${fmtCurrency(point.overallGMV)}`)
-                : (uiLanguage === "English" ? `Total Orders ${fmtNumber(point.overallOrders)}` : `总订单 ${fmtNumber(point.overallOrders)}`);
+                ? `${t(lang, "total_gmv")} ${fmtCurrency(point.overallGMV)}`
+                : `${t(lang, "total_orders")} ${fmtNumber(point.overallOrders)}`;
 
           return (
             <div key={point.label} className={styles.trendRow}>
@@ -134,9 +133,7 @@ export function TrendChart({ trend, lang, formatters }: TrendChartProps) {
       </div>
       
       <p className={styles.helpText}>
-        {uiLanguage === "English" 
-          ? "Toggle GMV/Orders and filter by channel. Low sample sizes can exaggerate variance; read alongside channel details." 
-          : "可切换 GMV / 订单并按渠道过滤；样本量低时单笔订单会放大波动，解读时需结合渠道详情。"}
+        {t(lang, "trend_help_text")}
       </p>
     </div>
   );

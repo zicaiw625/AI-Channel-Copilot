@@ -7,6 +7,7 @@ import { ValidationError, AppError, ErrorCode } from "./errors";
 import { logger } from "./logger.server";
 import { INTENT_TEMPLATES, buildOverviewShape } from "./ai/prompts";
 import { isDemoMode } from "./runtime.server";
+import { resolveUILanguageFromRequest } from "./language.server";
 
 type CopilotRequest = {
   intent?: CopilotIntent;
@@ -48,8 +49,9 @@ export const copilotAnswer = async (request: Request, payload: CopilotRequest) =
     shopDomain = session?.shop || "";
     const settings = await getSettings(shopDomain);
     
+    const language = resolveUILanguageFromRequest(request, settings.languages?.[0] || "English");
     // 缓存语言设置，供错误处理使用
-    cachedLanguage = settings.languages?.[0] || "English";
+    cachedLanguage = language;
 
     // 验证和解析时间范围
     const rangeKey: TimeRangeKey = (payload.range as TimeRangeKey) || "30d";
@@ -66,6 +68,7 @@ export const copilotAnswer = async (request: Request, payload: CopilotRequest) =
     const { data } = await getAiDashboardData(shopDomain, dateRange, settings, {
       timezone,
       allowDemo,
+      language,
     });
 
     const intent = payload.intent || parseIntent(payload.question);
@@ -75,8 +78,6 @@ export const copilotAnswer = async (request: Request, payload: CopilotRequest) =
         question: payload.question?.slice(0, 100),
       });
 
-      const language = settings.languages?.[0] || "English";
-      
       // 提供更友好的错误提示，附带建议的问法
       const suggestions = language === "English"
         ? [
@@ -102,7 +103,6 @@ export const copilotAnswer = async (request: Request, payload: CopilotRequest) =
       };
     }
 
-    const language = settings.languages?.[0] || "English";
     const overviewShape = buildOverviewShape(data, language);
     const answer = INTENT_TEMPLATES[intent]({
       rangeLabel: dateRange.label,

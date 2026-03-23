@@ -106,7 +106,6 @@ const DataCollectionHint = ({ lang, aiOrders }: { lang: Lang; aiOrders: number }
 
 export function KPICards({ overview, lang, formatters }: KPICardsProps) {
   const { fmtCurrency, fmtNumber, fmtPercent } = formatters;
-  const uiLanguage = lang;
   
   const aiOrders = overview.aiOrders;
   const isLowSample = aiOrders < LOW_SAMPLE_THRESHOLD;
@@ -125,7 +124,7 @@ export function KPICards({ overview, lang, formatters }: KPICardsProps) {
           <p className={styles.cardLabel}>{t(lang, "kpi_total_gmv")}</p>
           <p className={styles.cardValue}>{fmtCurrency(overview.totalGMV)}</p>
           <p className={styles.cardMeta}>
-            {uiLanguage === "English" ? "Orders" : t(lang, "kpi_orders")} {fmtNumber(overview.totalOrders)} · {uiLanguage === "English" ? "New" : t(lang, "kpi_new_customers")} {fmtNumber(overview.totalNewCustomers)}
+            {t(lang, "kpi_orders")} {fmtNumber(overview.totalOrders)} · {t(lang, "new_short")} {fmtNumber(overview.totalNewCustomers)}
           </p>
           <p className={styles.helpText}>{t(lang, "kpi_net_gmv")} {fmtCurrency(overview.netGMV)}</p>
         </div>
@@ -139,17 +138,17 @@ export function KPICards({ overview, lang, formatters }: KPICardsProps) {
           <p className={styles.cardValue}>
             {isVeryLowSample && aiOrders === 0 ? (
               <span style={{ fontSize: 18, color: "#bfbfbf" }}>
-                {uiLanguage === "English" ? "Awaiting data" : "等待数据"}
+                {t(lang, "awaiting_data")}
               </span>
             ) : (
               fmtCurrency(overview.aiGMV)
             )}
           </p>
           <p className={styles.cardMeta}>
-            {uiLanguage === "English" ? "Share" : t(lang, "kpi_ai_share")} {fmtPercent(overview.aiShare)}
+            {t(lang, "kpi_ai_share")} {fmtPercent(overview.aiShare)}
           </p>
           <p className={styles.helpText}>
-            {uiLanguage === "English" ? "AI Net GMV" : "AI 净 GMV"} {fmtCurrency(overview.netAiGMV)}
+            {t(lang, "ai_net_gmv")} {fmtCurrency(overview.netAiGMV)}
           </p>
         </div>
         
@@ -167,7 +166,7 @@ export function KPICards({ overview, lang, formatters }: KPICardsProps) {
             )}
           </p>
           <p className={styles.cardMeta}>
-            {uiLanguage === "English" ? "Total Orders" : t(lang, "kpi_ai_order_share")} {fmtNumber(overview.totalOrders)} · {fmtPercent(overview.aiOrderShare)}
+            {t(lang, "kpi_ai_order_share")} {fmtNumber(overview.totalOrders)} · {fmtPercent(overview.aiOrderShare)}
           </p>
         </div>
         
@@ -185,7 +184,7 @@ export function KPICards({ overview, lang, formatters }: KPICardsProps) {
             )}
           </p>
           <p className={styles.cardMeta}>
-            {uiLanguage === "English" ? "AI New Customer Rate" : t(lang, "kpi_ai_new_customer_rate")} {fmtPercent(overview.aiNewCustomerRate)} · {uiLanguage === "English" ? "Site New" : "全站新客"} {fmtNumber(overview.totalNewCustomers)}
+            {t(lang, "kpi_ai_new_customer_rate")} {fmtPercent(overview.aiNewCustomerRate)} · {t(lang, "site_new_short")} {fmtNumber(overview.totalNewCustomers)}
           </p>
         </div>
       </div>

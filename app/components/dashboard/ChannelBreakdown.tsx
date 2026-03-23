@@ -19,7 +19,6 @@ type MetricView = "gmv" | "orders" | "newCustomers";
 export function ChannelBreakdown({ channels, lang, formatters }: ChannelBreakdownProps) {
   const [metricView, setMetricView] = useState<MetricView>("gmv");
   const { fmtCurrency, fmtNumber } = formatters;
-  const uiLanguage = lang;
 
   const channelMax = useMemo(() => {
     const values = channels.map((channel) => {
@@ -86,9 +85,7 @@ export function ChannelBreakdown({ channels, lang, formatters }: ChannelBreakdow
       </div>
       
       <p className={styles.helpText}>
-        {uiLanguage === "English" 
-          ? "Priority: referrer > UTM. AI traffic without referrer/UTM cannot be attributed; results are conservative." 
-          : "优先级：referrer > UTM。未带 referrer/UTM 的 AI 流量无法被识别，结果为保守估计。"}
+        {t(lang, "conservative_attribution_note")}
       </p>
     </div>
   );

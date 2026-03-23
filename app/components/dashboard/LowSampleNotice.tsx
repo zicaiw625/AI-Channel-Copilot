@@ -3,6 +3,7 @@
  * 用更友好、更克制的方式提示商家数据处于积累阶段
  */
 
+import { t, tp } from "../../lib/i18n";
 import type { Lang } from "./types";
 
 export interface LowSampleNoticeProps {
@@ -15,19 +16,6 @@ export interface LowSampleNoticeProps {
   showTips?: boolean;
 }
 
-const tips = {
-  en: [
-    "AI channel attribution requires consistent traffic over time",
-    "Results become more reliable as more orders are collected",
-    "Consider extending the date range for a clearer picture",
-  ],
-  zh: [
-    "AI 渠道归因需要持续一段时间的流量积累",
-    "随着订单数据增加，结果会更加可靠",
-    "可以尝试延长时间范围以获得更清晰的数据",
-  ],
-};
-
 export const LowSampleNotice = ({
   sampleCount,
   threshold,
@@ -35,8 +23,12 @@ export const LowSampleNotice = ({
   variant = "inline",
   showTips = false,
 }: LowSampleNoticeProps) => {
-  const en = lang === "English";
   const progress = Math.min((sampleCount / threshold) * 100, 100);
+  const tipItems = [
+    t(lang, "low_sample_tip_traffic"),
+    t(lang, "low_sample_tip_reliability"),
+    t(lang, "low_sample_tip_range"),
+  ];
 
   // inline 模式：紧凑的徽章样式
   if (variant === "inline") {
@@ -52,14 +44,11 @@ export const LowSampleNotice = ({
           fontSize: 11,
           color: "#637381",
         }}
-        title={en 
-          ? `${sampleCount} AI orders detected, ${threshold} needed for reliable insights`
-          : `检测到 ${sampleCount} 笔 AI 订单，需要 ${threshold} 笔以获得可靠分析`
-        }
+        title={tp(lang, "low_sample_n_of_threshold", { count: sampleCount, threshold })}
       >
         <span style={{ fontSize: 12 }}>📊</span>
         <span>
-          {en ? "Building insights" : "数据积累中"}
+          {t(lang, "low_sample_building_insights")}
         </span>
         <span
           style={{
@@ -156,12 +145,10 @@ export const LowSampleNotice = ({
               marginBottom: 4,
             }}
           >
-            {en ? "Building Your AI Insights" : "正在积累 AI 渠道数据"}
+            {t(lang, "low_sample_building_ai_insights")}
           </div>
           <div style={{ fontSize: 13, color: "#637381", lineHeight: 1.5 }}>
-            {en
-              ? `We've detected ${sampleCount} AI-attributed orders so far. For reliable trends, we recommend waiting until you have at least ${threshold} orders.`
-              : `目前已检测到 ${sampleCount} 笔 AI 归因订单。建议等待至少 ${threshold} 笔订单后再分析趋势，数据会更可靠。`}
+            {tp(lang, "low_sample_banner_text", { count: sampleCount, threshold })}
           </div>
 
           {showTips && (
@@ -175,7 +162,7 @@ export const LowSampleNotice = ({
                   marginBottom: 6,
                 }}
               >
-                {en ? "What you can do" : "建议操作"}
+                {t(lang, "low_sample_what_to_do")}
               </div>
               <ul
                 style={{
@@ -186,7 +173,7 @@ export const LowSampleNotice = ({
                   lineHeight: 1.6,
                 }}
               >
-                {(en ? tips.en : tips.zh).map((tip, i) => (
+                {tipItems.map((tip, i) => (
                   <li key={i}>{tip}</li>
                 ))}
               </ul>
@@ -209,10 +196,7 @@ export const EstimateTag = ({
   lang: Lang;
   tooltip?: string;
 }) => {
-  const en = lang === "English";
-  const defaultTooltip = en
-    ? "This value is an estimate based on limited data"
-    : "此数值为基于有限数据的估算";
+  const defaultTooltip = t(lang, "estimate_tooltip");
 
   return (
     <span
@@ -231,7 +215,7 @@ export const EstimateTag = ({
       }}
       title={tooltip || defaultTooltip}
     >
-      {en ? "est." : "估"}
+      {t(lang, "estimate_short")}
     </span>
   );
 };

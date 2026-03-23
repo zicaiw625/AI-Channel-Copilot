@@ -6,6 +6,7 @@ import { hasFeature, FEATURES } from "../lib/access.server";
 import { logger } from "../lib/logger.server";
 import { enforceRateLimit, RateLimitRules } from "../lib/security/rateLimit.server";
 import { normalizeLanguageCode, toUILanguage } from "../lib/language";
+import { resolveUILanguageFromRequest } from "../lib/language.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const url = new URL(request.url);
@@ -42,18 +43,21 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     // Allow overriding language from query param (for preview to match UI selection)
     // Only accept valid language values to ensure type safety
     const langCode = normalizeLanguageCode(url.searchParams.get("lang"));
-    const nextLanguage = langCode
-      ? toUILanguage(langCode)
-      : toUILanguage(settings.languages?.[0], "中文");
-    const settingsWithLang = langCode
-      ? { ...settings, languages: [nextLanguage, ...(settings.languages || []).filter((l: string) => l !== nextLanguage)] }
-      : settings;
+    const cookieLanguage = resolveUILanguageFromRequest(request, settings.languages?.[0] || "中文");
+    const nextLanguage = langCode ? toUILanguage(langCode) : cookieLanguage;
+
+    // 预览必须与当前语言一致：即使 URL 没有提供 lang，也用 cookie 语言覆盖 settings.languages[0]
+    const settingsWithLang = {
+      ...settings,
+      languages: [nextLanguage, ...(settings.languages || []).filter((l: string) => l !== nextLanguage)],
+    };
     
     // Pass admin client to enable fetching collections and blogs from Shopify API
     const text = await buildLlmsTxt(shopDomain, settingsWithLang, { 
       range: "30d", 
       topN: 20,
       admin: admin || undefined,
+      language: nextLanguage,
     });
 
     if (download) {

@@ -8,11 +8,12 @@ import { requireEnv } from "../lib/env.server";
 import { useUILanguage } from "../lib/useUILanguage";
 import { getShopifyContextParams, getPreservedSearchParams } from "../lib/navigation";
 import { normalizeLanguageCode, toUILanguage } from "../lib/language";
+import { resolveUILanguageFromRequest } from "../lib/language.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  let language = "中文";
   const url = new URL(request.url);
-  language = toUILanguage(url.searchParams.get("lang"));
+  const queryLangCode = normalizeLanguageCode(url.searchParams.get("lang"));
+  let language: string = queryLangCode ? toUILanguage(queryLangCode, "中文") : "中文";
 
   let shopDomain = url.searchParams.get("shop") || "";
 
@@ -64,7 +65,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   if (shopDomain) {
     try {
       const settings = await getSettings(shopDomain);
-      language = settings.languages[0] || language;
+      // 只有在没有显式 query `lang` 时才使用 cookie 优先（从而保证全站一致）
+      language = queryLangCode
+        ? language
+        : resolveUILanguageFromRequest(request, settings.languages?.[0] || "中文");
     } catch (error) {
       // Ignore settings lookup failures; fall back to default language.
       void error;

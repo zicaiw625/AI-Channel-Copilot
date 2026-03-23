@@ -3,6 +3,12 @@ import { LANGUAGE_EVENT, LANGUAGE_STORAGE_KEY } from "./constants";
 
 export const useUILanguage = (initial: string) => {
   const [uiLanguage, setUiLanguage] = useState(initial);
+
+  const getCookieLanguage = () => {
+    const cookieHeader = typeof document === "undefined" ? "" : document.cookie || "";
+    const match = cookieHeader.match(new RegExp(`(?:^|;\\s*)${LANGUAGE_STORAGE_KEY}=([^;]+)`));
+    return match?.[1] ? match[1] : null;
+  };
   
   // 使用 useCallback 来稳定事件处理器引用
   const handleStorageEvent = useCallback((e: StorageEvent) => {
@@ -21,8 +27,21 @@ export const useUILanguage = (initial: string) => {
   // 初始化时从 localStorage 读取
   useEffect(() => {
     try {
+      // 语言彻底统一：以 cookie 为准（localStorage 可能是旧值）
+      const cookieRaw = getCookieLanguage();
+      if (cookieRaw) {
+        const decoded = decodeURIComponent(cookieRaw);
+        if (decoded === "English" || decoded === "中文") {
+          setUiLanguage(decoded);
+          // 同步 localStorage，避免后续 storage 事件再次把界面拉回旧值
+          window.localStorage.setItem(LANGUAGE_STORAGE_KEY, decoded);
+          return;
+        }
+      }
+
+      // cookie 不可用时才回退 localStorage
       const stored = window.localStorage.getItem(LANGUAGE_STORAGE_KEY);
-      if (stored && stored !== initial) {
+      if (stored && (stored === "English" || stored === "中文") && stored !== initial) {
         setUiLanguage(stored);
       }
     } catch (error) {

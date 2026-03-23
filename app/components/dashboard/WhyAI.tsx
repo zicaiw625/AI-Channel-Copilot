@@ -4,6 +4,7 @@
  */
 
 import { useState } from "react";
+import { t } from "../../lib/i18n";
 import type { Lang } from "./types";
 
 export type ConfidenceLevel = "high" | "medium" | "low";
@@ -64,20 +65,19 @@ const parseMatchType = (
   lang: Lang
 ): { type: string; value: string; icon: string }[] => {
   const matches: { type: string; value: string; icon: string }[] = [];
-  const en = lang === "English";
 
   // 检查 referrer 匹配
   if (detection?.includes("referrer matched") || detection?.includes("来源域名匹配")) {
     const domainMatch = detection.match(/matched\s+([^\s·]+)/i) || 
                         detection.match(/匹配\s+([^\s·]+)/);
     matches.push({
-      type: en ? "Referrer Domain" : "来源域名",
+      type: t(lang, "whyai_referrer_domain"),
       value: domainMatch?.[1] || referrer || "-",
       icon: "🔗",
     });
   } else if (referrer && referrer !== "-") {
     matches.push({
-      type: en ? "Referrer" : "来源",
+      type: t(lang, "whyai_referrer"),
       value: referrer,
       icon: "🔗",
     });
@@ -95,8 +95,8 @@ const parseMatchType = (
   // 检查标签匹配
   if (detection?.includes("existing tag") || detection?.includes("标签")) {
     matches.push({
-      type: en ? "Existing Tag" : "已有标签",
-      value: en ? "Pre-tagged by app" : "应用已标记",
+      type: t(lang, "whyai_existing_tag"),
+      value: t(lang, "whyai_pretagged"),
       icon: "🔖",
     });
   }
@@ -104,8 +104,8 @@ const parseMatchType = (
   // 检查备注属性匹配
   if (detection?.includes("Note attribute") || detection?.includes("备注属性")) {
     matches.push({
-      type: en ? "Note Attribute" : "备注属性",
-      value: en ? "Detected from order notes" : "从订单备注检测",
+      type: t(lang, "whyai_note_attribute"),
+      value: t(lang, "whyai_note_detected"),
       icon: "📝",
     });
   }
@@ -168,7 +168,6 @@ export const WhyAI = ({
   compact = false,
 }: WhyAIProps) => {
   const [expanded, setExpanded] = useState(false);
-  const en = lang === "English";
   const confidence = parseConfidence(detection);
   const matches = parseMatchType(detection, referrer, utmSource, lang);
   const colors = confidenceColors[confidence];
@@ -177,7 +176,7 @@ export const WhyAI = ({
   if (!aiSource) {
     return (
       <span style={{ color: "#919eab", fontSize: 12 }}>
-        {en ? "Not AI" : "非 AI"}
+        {t(lang, "whyai_not_ai")}
       </span>
     );
   }
@@ -197,7 +196,7 @@ export const WhyAI = ({
           alignItems: "center",
           gap: 4,
         }}
-        title={en ? "Click to see why" : "点击查看原因"}
+        title={t(lang, "whyai_click_to_see")}
       >
         <span style={{ fontWeight: 500 }}>{aiSource}</span>
         <ConfidenceBadge level={confidence} lang={lang} size="small" />
@@ -234,7 +233,7 @@ export const WhyAI = ({
             padding: "2px 4px",
           }}
         >
-          {expanded ? (en ? "Hide Details" : "收起") : (en ? "Why AI?" : "为什么?")}
+          {expanded ? t(lang, "whyai_hide_details") : t(lang, "whyai_question")}
         </button>
       </div>
 
@@ -260,7 +259,7 @@ export const WhyAI = ({
                 marginBottom: 8,
               }}
             >
-              {en ? "Detection Evidence" : "识别证据"}
+              {t(lang, "whyai_detection_evidence")}
             </div>
             {matches.length > 0 ? (
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -293,7 +292,7 @@ export const WhyAI = ({
               </div>
             ) : (
               <div style={{ fontSize: 12, color: "#919eab" }}>
-                {en ? "No specific evidence recorded" : "未记录具体证据"}
+                {t(lang, "whyai_no_specific_evidence")}
               </div>
             )}
           </div>
@@ -310,7 +309,7 @@ export const WhyAI = ({
                   marginBottom: 6,
                 }}
               >
-                {en ? "Additional Signals" : "其他信号"}
+                {t(lang, "whyai_additional_signals")}
               </div>
               <ul
                 style={{
@@ -358,7 +357,7 @@ export const WhyAI = ({
                   cursor: "pointer",
                 }}
               >
-                {en ? "Raw Detection" : "原始检测结果"}
+                {t(lang, "whyai_raw_detection")}
               </summary>
               <div
                 style={{
@@ -391,25 +390,19 @@ export const WhyAI = ({
             {confidence === "high" && (
               <>
                 ✅{" "}
-                {en
-                  ? "Referrer domain matched a known AI source. This is reliable evidence."
-                  : "来源域名匹配已知的 AI 平台，这是可靠的证据。"}
+                {t(lang, "whyai_confidence_high_text")}
               </>
             )}
             {confidence === "medium" && (
               <>
                 ⚠️{" "}
-                {en
-                  ? "Detected via UTM or existing tag. May need verification."
-                  : "通过 UTM 参数或已有标签识别，可能需要核实。"}
+                {t(lang, "whyai_confidence_medium_text")}
               </>
             )}
             {confidence === "low" && (
               <>
                 ❓{" "}
-                {en
-                  ? "Weak signal or only medium keyword match. Consider reviewing rules."
-                  : "信号较弱或仅匹配 medium 关键词，建议检查规则配置。"}
+                {t(lang, "whyai_confidence_low_text")}
               </>
             )}
           </div>

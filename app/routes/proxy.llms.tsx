@@ -5,6 +5,7 @@ import { buildLlmsTxt, getLlmsTxtCache } from "../lib/llms.server";
 import { logger } from "../lib/logger.server";
 import { readCriticalEnv } from "../lib/env.server";
 import { enforceRateLimit, RateLimitRules, getClientIp, buildRateLimitKey } from "../lib/security/rateLimit.server";
+import { resolveUILanguageFromRequest } from "../lib/language.server";
 
 /**
  * Verify Shopify App Proxy signature
@@ -127,7 +128,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
     if (!hasAnyExposure) {
       // Return a minimal llms.txt indicating no content is exposed
-      const language = settings.languages?.[0] || "中文";
+      const language = resolveUILanguageFromRequest(request, settings.languages?.[0] || "中文");
       const noContentText =
         language === "English"
           ? `# llms.txt · AI crawling preferences

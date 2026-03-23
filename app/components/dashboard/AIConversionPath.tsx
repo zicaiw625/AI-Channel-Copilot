@@ -3,6 +3,7 @@
  * 直观展示 AI 流量 → 结账 → 订单的转化路径
  */
 
+import { getLocale, t, tp } from "../../lib/i18n";
 import type { Lang } from "./types";
 
 export interface PathStage {
@@ -45,7 +46,7 @@ const formatNumber = (num: number): string => {
  * 格式化货币（根据语言选择 locale）
  */
 const formatCurrency = (value: number, currency: string = "USD", lang: Lang = "English"): string => {
-  const locale = lang === "English" ? "en-US" : "zh-CN";
+  const locale = getLocale(lang);
   return new Intl.NumberFormat(locale, {
     style: "currency",
     currency,
@@ -68,7 +69,6 @@ const StageNode = ({
   currency: string;
   isEstimated?: boolean;
 }) => {
-  const en = lang === "English";
   const icon = stageIcons[stage.id] || "📍";
   const aiRatio = stage.count > 0 ? (stage.aiCount / stage.count) * 100 : 0;
 
@@ -107,9 +107,9 @@ const StageNode = ({
               color: "#919eab",
               verticalAlign: "super",
             }}
-            title={en ? "Estimated value" : "估算值"}
+            title={t(lang, "estimated_value")}
           >
-            (est.)
+            ({t(lang, "estimate_short")}.)
           </span>
         )}
       </div>
@@ -261,8 +261,6 @@ export const AIConversionPath = ({
   currency = "USD",
   isEstimated = false,
 }: AIConversionPathProps) => {
-  const en = lang === "English";
-
   if (stages.length === 0) {
     return (
       <div
@@ -272,7 +270,7 @@ export const AIConversionPath = ({
           color: "#637381",
         }}
       >
-        {en ? "No data available" : "暂无数据"}
+        {t(lang, "no_data_available")}
       </div>
     );
   }
@@ -293,9 +291,7 @@ export const AIConversionPath = ({
           }}
         >
           ⚠️{" "}
-          {en
-            ? "Visit and cart data are estimates based on checkout/order patterns. Enable checkout webhooks for more accurate data."
-            : "访问和加购数据是基于结账/订单模式的估算。启用 checkout webhook 可获得更准确的数据。"}
+          {t(lang, "estimated_visit_cart_note")}
         </div>
       )}
 
@@ -357,7 +353,7 @@ export const AIConversionPath = ({
                 marginBottom: 2,
               }}
             >
-              {en ? "AI Channel Insight" : "AI 渠道洞察"}
+              {t(lang, "ai_channel_insight")}
             </div>
             <div style={{ fontSize: 12, color: "#637381" }}>
               {(() => {
@@ -374,17 +370,11 @@ export const AIConversionPath = ({
                 const diff = aiCvr - overallCvr;
 
                 if (Math.abs(diff) < 0.5) {
-                  return en
-                    ? "AI channel conversion rate is similar to overall."
-                    : "AI 渠道转化率与整体相近。";
+                  return t(lang, "ai_conversion_similar");
                 } else if (diff > 0) {
-                  return en
-                    ? `AI channel converts ${diff.toFixed(1)}% better than overall. High-intent traffic!`
-                    : `AI 渠道转化率高出整体 ${diff.toFixed(1)}%，这是高意向流量！`;
+                  return tp(lang, "ai_conversion_better", { diff: diff.toFixed(1) });
                 } else {
-                  return en
-                    ? `AI channel converts ${Math.abs(diff).toFixed(1)}% lower than overall. Consider optimizing AI-facing content.`
-                    : `AI 渠道转化率低于整体 ${Math.abs(diff).toFixed(1)}%，建议优化面向 AI 的内容。`;
+                  return tp(lang, "ai_conversion_lower", { diff: Math.abs(diff).toFixed(1) });
                 }
               })()}
             </div>

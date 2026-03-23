@@ -24,6 +24,10 @@ export type DashboardContextOptions = {
   fallbackToShopify?: boolean;
   fallbackIntent?: string;
   backfillCooldownMinutes?: number;
+  /**
+   * UI 语言覆盖：用于保证首屏 SSR 文案与前端 cookie 选择一致
+   */
+  language?: string;
 };
 
 export type DashboardContextResult = {
@@ -50,12 +54,13 @@ export const loadDashboardContext = async ({
   fallbackToShopify = false,
   fallbackIntent = "settings-export",
   backfillCooldownMinutes = BACKFILL_COOLDOWN_MINUTES,
+  language: languageOverride,
 }: DashboardContextOptions): Promise<DashboardContextResult> => {
   const rangeKey = (url.searchParams.get("range") as TimeRangeKey) || defaultRangeKey;
   const from = url.searchParams.get("from");
   const to = url.searchParams.get("to");
   const displayTimezone = settings.timezones[0] || "UTC";
-  const language = settings.languages[0] || "English";
+  const language = languageOverride ?? settings.languages[0] ?? "English";
   const currency = settings.primaryCurrency || "USD";
   const calculationTimezone = displayTimezone || "UTC";
   const dateRange = resolveDateRange(rangeKey, new Date(), from, to, calculationTimezone);

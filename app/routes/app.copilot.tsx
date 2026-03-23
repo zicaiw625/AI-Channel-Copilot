@@ -10,6 +10,7 @@ import styles from "../styles/app.copilot.module.css";
 import { hasFeature, FEATURES } from "../lib/access.server";
 import { isDemoMode } from "../lib/runtime.server";
 import { buildEmbeddedAppPath } from "../lib/navigation";
+import { resolveUILanguageFromRequest } from "../lib/language.server";
 
 /**
  * Copilot API 内部数据类型
@@ -64,6 +65,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   }
   
   const settings = await getSettings(shopDomain);
+  const language = resolveUILanguageFromRequest(request, settings.languages?.[0] || "中文");
   const timezone = settings.timezones[0] || "UTC";
   const range = "30d" as TimeRangeKey;
   const dateRange = resolveDateRange(range, new Date(), undefined, undefined, timezone);
@@ -73,17 +75,17 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   // If demo, allow; otherwise check feature access
   const readOnly = !canUseCopilot && !demo;
 
-  return { shopDomain, settings, timezone, dateRange, range, readOnly, demo };
+  return { shopDomain, settings, timezone, dateRange, range, readOnly, demo, language };
 };
 
 export default function Copilot() {
-  const { settings, dateRange, range, readOnly, demo } = useLoaderData<typeof loader>();
+  const { settings, dateRange, range, readOnly, demo, language: loaderLanguage } = useLoaderData<typeof loader>();
   const location = useLocation();
   const fetcher = useFetcher<CopilotResponse>();
   const [question, setQuestion] = useState("");
   const [activeIntent, setActiveIntent] = useState<string | null>(null);
   // 使用 useUILanguage 保持语言设置的客户端一致性
-  const language = useUILanguage(settings.languages[0] || "中文");
+  const language = useUILanguage(loaderLanguage || settings.languages[0] || "中文");
   const dashboardHref = buildEmbeddedAppPath("/app", location.search, { backTo: null, fromTab: null, tab: null });
   const billingHref = buildEmbeddedAppPath("/app/billing", location.search, { backTo: null, fromTab: null, tab: null });
   

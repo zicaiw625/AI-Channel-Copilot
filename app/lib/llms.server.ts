@@ -392,6 +392,10 @@ export const buildLlmsTxt = async (
     admin?: AdminGraphqlClient;
     includeProductDetails?: boolean;
     includeFAQs?: boolean;
+    /**
+     * 语言覆盖：用于让 llms.txt 生成内容与当前 UI/cookie 选择一致
+     */
+    language?: "English" | "中文";
   },
 ) => {
   const rangeKey = options?.range || "30d";
@@ -402,7 +406,9 @@ export const buildLlmsTxt = async (
   // FAQ templates should never leak into the live/public llms.txt unless explicitly requested.
   const includeFAQs = options?.includeFAQs ?? false;
   const lines: string[] = [];
-  const language = (settings.languages && settings.languages[0]) || "English";
+  const language =
+    options?.language ??
+    ((settings.languages && settings.languages[0]) || "English");
   const isEnglish = language === "English";
 
   // === Header ===

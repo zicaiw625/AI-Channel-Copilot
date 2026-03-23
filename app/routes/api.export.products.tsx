@@ -7,6 +7,7 @@ import { requireFeature, FEATURES } from "../lib/access.server";
 import { isDemoMode } from "../lib/runtime.server";
 import { enforceRateLimit, RateLimitRules } from "../lib/security/rateLimit.server";
 import { toCsvValue } from "../lib/export";
+import { resolveUILanguageFromRequest } from "../lib/language.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   let session;
@@ -31,7 +32,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const timezone = settings.timezones[0] || "UTC";
   const dateRange = resolveDateRange(rangeKey, new Date(), from, to, timezone);
 
-  const { data } = await getAiDashboardData(shopDomain, dateRange, settings, { timezone });
+  const language = resolveUILanguageFromRequest(request, settings.languages?.[0] || "中文");
+  const { data } = await getAiDashboardData(shopDomain, dateRange, settings, { timezone, language });
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {

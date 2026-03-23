@@ -3,9 +3,11 @@ import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { Link, useLoaderData, useFetcher, useLocation } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 
+import { Banner, Button } from "../components/ui";
 import { authenticate } from "../shopify.server";
 import { getSettings } from "../lib/settings.server";
 import { useUILanguage } from "../lib/useUILanguage";
+import { resolveUILanguageFromRequest } from "../lib/language.server";
 import styles from "../styles/app.dashboard.module.css";
 import { hasFeature, FEATURES } from "../lib/access.server";
 import { buildEmbeddedAppPath } from "../lib/navigation";
@@ -20,7 +22,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   
   const isGrowth = await hasFeature(shopDomain, FEATURES.MULTI_STORE);
   const settings = await getSettings(shopDomain);
-  const language = settings.languages?.[0] || "中文";
+  const language = resolveUILanguageFromRequest(request, settings.languages?.[0] || "中文");
 
   // 获取 webhook 配置
   const webhookConfig = (settings as any).webhookExport || {
@@ -167,18 +169,11 @@ export default function WebhookExport() {
             </p>
             <Link
               to={billingHref}
-              style={{
-                display: "inline-block",
-                padding: "12px 24px",
-                background: "#008060",
-                color: "#fff",
-                borderRadius: 6,
-                fontSize: 14,
-                fontWeight: 600,
-                textDecoration: "none",
-              }}
+              style={{ textDecoration: "none" }}
             >
-              {en ? "Upgrade to Growth" : "升级到 Growth 版"}
+              <Button variant="primary" size="medium">
+                {en ? "Upgrade to Growth" : "升级到 Growth 版"}
+              </Button>
             </Link>
           </div>
         </div>
@@ -254,9 +249,11 @@ export default function WebhookExport() {
               }}
             />
             {url && !url.startsWith("https://") && (
-              <p style={{ margin: "6px 0 0", fontSize: 12, color: "#ff4d4f" }}>
-                {en ? "⚠ Only HTTPS URLs are allowed for security" : "⚠ 出于安全考虑，仅支持 HTTPS 地址"}
-              </p>
+              <div style={{ marginTop: 8 }}>
+                <Banner status="critical">
+                  {en ? "Only HTTPS URLs are allowed for security" : "出于安全考虑，仅支持 HTTPS 地址"}
+                </Banner>
+              </div>
             )}
             <p style={{ margin: "6px 0 0", fontSize: 12, color: "#637381" }}>
               {en
@@ -328,46 +325,26 @@ export default function WebhookExport() {
           </div>
 
           <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-            <button
+            <Button
               type="button"
               onClick={handleSaveConfig}
               disabled={configFetcher.state !== "idle"}
-              style={{
-                padding: "10px 20px",
-                background: "#008060",
-                color: "#fff",
-                border: "none",
-                borderRadius: 4,
-                fontSize: 14,
-                fontWeight: 500,
-                cursor: "pointer",
-              }}
             >
               {configFetcher.state !== "idle"
                 ? (en ? "Saving..." : "保存中...")
                 : (en ? "Save Configuration" : "保存配置")}
-            </button>
+            </Button>
             
-            <button
+            <Button
               type="button"
               onClick={handleTestWebhook}
               disabled={!url || testFetcher.state !== "idle"}
-              style={{
-                padding: "10px 20px",
-                background: "#fff",
-                color: "#333",
-                border: "1px solid #c4cdd5",
-                borderRadius: 4,
-                fontSize: 14,
-                fontWeight: 500,
-                cursor: url ? "pointer" : "not-allowed",
-                opacity: url ? 1 : 0.5,
-              }}
+              variant="secondary"
             >
               {testFetcher.state !== "idle"
                 ? (en ? "Testing..." : "测试中...")
                 : (en ? "Send Test" : "发送测试")}
-            </button>
+            </Button>
             
             {testFetcher.data && (
               <StatusBadge 
@@ -443,52 +420,33 @@ export default function WebhookExport() {
               <option value="90d">{en ? "Last 90 Days" : "最近 90 天"}</option>
             </select>
             
-            <button
+            <Button
               type="button"
               onClick={handleTriggerExport}
               disabled={!url || exportFetcher.state !== "idle"}
-              style={{
-                padding: "10px 20px",
-                background: "#635bff",
-                color: "#fff",
-                border: "none",
-                borderRadius: 4,
-                fontSize: 14,
-                fontWeight: 500,
-                cursor: url ? "pointer" : "not-allowed",
-                opacity: url ? 1 : 0.5,
-              }}
+              variant="primary"
             >
               {exportFetcher.state !== "idle"
                 ? (en ? "Exporting..." : "导出中...")
                 : (en ? "Export Now" : "立即导出")}
-            </button>
+            </Button>
           </div>
 
           {exportFetcher.data?.ok && (
-            <div
-              style={{
-                marginTop: 16,
-                padding: 16,
-                background: "#f6ffed",
-                border: "1px solid #b7eb8f",
-                borderRadius: 6,
-              }}
-            >
-              <div style={{ fontWeight: 600, color: "#389e0d", marginBottom: 8 }}>
-                ✓ {en ? "Export completed!" : "导出完成！"}
-              </div>
-              <div style={{ fontSize: 13, color: "#333" }}>
-                {en ? "Orders exported: " : "导出订单数："}
-                <strong>{exportFetcher.data.ordersExported}</strong>
-              </div>
-              {exportFetcher.data.summary && (
-                <div style={{ marginTop: 8, fontSize: 13, color: "#637381" }}>
-                  AI GMV: ${exportFetcher.data.summary.aiGMV.toFixed(2)} · 
-                  AI Orders: {exportFetcher.data.summary.aiOrders} · 
-                  AI Share: {exportFetcher.data.summary.aiShare.toFixed(1)}%
+            <div style={{ marginTop: 16 }}>
+              <Banner status="success" title={en ? "Export completed!" : "导出完成！"}>
+                <div>
+                  {en ? "Orders exported: " : "导出订单数："}
+                  <strong>{exportFetcher.data.ordersExported}</strong>
                 </div>
-              )}
+                {exportFetcher.data.summary && (
+                  <div style={{ marginTop: 8 }}>
+                    AI GMV: ${exportFetcher.data.summary.aiGMV.toFixed(2)} · 
+                    AI Orders: {exportFetcher.data.summary.aiOrders} · 
+                    AI Share: {exportFetcher.data.summary.aiShare.toFixed(1)}%
+                  </div>
+                )}
+              </Banner>
             </div>
           )}
 

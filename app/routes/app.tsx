@@ -17,6 +17,7 @@ import { MAX_BACKFILL_DURATION_MS, MAX_BACKFILL_ORDERS } from "../lib/constants"
 import { ensureWebhooks } from "../lib/webhooks.server";
 import { extractAdminClient } from "../lib/graphqlSdk.server";
 import { buildEmbeddedAppPath } from "../lib/navigation";
+import { resolveUILanguageFromRequest } from "../lib/language.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { demoMode, enableBilling } = readAppFlags();
@@ -140,7 +141,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
     return {
       apiKey: requireEnv("SHOPIFY_API_KEY"),
-      language: settings.languages[0] || "中文",
+      language: resolveUILanguageFromRequest(request, settings.languages?.[0] || "中文"),
       plan,
       trialDaysLeft,
       isDevShop,
@@ -151,7 +152,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     logger.error("[app] loader error", { shopDomain }, { error: e });
     return {
       apiKey: requireEnv("SHOPIFY_API_KEY"),
-      language: settings.languages[0] || "中文",
+      language: resolveUILanguageFromRequest(request, settings.languages?.[0] || "中文"),
       plan: "none" as PlanTier,
       trialDaysLeft: null,
       isDevShop: false,
@@ -169,6 +170,7 @@ export default function App() {
     <AppProvider embedded apiKey={apiKey}>
       <NavMenu>
         <a href={buildEmbeddedAppPath("/app", location.search, { backTo: null, fromTab: null, tab: null })} rel="home">{uiLanguage === "English" ? "Dashboard" : "仪表盘"}</a>
+        <a href={buildEmbeddedAppPath("/app/additional/attribution", location.search, { backTo: null, fromTab: null, tab: null })}>{uiLanguage === "English" ? "Attribution" : "归因规则"}</a>
         <a href={buildEmbeddedAppPath("/app/ai-visibility", location.search, { backTo: null, fromTab: null, tab: "llms" })}>{uiLanguage === "English" ? "AI SEO Workspace" : "AI SEO 工作台"}</a>
         <a href={buildEmbeddedAppPath("/app/optimization", location.search, { backTo: null, fromTab: null, tab: null })}>{uiLanguage === "English" ? "Optimization" : "优化建议"}</a>
         <a href={buildEmbeddedAppPath("/app/billing", location.search, { backTo: null, fromTab: null, tab: null })}>{uiLanguage === "English" ? "Billing" : "计费管理"}</a>

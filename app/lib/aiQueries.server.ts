@@ -39,6 +39,10 @@ type DashboardQueryOptions = {
   timezone?: string;
   allowDemo?: boolean;
   orders?: OrderRecord[];
+  /**
+   * UI 语言覆盖：用于保证 SSR 文案（如 sampleNote）与前端 cookie 选择一致
+   */
+  language?: Lang;
 };
 
 /**
@@ -802,8 +806,8 @@ export const getAiDashboardData = async (
           undefined,
         );
 
-  const language = settings.languages && settings.languages[0] ? settings.languages[0] : "English";
-  const clampedNote = t(language as Lang, "data_truncated_sample");
+  const language = options.language ?? (settings.languages && settings.languages[0] ? (settings.languages[0] as Lang) : "English");
+  const clampedNote = t(language, "data_truncated_sample");
   const localizeNote = (note: string | null): string | null => {
     if (!note || language !== "English") return note;
     let out = note;

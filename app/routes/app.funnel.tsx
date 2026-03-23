@@ -3,21 +3,25 @@ import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { Link, useLoaderData, useNavigate, useLocation } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 
+import { Banner, Card } from "../components/ui";
+import { ConversionCard, FunnelChart } from "../components/funnel/FunnelPanels";
 import { authenticate } from "../shopify.server";
 import { getSettings } from "../lib/settings.server";
-import { getFunnelData, type FunnelMetrics } from "../lib/funnelService.server";
+import { getFunnelData } from "../lib/funnelService.server";
 import { useUILanguage } from "../lib/useUILanguage";
 import styles from "../styles/app.dashboard.module.css";
 import { AI_CHANNELS, timeRanges, type TimeRangeKey } from "../lib/aiData";
 import { AIConversionPath, type PathStage } from "../components/dashboard";
 import { buildEmbeddedAppPath, getPreservedSearchParams } from "../lib/navigation";
+import { resolveUILanguageFromRequest } from "../lib/language.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
 
   const shopDomain = session.shop;
   const settings = await getSettings(shopDomain);
-  const language = settings.languages?.[0] || "中文";
+  // 优先使用 cookie `aicc_language`，减少前端切换语言造成的文案/数据不一致
+  const language = resolveUILanguageFromRequest(request, settings.languages?.[0] || "中文");
   const timezone = settings.timezones?.[0] || "UTC";
   
   const url = new URL(request.url);
@@ -38,249 +42,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     currency: settings.primaryCurrency || "USD",
     isEstimated: funnelData.isEstimated,
   };
-};
-
-// 判断漏斗阶段是否为估算数据
-const isEstimatedStage = (stage: string): boolean => {
-  return stage === "visit" || stage === "add_to_cart";
-};
-
-// 漏斗可视化组件
-const FunnelChart = ({ 
-  stages, 
-  language,
-  maxCount,
-  isEstimated = true,
-}: { 
-  stages: FunnelMetrics[]; 
-  language: string;
-  maxCount: number;
-  isEstimated?: boolean;
-}) => {
-  const isEnglish = language === "English";
-  
-  // 检查是否有数据
-  const hasData = stages.some(s => s.count > 0);
-  
-  if (!hasData) {
-    return (
-      <div 
-        style={{ 
-          padding: "40px 20px", 
-          textAlign: "center",
-          color: "#637381",
-        }}
-        role="status"
-        aria-label={isEnglish ? "No funnel data available" : "暂无漏斗数据"}
-      >
-        <p style={{ margin: 0, fontSize: 14 }}>
-          {isEnglish ? "No data available for this period" : "该时间段内暂无数据"}
-        </p>
-        <p style={{ margin: "8px 0 0", fontSize: 12, color: "#919eab" }}>
-          {isEnglish 
-            ? "Data will appear once orders are received" 
-            : "收到订单后数据将自动更新"}
-        </p>
-      </div>
-    );
-  }
-  
-  return (
-    <div 
-      style={{ padding: "20px 0" }}
-      role="img"
-      aria-label={isEnglish 
-        ? `Funnel chart showing ${stages.length} stages from ${stages[0]?.label} to ${stages[stages.length - 1]?.label}`
-        : `漏斗图表，显示从 ${stages[0]?.label} 到 ${stages[stages.length - 1]?.label} 的 ${stages.length} 个阶段`
-      }
-    >
-      {/* 屏幕阅读器专用摘要 */}
-      <div className="sr-only" role="list" aria-label={isEnglish ? "Funnel stages" : "漏斗阶段"}>
-        {stages.map((stage) => (
-          <div key={`sr-${stage.stage}`} role="listitem">
-            {stage.label}: {stage.count.toLocaleString()} 
-            ({(stage.conversionRate * 100).toFixed(1)}% {isEnglish ? "conversion" : "转化率"})
-            {stage.value > 0 && ` - $${stage.value.toLocaleString()}`}
-          </div>
-        ))}
-      </div>
-      
-      {stages.map((stage, index) => {
-        const widthPercent = maxCount > 0 ? (stage.count / maxCount) * 100 : 0;
-        const nextStage = stages[index + 1];
-        const dropoff = nextStage && stage.count > 0
-          ? ((stage.count - nextStage.count) / stage.count * 100).toFixed(1)
-          : null;
-        const stageIsEstimated = isEstimated && isEstimatedStage(stage.stage);
-        
-        return (
-          <div key={stage.stage} style={{ marginBottom: 24 }} aria-hidden="true">
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontWeight: 600, fontSize: 14 }}>{stage.label}</span>
-                {stageIsEstimated && (
-                  <span 
-                    style={{ 
-                      fontSize: 10, 
-                      padding: "2px 6px", 
-                      background: "#fff7e6", 
-                      color: "#d46b08",
-                      borderRadius: 4,
-                      border: "1px solid #ffd591",
-                    }}
-                    title={isEnglish ? "This value is estimated based on order patterns" : "此数值基于订单模式估算"}
-                  >
-                    {isEnglish ? "Est." : "估算"}
-                  </span>
-                )}
-              </div>
-              <span style={{ color: "#637381", fontSize: 14 }}>
-                {stageIsEstimated && "~"}{stage.count.toLocaleString()}
-                {stage.value > 0 && ` · $${stage.value.toLocaleString()}`}
-              </span>
-            </div>
-            <div
-              style={{
-                position: "relative",
-                height: 40,
-                background: "#f4f6f8",
-                borderRadius: 8,
-                overflow: "hidden",
-              }}
-              role="progressbar"
-              aria-valuenow={Math.round(stage.conversionRate * 100)}
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-label={`${stage.label}: ${(stage.conversionRate * 100).toFixed(1)}%`}
-            >
-              <div
-                style={{
-                  position: "absolute",
-                  left: 0,
-                  top: 0,
-                  height: "100%",
-                  width: `${widthPercent}%`,
-                  minWidth: widthPercent > 0 ? 8 : 0,
-                  background: "#635bff",
-                  borderRadius: 8,
-                  transition: "width 0.5s ease",
-                }}
-              />
-              <div
-                style={{
-                  position: "absolute",
-                  right: 12,
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                  fontSize: 12,
-                  color: "#212b36",
-                  fontWeight: 500,
-                }}
-              >
-                {(stage.conversionRate * 100).toFixed(1)}%
-              </div>
-            </div>
-            {dropoff && parseFloat(dropoff) > 0 && (
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  marginTop: 8,
-                  paddingLeft: 20,
-                }}
-                aria-label={isEnglish 
-                  ? `${dropoff}% drop-off to next stage` 
-                  : `到下一阶段流失 ${dropoff}%`
-                }
-              >
-                <span style={{ color: "#de3618", fontSize: 12 }} aria-hidden="true">↓</span>
-                <span style={{ color: "#de3618", fontSize: 12 }}>
-                  {isEnglish ? `${dropoff}% drop-off` : `${dropoff}% 流失`}
-                </span>
-              </div>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-};
-
-// 转化率卡片
-const ConversionCard = ({
-  title,
-  rate,
-  aiRate,
-  language,
-  isEstimated = false,
-}: {
-  title: string;
-  rate: number;
-  aiRate: number;
-  language: string;
-  isEstimated?: boolean;
-}) => {
-  const isEnglish = language === "English";
-  const diff = aiRate - rate;
-  const diffColor = diff >= 0 ? "#50b83c" : "#de3618";
-  
-  return (
-    <article
-      style={{
-        background: "#fff",
-        border: isEstimated ? "1px dashed #ffd591" : "1px solid #e0e0e0",
-        borderRadius: 8,
-        padding: 16,
-        flex: 1,
-        position: "relative",
-      }}
-      aria-label={`${title}: ${isEnglish ? "Overall" : "全站"} ${(rate * 100).toFixed(1)}%, AI ${(aiRate * 100).toFixed(1)}%`}
-    >
-      {isEstimated && (
-        <span 
-          style={{ 
-            position: "absolute",
-            top: 8,
-            right: 8,
-            fontSize: 9, 
-            padding: "2px 5px", 
-            background: "#fff7e6", 
-            color: "#d46b08",
-            borderRadius: 3,
-            border: "1px solid #ffd591",
-          }}
-          title={isEnglish ? "Based on estimated data" : "基于估算数据"}
-        >
-          {isEnglish ? "Est." : "估算"}
-        </span>
-      )}
-      <p style={{ margin: "0 0 8px", fontSize: 12, color: "#637381" }} id={`card-title-${title.replace(/\s+/g, '-')}`}>
-        {title}
-      </p>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-        <span style={{ fontSize: 24, fontWeight: 700 }} aria-label={`${(rate * 100).toFixed(1)}% ${isEnglish ? "overall" : "全站"}`}>
-          {isEstimated && "~"}{(rate * 100).toFixed(1)}%
-        </span>
-        <span style={{ fontSize: 12, color: "#637381" }}>
-          {isEnglish ? "Overall" : "全站"}
-        </span>
-      </div>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginTop: 4 }}>
-        <span style={{ fontSize: 18, fontWeight: 600, color: "#635bff" }}>
-          {isEstimated && "~"}{(aiRate * 100).toFixed(1)}%
-        </span>
-        <span style={{ fontSize: 12, color: "#637381" }}>
-          {isEnglish ? "AI Channels" : "AI 渠道"}
-        </span>
-        {Math.abs(diff) > 0.001 && (
-          <span style={{ fontSize: 12, color: diffColor }}>
-            ({diff >= 0 ? "+" : ""}{(diff * 100).toFixed(1)}%)
-          </span>
-        )}
-      </div>
-    </article>
-  );
 };
 
 export default function FunnelAnalysis() {
@@ -367,12 +128,13 @@ export default function FunnelAnalysis() {
             marginBottom: 16,
           }}>
             {/* 实际数据区域 */}
-            <div style={{ 
-              padding: "12px 16px", 
-              background: "#f6ffed",
-              border: "1px solid #b7eb8f",
-              borderRadius: 8,
-            }}>
+            <Card
+              padding="tight"
+              style={{
+                background: "#f6ffed",
+                border: "1px solid #b7eb8f",
+              }}
+            >
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
                 <span style={{ 
                   display: "inline-flex",
@@ -397,15 +159,16 @@ export default function FunnelAnalysis() {
                   {isEnglish ? "These metrics are sourced directly from Shopify events and are suitable for operational reporting" : "这些指标直接来自 Shopify 事件，适合用于运营复盘"}
                 </li>
               </ul>
-            </div>
+            </Card>
             
             {/* 估算数据区域 */}
-            <div style={{ 
-              padding: "12px 16px", 
-              background: "#fffbe6",
-              border: "1px dashed #faad14",
-              borderRadius: 8,
-            }}>
+            <Card
+              padding="tight"
+              style={{
+                background: "#fffbe6",
+                border: "1px dashed #faad14",
+              }}
+            >
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
                 <span style={{ 
                   display: "inline-flex",
@@ -431,22 +194,21 @@ export default function FunnelAnalysis() {
                     : "基于电商行业平均值（可调整）"}
                 </li>
               </ul>
-            </div>
+            </Card>
           </div>
 
           {/* 🆕 估算方法说明 */}
-          <details style={{ 
-            background: "#f9f9f9", 
-            borderRadius: 6, 
-            padding: "8px 12px",
-            marginBottom: 12,
-            fontSize: 12,
-            color: "#666",
-          }}>
+          <details style={{ marginBottom: 12 }}>
             <summary style={{ cursor: "pointer", fontWeight: 500, color: "#333" }}>
               {isEnglish ? "📊 How estimates are calculated" : "📊 估算方法说明"}
             </summary>
-            <div style={{ marginTop: 8, paddingLeft: 4 }}>
+            <Card
+              padding="tight"
+              style={{
+                marginTop: 8,
+                background: "#f9f9f9",
+              }}
+            >
               <p style={{ margin: "4px 0" }}>
                 {isEnglish 
                   ? "Our estimates use industry-standard conversion rates:" 
@@ -462,7 +224,7 @@ export default function FunnelAnalysis() {
                   ? "💡 Tip: For accurate Visit/Cart data, enable client-side tracking or checkout webhooks." 
                   : "💡 提示：如需准确的访问/加购数据，可启用客户端追踪或 checkout webhooks。"}
               </p>
-            </div>
+            </Card>
           </details>
 
           <p className={styles.helpText}>
@@ -565,6 +327,7 @@ export default function FunnelAnalysis() {
               language={uiLanguage}
               maxCount={maxCount}
               isEstimated={funnelData.isEstimated.visits || funnelData.isEstimated.carts}
+              currency={currency}
             />
           </div>
 
@@ -595,15 +358,9 @@ export default function FunnelAnalysis() {
             </div>
             
             {maxCount === 0 ? (
-              <div style={{ 
-                padding: "40px 20px", 
-                textAlign: "center",
-                color: "#637381",
-              }}>
-                <p style={{ margin: 0, fontSize: 14 }}>
-                  {isEnglish ? "No data available for this period" : "该时间段内暂无数据"}
-                </p>
-              </div>
+              <Banner status="info">
+                {isEnglish ? "No data available for this period." : "该时间段内暂无数据。"}
+              </Banner>
             ) : (
               <div style={{ padding: "20px 0" }}>
                 {/* 加购放弃 */}

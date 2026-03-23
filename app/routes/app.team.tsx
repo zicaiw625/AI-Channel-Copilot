@@ -5,6 +5,7 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import { getSettings } from "../lib/settings.server";
 import { useUILanguage } from "../lib/useUILanguage";
+import { resolveUILanguageFromRequest } from "../lib/language.server";
 import styles from "../styles/app.dashboard.module.css";
 import { hasFeature, FEATURES } from "../lib/access.server";
 import { logger } from "../lib/logger.server";
@@ -34,7 +35,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   
   const isGrowth = await hasFeature(shopDomain, FEATURES.MULTI_STORE);
   const settings = await getSettings(shopDomain);
-  const language = settings.languages?.[0] || "中文";
+  const language = resolveUILanguageFromRequest(request, settings.languages?.[0] || "中文");
 
   // 获取店铺信息
   let shopName = shopDomain.replace(".myshopify.com", "");

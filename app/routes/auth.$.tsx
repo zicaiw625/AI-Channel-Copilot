@@ -73,6 +73,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       throw new Response(null, { status: 302, headers: { Location: next.toString() } });
     }
   } catch (error) {
+    if (error instanceof Response) throw error;
     logger.warn("[auth] loader encountered error", undefined, { message: (error as Error).message });
   }
 

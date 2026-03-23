@@ -9,6 +9,7 @@ import { enforceRateLimit, RateLimitRules, buildRateLimitKey } from "../lib/secu
 import { logger } from "../lib/logger.server";
 import prisma from "../db.server";
 import { extractAdminClient } from "../lib/graphqlSdk.server";
+import { buildEmbeddedAppPath } from "../lib/navigation";
 
 /**
  * 🔒 Shop 域名格式校验
@@ -129,9 +130,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const shopDomain = url.searchParams.get("shop") || "";
   // 如果连 shop 都没有，无法继续；让它回到 app（后续会触发标准 /auth 流程）
   if (!shopDomain) {
-    const next = new URL("/app", url.origin);
-    next.search = url.search;
-    throw new Response(null, { status: 302, headers: { Location: next.toString() } });
+    const next = buildEmbeddedAppPath("/app", url.search);
+    throw new Response(null, { status: 302, headers: { Location: next } });
   }
 
   // 🔒 安全校验 1: Shop 域名格式硬校验
@@ -168,9 +168,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       shopDomain,
     });
     // 重定向到 app，触发正常的 OAuth 流程
-    const next = new URL("/app", url.origin);
-    next.searchParams.set("shop", shopDomain);
-    throw new Response(null, { status: 302, headers: { Location: next.toString() } });
+    const next = buildEmbeddedAppPath("/app", url.search, { shop: shopDomain });
+    throw new Response(null, { status: 302, headers: { Location: next } });
   }
 
   // 关键改动：

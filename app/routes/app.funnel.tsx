@@ -318,7 +318,7 @@ export default function FunnelAnalysis() {
       <div className={styles.page}>
         <div style={{ marginBottom: 16, display: "flex", gap: 12, justifyContent: "space-between", alignItems: "center" }}>
           <Link to={optimizationHref} className={styles.secondaryButton}>
-            ← {isEnglish ? "Back to Optimization" : "返回 Optimization"}
+            ← {isEnglish ? "Back to Optimization" : "返回优化建议"}
           </Link>
 
           <div className={styles.rangePills}>

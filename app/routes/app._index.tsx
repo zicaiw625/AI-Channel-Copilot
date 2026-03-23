@@ -454,7 +454,7 @@ export default function Index() {
   // 使用新的 UpgradePrompt 组件替代原有的 UpgradeOverlay
 
   return (
-    <s-page heading={uiLanguage === "English" ? "AI SEO & Discovery" : "AI SEO & Discovery Dashboard"}>
+    <s-page heading={uiLanguage === "English" ? "AI SEO & Discovery" : "AI SEO 与发现仪表盘"}>
       <div className={styles.page}>
         
         {isFreePlan && (

@@ -44,13 +44,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     session = auth.session;
   } catch (error) {
     if (!demo) {
-      // If authentication fails and not in demo mode, redirect to app root
-      // which will handle the onboarding flow
-      const url = new URL(request.url);
-      const redirectUrl = new URL("/app", url.origin);
+      const redirectUrl = buildEmbeddedAppPath("/app", new URL(request.url).search);
       throw new Response(null, { 
         status: 302, 
-        headers: { Location: redirectUrl.toString() } 
+        headers: { Location: redirectUrl } 
       });
     }
   }
@@ -59,9 +56,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   
   // If no shop domain and not demo, redirect
   if (!shopDomain && !demo) {
+    const redirectUrl = buildEmbeddedAppPath("/app", new URL(request.url).search);
     throw new Response(null, { 
       status: 302, 
-      headers: { Location: "/app" } 
+      headers: { Location: redirectUrl } 
     });
   }
   

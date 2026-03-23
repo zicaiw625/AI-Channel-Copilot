@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest'
 import * as llms from '../app/lib/llms.server'
+import { defaultSettings, type SettingsDefaults } from '../app/lib/aiData'
 
 vi.mock('../app/db.server', () => ({
   default: {
@@ -33,13 +34,23 @@ describe('llms.server buildLlmsTxt', () => {
   afterAll(() => {
     vi.useRealTimers()
   })
-  const baseSettings = { exposurePreferences: { exposeProducts: true, exposeCollections: false, exposeBlogs: false }, primaryCurrency: 'USD', languages: ['中文'] }
+  const baseSettings: SettingsDefaults = {
+    ...defaultSettings,
+    primaryCurrency: 'USD',
+    languages: ['中文'],
+    exposurePreferences: {
+      exposeProducts: true,
+      exposeCollections: false,
+      exposeBlogs: false,
+    },
+  }
 
   it('generates Chinese text with product list', async () => {
     const text = await llms.buildLlmsTxt('shop.example.com', baseSettings, { range: '30d', topN: 2 })
     expect(text).toMatchSnapshot()
     expect(text).toContain('products:')
     expect(text).toContain('https://shop.example.com/products/a')
+    expect(text).not.toContain('[请修改]')
   })
 
   it('generates English text and respects exposure toggles without admin', async () => {
@@ -53,6 +64,7 @@ describe('llms.server buildLlmsTxt', () => {
     // Without admin, it should show "require API access" message
     expect(text).toContain('# Collections require API access')
     expect(text).toContain('# Blog articles require API access')
+    expect(text).not.toContain('[CUSTOMIZE]')
   })
 
   it('shows disabled messages when exposure is off', async () => {

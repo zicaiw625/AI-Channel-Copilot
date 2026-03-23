@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import type { ActionFunctionArgs, HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { useFetcher, useLoaderData, useNavigate, useLocation } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
@@ -17,7 +17,7 @@ import {
 import { downloadFromApi } from "../lib/downloadUtils";
 import { fetchOrdersForRange } from "../lib/shopifyOrders.server";
 import { getSettings, markActivity, normalizeSettingsPayload, saveSettings, syncShopPreferences } from "../lib/settings.server";
-import { buildLlmsTxt, updateLlmsTxtCache } from "../lib/llms.server";
+import { buildLlmsTxt, getLlmsStatus, updateLlmsTxtCache } from "../lib/llms.server";
 import { getDeadLetterJobs, getWebhookQueueSize } from "../lib/webhookQueue.server";
 import { persistOrders, removeDeletedOrders } from "../lib/persistence.server";
 import { applyAiTags } from "../lib/tagging.server";
@@ -30,6 +30,7 @@ import { LANGUAGE_EVENT, LANGUAGE_STORAGE_KEY, BACKFILL_COOLDOWN_MINUTES, DEFAUL
 import { loadDashboardContext } from "../lib/dashboardContext.server";
 import { logger } from "../lib/logger.server";
 import { hasFeature, FEATURES } from "../lib/access.server";
+import { LlmsTxtPanel } from "../components/seo/LlmsTxtPanel";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const _demo = isDemoMode();
@@ -69,13 +70,34 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   
 
   const ordersSample = orders.slice(0, 20);
-  const [webhookQueueSize, deadLetters, canExport] = await Promise.all([
+  const [webhookQueueSize, deadLetters, canExport, canManageLlms, canUseLlmsAdvanced] = await Promise.all([
     getWebhookQueueSize(),
     getDeadLetterJobs(10),
     hasFeature(shopDomain, FEATURES.EXPORTS),
+    hasFeature(shopDomain, FEATURES.LLMS_BASIC),
+    hasFeature(shopDomain, FEATURES.LLMS_ADVANCED),
   ]);
+  const llmsStatus = await getLlmsStatus(shopDomain, settings);
   const { showDebugPanels } = readAppFlags();
-  return { settings, exportRange, clamped, displayTimezone, ordersSample, webhookQueueSize, deadLetters, canExport, showDebugPanels, shopDomain };
+  return {
+    settings,
+    exportRange,
+    clamped,
+    displayTimezone,
+    ordersSample,
+    webhookQueueSize,
+    deadLetters,
+    canExport,
+    canManageLlms,
+    canUseLlmsAdvanced,
+    llmsStatus: {
+      status: llmsStatus.status,
+      publicUrl: llmsStatus.publicUrl,
+      cachedAt: llmsStatus.cachedAt?.toISOString() || null,
+    },
+    showDebugPanels,
+    shopDomain,
+  };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -131,13 +153,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     await saveSettings(shopDomain, merged);
     
-    // 只在 llms.txt 相关设置变化时刷新缓存：
-    // 1. exposurePreferences 变化
-    // 2. 语言设置变化（llms.txt 内容是多语言的）
-    // 3. 用户明确请求刷新（intent === "save_llms"）
     const exposureChanged = JSON.stringify(existing.exposurePreferences) !== JSON.stringify(merged.exposurePreferences);
     const languageChanged = existing.languages?.[0] !== merged.languages?.[0];
-    const shouldRefreshLlms = intent === "save_llms" || exposureChanged || languageChanged;
+    const shouldRefreshLlms = exposureChanged || languageChanged;
     
     if (shouldRefreshLlms && admin && shopDomain) {
       try {
@@ -146,7 +164,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           shopDomain, 
           targetLanguage,
           exposurePreferences: merged.exposurePreferences,
-          reason: intent === "save_llms" ? "user_request" : exposureChanged ? "exposure_changed" : "language_changed",
+          reason: exposureChanged ? "exposure_changed" : "language_changed",
         });
         
         const llmsText = await buildLlmsTxt(shopDomain, merged, {
@@ -338,7 +356,20 @@ const isValidDomain = (value: string) => /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(value.
 const isValidUtmSource = (value: string) => /^[a-z0-9_-]+$/i.test(value.trim());
 
 export default function SettingsAndExport() {
-  const { settings, exportRange, clamped, ordersSample, webhookQueueSize, deadLetters, canExport, showDebugPanels, shopDomain } = useLoaderData<typeof loader>();
+  const {
+    settings,
+    exportRange,
+    clamped,
+    ordersSample,
+    webhookQueueSize,
+    deadLetters,
+    canExport,
+    canManageLlms,
+    canUseLlmsAdvanced,
+    llmsStatus,
+    showDebugPanels,
+    shopDomain,
+  } = useLoaderData<typeof loader>();
   const shopify = useAppBridge();
   const fetcher = useFetcher<typeof action>();
   const navigate = useNavigate();
@@ -402,9 +433,6 @@ export default function SettingsAndExport() {
 
   // Modal state for confirming removal of default domain
   const [confirmModal, setConfirmModal] = useState<{ open: boolean; rule: AiDomainRule | null }>({ open: false, rule: null });
-
-  // Track last save time to trigger llms.txt preview refresh
-  const [lastSavedAt, setLastSavedAt] = useState<number>(0);
 
   // Modal state for confirming removal of default UTM rule
   const [confirmUtmModal, setConfirmUtmModal] = useState<{ open: boolean; rule: UtmSourceRule | null }>({ open: false, rule: null });
@@ -584,8 +612,6 @@ export default function SettingsAndExport() {
               ? (language === "English" ? "Backfilled last 60 days (including AI detection)" : "已补拉最近 60 天订单（含 AI 识别）")
               : (language === "English" ? "Settings saved" : "设置已保存");
         shopify.toast.show?.(message);
-        // Trigger llms.txt preview refresh after successful save
-        setLastSavedAt(Date.now());
       } else {
         // 将技术错误转换为用户友好的消息
         let friendlyMessage = data.message || "";
@@ -618,10 +644,10 @@ export default function SettingsAndExport() {
   }, [fetcher.data, shopify, language]);
 
   return (
-    <s-page heading={language === "English" ? "Settings / Rules & Export" : "设置 / 规则 & 导出"}>
+    <s-page heading={language === "English" ? "AI SEO & Tracking Settings" : "AI SEO 与归因设置"}>
       <div className={styles.page}>
       <div className={styles.lede}>
-        <h1>{language === "English" ? "AI Channel Rules & Data Export" : "AI 渠道识别规则 & 数据导出"}</h1>
+        <h1>{language === "English" ? "AI SEO & Tracking Settings" : "AI SEO 与归因设置"}</h1>
         <p>{t(language as Lang, "settings_lede_desc")}</p>
         <div className={styles.alert}>{t(language as Lang, "ai_conservative_alert")}</div>
         <p className={styles.helpText}>{t(language as Lang, "default_rules_help")}</p>
@@ -1071,133 +1097,21 @@ export default function SettingsAndExport() {
             </label>
             <p className={styles.helpText}>{t(language as Lang, "gmv_metric_help")}</p>
           </div>
-          
-          <p className={styles.helpText}>{t(language as Lang, "llms_preview_help")}</p>
         </div>
 
-        {/* llms.txt 完整卡片 - 合并偏好设置和预览 */}
         <div id="llms-txt-settings" className={styles.card}>
-          <div className={styles.sectionHeader}>
-            <div>
-              <p className={styles.sectionLabel}>{language === "English" ? "llms.txt Preferences" : "llms.txt 偏好"}</p>
-              <h3 className={styles.sectionTitle}>{language === "English" ? "Site Types to Expose to AI" : "希望向 AI 暴露的站点类型"}</h3>
-            </div>
-            <div className={styles.inlineActions}>
-              <button 
-                type="button" 
-                className={styles.secondaryButton} 
-                onClick={() => {
-                  // llms.txt 保存需要设置 intent 以强制刷新缓存
-                  const payload = {
-                    aiDomains: sanitizedDomains,
-                    utmSources: sanitizedUtmSources,
-                    utmMediumKeywords,
-                    gmvMetric,
-                    primaryCurrency: settings.primaryCurrency,
-                    tagging,
-                    exposurePreferences,
-                    languages: [language, ...settings.languages.filter((l) => l !== language)],
-                    timezones: [timezone, ...settings.timezones.filter((t) => t !== timezone)],
-                    pipelineStatuses: settings.pipelineStatuses,
-                  };
-                  fetcher.submit(
-                    { settings: JSON.stringify(payload), intent: "save_llms" },
-                    { method: "post", encType: "application/x-www-form-urlencoded" },
-                  );
-                }} 
-                data-action="llms-save"
-              >
-                {t(language as Lang, "btn_save")}
-              </button>
-              <span className={styles.badge}>{t(language as Lang, "badge_experiment")}</span>
-            </div>
-          </div>
-          
-          {shopDomain && (
-            <div className={styles.alert} style={{ background: "#e3f1df", borderColor: "#50b83c" }}>
-              {language === "English" ? "Public URL: " : "公开访问地址："}
-              <a 
-                href={`https://${shopDomain}/a/llms`} 
-                target="_blank" 
-                rel="noopener noreferrer"
-                style={{ color: "#006d3a", fontWeight: 500 }}
-              >
-                https://{shopDomain}/a/llms
-              </a>
-              <span style={{ marginLeft: 8, color: "#637381", fontSize: 12 }}>
-                {language === "English" ? "(AI crawlers can access this URL)" : "（AI 爬虫可访问此地址）"}
-              </span>
-            </div>
-          )}
-          
-          <p className={styles.helpText}>{language === "English" ? "Configure which content types AI crawlers (ChatGPT, Perplexity, etc.) can discover via llms.txt. Changes take effect after saving." : "配置 AI 爬虫（ChatGPT、Perplexity 等）可通过 llms.txt 发现哪些内容类型。更改保存后生效。"}</p>
-          
-          <div className={styles.gridTwo}>
-            {/* 左侧：偏好设置 */}
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-              <div className={styles.checkboxRow}>
-                <input
-                  type="checkbox"
-                  checked={exposurePreferences.exposeProducts}
-                  onChange={(event) =>
-                    setExposurePreferences((prev) => ({
-                      ...prev,
-                      exposeProducts: event.target.checked,
-                    }))
-                  }
-                />
-                <div>
-                  <div className={styles.ruleTitle}>{language === "English" ? "Allow AI to access product pages" : "允许 AI 访问产品页"}</div>
-                  <div className={styles.ruleMeta}>{language === "English" ? "product_url / handle" : "product_url / handle"}</div>
-                </div>
-              </div>
-              <div className={styles.checkboxRow}>
-                <input
-                  type="checkbox"
-                  checked={exposurePreferences.exposeCollections}
-                  onChange={(event) =>
-                    setExposurePreferences((prev) => ({
-                      ...prev,
-                      exposeCollections: event.target.checked,
-                    }))
-                  }
-                />
-                <div>
-                  <div className={styles.ruleTitle}>{language === "English" ? "Allow AI to access collections/categories" : "允许 AI 访问合集/分类页"}</div>
-                  <div className={styles.ruleMeta}>{language === "English" ? "Reserved for curated collections in future" : "未来用于生成精选集合"}</div>
-                </div>
-              </div>
-              <div className={styles.checkboxRow}>
-                <input
-                  type="checkbox"
-                  checked={exposurePreferences.exposeBlogs}
-                  onChange={(event) =>
-                    setExposurePreferences((prev) => ({
-                      ...prev,
-                      exposeBlogs: event.target.checked,
-                    }))
-                  }
-                />
-                <div>
-                  <div className={styles.ruleTitle}>{language === "English" ? "Allow AI to access blog content" : "允许 AI 访问博客内容"}</div>
-                  <div className={styles.ruleMeta}>{language === "English" ? "Blog/content pages optional" : "博客/内容页可选暴露"}</div>
-                </div>
-              </div>
-            </div>
-            
-            {/* 右侧：预览 */}
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.25rem" }}>
-                <span className={styles.fieldLabel}>{language === "English" ? "Preview" : "预览"}</span>
-                <span className={styles.helpText} style={{ fontSize: "0.8rem" }}>
-                  {language === "English" 
-                    ? "Click \"Save\" to update public URL"
-                    : "点击「保存」以更新公开 URL"}
-                </span>
-              </div>
-              <LlmsPreview language={language} canExport={canExport} lastSavedAt={lastSavedAt} />
-            </div>
-          </div>
+          <LlmsTxtPanel
+            language={language}
+            shopDomain={shopDomain}
+            initialStatus={llmsStatus}
+            initialExposurePreferences={settings.exposurePreferences}
+            exposurePreferences={exposurePreferences}
+            onExposurePreferencesChange={setExposurePreferences}
+            canManage={canManageLlms}
+            canUseAdvanced={canUseLlmsAdvanced}
+            editable={canManageLlms}
+            settingsHref="/app/additional#llms-txt-settings"
+          />
         </div>
 
         {/* 调试面板 - 仅在 SHOW_DEBUG_PANELS=true 时显示 */}
@@ -1570,143 +1484,3 @@ export default function SettingsAndExport() {
 export const headers: HeadersFunction = (headersArgs) => {
   return boundary.headers(headersArgs);
 };
-
-function LlmsPreview({ language, canExport, lastSavedAt }: { language: string; canExport: boolean; lastSavedAt?: number }) {
-  const shopify = useAppBridge();
-  const fetcher = useFetcher<{ ok: boolean; text?: string; message?: string }>();
-  const [copied, setCopied] = useState(false);
-  const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  
-  // 清理 copy 状态的 timer
-  useEffect(() => {
-    return () => {
-      if (copyTimeoutRef.current) {
-        clearTimeout(copyTimeoutRef.current);
-      }
-    };
-  }, []);
-
-  const handleDownload = useCallback(async (e: React.MouseEvent<HTMLAnchorElement>, url: string, fallbackFilename: string) => {
-    e.preventDefault();
-    if (!canExport) {
-      shopify.toast.show?.(language === "English" ? "Upgrade to Pro to download." : "升级到 Pro 版以下载。");
-      return;
-    }
-    const success = await downloadFromApi(
-      url,
-      fallbackFilename,
-      () => shopify.idToken()
-    );
-    if (!success) {
-      shopify.toast.show?.(language === "English" ? "Download failed" : "下载失败");
-    }
-  }, [canExport, language, shopify]);
-
-  // 使用 useEffect 直接调用 fetcher.load，避免 ref 导致的时序问题
-  useEffect(() => {
-    // Only load if user has export permission to avoid 403 errors
-    if (canExport) {
-      // Pass current language to API to ensure preview matches UI language selection
-      fetcher.load(`/api/llms-txt-preview?ts=${Date.now()}&lang=${encodeURIComponent(language)}`);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- fetcher.load 是稳定的，但添加到 deps 会导致无限循环
-  }, [language, canExport, lastSavedAt]);
-
-  const upgradeMessage = language === "English" 
-    ? "# Upgrade to Pro to preview llms.txt\n\nThis feature requires a Pro subscription."
-    : "# 升级到 Pro 版以预览 llms.txt\n\n此功能需要 Pro 订阅。";
-  
-  // 根据 fetcher 状态确定显示内容
-  const isLoading = fetcher.state === "loading";
-  const hasError = fetcher.data && !fetcher.data.ok;
-  
-  let text: string;
-  if (!canExport) {
-    text = upgradeMessage;
-  } else if (isLoading) {
-    text = language === "English" ? "# Loading..." : "# 加载中...";
-  } else if (hasError) {
-    // API 返回错误（如 403 权限不足、429 速率限制）
-    const errorMsg = fetcher.data?.message || (language === "English" ? "Failed to load" : "加载失败");
-    text = language === "English" 
-      ? `# Error: ${errorMsg}\n\n# Please try again or check your subscription.`
-      : `# 错误：${errorMsg}\n\n# 请重试或检查您的订阅状态。`;
-  } else if (fetcher.data?.text) {
-    text = fetcher.data.text;
-  } else {
-    // 初始状态，尚未加载
-    text = language === "English" ? "# Generating..." : "# 生成中...";
-  }
-
-  // 按钮状态：加载中或没有有效内容时禁用
-  const isButtonDisabled = !canExport || isLoading || hasError || !fetcher.data?.text;
-
-  const copy = async () => {
-    if (isButtonDisabled) {
-      if (!canExport) {
-        shopify.toast.show?.(language === "English" ? "Upgrade to Pro to copy." : "升级到 Pro 版以复制。");
-      }
-      return;
-    }
-    // 清理之前的 timer
-    if (copyTimeoutRef.current) {
-      clearTimeout(copyTimeoutRef.current);
-    }
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      copyTimeoutRef.current = setTimeout(() => setCopied(false), 2000);
-    } catch { 
-      // 回退方案
-      try {
-        const textarea = document.createElement("textarea");
-        textarea.value = text;
-        document.body.appendChild(textarea);
-        textarea.select();
-        document.execCommand("copy");
-        document.body.removeChild(textarea);
-        setCopied(true);
-        copyTimeoutRef.current = setTimeout(() => setCopied(false), 2000);
-      } catch {
-        shopify.toast.show?.(language === "English" ? "Copy failed" : "复制失败");
-      }
-    }
-  };
-
-  return (
-    <div>
-      <textarea 
-        readOnly 
-        className={styles.textarea} 
-        value={text} 
-        rows={10} 
-        style={!canExport || hasError ? { opacity: 0.6 } : {}} 
-      />
-      <div className={styles.inlineActions}>
-        <button 
-          type="button" 
-          className={styles.secondaryButton} 
-          onClick={copy} 
-          disabled={isButtonDisabled}
-          style={isButtonDisabled ? { opacity: 0.6, cursor: "not-allowed" } : {}}
-          data-action="llms-copy"
-        >
-          {isLoading 
-            ? (language === "English" ? "Loading..." : "加载中...") 
-            : copied 
-              ? (language === "English" ? "Copied" : "已复制") 
-              : (language === "English" ? "Copy" : "复制")}
-        </button>
-        <button
-          type="button"
-          className={styles.primaryButton}
-          onClick={(e) => handleDownload(e as unknown as React.MouseEvent<HTMLAnchorElement>, "/api/llms-txt-preview?download=1", "llms.txt")}
-          disabled={!canExport || isLoading}
-          style={!canExport || isLoading ? { opacity: 0.6 } : {}}
-        >
-          {language === "English" ? "Download llms.txt" : "下载 llms.txt"}
-        </button>
-      </div>
-    </div>
-  );
-}

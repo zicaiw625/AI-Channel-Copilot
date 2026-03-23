@@ -1,9 +1,10 @@
 import prisma from "../db.server";
-import { resolveDateRange, type TimeRangeKey } from "./aiData";
+import { resolveDateRange, type SettingsDefaults, type TimeRangeKey } from "./aiData";
 import { createGraphqlSdk, type AdminGraphqlClient } from "./graphqlSdk.server";
 import { logger } from "./logger.server";
 import { getPlatform } from "./runtime.server";
 import { LLMS_CACHE_TTL_MS, LLMS_CACHE_UPDATE_COOLDOWN_MS } from "./constants";
+import { saveSettings } from "./settings.server";
 
 /**
  * YAML 特殊字符检测正则表达式
@@ -115,6 +116,10 @@ type FetchResult<T> = {
   data: T[];
   error?: "permission_denied" | "api_error" | "unknown";
 };
+
+export type LlmsStatus = "not_configured" | "ready_to_sync" | "active" | "partial" | "error";
+
+type LlmsSettings = SettingsDefaults;
 
 /**
  * Fetch collections from Shopify API
@@ -380,11 +385,7 @@ async function fetchRecentProductsAsFallback(
 
 export const buildLlmsTxt = async (
   shopDomain: string,
-  settings: {
-    exposurePreferences: { exposeProducts: boolean; exposeCollections: boolean; exposeBlogs: boolean };
-    primaryCurrency?: string;
-    languages?: string[];
-  },
+  settings: LlmsSettings,
   options?: { 
     range?: TimeRangeKey; 
     topN?: number;
@@ -398,7 +399,8 @@ export const buildLlmsTxt = async (
   const topN = options?.topN || 10;
   const admin = options?.admin;
   const includeProductDetails = options?.includeProductDetails ?? true;
-  const includeFAQs = options?.includeFAQs ?? true;
+  // FAQ templates should never leak into the live/public llms.txt unless explicitly requested.
+  const includeFAQs = options?.includeFAQs ?? false;
   const lines: string[] = [];
   const language = (settings.languages && settings.languages[0]) || "English";
   const isEnglish = language === "English";
@@ -825,4 +827,120 @@ export const updateLlmsTxtCache = async (
     });
     return { updated: false, reason: "error" };
   }
+};
+
+export const getLlmsStatus = async (
+  shopDomain: string,
+  settings: LlmsSettings,
+): Promise<{
+  status: LlmsStatus;
+  publicUrl: string;
+  cachedAt: Date | null;
+  hasExposure: boolean;
+}> => {
+  const publicUrl = shopDomain ? `https://${shopDomain}/a/llms` : "";
+  const hasExposure =
+    settings.exposurePreferences.exposeProducts ||
+    settings.exposurePreferences.exposeCollections ||
+    settings.exposurePreferences.exposeBlogs;
+
+  if (!shopDomain) {
+    return { status: "error", publicUrl, cachedAt: null, hasExposure };
+  }
+
+  if (!hasExposure) {
+    return { status: "not_configured", publicUrl, cachedAt: null, hasExposure };
+  }
+
+  const platform = getPlatform();
+
+  try {
+    const record = await prisma.shopSettings.findUnique({
+      where: { shopDomain_platform: { shopDomain, platform } },
+      select: { llmsTxtCache: true, llmsTxtCachedAt: true },
+    });
+
+    const cachedAt = record?.llmsTxtCachedAt ? new Date(record.llmsTxtCachedAt) : null;
+
+    if (!record?.llmsTxtCache || !cachedAt) {
+      return { status: "ready_to_sync", publicUrl, cachedAt: null, hasExposure };
+    }
+
+    const isFresh = Date.now() - cachedAt.getTime() <= LLMS_CACHE_TTL_MS;
+
+    return {
+      status: isFresh ? "active" : "partial",
+      publicUrl,
+      cachedAt,
+      hasExposure,
+    };
+  } catch (error) {
+    logger.warn("[llms] Failed to resolve status", { shopDomain }, {
+      error: (error as Error).message,
+    });
+    return { status: "error", publicUrl, cachedAt: null, hasExposure };
+  }
+};
+
+export const syncLlmsTxt = async (
+  shopDomain: string,
+  admin: AdminGraphqlClient,
+  settings: LlmsSettings,
+  options?: {
+    range?: TimeRangeKey;
+    topN?: number;
+    persistSettings?: boolean;
+    autoEnableProducts?: boolean;
+  },
+): Promise<{
+  text: string;
+  status: LlmsStatus;
+  publicUrl: string;
+  cachedAt: Date | null;
+  hasExposure: boolean;
+  settings: LlmsSettings;
+  updated: boolean;
+  reason?: string;
+  autoEnabledProducts: boolean;
+}> => {
+  let nextSettings = settings;
+  let autoEnabledProducts = false;
+  const hasExposure =
+    settings.exposurePreferences.exposeProducts ||
+    settings.exposurePreferences.exposeCollections ||
+    settings.exposurePreferences.exposeBlogs;
+
+  if (!hasExposure && options?.autoEnableProducts !== false) {
+    nextSettings = {
+      ...settings,
+      exposurePreferences: {
+        ...settings.exposurePreferences,
+        exposeProducts: true,
+      },
+    };
+    autoEnabledProducts = true;
+    if (options?.persistSettings !== false) {
+      await saveSettings(shopDomain, nextSettings);
+    }
+  }
+
+  const text = await buildLlmsTxt(shopDomain, nextSettings, {
+    range: options?.range || "30d",
+    topN: options?.topN || 20,
+    admin,
+  });
+  const cacheResult = await updateLlmsTxtCache(shopDomain, text, { force: true });
+  const statusInfo = await getLlmsStatus(shopDomain, nextSettings);
+
+  return {
+    text,
+    status: statusInfo.status,
+    publicUrl: statusInfo.publicUrl,
+    cachedAt: statusInfo.cachedAt,
+    hasExposure: statusInfo.hasExposure,
+    settings: nextSettings,
+    updated: cacheResult.updated,
+    reason: cacheResult.reason,
+    autoEnabledProducts,
+  };
 };

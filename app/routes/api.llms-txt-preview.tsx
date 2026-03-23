@@ -28,7 +28,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     throw error;
   }
 
-  const allowed = await hasFeature(shopDomain, FEATURES.EXPORTS);
+  const allowed = await hasFeature(shopDomain, FEATURES.LLMS_ADVANCED);
   if (!allowed) {
     return Response.json({ ok: false, message: "Upgrade required" }, { status: 403 });
   }

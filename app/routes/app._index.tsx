@@ -24,6 +24,8 @@ import { getEffectivePlan, hasFeature, FEATURES } from "../lib/access.server";
 import { isDemoMode } from "../lib/runtime.server";
 import { readAppFlags } from "../lib/env.server";
 import { logger } from "../lib/logger.server";
+import { getLlmsStatus } from "../lib/llms.server";
+import { LlmsTxtPanel } from "../components/seo/LlmsTxtPanel";
 
 // Dashboard 子组件
 import { 
@@ -68,6 +70,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const plan = await getEffectivePlan(shopDomain);
   const isFreePlan = plan === "free";
   const canViewFull = await hasFeature(shopDomain, FEATURES.DASHBOARD_FULL);
+  const canManageLlms = await hasFeature(shopDomain, FEATURES.LLMS_BASIC);
+  const canUseLlmsAdvanced = await hasFeature(shopDomain, FEATURES.LLMS_ADVANCED);
+  const llmsStatus = await getLlmsStatus(shopDomain, settings);
 
   // Enforce 7d limit for Free plan
   const defaultRangeKey: TimeRangeKey = isFreePlan ? "7d" : DEFAULT_RANGE_KEY;
@@ -124,6 +129,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     clamped: context.clamped,
     isFreePlan,
     canViewFull,
+    canManageLlms,
+    canUseLlmsAdvanced,
+    shopDomain,
+    llmsStatus: {
+      status: llmsStatus.status,
+      publicUrl: llmsStatus.publicUrl,
+      cachedAt: llmsStatus.cachedAt?.toISOString() || null,
+    },
+    exposurePreferences: settings.exposurePreferences,
     showDebugPanels, // 控制是否显示调试面板
     backfillStaleThresholdSeconds: BACKFILL_STALE_THRESHOLD_SECONDS, // 供前端判断任务是否卡住
   };
@@ -156,6 +170,11 @@ export default function Index() {
     dataLastUpdated,
     isFreePlan,
     canViewFull,
+    canManageLlms,
+    canUseLlmsAdvanced,
+    shopDomain,
+    llmsStatus,
+    exposurePreferences,
     showDebugPanels,
     backfillStaleThresholdSeconds,
   } = useLoaderData<typeof loader>();
@@ -626,7 +645,7 @@ export default function Index() {
               </div>
               <div className={styles.actionButtons}>
                 <Link to="/app/additional" className={styles.primaryButton}>
-                  {uiLanguage === "English" ? "Settings / Rules & Export" : "设置 / 规则 & 导出"}
+                  {uiLanguage === "English" ? "AI SEO & Settings" : "AI SEO 与设置"}
                 </Link>
                 <Link to="/app/optimization" className={styles.secondaryButton} style={{ background: "#635bff", color: "white", border: "none" }}>
                   {uiLanguage === "English" ? "🚀 AI Optimization" : "🚀 AI 优化建议"}
@@ -644,7 +663,7 @@ export default function Index() {
                   {uiLanguage === "English" ? "🏪 Multi-Store" : "🏪 多店铺汇总"}
                 </Link>
                 <Link to="/app/ai-visibility" className={styles.secondaryButton} style={{ background: "#f0f4ff", border: "1px solid #adc6ff", color: "#2f54eb" }}>
-                  {uiLanguage === "English" ? "🚀 AI Visibility Suite" : "🚀 AI 可见性套件"}
+                  {uiLanguage === "English" ? "🚀 AI SEO Workspace" : "🚀 AI SEO 工作台"}
                 </Link>
                 <Link to="/app/webhook-export" className={styles.secondaryButton} style={{ background: "#fff0f6", border: "1px solid #ffadd2", color: "#c41d7f" }}>
                   {uiLanguage === "English" ? "🔌 Webhook Export" : "🔌 Webhook 导出"}
@@ -686,6 +705,17 @@ export default function Index() {
         </div>
 
         {/* KPI 卡片组件 */}
+        <LlmsTxtPanel
+          language={language}
+          shopDomain={shopDomain}
+          initialStatus={llmsStatus}
+          initialExposurePreferences={exposurePreferences}
+          canManage={canManageLlms}
+          canUseAdvanced={canUseLlmsAdvanced}
+          compact
+          showPreview={false}
+          settingsHref="/app/additional#llms-txt-settings"
+        />
         <KPICards 
           overview={overview} 
           lang={lang} 
@@ -1052,7 +1082,7 @@ export default function Index() {
             </table>
           </div>
           <p className={styles.helpText}>
-            {uiLanguage === "English" ? "If attribution looks off, adjust AI domains and UTM mapping in Settings / Rules & Export. All results are conservative estimates." : "若识别结果与预期不符，可在「设置 / 规则 & 导出」中调整 AI 域名与 UTM 映射；所有结果均为保守估计。"}
+            {uiLanguage === "English" ? "If attribution looks off, adjust AI domains and UTM mapping in AI SEO & Tracking Settings. All results are conservative estimates." : "若识别结果与预期不符，可在「AI SEO 与归因设置」中调整 AI 域名与 UTM 映射；所有结果均为保守估计。"}
           </p>
         </div>
         )}

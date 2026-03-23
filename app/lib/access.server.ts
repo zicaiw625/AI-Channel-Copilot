@@ -10,6 +10,8 @@ export const FEATURES = {
   DASHBOARD_FULL: "dashboard_full",   // Full history, LTV, etc.
   COPILOT: "copilot",
   EXPORTS: "exports",
+  LLMS_BASIC: "llms_basic",
+  LLMS_ADVANCED: "llms_advanced",
   MULTI_STORE: "multi_store", // Growth only
 };
 
@@ -132,7 +134,11 @@ export async function hasFeature(shopDomain: string, feature: string): Promise<b
     case FEATURES.DASHBOARD_FULL:
     case FEATURES.COPILOT:
     case FEATURES.EXPORTS:
+    case FEATURES.LLMS_ADVANCED:
       return plan === "pro" || plan === "growth";
+    
+    case FEATURES.LLMS_BASIC:
+      return plan === "free" || plan === "pro" || plan === "growth";
       
     case FEATURES.MULTI_STORE:
       return plan === "growth";

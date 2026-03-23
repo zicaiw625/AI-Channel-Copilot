@@ -273,7 +273,7 @@ describe("Billing State Constants", () => {
 
 describe("Billing State Upsert", () => {
   it("does not clear trial timestamps on partial updates", async () => {
-    const prismaMock = (await import("../app/db.server")).default as {
+    const prismaMock = (await import("../app/db.server")).default as unknown as {
       shopBillingState: {
         upsert: ReturnType<typeof vi.fn>;
       };

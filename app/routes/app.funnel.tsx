@@ -10,7 +10,7 @@ import { useUILanguage } from "../lib/useUILanguage";
 import styles from "../styles/app.dashboard.module.css";
 import { AI_CHANNELS, timeRanges, type TimeRangeKey } from "../lib/aiData";
 import { AIConversionPath, type PathStage } from "../components/dashboard";
-import { buildEmbeddedAppPath } from "../lib/navigation";
+import { buildEmbeddedAppPath, getPreservedSearchParams } from "../lib/navigation";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
@@ -305,10 +305,16 @@ export default function FunnelAnalysis() {
     if (selectedChannel === "ai") return funnelData.aiChannels;
     return funnelData.byChannel[selectedChannel] || funnelData.overall;
   }, [selectedChannel, funnelData]);
-  const optimizationHref = buildEmbeddedAppPath("/app/optimization", location.search);
+  const backTo = new URLSearchParams(location.search).get("backTo");
+  const optimizationHref = buildEmbeddedAppPath("/app/optimization", location.search, { backTo: null });
+  const dashboardHref = buildEmbeddedAppPath("/app", location.search, { backTo: null });
+  const backHref = backTo === "dashboard" ? dashboardHref : optimizationHref;
+  const backLabel = backTo === "dashboard"
+    ? (isEnglish ? "Back to Dashboard" : "返回仪表盘")
+    : (isEnglish ? "Back to Optimization" : "返回优化建议");
   
   const setRange = (value: TimeRangeKey) => {
-    const params = new URLSearchParams(location.search);
+    const params = getPreservedSearchParams(location.search);
     params.set("range", value);
     navigate({ search: `?${params.toString()}` });
   };
@@ -317,8 +323,8 @@ export default function FunnelAnalysis() {
     <s-page heading={isEnglish ? "Funnel Analysis" : "漏斗分析"}>
       <div className={styles.page}>
         <div style={{ marginBottom: 16, display: "flex", gap: 12, justifyContent: "space-between", alignItems: "center" }}>
-          <Link to={optimizationHref} className={styles.secondaryButton}>
-            ← {isEnglish ? "Back to Optimization" : "返回优化建议"}
+          <Link to={backHref} className={styles.secondaryButton}>
+            ← {backLabel}
           </Link>
 
           <div className={styles.rangePills}>
@@ -381,14 +387,14 @@ export default function FunnelAnalysis() {
                   fontWeight: "bold",
                 }}>✓</span>
                 <strong style={{ fontSize: 14, color: "#237804" }}>
-                  {isEnglish ? "Actual Data (100% Accurate)" : "实际数据（100% 准确）"}
+                  {isEnglish ? "Actual Store Data" : "店铺实际数据"}
                 </strong>
               </div>
               <ul style={{ margin: 0, paddingLeft: 16, fontSize: 13, color: "#555", lineHeight: 1.6 }}>
                 <li><strong>{isEnglish ? "Checkout" : "结账"}</strong>: {isEnglish ? "From Shopify Checkout Webhooks" : "来自 Shopify Checkout Webhooks"}</li>
                 <li><strong>{isEnglish ? "Order" : "订单"}</strong>: {isEnglish ? "From Shopify Order Webhooks" : "来自 Shopify Order Webhooks"}</li>
                 <li style={{ color: "#237804", fontStyle: "italic" }}>
-                  {isEnglish ? "These metrics are verified and can be trusted for reporting" : "这些指标已验证，可用于正式报告"}
+                  {isEnglish ? "These metrics are sourced directly from Shopify events and are suitable for operational reporting" : "这些指标直接来自 Shopify 事件，适合用于运营复盘"}
                 </li>
               </ul>
             </div>
@@ -461,8 +467,8 @@ export default function FunnelAnalysis() {
 
           <p className={styles.helpText}>
             {isEnglish
-              ? "Track how AI-referred visitors convert through your purchase funnel. Checkout and Order data are 100% actual; Visit/Cart are estimates."
-              : "追踪 AI 引荐访客在购买漏斗中的转化情况。结账和订单数据为 100% 实际数据；访问/加购为估算值。"}
+              ? "Track how AI-referred visitors convert through your purchase funnel. Checkout and Order data come from Shopify events; Visit/Cart remain estimates."
+              : "追踪 AI 引荐访客在购买漏斗中的转化情况。结账和订单数据来自 Shopify 事件；访问/加购仍为估算值。"}
           </p>
         </div>
 

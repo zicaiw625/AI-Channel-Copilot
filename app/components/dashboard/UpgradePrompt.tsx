@@ -202,7 +202,7 @@ export const UpgradePrompt = ({
               fontWeight: 600,
             }}
           >
-            {en ? "Upgrade to Pro" : "升级到 Pro"}
+            {en ? "Upgrade plan" : "升级套餐"}
           </Link>
           <div style={{ marginTop: 4, fontSize: 9, color: "#919eab" }}>
             {en ? "14-day free trial" : "14 天免费试用"}

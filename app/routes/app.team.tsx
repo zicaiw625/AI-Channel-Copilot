@@ -214,8 +214,8 @@ export default function Team() {
   const uiLanguage = useUILanguage(language);
   const en = uiLanguage === "English";
   const location = useLocation();
-  const dashboardHref = buildEmbeddedAppPath("/app", location.search);
-  const billingHref = buildEmbeddedAppPath("/app/billing", location.search);
+  const dashboardHref = buildEmbeddedAppPath("/app", location.search, { backTo: null, fromTab: null, tab: null });
+  const billingHref = buildEmbeddedAppPath("/app/billing", location.search, { backTo: null, fromTab: null, tab: null });
 
   if (!isGrowth) {
     return (
@@ -238,7 +238,7 @@ export default function Team() {
           >
             <div style={{ fontSize: 48, marginBottom: 16 }}>🔒</div>
             <h2 style={{ margin: "0 0 8px", fontSize: 20, color: "#212b36" }}>
-              {en ? "Growth Plan Feature" : "Growth 版功能"}
+              {en ? "Requires Growth" : "需要 Growth 版"}
             </h2>
             <p style={{ margin: "0 0 20px", color: "#637381" }}>
               {en
@@ -258,7 +258,7 @@ export default function Team() {
                 textDecoration: "none",
               }}
             >
-              {en ? "Upgrade to manage team access" : "升级以管理团队访问"}
+              {en ? "Upgrade to Growth" : "升级到 Growth 版"}
             </Link>
           </div>
         </div>
@@ -289,7 +289,7 @@ export default function Team() {
               fontWeight: 500,
             }}
           >
-            ✨ {en ? "Growth Plan Feature" : "Growth 版功能"}
+            ✨ {en ? "Requires Growth" : "需要 Growth 版"}
           </div>
         </div>
 

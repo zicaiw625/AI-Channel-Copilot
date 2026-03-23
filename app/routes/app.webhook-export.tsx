@@ -73,8 +73,8 @@ export default function WebhookExport() {
   const uiLanguage = useUILanguage(language);
   const en = uiLanguage === "English";
   const location = useLocation();
-  const dashboardHref = buildEmbeddedAppPath("/app", location.search);
-  const billingHref = buildEmbeddedAppPath("/app/billing", location.search);
+  const dashboardHref = buildEmbeddedAppPath("/app", location.search, { backTo: null, fromTab: null, tab: null });
+  const billingHref = buildEmbeddedAppPath("/app/billing", location.search, { backTo: null, fromTab: null, tab: null });
   
   const configFetcher = useFetcher();
   const testFetcher = useFetcher();
@@ -158,7 +158,7 @@ export default function WebhookExport() {
           >
             <div style={{ fontSize: 48, marginBottom: 16 }}>🔒</div>
             <h2 style={{ margin: "0 0 8px", fontSize: 20, color: "#212b36" }}>
-              {en ? "Growth Plan Feature" : "Growth 版功能"}
+              {en ? "Requires Growth" : "需要 Growth 版"}
             </h2>
             <p style={{ margin: "0 0 20px", color: "#637381" }}>
               {en
@@ -178,7 +178,7 @@ export default function WebhookExport() {
                 textDecoration: "none",
               }}
             >
-              {en ? "Upgrade to push AI order data" : "升级以推送 AI 订单数据"}
+              {en ? "Upgrade to Growth" : "升级到 Growth 版"}
             </Link>
           </div>
         </div>
@@ -209,7 +209,7 @@ export default function WebhookExport() {
               fontWeight: 500,
             }}
           >
-            ✨ {en ? "Growth Plan Feature" : "Growth 版功能"}
+            ✨ {en ? "Requires Growth" : "需要 Growth 版"}
           </div>
         </div>
 

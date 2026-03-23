@@ -232,7 +232,7 @@ function DetectionCoverageCard({
   const statusColor = isLowCoverage ? "#de3618" : isMediumCoverage ? "#f4a623" : "#50b83c";
   const statusBg = isLowCoverage ? "#fef3f3" : isMediumCoverage ? "#fffbe6" : "#f6ffed";
   const statusBorder = isLowCoverage ? "#ffccc7" : isMediumCoverage ? "#ffe58f" : "#b7eb8f";
-  const utmWizardHref = buildEmbeddedAppPath("/app/utm-wizard", location.search);
+  const utmWizardHref = buildEmbeddedAppPath("/app/utm-wizard", location.search, { backTo: "dashboard" });
   
   return (
     <div
@@ -284,8 +284,8 @@ function DetectionCoverageCard({
               <strong style={{ color: statusColor }}>
                 {" "}
                 {isEnglish 
-                  ? "Excellent coverage! AI attribution data is reliable." 
-                  : "覆盖率优秀！AI 归因数据可靠。"}
+                  ? "Excellent coverage! AI attribution confidence is higher." 
+                  : "覆盖率优秀！AI 归因置信度更高。"}
               </strong>
             )}
           </p>

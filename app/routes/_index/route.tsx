@@ -3,6 +3,7 @@ import { redirect, Form, useLoaderData } from "react-router";
 
 import styles from "../../styles/index.module.css";
 import { readAppFlags, isProduction } from "../../lib/env.server";
+import { toUILanguage } from "../../lib/language";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const url = new URL(request.url);
@@ -11,7 +12,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     throw redirect(`/app?${url.searchParams.toString()}`);
   }
 
-  const language = url.searchParams.get("lang") === "en" ? "English" : "中文";
+  const language = toUILanguage(url.searchParams.get("lang"));
   // 生产环境强制隐藏表单，避免 Shopify 审核风险
   // Shopify 要求：应用不得在安装或配置流程中要求商家手动输入 myshopify.com 或店铺域名
   const showForm = !isProduction() && readAppFlags().enableLoginForm;
@@ -30,8 +31,8 @@ export default function App() {
         </h1>
         <p className={styles.text}>
           {language === "English"
-            ? "Traditional SEO is dead. Auto-generate llms.txt to feed your products to AI bots, increase your visibility in AI chats, and track the exact GMV driven by AI tools."
-            : "传统 SEO 已经不够用了。通过自动生成 llms.txt 并优化 AI 爬虫抓取，让你的独立站商品在 AI 搜索中脱颖而出，并追踪 AI 带来的真实销量。"}
+            ? "Detect AI-attributed orders from ChatGPT, Perplexity, Gemini, and Copilot, improve AI discoverability with llms.txt and AI SEO tools, and track the GMV these channels actually drive."
+            : "识别来自 ChatGPT、Perplexity、Gemini 和 Copilot 的 AI 归因订单，结合 llms.txt 与 AI SEO 工具提升可见性，并追踪这些渠道实际带来的 GMV。"}
         </p>
         <div className={styles.actions}>
           {showForm && (
@@ -68,7 +69,7 @@ export default function App() {
         <div className={styles.panelSection}>
           <h3>{language === "English" ? "Features (v0.1)" : "v0.1 功能覆盖"}</h3>
           <ul>
-            <li>{language === "English" ? "Data ingress: Shopify Admin API + orders/create webhook + 90-day backfill." : "数据接入：Shopify Admin API + orders/create webhook + 90 天补拉。"}</li>
+            <li>{language === "English" ? "Data ingress: Shopify Admin API + orders/create webhook + 60-day backfill." : "数据接入：Shopify Admin API + orders/create webhook + 60 天补拉。"}</li>
             <li>{language === "English" ? "AI attribution: preset ChatGPT / Perplexity / Gemini / Copilot domains & UTM." : "AI 渠道识别：预置 ChatGPT / Perplexity / Gemini / Copilot 域名 & UTM。"}</li>
             <li>{language === "English" ? "Dashboard: GMV, Orders, New Customers, AOV, Repeat; AI vs Overall." : "基础仪表盘：GMV、订单、新客、AOV、复购，对比 AI vs Overall。"}</li>
             <li>{language === "English" ? "Debug view: recent orders' referrer/UTM/detection for rule verification." : "调试视图：最近订单的 referrer / UTM / 解析结果，便于核验规则。"}</li>
@@ -100,7 +101,7 @@ export default function App() {
         <div className={styles.panelSection}>
           <h3>{language === "English" ? "Getting Started (basic data visible after install)" : "快速上手（安装后即可看到基础数据）"}</h3>
           <ol>
-            <li>{language === "English" ? "Install and authorize the Shopify app; the backend auto backfills the last 90 days." : "安装 Shopify 应用并授权，后台会自动补拉最近 90 天订单。"}</li>
+            <li>{language === "English" ? "Install and authorize the Shopify app; the backend auto backfills the last 60 days." : "安装 Shopify 应用并授权，后台会自动补拉最近 60 天订单。"}</li>
             <li>{language === "English" ? "Open Dashboard for AI GMV/Orders/New Customers. Default rules cover chat.openai.com, perplexity.ai, gemini.google.com, copilot.microsoft.com and utm_source=chatgpt/perplexity/gemini/copilot." : "Dashboard 查看 AI GMV / 订单 / 新客，默认规则已覆盖 chat.openai.com、perplexity.ai、\n              gemini.google.com、copilot.microsoft.com 与 utm_source=chatgpt/perplexity/gemini/copilot。"}</li>
             <li>{language === "English" ? "In Settings, adjust rules, enable tag write-back (off by default) and download CSV exports." : "在 Settings 调整识别规则、开启标签写回（默认关闭）并下载 CSV 导出。"}</li>
           </ol>

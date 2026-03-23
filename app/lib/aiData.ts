@@ -272,12 +272,12 @@ const defaultPipelineStatuses: PipelineStatus[] = [
   {
     title: "Hourly backfill (last 60 days)",
     status: "info",
-    detail: "Waiting for first backfill · Catching up 90d orders",
+    detail: "Waiting for first backfill · Catching up 60d orders",
   },
   {
     title: "AI tagging write-back",
     status: "info",
-    detail: "Order + customer tags ready · off by default",
+    detail: "Order tags ready · off by default",
   },
 ];
 

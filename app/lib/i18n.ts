@@ -44,11 +44,11 @@ const dict: Record<string, TranslationEntry> = {
   settings_lede_desc: { zh: "控制 referrer / UTM 匹配规则、标签写回、语言时区，并导出 AI 渠道订单与产品榜单。所有数据基于 v0.1 保守识别。", en: "Control referrer/UTM rules, tag write-back, language/timezone, and export AI orders and product lists. All data follows v0.1 conservative attribution." },
   ai_conservative_alert: { zh: "AI 渠道识别为保守估计：依赖 referrer/UTM/标签，部分 AI 会隐藏来源；仅统计站外 AI 点击到站并完成订单的链路。", en: "AI attribution is conservative: depends on referrer/UTM/tags; some AI hide referrer. We only count offsite AI clicks that land and convert." },
   default_rules_help: { zh: "默认规则覆盖 ChatGPT / Perplexity / Gemini / Copilot / Claude / DeepSeek 等常见 referrer 与 utm_source；安装后无需改动即可识别主流 AI 域名与 UTM。", en: "Default rules cover common referrers and utm_source for ChatGPT, Perplexity, Gemini, Copilot, Claude, DeepSeek; works out-of-the-box." },
-  tag_prefix_help: { zh: "标签默认前缀：订单 AI-Source-*，客户 AI-Customer；可在下方自定义。", en: "Default tag prefixes: Orders AI-Source-*, Customer AI-Customer; customizable below." },
+  tag_prefix_help: { zh: "标签默认前缀：订单 AI-Source-*；可在下方自定义。", en: "Default tag prefix: Orders AI-Source-*; customizable below." },
   backfill_protect_alert: { zh: "单次 Backfill 保护：最多回拉 60 天 / 1000 笔订单（Shopify 默认限制）。大店请拆分时间窗口分批回填。", en: "Backfill protection: max 60 days / 1000 orders per run (Shopify default limit). Split windows for high-volume shops." },
   backfill_help: { zh: "回拉任务可能需多次覆盖所有历史数据，特别是高日单量或区间较长的店铺，建议拆分时间段循环触发。", en: "Backfill may need multiple runs for full coverage, especially for high-volume or long-range shops." },
   referrer_help: { zh: "编辑默认域名可能导致漏标/误标，建议只新增或停用可疑域名；referrer 匹配优先于 UTM。Copilot 仅在 copilot.microsoft.com 或带 chat/copilot 参数的 bing.com 计入。", en: "Editing default domains may reduce accuracy; prefer adding/disabling suspicious domains. Referrer > UTM. Copilot counted only for copilot.microsoft.com or bing.com with chat/copilot params." },
-  tagging_enable_alert: { zh: "启用后将修改订单/客户标签。若依赖标签驱动自动化，请先在测试店验证。避免与既有标签冲突。", en: "Enabling tag write-back modifies order/customer tags. Verify on a test shop if your automations depend on tags. Avoid conflicts." },
+  tagging_enable_alert: { zh: "启用后将修改订单标签。若依赖标签驱动自动化，请先在测试店验证。避免与既有标签冲突。", en: "Enabling tag write-back modifies order tags. Verify on a test shop if your automations depend on tags. Avoid conflicts." },
   llms_preview_help: { zh: "llms.txt 为实验性标准，不保证产生排名效果；平台采集策略可能变化。", en: "llms.txt is experimental, not guaranteed to improve rankings; platform crawling policies may change." },
   gmv_metric_help: { zh: "仅影响 UI 展示，不影响底层数据口径。", en: "Affects UI display only, not underlying data definitions." },
   customers_ltv_desc: { zh: "字段：customer_id、LTV（窗口内累计 GMV）、GMV 口径、first_ai_acquired、repeat_count、ai_order_share、first_order_at。", en: "Fields: customer_id, LTV (window GMV), gmv_metric, first_ai_acquired, repeat_count, ai_order_share, first_order_at." },
@@ -121,7 +121,7 @@ const dict: Record<string, TranslationEntry> = {
   // 覆盖率相关
   detection_coverage: { zh: "AI 检测覆盖率", en: "AI Detection Coverage" },
   coverage_low_warning: { zh: "覆盖率过低意味着 AI 流量可能被低估。", en: "Low coverage means AI traffic may be underreported." },
-  coverage_high_success: { zh: "覆盖率优秀！AI 归因数据可靠。", en: "Excellent coverage! AI attribution data is reliable." },
+  coverage_high_success: { zh: "覆盖率优秀！AI 归因置信度更高。", en: "Excellent coverage! AI attribution confidence is higher." },
   setup_utm_links: { zh: "设置 UTM 链接", en: "Setup UTM Links" },
   
   // 低样本量提示
@@ -154,7 +154,7 @@ const dict: Record<string, TranslationEntry> = {
   free_plan: { zh: "免费版", en: "Free Plan" },
   pro_plan: { zh: "专业版", en: "Pro Plan" },
   growth_plan: { zh: "增长版", en: "Growth Plan" },
-  upgrade_to_pro: { zh: "升级到 Pro 版", en: "Upgrade to Pro" },
+  upgrade_to_pro: { zh: "升级套餐", en: "Upgrade plan" },
   trial_days_left: { zh: "试用剩余 {n} 天", en: "{n} day(s) trial left" },
   dev_store_env: { zh: "开发店环境", en: "Development store" },
   
@@ -197,7 +197,7 @@ const dict: Record<string, TranslationEntry> = {
   // ============================================================================
   landing_badge: { zh: "AI SEO & Discovery · v0.1", en: "AI SEO & Discovery · v0.1" },
   landing_heading: { zh: "让你的商品被 ChatGPT、Perplexity 和 Gemini 推荐", en: "Get your products recommended by ChatGPT, Perplexity & Gemini" },
-  landing_text: { zh: "自动识别来自 ChatGPT / Perplexity / Gemini / Copilot 的订单，提供基础仪表盘、调试视图、规则配置与 CSV 导出，帮助中高阶 DTC 商家判断 AI 渠道是否值得投入。", en: "Traditional SEO is dead. Auto-generate llms.txt to feed your products to AI bots, increase your visibility in AI chats, and track the exact GMV driven by AI tools." },
+  landing_text: { zh: "识别来自 ChatGPT / Perplexity / Gemini / Copilot 的 AI 归因订单，结合 llms.txt 与 AI SEO 工具提升可见性，并追踪这些渠道实际带来的 GMV。", en: "Detect AI-attributed orders from ChatGPT, Perplexity, Gemini, and Copilot, improve AI discoverability with llms.txt and AI SEO tools, and track the GMV these channels actually drive." },
   shop_placeholder: { zh: "your-store.myshopify.com", en: "your-store.myshopify.com" },
   chip_conservative: { zh: "Referrer + UTM 保守识别", en: "Conservative: Referrer + UTM" },
   chip_ai_gmv: { zh: "AI 渠道 GMV / 订单 / 新客", en: "AI GMV / Orders / New Customers" },
@@ -206,7 +206,7 @@ const dict: Record<string, TranslationEntry> = {
   switch_to_chinese: { zh: "切换为中文", en: "切换为中文" },
   switch_to_english: { zh: "Switch to English", en: "Switch to English" },
   features_v01: { zh: "v0.1 功能覆盖", en: "Features (v0.1)" },
-  feature_data_ingress: { zh: "数据接入：Shopify Admin API + orders/create webhook + 90 天补拉。", en: "Data ingress: Shopify Admin API + orders/create webhook + 90-day backfill." },
+  feature_data_ingress: { zh: "数据接入：Shopify Admin API + orders/create webhook + 60 天补拉。", en: "Data ingress: Shopify Admin API + orders/create webhook + 60-day backfill." },
   feature_ai_attribution: { zh: "AI 渠道识别：预置 ChatGPT / Perplexity / Gemini / Copilot 域名 & UTM。", en: "AI attribution: preset ChatGPT / Perplexity / Gemini / Copilot domains & UTM." },
   feature_dashboard: { zh: "基础仪表盘：GMV、订单、新客、AOV、复购，对比 AI vs Overall。", en: "Dashboard: GMV, Orders, New Customers, AOV, Repeat; AI vs Overall." },
   feature_debug: { zh: "调试视图：最近订单的 referrer / UTM / 解析结果，便于核验规则。", en: "Debug view: recent orders' referrer/UTM/detection for rule verification." },
@@ -218,7 +218,7 @@ const dict: Record<string, TranslationEntry> = {
   stat_attribution: { zh: "识别口径", en: "Attribution" },
   stat_conservative: { zh: "保守估计", en: "Conservative" },
   getting_started: { zh: "快速上手（安装后即可看到基础数据）", en: "Getting Started (basic data visible after install)" },
-  step_1: { zh: "安装 Shopify 应用并授权，后台会自动补拉最近 90 天订单。", en: "Install and authorize the Shopify app; the backend auto backfills the last 90 days." },
+  step_1: { zh: "安装 Shopify 应用并授权，后台会自动补拉最近 60 天订单。", en: "Install and authorize the Shopify app; the backend auto backfills the last 60 days." },
   step_2: { zh: "Dashboard 查看 AI GMV / 订单 / 新客，默认规则已覆盖 chat.openai.com、perplexity.ai、gemini.google.com、copilot.microsoft.com 与 utm_source=chatgpt/perplexity/gemini/copilot。", en: "Open Dashboard for AI GMV/Orders/New Customers. Default rules cover chat.openai.com, perplexity.ai, gemini.google.com, copilot.microsoft.com and utm_source=chatgpt/perplexity/gemini/copilot." },
   step_3: { zh: "在 Settings 调整识别规则、开启标签写回（默认关闭）并下载 CSV 导出。", en: "In Settings, adjust rules, enable tag write-back (off by default) and download CSV exports." },
   
@@ -232,7 +232,7 @@ const dict: Record<string, TranslationEntry> = {
   utm_source_exists: { zh: "该 utm_source 值已存在于列表中。", en: "This utm_source value already exists in the list." },
   utm_source_added: { zh: "新增 utm_source 规则，保存后应用到识别逻辑", en: "utm_source rule added. Save to apply to detection." },
   rules_reset: { zh: "已恢复默认规则，点击保存后生效", en: "Rules reset to defaults. Click Save to apply." },
-  upgrade_to_export: { zh: "升级到 Pro 版以导出数据。", en: "Upgrade to Pro to export data." },
+  upgrade_to_export: { zh: "升级到 Pro 或 Growth 版以导出数据。", en: "Upgrade to Pro or Growth to export data." },
   download_failed: { zh: "下载失败，请重试。", en: "Download failed. Please try again." },
   tag_writeback_triggered: { zh: "标签写回已触发（基于最近 60 天 AI 订单）", en: "Tag write-back triggered (based on last 60 days AI orders)" },
   

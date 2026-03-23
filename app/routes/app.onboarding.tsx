@@ -430,7 +430,7 @@ export default function Onboarding() {
           marginBottom: 16,
           flexWrap: "wrap",
         }}>
-          <ValuePill icon="🔍" label={en ? "Detect AI Orders" : "识别 AI 订单"} sublabel={en ? "Automatic attribution" : "自动归因"} />
+          <ValuePill icon="🔍" label={en ? "Detect AI Orders" : "识别 AI 订单"} sublabel={en ? "Attribution support" : "归因辅助"} />
           <ValuePill icon="📊" label={en ? "Compare Conversion" : "对比转化率"} sublabel={en ? "AI vs Other traffic" : "AI vs 其他流量"} />
           <ValuePill icon="🚀" label={en ? "Get AI-Ready" : "AI 优化建议"} sublabel={en ? "One-click fixes" : "一键落地"} />
         </div>

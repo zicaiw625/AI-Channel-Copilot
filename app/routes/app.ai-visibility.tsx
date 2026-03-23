@@ -1194,7 +1194,7 @@ export default function AIVisibility() {
                   {en ? "Based on Your Store Analysis" : "基于店铺分析的建议"}
                 </h3>
               </div>
-              <Link to={buildEmbeddedAppPath("/app/optimization", location.search)} style={{ color: "#008060", fontSize: 13, fontWeight: 500 }}>
+              <Link to={buildEmbeddedAppPath("/app/optimization", location.search, { backTo: "workspace", fromTab: activeTab, tab: null })} style={{ color: "#008060", fontSize: 13, fontWeight: 500 }}>
                 {en ? "View All →" : "查看全部 →"}
               </Link>
             </div>

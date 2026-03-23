@@ -1,3 +1,5 @@
+import { normalizeLanguageSearchParams } from "./language";
+
 const SHOPIFY_CONTEXT_KEYS = ["host", "embedded", "locale"] as const;
 
 type ParamValue = string | null | undefined;
@@ -21,7 +23,7 @@ export function getShopifyContextParams(search: string | URLSearchParams) {
 }
 
 export function getPreservedSearchParams(search: string | URLSearchParams) {
-  return toSearchParams(search);
+  return normalizeLanguageSearchParams(toSearchParams(search));
 }
 
 export function buildEmbeddedAppPath(

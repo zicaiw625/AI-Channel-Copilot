@@ -44,7 +44,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     session = auth.session;
   } catch (error) {
     if (!demo) {
-      const redirectUrl = buildEmbeddedAppPath("/app", new URL(request.url).search);
+      const redirectUrl = buildEmbeddedAppPath("/app", new URL(request.url).search, { backTo: null, fromTab: null, tab: null });
       throw new Response(null, { 
         status: 302, 
         headers: { Location: redirectUrl } 
@@ -56,7 +56,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   
   // If no shop domain and not demo, redirect
   if (!shopDomain && !demo) {
-    const redirectUrl = buildEmbeddedAppPath("/app", new URL(request.url).search);
+    const redirectUrl = buildEmbeddedAppPath("/app", new URL(request.url).search, { backTo: null, fromTab: null, tab: null });
     throw new Response(null, { 
       status: 302, 
       headers: { Location: redirectUrl } 
@@ -84,8 +84,8 @@ export default function Copilot() {
   const [activeIntent, setActiveIntent] = useState<string | null>(null);
   // 使用 useUILanguage 保持语言设置的客户端一致性
   const language = useUILanguage(settings.languages[0] || "中文");
-  const dashboardHref = buildEmbeddedAppPath("/app", location.search);
-  const billingHref = buildEmbeddedAppPath("/app/billing", location.search);
+  const dashboardHref = buildEmbeddedAppPath("/app", location.search, { backTo: null, fromTab: null, tab: null });
+  const billingHref = buildEmbeddedAppPath("/app/billing", location.search, { backTo: null, fromTab: null, tab: null });
   
   const isLoading = fetcher.state !== "idle";
   
@@ -128,16 +128,16 @@ export default function Copilot() {
       }}>
           <div>
             <h3 style={{ margin: "0 0 8px 0", color: "#d4380d" }}>
-                {language === "English" ? "Pro Feature" : "Pro 功能"}
+                {language === "English" ? "Requires Pro or Growth" : "需要 Pro 或 Growth 版"}
             </h3>
             <p style={{ margin: 0 }}>
                 {language === "English" 
-                  ? "AI Copilot requires a Pro plan. Upgrade to unlock instant answers." 
-                  : "AI Copilot 需要 Pro 计划。升级以解锁智能问答。"}
+                  ? "AI Copilot is available on Pro and Growth plans. Upgrade to access instant answers." 
+                  : "AI Copilot 仅在 Pro 和 Growth 版中可用。升级后即可使用智能问答。"}
             </p>
           </div>
           <Link to={billingHref} className={styles.primaryButton}>
-              {language === "English" ? "Upgrade to unlock Copilot answers" : "升级以解锁 Copilot 问答"}
+              {language === "English" ? "Upgrade plan" : "升级套餐"}
           </Link>
       </div>
   );

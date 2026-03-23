@@ -268,8 +268,8 @@ function DetectionPreview({
       }}>
         <strong>💡 {en ? "Tip:" : "提示："}</strong>{" "}
         {en 
-          ? "When users click this link from AI assistants, we'll automatically attribute the order to this AI channel."
-          : "当用户从 AI 助手点击此链接时，我们会自动将订单归因到此 AI 渠道。"}
+          ? "When users click this link from AI assistants, orders are more likely to be attributed to the matching AI channel."
+          : "当用户从 AI 助手点击此链接时，订单更容易被归因到对应的 AI 渠道。"}
       </div>
     </div>
   );
@@ -488,7 +488,13 @@ export default function UTMWizard() {
   const en = uiLanguage === "English";
 
   const location = useLocation();
-  const additionalHref = buildEmbeddedAppPath("/app/additional", location.search);
+  const backTo = new URLSearchParams(location.search).get("backTo");
+  const additionalHref = buildEmbeddedAppPath("/app/additional", location.search, { backTo: null });
+  const dashboardHref = buildEmbeddedAppPath("/app", location.search, { backTo: null });
+  const backHref = backTo === "dashboard" ? dashboardHref : additionalHref;
+  const backLabel = backTo === "dashboard"
+    ? (en ? "Back to Dashboard" : "返回仪表盘")
+    : (en ? "Back to Attribution & Advanced Settings" : "返回归因与高级设置");
   const [productPath, setProductPath] = useState("/products/");
   const [selectedSource, setSelectedSource] = useState<typeof AI_SOURCES[number] | null>(null);
   const [activeTab, setActiveTab] = useState<"single" | "bulk">("single");
@@ -498,8 +504,8 @@ export default function UTMWizard() {
       <div className={styles.page}>
         {/* 顶部导航 */}
         <div style={{ marginBottom: 16, display: "flex", gap: 12 }}>
-          <Link to={additionalHref} className={styles.secondaryButton}>
-            ← {en ? "Back to Attribution Settings" : "返回归因设置"}
+          <Link to={backHref} className={styles.secondaryButton}>
+            ← {backLabel}
           </Link>
         </div>
 
@@ -543,8 +549,8 @@ export default function UTMWizard() {
               icon="📈"
               title={en ? "Result" : "效果"}
               description={en 
-                ? "100% accurate attribution for AI-referred traffic"
-                : "AI 引荐流量 100% 准确归因"}
+                ? "More reliable attribution for AI-referred traffic"
+                : "让 AI 引荐流量的归因更可靠"}
               color="#635bff"
             />
           </div>
@@ -677,7 +683,7 @@ export default function UTMWizard() {
                   </h3>
                 </div>
                 <span className={styles.badge}>
-                  {en ? "Real-time" : "实时"}
+                  {en ? "Preview" : "预览"}
                 </span>
               </div>
               

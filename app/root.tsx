@@ -3,13 +3,14 @@ import type { LoaderFunctionArgs } from "react-router";
 import { useEffect } from "react";
 import { useUILanguage } from "./lib/useUILanguage";
 import { useNonce } from "./lib/nonce";
+import { normalizeLanguageCode, toUILanguage } from "./lib/language";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const url = new URL(request.url);
   const qlang = url.searchParams.get("lang");
   const header = request.headers.get("accept-language") || "";
-  const lang = qlang === "en" ? "en" : qlang === "zh" ? "zh" : /\ben\b/i.test(header) ? "en" : "zh";
-  const uiLanguage = lang === "en" ? "English" : "中文";
+  const lang = normalizeLanguageCode(qlang) || (/\ben\b/i.test(header) ? "en" : "zh");
+  const uiLanguage = toUILanguage(lang);
   return { lang, uiLanguage };
 };
 

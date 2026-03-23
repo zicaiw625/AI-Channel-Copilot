@@ -32,7 +32,7 @@ import { loadDashboardContext } from "../lib/dashboardContext.server";
 import { logger } from "../lib/logger.server";
 import { hasFeature, FEATURES } from "../lib/access.server";
 import { LlmsTxtPanel } from "../components/seo/LlmsTxtPanel";
-import { buildEmbeddedAppPath } from "../lib/navigation";
+import { buildEmbeddedAppPath, getPreservedSearchParams } from "../lib/navigation";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const _demo = isDemoMode();
@@ -448,8 +448,14 @@ export default function SettingsAndExport() {
   const [advancedExpanded, setAdvancedExpanded] = useState(false);
 
   const locale = language === "English" ? "en-US" : "zh-CN";
-  const workspaceHref = buildEmbeddedAppPath("/app/ai-visibility", location.search, { tab: "llms" });
-  const utmWizardHref = buildEmbeddedAppPath("/app/utm-wizard", location.search);
+  const backTo = location.search ? new URLSearchParams(location.search).get("backTo") : null;
+  const workspaceHref = buildEmbeddedAppPath("/app/ai-visibility", location.search, { tab: "llms", backTo: null });
+  const dashboardHref = buildEmbeddedAppPath("/app", location.search, { backTo: null });
+  const utmWizardHref = buildEmbeddedAppPath("/app/utm-wizard", location.search, { backTo: "additional" });
+  const backHref = backTo === "dashboard" ? dashboardHref : workspaceHref;
+  const backLabel = backTo === "dashboard"
+    ? (language === "English" ? "Back to Dashboard" : "返回仪表盘")
+    : (language === "English" ? "Back to AI SEO Workspace" : "返回 AI SEO 工作台");
 
   const utmMediumKeywords = useMemo(
     () =>
@@ -571,7 +577,7 @@ export default function SettingsAndExport() {
     e.preventDefault();
     // Check export permission
     if (!canExport) {
-      shopify.toast.show?.(language === "English" ? "Upgrade to Pro to export data." : "升级到 Pro 版以导出数据。");
+      shopify.toast.show?.(language === "English" ? "Upgrade to Pro or Growth to export data." : "升级到 Pro 或 Growth 版以导出数据。");
       return;
     }
     const success = await downloadFromApi(
@@ -656,8 +662,8 @@ export default function SettingsAndExport() {
     <s-page heading={language === "English" ? "Attribution & Advanced Settings" : "归因与高级设置"}>
       <div className={styles.page}>
       <div className={styles.inlineActions} style={{ marginBottom: 16 }}>
-        <Link to={workspaceHref} className={styles.secondaryButton}>
-          ← {language === "English" ? "Back to AI SEO Workspace" : "返回 AI SEO 工作台"}
+        <Link to={backHref} className={styles.secondaryButton}>
+          ← {backLabel}
         </Link>
       </div>
       <div className={styles.lede}>
@@ -739,8 +745,8 @@ export default function SettingsAndExport() {
           </div>
           <p style={{ margin: 0, color: "#0c4a6e", lineHeight: 1.6 }}>
             {language === "English"
-              ? "Use our UTM Link Generator to create trackable links. When AI assistants share these links, orders are automatically attributed to the correct AI channel."
-              : "请使用我们生成的带 UTM 链接进行投放。当 AI 助手分享这些链接时，订单会自动归因到对应的 AI 渠道。"}
+              ? "Use our UTM Link Generator to create trackable links. When AI assistants share these links, attribution is more likely to map to the matching AI channel."
+              : "请使用我们生成的带 UTM 链接进行投放。当 AI 助手分享这些链接时，归因结果更容易映射到对应的 AI 渠道。"}
           </p>
           <div className={styles.inlineActions} style={{ marginTop: 8 }}>
             <button
@@ -1025,7 +1031,7 @@ export default function SettingsAndExport() {
                 }
               />
             </label>
-            <p className={styles.helpText}>{language === "English" ? "Tags are off by default; when enabled, they write to Shopify orders/customers for filtering/export." : "标签默认关闭；开启后会回写到 Shopify 订单/客户，便于在后台过滤或导出。"}</p>
+            <p className={styles.helpText}>{language === "English" ? "Tags are off by default; when enabled, they write to Shopify orders for filtering/export." : "标签默认关闭；开启后会回写到 Shopify 订单，便于在后台过滤或导出。"}</p>
           </div>
 
           {/* 语言/时区卡片 */}
@@ -1186,7 +1192,7 @@ export default function SettingsAndExport() {
               onChange={(event) => {
                 const value = event.target.value as TimeRangeKey;
                 setExportWindow(value);
-                const params = new URLSearchParams(location.search);
+                const params = getPreservedSearchParams(location.search);
                 params.set("range", value);
                 navigate({ search: `?${params.toString()}` });
               }}
@@ -1285,7 +1291,8 @@ export default function SettingsAndExport() {
                   .replace(/Catching up 90d orders/g, "补拉 60 天订单")
                   .replace(/Catching up 60d orders to avoid webhook gaps/g, "补拉 60 天订单以避免 Webhook 漏单")
                   .replace(/Catching up 60d orders/g, "补拉 60 天订单")
-                  .replace(/Order \+ customer tags ready/g, "订单和客户标签已就绪")
+                  .replace(/Order \+ customer tags ready/g, "订单标签已就绪")
+                  .replace(/Order tags ready/g, "订单标签已就绪")
                   .replace(/off by default/g, "默认关闭")
                   .replace(/Waiting for first webhook/g, "等待首次 Webhook")
                   .replace(/Waiting for first backfill/g, "等待首次补拉")

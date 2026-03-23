@@ -5,9 +5,10 @@ import { useActionData, useLoaderData, useRouteError, Form } from "react-router"
 import { boundary } from "@shopify/shopify-app-react-router/server";
 
 import { login } from "../../shopify.server";
-import { loginErrorMessage } from "./error.server";
+import { loginErrorMessage } from "../../lib/auth/loginErrorMessage.server";
 import { requireEnv, isProduction } from "../../lib/env.server";
 import { t, type Lang } from "../../lib/i18n";
+import { toUILanguage } from "../../lib/language";
 
 /**
  * 生产环境禁止访问此页面
@@ -25,7 +26,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   if (result instanceof Response) throw result;
   const errors = loginErrorMessage(result);
   const url = new URL(request.url);
-  const language = url.searchParams.get("lang") === "en" ? "English" : "中文";
+  const language = toUILanguage(url.searchParams.get("lang"));
   return { errors, language, apiKey: requireEnv("SHOPIFY_API_KEY") };
 };
 
@@ -35,7 +36,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   if (result instanceof Response) throw result;
   const errors = loginErrorMessage(result);
   const url = new URL(request.url);
-  const language = url.searchParams.get("lang") === "en" ? "English" : "中文";
+  const language = toUILanguage(url.searchParams.get("lang"));
   return {
     errors,
     language,

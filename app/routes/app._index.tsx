@@ -26,7 +26,7 @@ import { readAppFlags } from "../lib/env.server";
 import { logger } from "../lib/logger.server";
 import { getLlmsStatus } from "../lib/llms.server";
 import { LlmsTxtPanel } from "../components/seo/LlmsTxtPanel";
-import { buildEmbeddedAppPath } from "../lib/navigation";
+import { buildEmbeddedAppPath, getPreservedSearchParams } from "../lib/navigation";
 
 // Dashboard 子组件
 import { 
@@ -71,6 +71,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const plan = await getEffectivePlan(shopDomain);
   const isFreePlan = plan === "free";
   const canViewFull = await hasFeature(shopDomain, FEATURES.DASHBOARD_FULL);
+  const canUseCopilot = await hasFeature(shopDomain, FEATURES.COPILOT);
+  const canUseGrowthTools = await hasFeature(shopDomain, FEATURES.MULTI_STORE);
   const canManageLlms = await hasFeature(shopDomain, FEATURES.LLMS_BASIC);
   const canUseLlmsAdvanced = await hasFeature(shopDomain, FEATURES.LLMS_ADVANCED);
   const llmsStatus = await getLlmsStatus(shopDomain, settings);
@@ -130,6 +132,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     clamped: context.clamped,
     isFreePlan,
     canViewFull,
+    canUseCopilot,
+    canUseGrowthTools,
     canManageLlms,
     canUseLlmsAdvanced,
     shopDomain,
@@ -171,6 +175,8 @@ export default function Index() {
     dataLastUpdated,
     isFreePlan,
     canViewFull,
+    canUseCopilot,
+    canUseGrowthTools,
     canManageLlms,
     canUseLlmsAdvanced,
     shopDomain,
@@ -231,11 +237,11 @@ export default function Index() {
     [timeFormatter, uiLanguage],
   );
   const billingHref = buildEmbeddedAppPath("/app/billing", location.search);
-  const attributionHref = buildEmbeddedAppPath("/app/additional", location.search);
-  const optimizationHref = buildEmbeddedAppPath("/app/optimization", location.search);
-  const funnelHref = buildEmbeddedAppPath("/app/funnel", location.search);
+  const attributionHref = buildEmbeddedAppPath("/app/additional", location.search, { backTo: "dashboard" });
+  const optimizationHref = buildEmbeddedAppPath("/app/optimization", location.search, { backTo: "dashboard" });
+  const funnelHref = buildEmbeddedAppPath("/app/funnel", location.search, { backTo: "dashboard" });
   const copilotHref = buildEmbeddedAppPath("/app/copilot", location.search);
-  const utmWizardHref = buildEmbeddedAppPath("/app/utm-wizard", location.search);
+  const utmWizardHref = buildEmbeddedAppPath("/app/utm-wizard", location.search, { backTo: "dashboard" });
   const multiStoreHref = buildEmbeddedAppPath("/app/multi-store", location.search);
   const aiWorkspaceHref = buildEmbeddedAppPath("/app/ai-visibility", location.search, { tab: "llms" });
   const webhookExportHref = buildEmbeddedAppPath("/app/webhook-export", location.search);
@@ -413,10 +419,10 @@ export default function Index() {
   const setRange = (value: TimeRangeKey) => {
     if (isFreePlan && value !== "7d") {
         // Show upgrade toast instead of alert
-        shopify.toast.show?.(uiLanguage === "English" ? "Upgrade to Pro to view more history." : "升级到 Pro 版以查看更多历史数据。");
+        shopify.toast.show?.(uiLanguage === "English" ? "Upgrade to Pro or Growth to view more history." : "升级到 Pro 或 Growth 版以查看更多历史数据。");
         return;
     }
-    const params = new URLSearchParams(location.search);
+    const params = getPreservedSearchParams(location.search);
     params.set("range", value);
     if (value === "custom") {
       if (customFrom) params.set("from", customFrom);
@@ -440,11 +446,11 @@ export default function Index() {
 
   const applyCustomRange = () => {
     if (isFreePlan) {
-        shopify.toast.show?.(uiLanguage === "English" ? "Upgrade to Pro to use custom ranges." : "升级到 Pro 版以使用自定义时间范围。");
+        shopify.toast.show?.(uiLanguage === "English" ? "Upgrade to Pro or Growth to use custom ranges." : "升级到 Pro 或 Growth 版以使用自定义时间范围。");
         return;
     }
     if (!customFrom) return;
-    const params = new URLSearchParams(location.search);
+    const params = getPreservedSearchParams(location.search);
     params.set("range", "custom");
     params.set("from", customFrom);
     params.set("to", customTo || customFrom);
@@ -472,7 +478,7 @@ export default function Index() {
                     {uiLanguage === "English" ? "You are on the Free plan (Limited to 7 days history)." : "当前为免费版（仅限查看最近 7 天数据）。"}
                 </span>
                 <Link to={billingHref} style={{ color: "#0050b3", fontWeight: "bold", textDecoration: "underline" }}>
-                    {uiLanguage === "English" ? "Upgrade to Pro" : "升级到 Pro 版"}
+                    {uiLanguage === "English" ? "Upgrade plan" : "升级套餐"}
                 </Link>
             </div>
         )}
@@ -602,7 +608,7 @@ export default function Index() {
                   ? "No qualifying orders found in the last 60 days (Shopify default limit). This may be a new store, or orders are older than 60 days. To access older orders, request 'read_all_orders' scope and re-authorize." 
                   : "最近 60 天内暂无符合条件的订单（Shopify 默认限制）。可能是新店铺，或订单都在 60 天之前。如需访问更早订单，请申请 read_all_orders 权限并重新授权。"}
                 <Link to={attributionHref} className={styles.link} style={{ marginLeft: 8 }}>
-                  {uiLanguage === "English" ? "Open Attribution Settings" : "打开归因设置"}
+                  {uiLanguage === "English" ? "Open Attribution & Advanced Settings" : "打开归因与高级设置"}
                 </Link>
               </div>
             )}
@@ -610,7 +616,7 @@ export default function Index() {
               <div className={styles.callout}>
                 <span>{uiLanguage === "English" ? "Hint" : "提示"}</span>
                 {t(lang, "hint_zero_ai")}
-                <Link to={attributionHref} className={styles.link}>{uiLanguage === "English" ? "Open Attribution Settings" : "打开归因设置"}</Link>
+                <Link to={attributionHref} className={styles.link}>{uiLanguage === "English" ? "Open Attribution & Advanced Settings" : "打开归因与高级设置"}</Link>
               </div>
             )}
             </div>
@@ -657,7 +663,7 @@ export default function Index() {
               <p className={styles.helpText} style={{ marginTop: 12 }}>
                 {uiLanguage === "English" ? "Need to adjust referrer or UTM rules? " : "需要调整 referrer 或 UTM 规则？"}
                 <Link to={attributionHref} className={styles.link}>
-                  {uiLanguage === "English" ? "Open Attribution Settings" : "打开归因设置"}
+                  {uiLanguage === "English" ? "Open Attribution & Advanced Settings" : "打开归因与高级设置"}
                 </Link>
               </p>
               <div className={styles.actionButtons}>
@@ -690,17 +696,65 @@ export default function Index() {
                   >
                     <Link to={funnelHref} className={styles.secondaryButton}>{uiLanguage === "English" ? "Funnel" : "漏斗分析"}</Link>
                     <Link to={utmWizardHref} className={styles.secondaryButton}>{uiLanguage === "English" ? "UTM Wizard" : "UTM 向导"}</Link>
-                    <Link to={copilotHref} className={styles.secondaryButton}>{uiLanguage === "English" ? "Copilot" : "Copilot"}</Link>
-                    <Link to={multiStoreHref} className={styles.secondaryButton}>{uiLanguage === "English" ? "Multi-Store" : "多店铺汇总"}</Link>
-                    <Link to={teamHref} className={styles.secondaryButton}>{uiLanguage === "English" ? "Team" : "团队"}</Link>
-                    <Link to={webhookExportHref} className={styles.secondaryButton}>{uiLanguage === "English" ? "Webhook Export" : "Webhook 导出"}</Link>
+                    {canUseCopilot ? (
+                      <Link to={copilotHref} className={styles.secondaryButton}>{uiLanguage === "English" ? "Copilot" : "Copilot"}</Link>
+                    ) : (
+                      <button
+                        type="button"
+                        className={styles.secondaryButton}
+                        style={{ width: "100%", display: "inline-flex", justifyContent: "space-between", alignItems: "center", opacity: 0.8 }}
+                        onClick={() => shopify.toast.show?.(uiLanguage === "English" ? "Upgrade to Pro or Growth to unlock Copilot." : "升级到 Pro 或 Growth 版以解锁 Copilot。")}
+                      >
+                        <span>{uiLanguage === "English" ? "Copilot" : "Copilot"}</span>
+                        <span>{uiLanguage === "English" ? "Pro/Growth" : "Pro/Growth"}</span>
+                      </button>
+                    )}
+                    {canUseGrowthTools ? (
+                      <Link to={multiStoreHref} className={styles.secondaryButton}>{uiLanguage === "English" ? "Multi-Store" : "多店铺汇总"}</Link>
+                    ) : (
+                      <button
+                        type="button"
+                        className={styles.secondaryButton}
+                        style={{ width: "100%", display: "inline-flex", justifyContent: "space-between", alignItems: "center", opacity: 0.8 }}
+                        onClick={() => shopify.toast.show?.(uiLanguage === "English" ? "Upgrade to Growth to unlock Multi-Store." : "升级到 Growth 版以解锁多店铺汇总。")}
+                      >
+                        <span>{uiLanguage === "English" ? "Multi-Store" : "多店铺汇总"}</span>
+                        <span>{uiLanguage === "English" ? "Growth" : "Growth"}</span>
+                      </button>
+                    )}
+                    {canUseGrowthTools ? (
+                      <Link to={teamHref} className={styles.secondaryButton}>{uiLanguage === "English" ? "Team" : "团队"}</Link>
+                    ) : (
+                      <button
+                        type="button"
+                        className={styles.secondaryButton}
+                        style={{ width: "100%", display: "inline-flex", justifyContent: "space-between", alignItems: "center", opacity: 0.8 }}
+                        onClick={() => shopify.toast.show?.(uiLanguage === "English" ? "Upgrade to Growth to unlock Team." : "升级到 Growth 版以解锁团队功能。")}
+                      >
+                        <span>{uiLanguage === "English" ? "Team" : "团队"}</span>
+                        <span>{uiLanguage === "English" ? "Growth" : "Growth"}</span>
+                      </button>
+                    )}
+                    {canUseGrowthTools ? (
+                      <Link to={webhookExportHref} className={styles.secondaryButton}>{uiLanguage === "English" ? "Webhook Export" : "Webhook 导出"}</Link>
+                    ) : (
+                      <button
+                        type="button"
+                        className={styles.secondaryButton}
+                        style={{ width: "100%", display: "inline-flex", justifyContent: "space-between", alignItems: "center", opacity: 0.8 }}
+                        onClick={() => shopify.toast.show?.(uiLanguage === "English" ? "Upgrade to Growth to unlock Webhook Export." : "升级到 Growth 版以解锁 Webhook 导出。")}
+                      >
+                        <span>{uiLanguage === "English" ? "Webhook Export" : "Webhook 导出"}</span>
+                        <span>{uiLanguage === "English" ? "Growth" : "Growth"}</span>
+                      </button>
+                    )}
                     <a
                       className={styles.secondaryButton}
                       href={canViewFull ? `/api/export/orders?range=${range}&from=${encodeURIComponent(dateRange.fromParam || "")}&to=${encodeURIComponent(dateRange.toParam || "")}` : "#"}
                       onClick={(e) => {
                           if (!canViewFull) {
                               e.preventDefault();
-                              shopify.toast.show?.(uiLanguage === "English" ? "Upgrade to Pro to export data." : "升级到 Pro 版以导出数据。");
+                              shopify.toast.show?.(uiLanguage === "English" ? "Upgrade to Pro or Growth to export data." : "升级到 Pro 或 Growth 版以导出数据。");
                               return;
                           }
                           handleDownload(e, `/api/export/orders?range=${range}&from=${encodeURIComponent(dateRange.fromParam || "")}&to=${encodeURIComponent(dateRange.toParam || "")}`, `ai-orders-${range}.csv`);
@@ -782,7 +836,7 @@ export default function Index() {
                 />
               ) : (
                 <span className={styles.smallBadge} style={{ background: "#e6f7ed", color: "#2e7d32" }}>
-                  {uiLanguage === "English" ? `${overview.aiOrders} AI orders · reliable` : `${overview.aiOrders} 笔 AI 订单 · 数据可靠`}
+                  {uiLanguage === "English" ? `${overview.aiOrders} AI orders · higher confidence` : `${overview.aiOrders} 笔 AI 订单 · 置信度较高`}
                 </span>
               )}
             </div>
@@ -1108,7 +1162,7 @@ export default function Index() {
             </table>
           </div>
           <p className={styles.helpText}>
-            {uiLanguage === "English" ? "If attribution looks off, adjust AI domains and UTM mapping in AI SEO & Tracking Settings. All results are conservative estimates." : "若识别结果与预期不符，可在「AI SEO 与归因设置」中调整 AI 域名与 UTM 映射；所有结果均为保守估计。"}
+            {uiLanguage === "English" ? "If attribution looks off, adjust AI domains and UTM mapping in Attribution & Advanced Settings. All results are conservative estimates." : "若识别结果与预期不符，可在「归因与高级设置」中调整 AI 域名与 UTM 映射；所有结果均为保守估计。"}
           </p>
         </div>
         )}

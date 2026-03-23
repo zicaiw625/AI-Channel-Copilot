@@ -9,7 +9,7 @@ import { getSettings } from "../lib/settings.server";
 import { generateAIOptimizationReport, type OptimizationSuggestion } from "../lib/aiOptimization.server";
 import { useUILanguage } from "../lib/useUILanguage";
 import { requireEnv } from "../lib/env.server";
-import { buildEmbeddedAppPath } from "../lib/navigation";
+import { buildEmbeddedAppPath, getPreservedSearchParams } from "../lib/navigation";
 import styles from "../styles/app.dashboard.module.css";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -430,6 +430,8 @@ const STATUS_CONFIG = {
   },
 } as const;
 
+const WORKSPACE_TABS = new Set(["schema", "faq", "llms"]);
+
 /**
  * 格式化货币显示
  */
@@ -486,7 +488,7 @@ export default function AIOptimization() {
   
   useEffect(() => {
     if (uiLanguage !== language) {
-      const next = new URLSearchParams(searchParamsRef.current);
+      const next = getPreservedSearchParams(searchParamsRef.current);
       next.delete("lang");
       document.cookie = `aicc_language=${encodeURIComponent(uiLanguage)};path=/;max-age=31536000;SameSite=Lax`;
       navigateRef.current(
@@ -501,8 +503,16 @@ export default function AIOptimization() {
   
   // 使用后端返回的语言来保证 UI 和数据内容一致
   const isEnglish = language === "English";
-  const funnelHref = buildEmbeddedAppPath("/app/funnel", location.search);
-  const workspaceLlmsHref = buildEmbeddedAppPath("/app/ai-visibility", location.search, { tab: "llms" });
+  const backTo = searchParams.get("backTo");
+  const funnelHref = buildEmbeddedAppPath("/app/funnel", location.search, { backTo: "optimization" });
+  const fromTab = searchParams.get("fromTab");
+  const workspaceTab = WORKSPACE_TABS.has(fromTab ?? "") ? fromTab : "llms";
+  const workspaceLlmsHref = buildEmbeddedAppPath("/app/ai-visibility", location.search, { tab: workspaceTab, fromTab: null, backTo: null });
+  const dashboardHref = buildEmbeddedAppPath("/app", location.search, { fromTab: null, backTo: null });
+  const backHref = backTo === "dashboard" ? dashboardHref : workspaceLlmsHref;
+  const backLabel = backTo === "dashboard"
+    ? (isEnglish ? "Back to Dashboard" : "返回仪表盘")
+    : (isEnglish ? "Back to AI SEO Workspace" : "返回 AI SEO 工作台");
   
   const [expandedSuggestions, setExpandedSuggestions] = useState<Set<string>>(new Set());
   
@@ -532,8 +542,8 @@ export default function AIOptimization() {
     <s-page heading={isEnglish ? "AI Optimization" : "AI 优化建议"}>
       <div className={styles.page}>
         <div style={{ marginBottom: 16 }}>
-          <Link to={workspaceLlmsHref} className={styles.secondaryButton}>
-            ← {isEnglish ? "Back to AI SEO Workspace" : "返回 AI SEO 工作台"}
+          <Link to={backHref} className={styles.secondaryButton}>
+            ← {backLabel}
           </Link>
         </div>
 
@@ -900,13 +910,13 @@ export default function AIOptimization() {
               border: "1px solid #b7e4c7",
             }}>
               ✓ {isEnglish 
-                ? "All content types are enabled. Your store is fully optimized for AI crawling." 
-                : "所有内容类型已启用，您的店铺已完全优化以供 AI 抓取。"}
+                ? "All content types are enabled. Your store is well prepared for AI crawling." 
+                : "所有内容类型已启用，您的店铺已为 AI 抓取做好较充分准备。"}
             </p>
           )}
           
           <Link to={workspaceLlmsHref} className={styles.primaryButton}>
-            {isEnglish ? "Open llms.txt Workspace" : "打开 llms.txt 工作台"}
+            {isEnglish ? "Open AI SEO Workspace" : "打开 AI SEO 工作台"}
           </Link>
         </div>
       </div>

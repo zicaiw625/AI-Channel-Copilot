@@ -6,13 +6,13 @@ import { authenticate } from "../shopify.server";
 import { getSettings } from "../lib/settings.server";
 import { requireEnv } from "../lib/env.server";
 import { useUILanguage } from "../lib/useUILanguage";
-import { getShopifyContextParams } from "../lib/navigation";
+import { getShopifyContextParams, getPreservedSearchParams } from "../lib/navigation";
+import { normalizeLanguageCode, toUILanguage } from "../lib/language";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   let language = "中文";
   const url = new URL(request.url);
-  const langParam = url.searchParams.get("lang");
-  if (langParam === "en") language = "English";
+  language = toUILanguage(url.searchParams.get("lang"));
 
   let shopDomain = url.searchParams.get("shop") || "";
 
@@ -80,11 +80,11 @@ export default function Intro() {
   const en = uiLanguage === "English";
   const location = useLocation();
   const onboardingParams = getShopifyContextParams(location.search);
-  const currentParams = new URLSearchParams(location.search);
+  const currentParams = getPreservedSearchParams(location.search);
   for (const key of ["shop", "id_token", "lang"] as const) {
     const value = currentParams.get(key);
     if (value) {
-      onboardingParams.set(key, value);
+      onboardingParams.set(key, key === "lang" ? (normalizeLanguageCode(value) || "zh") : value);
     }
   }
   const onboardingHref = `/app/onboarding${onboardingParams.toString() ? `?${onboardingParams.toString()}` : ""}`;
@@ -93,7 +93,7 @@ export default function Intro() {
       <section style={{ padding: 16 }}>
         <h2>{en ? "AI SEO & Discovery Introduction" : "AI SEO & Discovery 简介"}</h2>
         <p>{en ? "Detect AI-attributed orders and analyze AOV/LTV." : "识别 AI 渠道订单，分析 AOV/LTV。"}</p>
-        <p>{en ? "Permissions: read-only orders/customers; no modifications." : "权限：仅读取订单/客户信息，不会修改订单。"}</p>
+        <p>{en ? "Permissions: orders/customers stay read-only by default; order tags are written only if you enable tag write-back." : "权限：默认仅读取订单/客户信息；只有手动开启标签写回时，才会向订单写入标签。"}</p>
         <p>{en ? "Historical sync may be started to populate dashboards." : "可进行历史订单同步以填充仪表盘。"}</p>
         <div style={{ display: "inline-block", marginTop: 12 }}>
           <s-link href={onboardingHref}>

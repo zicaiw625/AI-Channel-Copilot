@@ -637,7 +637,7 @@ function AddStorePrompt({ en }: { en: boolean }) {
 
 function UpgradePrompt({ en }: { en: boolean }) {
   const location = useLocation();
-  const billingHref = buildEmbeddedAppPath("/app/billing", location.search);
+  const billingHref = buildEmbeddedAppPath("/app/billing", location.search, { backTo: null, fromTab: null, tab: null });
 
   return (
     <div
@@ -712,7 +712,7 @@ function UpgradePrompt({ en }: { en: boolean }) {
         marginBottom: 24,
       }}>
         <div style={{ fontSize: 13, color: "#389e0d", fontWeight: 600, marginBottom: 8 }}>
-          ✨ {en ? "Growth Plan Feature" : "Growth 版专属功能"}
+          ✨ {en ? "Requires Growth" : "需要 Growth 版"}
         </div>
         <div style={{ fontSize: 14, color: "#637381" }}>
           {en
@@ -735,7 +735,7 @@ function UpgradePrompt({ en }: { en: boolean }) {
           boxShadow: "0 4px 12px rgba(82, 196, 26, 0.3)",
         }}
       >
-        {en ? "Upgrade to unlock multi-store rollup →" : "升级以解锁多店铺汇总 →"}
+        {en ? "Upgrade to Growth →" : "升级到 Growth 版 →"}
       </Link>
     </div>
   );
@@ -746,7 +746,7 @@ export default function MultiStore() {
   const uiLanguage = useUILanguage(language);
   const en = uiLanguage === "English";
   const location = useLocation();
-  const dashboardHref = buildEmbeddedAppPath("/app", location.search);
+  const dashboardHref = buildEmbeddedAppPath("/app", location.search, { backTo: null, fromTab: null, tab: null });
 
   const formatCurrency = useMemo(() => {
     return (amount: number, currency = "USD") => {
@@ -803,7 +803,7 @@ export default function MultiStore() {
             fontWeight: 500,
           }}
         >
-          ✨ {en ? "Growth Plan Feature" : "Growth 版功能"}
+          ✨ {en ? "Requires Growth" : "需要 Growth 版"}
         </div>
 
         {/* 汇总概览 */}

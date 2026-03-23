@@ -168,10 +168,10 @@ export default function App() {
   return (
     <AppProvider embedded apiKey={apiKey}>
       <NavMenu>
-        <a href={buildEmbeddedAppPath("/app", location.search)} rel="home">{uiLanguage === "English" ? "Dashboard" : "仪表盘"}</a>
-        <a href={buildEmbeddedAppPath("/app/ai-visibility", location.search, { tab: "llms" })}>{uiLanguage === "English" ? "AI SEO Workspace" : "AI SEO 工作台"}</a>
-        <a href={buildEmbeddedAppPath("/app/optimization", location.search)}>{uiLanguage === "English" ? "Optimization" : "优化建议"}</a>
-        <a href={buildEmbeddedAppPath("/app/billing", location.search)}>{uiLanguage === "English" ? "Billing" : "计费管理"}</a>
+        <a href={buildEmbeddedAppPath("/app", location.search, { backTo: null, fromTab: null, tab: null })} rel="home">{uiLanguage === "English" ? "Dashboard" : "仪表盘"}</a>
+        <a href={buildEmbeddedAppPath("/app/ai-visibility", location.search, { backTo: null, fromTab: null, tab: "llms" })}>{uiLanguage === "English" ? "AI SEO Workspace" : "AI SEO 工作台"}</a>
+        <a href={buildEmbeddedAppPath("/app/optimization", location.search, { backTo: null, fromTab: null, tab: null })}>{uiLanguage === "English" ? "Optimization" : "优化建议"}</a>
+        <a href={buildEmbeddedAppPath("/app/billing", location.search, { backTo: null, fromTab: null, tab: null })}>{uiLanguage === "English" ? "Billing" : "计费管理"}</a>
       </NavMenu>
 
       <div style={{ padding: '10px 16px', background: '#f1f2f3', borderBottom: '1px solid #dfe3e8', display: 'flex', alignItems: 'center', gap: '12px', fontSize: '13px' }}>

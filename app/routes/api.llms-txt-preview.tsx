@@ -5,6 +5,7 @@ import { buildLlmsTxt } from "../lib/llms.server";
 import { hasFeature, FEATURES } from "../lib/access.server";
 import { logger } from "../lib/logger.server";
 import { enforceRateLimit, RateLimitRules } from "../lib/security/rateLimit.server";
+import { normalizeLanguageCode, toUILanguage } from "../lib/language";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const url = new URL(request.url);
@@ -40,11 +41,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     
     // Allow overriding language from query param (for preview to match UI selection)
     // Only accept valid language values to ensure type safety
-    const langParam = url.searchParams.get("lang");
-    const validLanguages = ["English", "中文"] as const;
-    const isValidLang = langParam && validLanguages.includes(langParam as typeof validLanguages[number]);
-    const settingsWithLang = isValidLang
-      ? { ...settings, languages: [langParam, ...(settings.languages || []).filter((l: string) => l !== langParam)] }
+    const langCode = normalizeLanguageCode(url.searchParams.get("lang"));
+    const nextLanguage = langCode
+      ? toUILanguage(langCode)
+      : toUILanguage(settings.languages?.[0], "中文");
+    const settingsWithLang = langCode
+      ? { ...settings, languages: [nextLanguage, ...(settings.languages || []).filter((l: string) => l !== nextLanguage)] }
       : settings;
     
     // Pass admin client to enable fetching collections and blogs from Shopify API

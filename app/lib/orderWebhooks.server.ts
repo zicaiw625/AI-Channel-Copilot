@@ -206,7 +206,7 @@ export const handleOrderWebhook = async (request: Request, expectedTopic: string
         `Processed ${expectedTopic} at ${new Date().toISOString()}`,
       );
 
-      if (record.aiSource && (settings.tagging.writeOrderTags || settings.tagging.writeCustomerTags)) {
+      if (record.aiSource && settings.tagging.writeOrderTags) {
         const taggingStart = Date.now();
         try {
           await applyAiTags(admin, [record], settings, { shopDomain: jobShopDomain, intent: expectedTopic });
@@ -338,7 +338,7 @@ export const registerDefaultOrderWebhookHandlers = () => {
       await persistOrders(jobShopDomain, [record]);
       await markActivity(jobShopDomain, { lastOrdersWebhookAt: new Date() });
 
-      if (record.aiSource && (settings.tagging.writeOrderTags || settings.tagging.writeCustomerTags)) {
+      if (record.aiSource && settings.tagging.writeOrderTags) {
         try {
           await applyAiTags(admin, [record], settings, { shopDomain: jobShopDomain, intent });
           await markActivity(jobShopDomain, { lastTaggingAt: new Date() });

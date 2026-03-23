@@ -940,10 +940,14 @@ export default function AIVisibility() {
   const updateActiveTab = useCallback((tab: TabId) => {
     const next = getPreservedSearchParams(location.search);
     next.set("tab", tab);
+    const nextHash =
+      tab === "schema" && location.hash === "#product-schema-settings"
+        ? location.hash
+        : "";
     navigate({
       pathname: location.pathname,
       search: `?${next.toString()}`,
-      hash: location.hash,
+      hash: nextHash,
     });
   }, [location.hash, location.pathname, location.search, navigate]);
 

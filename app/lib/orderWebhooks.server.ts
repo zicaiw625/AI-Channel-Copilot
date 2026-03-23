@@ -245,7 +245,7 @@ export const handleOrderWebhook = async (request: Request, expectedTopic: string
     }
 
     // externalId 和 eventTime 已在上方早期去重检查时提取
-    await enqueueWebhookJob({
+    const enqueueResult = await enqueueWebhookJob({
       shopDomain: shop,
       topic,
       intent: expectedTopic,
@@ -255,6 +255,10 @@ export const handleOrderWebhook = async (request: Request, expectedTopic: string
       eventTime,
       run: handler,
     });
+
+    if (enqueueResult.status === "duplicate") {
+      return new Response("Duplicate", { status: 200 });
+    }
 
     await setWebhookStatus(
       shop,

@@ -5,12 +5,13 @@ import {
   setSubscriptionActiveState,
   setSubscriptionExpiredState,
   getBillingState,
+  toPlanId,
 } from "../lib/billing.server";
 import { resolvePlanByShopifyName, getPlanConfig, PRIMARY_BILLABLE_PLAN_ID } from "../lib/billing/plans";
 import { logger } from "../lib/logger.server";
 import prisma from "../db.server";
 
-const DAY_IN_MS = 24 * 60 * 60 * 1000;
+const PROCESSING_STALE_MS = 5 * 60 * 1000;
 
 type AppSubscriptionPayload = {
   app_subscription?: {
@@ -21,6 +22,10 @@ type AppSubscriptionPayload = {
   };
 };
 
+type ProcessingState =
+  | { skip: true }
+  | { skip: false; jobId: number | null };
+
 /**
  * 检查订阅更新 webhook 是否已处理（幂等性检查）
  * 使用订阅 ID + 状态作为幂等键
@@ -30,47 +35,119 @@ type AppSubscriptionPayload = {
  * - subscriptionId 是 Shopify 内部 ID (gid://shopify/AppSubscription/xxx)
  * - 这些记录会被 retention.server.ts 的 WebhookJob 清理逻辑定期删除（7 天 TTL）
  */
-const checkAndMarkProcessed = async (
+const beginProcessing = async (
   shopDomain: string,
   subscriptionId: string,
   status: string
-): Promise<boolean> => {
-  // 使用 subscriptionId:status 作为 externalId，确保同一状态变更只处理一次
+): Promise<ProcessingState> => {
   const externalId = `${subscriptionId}:${status}`;
   const topic = "app/subscriptions_update";
+  const now = new Date();
   
   try {
-    // 尝试创建记录，如果已存在则会因唯一约束失败
-    // 🔒 只存储最小化数据，不包含客户 PII
-    await prisma.webhookJob.create({
+    const job = await prisma.webhookJob.create({
       data: {
         shopDomain,
         topic,
         intent: "subscription_status_change",
         externalId,
-        payload: { subscriptionId, status },  // 🔒 最小化 payload，无 PII
-        status: "completed",
-        finishedAt: new Date(),
+        payload: { subscriptionId, status },
+        status: "processing",
+        startedAt: now,
       },
+      select: { id: true },
     });
-    return false; // 未处理过，继续处理
+    return { skip: false, jobId: job.id };
   } catch (error) {
-    // P2002 = unique constraint violation
     if ((error as { code?: string })?.code === "P2002") {
+      const existing = await prisma.webhookJob.findFirst({
+        where: { shopDomain, topic, externalId },
+        select: { id: true, status: true, createdAt: true, startedAt: true },
+      });
+
+      const staleAt = now.getTime() - PROCESSING_STALE_MS;
+      const lastStartedAt = existing?.startedAt?.getTime() ?? existing?.createdAt?.getTime() ?? 0;
+      const shouldReclaim =
+        existing?.status === "failed" ||
+        (existing?.status === "processing" && lastStartedAt < staleAt);
+
+      if (existing && shouldReclaim) {
+        const staleDate = new Date(staleAt);
+        const reclaimed = await prisma.webhookJob.updateMany({
+          where: {
+            id: existing.id,
+            ...(existing.status === "failed"
+              ? { status: "failed" as const }
+              : {
+                  status: "processing" as const,
+                  OR: [
+                    { startedAt: { lt: staleDate } },
+                    {
+                      startedAt: null,
+                      createdAt: { lt: staleDate },
+                    },
+                  ],
+                }),
+          },
+          data: {
+            status: "processing",
+            startedAt: now,
+            error: null,
+            finishedAt: null,
+          },
+        });
+
+        if (reclaimed.count > 0) {
+          logger.warn("[billing-webhook] Reclaimed stale subscription update", {
+            shopDomain,
+            subscriptionId,
+            status,
+            previousStatus: existing.status,
+          });
+          return { skip: false, jobId: existing.id };
+        }
+      }
+
       logger.debug("[billing-webhook] Duplicate subscription update, skipping", {
         shopDomain,
         subscriptionId,
         status,
       });
-      return true; // 已处理过，跳过
+      return { skip: true };
     }
-    // 其他错误继续处理（宁可重复处理也不要丢失）
+
     logger.warn("[billing-webhook] Idempotency check failed, proceeding", {
       shopDomain,
       error: (error as Error).message,
     });
-    return false;
+    return { skip: false, jobId: null };
   }
+};
+
+const completeProcessing = async (jobId: number | null) => {
+  if (!jobId) return;
+
+  await prisma.webhookJob.updateMany({
+    where: { id: jobId },
+    data: {
+      status: "completed",
+      finishedAt: new Date(),
+      error: null,
+    },
+  });
+};
+
+const failProcessing = async (jobId: number | null, error: unknown) => {
+  if (!jobId) return;
+
+  await prisma.webhookJob.updateMany({
+    where: { id: jobId },
+    data: {
+      status: "failed",
+      finishedAt: new Date(),
+      error: error instanceof Error ? error.message.slice(0, 1000) : String(error).slice(0, 1000),
+    },
+  });
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -86,13 +163,18 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const subscriptionId = subscription.admin_graphql_api_id || "";
   const status = (subscription.status || "").toUpperCase();
   
-  // 幂等性检查：如果这个状态变更已处理，直接返回成功
-  if (subscriptionId && await checkAndMarkProcessed(shopDomain, subscriptionId, status)) {
-    return new Response(); // 200 OK - 已处理
+  const processing = subscriptionId
+    ? await beginProcessing(shopDomain, subscriptionId, status)
+    : { skip: false, jobId: null as number | null };
+
+  if (processing.skip) {
+    return new Response();
   }
 
+  const existingState = await getBillingState(shopDomain);
+  const fallbackPlanId = toPlanId(existingState?.billingPlan) || PRIMARY_BILLABLE_PLAN_ID;
   const plan =
-    resolvePlanByShopifyName(subscription.name) || getPlanConfig(PRIMARY_BILLABLE_PLAN_ID);
+    resolvePlanByShopifyName(subscription.name) || getPlanConfig(fallbackPlanId);
   const trialEnd = subscription.trial_end ? new Date(subscription.trial_end) : null;
 
   logger.info("[billing-webhook] Processing subscription update", {
@@ -102,49 +184,39 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     planId: plan.id,
   });
 
-  if (status === "ACTIVE") {
-    if (trialEnd && trialEnd.getTime() > Date.now() && plan.trialSupported) {
-      await setSubscriptionTrialState(shopDomain, plan.id, trialEnd, status);
-    } else if (plan.trialSupported) {
-      // For dev stores with test: true subscriptions, Shopify doesn't return trial_end
-      // Check if we should grant trial locally
-      const existingState = await getBillingState(shopDomain);
-      
-      // 关键修复：如果当前已经处于 TRIALING 状态且试用期未过期，不要覆盖为 ACTIVE
-      const isCurrentlyTrialing = existingState?.billingState?.includes("TRIALING") &&
-        existingState?.lastTrialEndAt && 
-        existingState.lastTrialEndAt.getTime() > Date.now();
-      
-      if (isCurrentlyTrialing) {
-        // 保持当前的 TRIALING 状态，不做任何更新
-        return new Response();
-      }
-      
-      const shouldGrantTrial = 
-        !existingState?.lastTrialStartAt &&
-        (existingState?.usedTrialDays || 0) < plan.defaultTrialDays;
-      
-      if (shouldGrantTrial) {
-        const remainingTrialDays = plan.defaultTrialDays - (existingState?.usedTrialDays || 0);
-        const localTrialEnd = new Date(Date.now() + remainingTrialDays * DAY_IN_MS);
-        await setSubscriptionTrialState(shopDomain, plan.id, localTrialEnd, status);
+  try {
+    if (status === "ACTIVE") {
+      if (trialEnd && trialEnd.getTime() > Date.now() && plan.trialSupported) {
+        await setSubscriptionTrialState(shopDomain, plan.id, trialEnd, status);
+      } else if (plan.trialSupported) {
+        // 关键修复：如果当前已经处于 TRIALING 状态且试用期未过期，不要覆盖为 ACTIVE
+        const isCurrentlyTrialing = existingState?.billingState?.includes("TRIALING") &&
+          existingState?.lastTrialEndAt && 
+          existingState.lastTrialEndAt.getTime() > Date.now();
+        
+        if (!isCurrentlyTrialing) {
+          await setSubscriptionActiveState(shopDomain, plan.id, status);
+        } else {
+          logger.debug("[billing-webhook] Keeping existing active trial state", {
+            shopDomain,
+            subscriptionId,
+            status,
+          });
+        }
       } else {
         await setSubscriptionActiveState(shopDomain, plan.id, status);
       }
-    } else {
-      await setSubscriptionActiveState(shopDomain, plan.id, status);
+    } else if (status === "CANCELLED") {
+      await setSubscriptionExpiredState(shopDomain, plan.id, status);
+    } else if (status === "EXPIRED") {
+      await setSubscriptionExpiredState(shopDomain, plan.id, status);
     }
-  } else if (status === "CANCELLED") {
-    // Set to EXPIRED_NO_SUBSCRIPTION instead of directly activating Free plan
-    // This allows the user to choose their next plan (Free or re-subscribe)
-    // The access control will redirect them to onboarding to make a choice
-    await setSubscriptionExpiredState(shopDomain, plan.id, status);
-    // Note: We intentionally do NOT call activateFreePlan here
-    // The user will be prompted to choose a plan when they next access the app
-  } else if (status === "EXPIRED") {
-    await setSubscriptionExpiredState(shopDomain, plan.id, status);
-  }
 
-  return new Response();
+    await completeProcessing(processing.jobId);
+    return new Response();
+  } catch (error) {
+    await failProcessing(processing.jobId, error);
+    throw error;
+  }
 };
 

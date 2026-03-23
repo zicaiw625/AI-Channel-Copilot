@@ -9,6 +9,20 @@ import { Prisma } from "@prisma/client";
 // Constants
 // ============================================================================
 
+export const EXCLUDED_SOURCE_NAMES = [
+  "pos",
+  "draft",
+  "draft_order",
+  "shopify_draft_order",
+] as const;
+
+export const isExcludedSourceName = (sourceName?: string | null): boolean => {
+  const normalized = (sourceName || "").trim().toLowerCase();
+  return EXCLUDED_SOURCE_NAMES.includes(normalized as (typeof EXCLUDED_SOURCE_NAMES)[number]);
+};
+
+export const RAW_SQL_SOURCE_NAME_CONDITION = `AND ("sourceName" IS NULL OR LOWER("sourceName") NOT IN (${EXCLUDED_SOURCE_NAMES.map((name) => `'${name}'`).join(", ")}))`;
+
 /**
  * 【修复】sourceName 过滤条件
  * 
@@ -20,7 +34,13 @@ import { Prisma } from "@prisma/client";
 export const SOURCE_NAME_FILTER: Prisma.OrderWhereInput = {
   OR: [
     { sourceName: null },
-    { sourceName: { notIn: ["pos", "draft"] } },
+    {
+      NOT: {
+        OR: EXCLUDED_SOURCE_NAMES.map((sourceName) => ({
+          sourceName: { equals: sourceName, mode: "insensitive" as const },
+        })),
+      },
+    },
   ],
 };
 

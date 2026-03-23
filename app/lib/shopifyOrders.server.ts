@@ -677,13 +677,7 @@ const classifyFetchError = (error: unknown): OrderFetchError => {
   };
 };
 
-export const fetchOrdersForRange = async (
-  admin: AdminGraphqlClient,
-  range: DateRange,
-  settings: SettingsDefaults = defaultSettings,
-  context?: FetchContext,
-  options?: { maxOrders?: number; maxDurationMs?: number },
-): Promise<{
+export type FetchOrdersForRangeResult = {
   orders: OrderRecord[];
   start: Date;
   end: Date;
@@ -692,9 +686,26 @@ export const fetchOrdersForRange = async (
   hitPageLimit: boolean;
   hitOrderLimit: boolean;
   hitDurationLimit: boolean;
-  /** 【新增】如果获取失败，返回结构化错误信息 */
   error?: OrderFetchError;
-}> => {
+};
+
+export const didFetchOrdersComplete = ({
+  error,
+  hitPageLimit,
+  hitOrderLimit,
+  hitDurationLimit,
+}: Pick<
+  FetchOrdersForRangeResult,
+  "error" | "hitPageLimit" | "hitOrderLimit" | "hitDurationLimit"
+>): boolean => !error && !hitPageLimit && !hitOrderLimit && !hitDurationLimit;
+
+export const fetchOrdersForRange = async (
+  admin: AdminGraphqlClient,
+  range: DateRange,
+  settings: SettingsDefaults = defaultSettings,
+  context?: FetchContext,
+  options?: { maxOrders?: number; maxDurationMs?: number },
+): Promise<FetchOrdersForRangeResult> => {
   if (isDemoMode()) {
     logger.info("[backfill] demo mode enabled; skipping Shopify fetch", {
       platform,
@@ -822,10 +833,14 @@ export const fetchOrdersForRange = async (
 
       after = page.pageInfo.hasNextPage ? page.pageInfo.endCursor || undefined : undefined;
       guard += 1;
-      if (guard >= MAX_BACKFILL_PAGES || records.length >= maxOrders) {
-        // Avoid runaway pagination in extreme cases.
-        hitPageLimit = guard >= MAX_BACKFILL_PAGES;
+      if (records.length >= maxOrders) {
         hitOrderLimit = records.length >= maxOrders;
+        break;
+      }
+
+      if (guard >= MAX_BACKFILL_PAGES && after) {
+        // 仅在达到页数上限且 Shopify 仍声明有下一页时，才视为被截断。
+        hitPageLimit = true;
         break;
       }
     } while (after);

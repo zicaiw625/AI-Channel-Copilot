@@ -12,10 +12,10 @@ import { wakeupDueWebhookJobs } from "./webhookQueue.server";
 import { extractAdminClient } from "./graphqlSdk.server";
 
 // 锁 ID 常量（需要在整个应用中唯一）
-const SCHEDULER_LOCK_RETENTION = 2001;
-const SCHEDULER_LOCK_BACKFILL = 2002;
-const SCHEDULER_LOCK_WEBHOOK_WAKEUP = 2003;
-const SCHEDULER_LOCK_BACKFILL_CLEANUP = 2004;
+const SCHEDULER_LOCK_RETENTION = 0x60000001;
+const SCHEDULER_LOCK_BACKFILL = 0x60000002;
+const SCHEDULER_LOCK_WEBHOOK_WAKEUP = 0x60000003;
+const SCHEDULER_LOCK_BACKFILL_CLEANUP = 0x60000004;
 
 let initialized = false;
 
@@ -69,7 +69,7 @@ const runWebhookWakeup = async () => {
  * 执行历史订单回填任务
  * 使用分布式锁确保多实例部署时只有一个实例执行
  */
-const runBackfillSweep = async () => {
+export const runBackfillSweep = async () => {
   if (!readAppFlags().enableBackfillSweep) return;
   
   const { lockInfo } = await withAdvisoryLock(SCHEDULER_LOCK_BACKFILL, async () => {
@@ -99,25 +99,8 @@ const runBackfillSweep = async () => {
           if (!queued.queued) continue;
           shopsQueued++;
         }
-
-        processBackfillQueue(
-          async () => {
-            let resolvedAdmin = null;
-            try {
-              const unauthResult = await unauthenticated.admin(shopDomain);
-              // 使用统一的类型安全辅助函数提取 admin 客户端
-              resolvedAdmin = extractAdminClient(unauthResult);
-            } catch {
-              resolvedAdmin = null;
-            }
-            return { admin: resolvedAdmin, settings };
-          },
-          { shopDomain },
-        ).catch((err) => {
-          logger.error("[scheduler] processBackfillQueue failed", { shopDomain, error: (err as Error).message });
-        });
       }
-      
+
       logger.info("[scheduler] Backfill sweep completed", { shopsChecked: shops.length, shopsQueued });
     } catch (error) {
       logger.warn("[scheduler] backfill sweep failed", undefined, { message: (error as Error).message });
@@ -126,7 +109,27 @@ const runBackfillSweep = async () => {
   
   if (!lockInfo.acquired) {
     logger.debug("[scheduler] Backfill sweep skipped (another instance is running)");
+    return;
   }
+
+  await processBackfillQueue(async (job) => {
+    let resolvedAdmin = null;
+    try {
+      const unauthResult = await unauthenticated.admin(job.shopDomain);
+      resolvedAdmin = extractAdminClient(unauthResult);
+    } catch {
+      resolvedAdmin = null;
+    }
+
+    return {
+      admin: resolvedAdmin,
+      settings: await getSettings(job.shopDomain),
+    };
+  }).catch((err) => {
+    logger.error("[scheduler] processBackfillQueue failed", {
+      error: (err as Error).message,
+    });
+  });
 };
 
 /**

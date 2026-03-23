@@ -3,7 +3,7 @@ import { resolveDateRange } from "./aiData";
 import { loadOrdersFromDb, persistOrders, removeDeletedOrders } from "./persistence.server";
 import { allowDemoData } from "./runtime.server";
 import { isBackfillRunning } from "./backfill.server";
-import { fetchOrdersForRange } from "./shopifyOrders.server";
+import { didFetchOrdersComplete, fetchOrdersForRange } from "./shopifyOrders.server";
 import { logger } from "./logger.server";
 import {
   BACKFILL_COOLDOWN_MINUTES,
@@ -118,9 +118,9 @@ export const loadDashboardContext = async ({
         clamped = fetched.clamped;
         if (orders.length > 0) {
           await persistOrders(shopDomain, orders);
-          // 【修复】删除数据库中存在但 Shopify 已删除的订单
-          const shopifyOrderIds = new Set(fetched.orders.map(o => o.id));
-          await removeDeletedOrders(shopDomain, dateRange, shopifyOrderIds);
+          if (didFetchOrdersComplete(fetched)) {
+            await removeDeletedOrders(shopDomain, dateRange, new Set(fetched.orders.map((o) => o.id)));
+          }
           dataSource = "live";
         }
       }

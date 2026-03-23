@@ -9,6 +9,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { Prisma } from "@prisma/client";
 
 // Mock Prisma
 vi.mock("../app/db.server", () => ({
@@ -90,6 +91,7 @@ describe("Webhook Queue", () => {
           shopDomain: "test-shop.myshopify.com",
           topic: "orders/create",
           externalId: "webhook-123",
+          status: { in: ["queued", "processing", "completed"] },
         },
         select: { id: true, status: true },
       });
@@ -108,6 +110,30 @@ describe("Webhook Queue", () => {
       );
 
       expect(isDuplicate).toBe(false);
+    });
+
+    it("当已有 failed 任务时不应视为重复", async () => {
+      const prisma = await import("../app/db.server");
+      (prisma.default.webhookJob.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+
+      const { checkWebhookDuplicate } = await import("../app/lib/webhookQueue.server");
+      
+      const isDuplicate = await checkWebhookDuplicate(
+        "test-shop.myshopify.com",
+        "orders/create",
+        "webhook-failed"
+      );
+
+      expect(isDuplicate).toBe(false);
+      expect(prisma.default.webhookJob.findFirst).toHaveBeenCalledWith({
+        where: {
+          shopDomain: "test-shop.myshopify.com",
+          topic: "orders/create",
+          externalId: "webhook-failed",
+          status: { in: ["queued", "processing", "completed"] },
+        },
+        select: { id: true, status: true },
+      });
     });
 
     it("当 externalId 为空时应返回 false", async () => {
@@ -230,6 +256,10 @@ describe("Webhook Queue", () => {
 });
 
 describe("边界条件测试", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   describe("Payload 大小限制", () => {
     it("应该拒绝过大的 payload", async () => {
       const prisma = await import("../app/db.server");
@@ -243,18 +273,63 @@ describe("边界条件测试", () => {
         largePayload[`key${i}`] = "x".repeat(10);
       }
       
-      await enqueueWebhookJob({
+      await expect(enqueueWebhookJob({
         shopDomain: "test-shop.myshopify.com",
         topic: "orders/create",
         intent: "orders/create",
         payload: largePayload,
         run: vi.fn(),
-      });
+      })).rejects.toThrow(/Webhook enqueue failed: payload/);
       
       // 应该记录错误日志
       expect(logger.logger.error).toHaveBeenCalled();
       // 不应该创建任务
       expect(prisma.default.webhookJob.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("失败任务重入", () => {
+    it("当唯一键冲突对应 failed 任务时应 reclaim 并重新入队", async () => {
+      const prisma = await import("../app/db.server");
+
+      const duplicateError = new Prisma.PrismaClientKnownRequestError(
+        "Unique constraint failed",
+        {
+          code: "P2002",
+          clientVersion: "test",
+          meta: { target: ["shopDomain", "topic", "externalId"] },
+        },
+      );
+
+      (prisma.default.webhookJob.create as ReturnType<typeof vi.fn>).mockRejectedValueOnce(duplicateError);
+      (prisma.default.webhookJob.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
+        id: 42,
+        status: "failed",
+      });
+      (prisma.default.webhookJob.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 1 });
+      (prisma.default.webhookJob.count as ReturnType<typeof vi.fn>).mockResolvedValue(0);
+
+      const { enqueueWebhookJob } = await import("../app/lib/webhookQueue.server");
+
+      const result = await enqueueWebhookJob({
+        shopDomain: "test-shop.myshopify.com",
+        topic: "orders/create",
+        intent: "orders/create",
+        payload: { orderId: "gid://shopify/Order/1" },
+        externalId: "webhook-123",
+        orderId: "gid://shopify/Order/1",
+        run: vi.fn(),
+      });
+
+      expect(result).toEqual({ status: "enqueued" });
+      expect(prisma.default.webhookJob.updateMany).toHaveBeenCalledWith({
+        where: { id: 42, status: "failed" },
+        data: expect.objectContaining({
+          status: "queued",
+          attempts: 0,
+          error: null,
+        }),
+      });
     });
   });
 
@@ -265,13 +340,13 @@ describe("边界条件测试", () => {
       
       const { enqueueWebhookJob } = await import("../app/lib/webhookQueue.server");
       
-      await enqueueWebhookJob({
+      await expect(enqueueWebhookJob({
         shopDomain: "",
         topic: "orders/create",
         intent: "orders/create",
         payload: { test: true },
         run: vi.fn(),
-      });
+      })).rejects.toThrow("Webhook enqueue failed: missing shopDomain");
       
       // 应该记录警告日志
       expect(logger.logger.warn).toHaveBeenCalled();
@@ -285,13 +360,13 @@ describe("边界条件测试", () => {
       
       const { enqueueWebhookJob } = await import("../app/lib/webhookQueue.server");
       
-      await enqueueWebhookJob({
+      await expect(enqueueWebhookJob({
         shopDomain: "test-shop.myshopify.com",
         topic: "orders/create",
         intent: "orders/create",
         payload: null as unknown as Record<string, unknown>,
         run: vi.fn(),
-      });
+      })).rejects.toThrow("Webhook enqueue failed: payload must be object");
       
       // 应该记录警告日志
       expect(logger.logger.warn).toHaveBeenCalled();

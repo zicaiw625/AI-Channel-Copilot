@@ -90,11 +90,95 @@ describe('aiAggregation', () => {
     expect(p1.topChannel === 'ChatGPT' || p1.topChannel === 'Perplexity').toBe(true)
   })
 
+  it('buildProducts evenly allocates AI GMV when line totals are zero', () => {
+    const zeroLineOrders = [
+      mkOrder({
+        id: 'zero-1',
+        totalPrice: 100,
+        aiSource: 'ChatGPT',
+        products: [
+          { id: 'p-zero-a', title: 'A', handle: 'a', url: '', price: 0, currency: 'USD', quantity: 1 },
+          { id: 'p-zero-b', title: 'B', handle: 'b', url: '', price: 0, currency: 'USD', quantity: 1 },
+        ],
+      }),
+    ]
+
+    const pr = buildProducts(zeroLineOrders, 'current_total_price')
+    expect(pr.find(x => x.handle === 'a')?.aiGMV).toBe(50)
+    expect(pr.find(x => x.handle === 'b')?.aiGMV).toBe(50)
+  })
+
   it('buildTopCustomers supports acquiredViaAi map and repeat count', () => {
     const acquired = { c1: true, c2: false }
     const tc = buildTopCustomers(orders, 'current_total_price', 10, acquired)
     const row = tc.find(x => x.customerId === 'c1')!
     expect(row.firstAIAcquired).toBe(true)
     expect(row.repeatCount).toBe(1)
+  })
+
+  it('buildTopCustomers marks firstAIAcquired when any in-range order is new AI acquisition', () => {
+    const customerOrders = [
+      mkOrder({
+        id: 'cust-1',
+        customerId: 'c-edge',
+        createdAt: '2025-11-01T00:00:00Z',
+        totalPrice: 20,
+        aiSource: null,
+        isNewCustomer: false,
+      }),
+      mkOrder({
+        id: 'cust-2',
+        customerId: 'c-edge',
+        createdAt: '2025-11-02T00:00:00Z',
+        totalPrice: 30,
+        aiSource: 'ChatGPT',
+        isNewCustomer: true,
+      }),
+    ]
+
+    const tc = buildTopCustomers(customerOrders, 'current_total_price', 10)
+    expect(tc.find(x => x.customerId === 'c-edge')?.firstAIAcquired).toBe(true)
+  })
+
+  it('buildTrend uses timezone-aware week buckets', () => {
+    const weeklyOrders = [
+      mkOrder({
+        id: 'tz-week',
+        createdAt: '2025-11-02T16:00:00Z',
+        totalPrice: 100,
+        aiSource: 'ChatGPT',
+      }),
+    ]
+    const weeklyRange = {
+      key: '30d' as const,
+      label: '最近 30 天',
+      days: 30,
+      start: new Date('2025-10-01T00:00:00Z'),
+      end: new Date('2025-11-30T23:59:59Z'),
+    }
+
+    const tr = buildTrend(weeklyOrders, weeklyRange, 'current_total_price', 'Asia/Tokyo')
+    expect(tr[0]?.label).toBe('2025-11-03 · 周')
+  })
+
+  it('buildTrend uses timezone-aware month buckets', () => {
+    const monthlyOrders = [
+      mkOrder({
+        id: 'tz-month',
+        createdAt: '2025-10-31T16:00:00Z',
+        totalPrice: 100,
+        aiSource: 'ChatGPT',
+      }),
+    ]
+    const monthlyRange = {
+      key: '90d' as const,
+      label: '最近 90 天',
+      days: 90,
+      start: new Date('2025-09-01T00:00:00Z'),
+      end: new Date('2025-11-30T23:59:59Z'),
+    }
+
+    const tr = buildTrend(monthlyOrders, monthlyRange, 'current_total_price', 'Asia/Tokyo')
+    expect(tr[0]?.label).toBe('2025-11')
   })
 })

@@ -23,6 +23,7 @@ import {
   buildProductsCsv,
   buildCustomersCsv,
 } from "./export";
+import { isExcludedSourceName } from "./queries/helpers";
 import { mockOrders } from "./mockData";
 
 // 从 aiTypes 重新导出所有类型，保持向后兼容
@@ -392,14 +393,8 @@ export const buildDashboardFromOrders = (
   acquiredViaAiMap?: Record<string, boolean>,
 ): DashboardData => {
   const ordersInRange = filterOrdersByDateRange(allOrders, range);
-  const excludedBySource = ordersInRange.filter((o) => {
-    const src = (o.sourceName || "").toLowerCase();
-    return src === "pos" || src === "draft";
-  }).length;
-  const usableOrders = ordersInRange.filter((o) => {
-    const src = (o.sourceName || "").toLowerCase();
-    return src !== "pos" && src !== "draft";
-  });
+  const excludedBySource = ordersInRange.filter((o) => isExcludedSourceName(o.sourceName)).length;
+  const usableOrders = ordersInRange.filter((o) => !isExcludedSourceName(o.sourceName));
   const { primaryCurrency: resolvedCurrency, primaryOrders, foreignOrders, foreignCurrencies } =
     partitionOrdersByCurrency(usableOrders, primaryCurrency);
   const overview = aggBuildOverview(primaryOrders, gmvMetric, resolvedCurrency);

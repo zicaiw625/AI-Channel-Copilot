@@ -377,7 +377,7 @@ export async function processCheckoutCreate(
     logger.error("[funnel] Error processing checkout create", { shopDomain, checkoutId: payload.id }, {
       error: (error as Error).message,
     });
-    // Don't throw - allow webhook to succeed
+    throw error;
   }
 }
 
@@ -459,6 +459,7 @@ export async function processCheckoutUpdate(
     logger.error("[funnel] Error processing checkout update", { shopDomain, checkoutId: payload.id }, {
       error: (error as Error).message,
     });
+    throw error;
   }
 }
 

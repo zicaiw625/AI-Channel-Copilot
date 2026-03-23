@@ -30,7 +30,7 @@ export function buildEmbeddedAppPath(
   extraParams?: Record<string, ParamValue>,
   hash?: string,
 ) {
-  const params = getShopifyContextParams(search);
+  const params = getPreservedSearchParams(search);
 
   for (const [key, value] of Object.entries(extraParams ?? {})) {
     if (value == null || value === "") {

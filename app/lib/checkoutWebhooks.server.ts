@@ -19,6 +19,7 @@ import {
   webhookBadRequest,
   handleWebhookError,
   logWebhookReceived,
+  webhookRetryableError,
 } from "./webhookUtils.server";
 
 /**
@@ -161,38 +162,50 @@ export const handleCheckoutCreateWebhook = async (request: Request) => {
     // 🔒 入队异步处理（使用脱敏后的 payload，不存储 PII）
     const sanitizedPayload = sanitizeCheckoutPayload(checkoutPayload);
     
-    await enqueueWebhookJob({
-      shopDomain: shop,
-      topic: "checkouts/create",
-      intent: "checkouts/create",
-      payload: {
-        checkoutId: sanitizedPayload.id,
+    try {
+      const enqueueResult = await enqueueWebhookJob({
         shopDomain: shop,
-        sanitizedPayload,  // 🔒 使用脱敏版本替代原始 payload
-      },
-      externalId,
-      orderId: null, // checkout 没有 orderId
-      eventTime,
-      run: async (jobPayload) => {
-        const jobShop = jobPayload.shopDomain as string;
-        const jobSanitized = jobPayload.sanitizedPayload as SanitizedCheckoutPayload;
-        
-        // 转换回 CheckoutPayload 格式供下游处理
-        const jobCheckoutPayload = toCheckoutPayload(jobSanitized);
-        
-        const settings = await getSettings(jobShop);
-        await processCheckoutCreate(jobShop, jobCheckoutPayload, {
-          aiDomains: settings.aiDomains,
-          utmSources: settings.utmSources,
-          utmMediumKeywords: settings.utmMediumKeywords,
-        });
-        
-        logger.info("[webhook] checkout processed", {
-          shop: jobShop,
-          checkoutId: jobSanitized.id,
-        });
-      },
-    });
+        topic: "checkouts/create",
+        intent: "checkouts/create",
+        payload: {
+          checkoutId: sanitizedPayload.id,
+          shopDomain: shop,
+          sanitizedPayload,  // 🔒 使用脱敏版本替代原始 payload
+        },
+        externalId,
+        orderId: null, // checkout 没有 orderId
+        eventTime,
+        run: async (jobPayload) => {
+          const jobShop = jobPayload.shopDomain as string;
+          const jobSanitized = jobPayload.sanitizedPayload as SanitizedCheckoutPayload;
+          
+          // 转换回 CheckoutPayload 格式供下游处理
+          const jobCheckoutPayload = toCheckoutPayload(jobSanitized);
+          
+          const settings = await getSettings(jobShop);
+          await processCheckoutCreate(jobShop, jobCheckoutPayload, {
+            aiDomains: settings.aiDomains,
+            utmSources: settings.utmSources,
+            utmMediumKeywords: settings.utmMediumKeywords,
+          });
+          
+          logger.info("[webhook] checkout processed", {
+            shop: jobShop,
+            checkoutId: jobSanitized.id,
+          });
+        },
+      });
+
+      if (enqueueResult.status === "duplicate") {
+        return webhookSuccess("Duplicate");
+      }
+    } catch (error) {
+      logger.error("[webhook] checkout/create enqueue failed", {
+        shop,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return webhookRetryableError();
+    }
 
     return webhookSuccess();
   } catch (error) {
@@ -268,38 +281,50 @@ export const handleCheckoutUpdateWebhook = async (request: Request) => {
     // 🔒 入队异步处理（使用脱敏后的 payload，不存储 PII）
     const sanitizedPayload = sanitizeCheckoutPayload(checkoutPayload);
     
-    await enqueueWebhookJob({
-      shopDomain: shop,
-      topic: "checkouts/update",
-      intent: "checkouts/update",
-      payload: {
-        checkoutId: sanitizedPayload.id,
+    try {
+      const enqueueResult = await enqueueWebhookJob({
         shopDomain: shop,
-        sanitizedPayload,  // 🔒 使用脱敏版本替代原始 payload
-      },
-      externalId,
-      orderId: null,
-      eventTime,
-      run: async (jobPayload) => {
-        const jobShop = jobPayload.shopDomain as string;
-        const jobSanitized = jobPayload.sanitizedPayload as SanitizedCheckoutPayload;
-        
-        // 转换回 CheckoutPayload 格式供下游处理
-        const jobCheckoutPayload = toCheckoutPayload(jobSanitized);
-        
-        const settings = await getSettings(jobShop);
-        await processCheckoutUpdate(jobShop, jobCheckoutPayload, {
-          aiDomains: settings.aiDomains,
-          utmSources: settings.utmSources,
-          utmMediumKeywords: settings.utmMediumKeywords,
-        });
-        
-        logger.info("[webhook] checkout update processed", {
-          shop: jobShop,
-          checkoutId: jobSanitized.id,
-        });
-      },
-    });
+        topic: "checkouts/update",
+        intent: "checkouts/update",
+        payload: {
+          checkoutId: sanitizedPayload.id,
+          shopDomain: shop,
+          sanitizedPayload,  // 🔒 使用脱敏版本替代原始 payload
+        },
+        externalId,
+        orderId: null,
+        eventTime,
+        run: async (jobPayload) => {
+          const jobShop = jobPayload.shopDomain as string;
+          const jobSanitized = jobPayload.sanitizedPayload as SanitizedCheckoutPayload;
+          
+          // 转换回 CheckoutPayload 格式供下游处理
+          const jobCheckoutPayload = toCheckoutPayload(jobSanitized);
+          
+          const settings = await getSettings(jobShop);
+          await processCheckoutUpdate(jobShop, jobCheckoutPayload, {
+            aiDomains: settings.aiDomains,
+            utmSources: settings.utmSources,
+            utmMediumKeywords: settings.utmMediumKeywords,
+          });
+          
+          logger.info("[webhook] checkout update processed", {
+            shop: jobShop,
+            checkoutId: jobSanitized.id,
+          });
+        },
+      });
+
+      if (enqueueResult.status === "duplicate") {
+        return webhookSuccess("Duplicate");
+      }
+    } catch (error) {
+      logger.error("[webhook] checkout/update enqueue failed", {
+        shop,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return webhookRetryableError();
+    }
 
     return webhookSuccess();
   } catch (error) {

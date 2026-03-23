@@ -269,6 +269,30 @@ export const buildPersistenceData = (payload: SettingsDefaults) => {
   } as const;
 };
 
+export const mergeSettingsForSave = (
+  existing: SettingsDefaults,
+  normalized: SettingsDefaults,
+): SettingsDefaults => ({
+  ...existing,
+  ...normalized,
+  primaryCurrency: normalized.primaryCurrency || existing.primaryCurrency || "USD",
+  languages:
+    normalized.languages && normalized.languages.length ? normalized.languages : existing.languages,
+  timezones:
+    normalized.timezones && normalized.timezones.length ? normalized.timezones : existing.timezones,
+  pipelineStatuses:
+    normalized.pipelineStatuses && normalized.pipelineStatuses.length
+      ? normalized.pipelineStatuses
+      : existing.pipelineStatuses,
+  // 这些字段只应由服务端活动更新逻辑维护，不能被设置表单保存覆盖。
+  lastOrdersWebhookAt: existing.lastOrdersWebhookAt,
+  lastBackfillAt: existing.lastBackfillAt,
+  lastBackfillAttemptAt: existing.lastBackfillAttemptAt,
+  lastBackfillOrdersFetched: existing.lastBackfillOrdersFetched,
+  lastTaggingAt: existing.lastTaggingAt,
+  lastCleanupAt: existing.lastCleanupAt,
+});
+
 export const buildActivityUpdates = (
   updates: Partial<{
     lastOrdersWebhookAt: Date;

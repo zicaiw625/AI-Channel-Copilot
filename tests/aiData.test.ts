@@ -191,6 +191,55 @@ describe("Order mapping and aggregation", () => {
     expect(dashboard.sampleNote).toContain("已过滤 1 笔非 USD 货币的订单");
     expect(dashboard.recentOrders).toHaveLength(1);
   });
+
+  it("excludes draft-like source names consistently from in-memory aggregation", () => {
+    const orders = [
+      {
+        id: "web-order",
+        name: "#1",
+        createdAt: "2024-01-05T00:00:00Z",
+        totalPrice: 100,
+        currency: "USD",
+        aiSource: "ChatGPT" as const,
+        referrer: "https://chat.openai.com/",
+        landingPage: "https://store.example.com/",
+        utmSource: "chatgpt",
+        utmMedium: "ai-agent",
+        sourceName: "web",
+        customerId: "c1",
+        isNewCustomer: true,
+        products: [],
+        detection: "referrer match",
+        signals: [],
+        tags: [],
+      },
+      {
+        id: "draft-order",
+        name: "#2",
+        createdAt: "2024-01-06T00:00:00Z",
+        totalPrice: 999,
+        currency: "USD",
+        aiSource: "ChatGPT" as const,
+        referrer: "https://chat.openai.com/",
+        landingPage: "https://store.example.com/",
+        utmSource: "chatgpt",
+        utmMedium: "ai-agent",
+        sourceName: "draft_order",
+        customerId: "c2",
+        isNewCustomer: true,
+        products: [],
+        detection: "referrer match",
+        signals: [],
+        tags: [],
+      },
+    ];
+
+    const dashboard = buildDashboardFromOrders(orders, range, "current_total_price", undefined, "USD");
+
+    expect(dashboard.overview.totalGMV).toBe(100);
+    expect(dashboard.overview.aiOrders).toBe(1);
+    expect(dashboard.sampleNote).toContain("已排除 1 笔 POS/草稿订单");
+  });
 });
 
 describe("GDPR identifier extraction", () => {

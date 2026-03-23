@@ -95,20 +95,9 @@ export const detectAndPersistDevShop = async (
     return false;
   }
   
-  // Safety check: If we have cached data and it's recent (within 24 hours), use it
-  if (existing?.lastCheckedAt && existing.isDevShop !== undefined) {
-    const hoursSinceCheck = (Date.now() - existing.lastCheckedAt.getTime()) / (1000 * 60 * 60);
-    if (hoursSinceCheck < 24) {
-      // Check if this is a reinstall that needs subscription sync
-      const isReinstall = existing.lastUninstalledAt && 
-        (!existing.lastReinstalledAt || existing.lastReinstalledAt < existing.lastUninstalledAt);
-      const needsSync = isReinstall || existing.billingState === "CANCELLED";
-      
-      if (!needsSync) {
-        return existing.isDevShop;
-      }
-    }
-  }
+  // 不再依赖 lastCheckedAt 做开发店探测缓存：
+  // 该字段也会被其它 billing 状态写入刷新，容易导致 isDevShop 长时间陈旧。
+  // 只要有 admin client，就实时查询 Shopify；查询失败时再回退到缓存值。
 
   const sdk = createGraphqlSdk(admin, shopDomain);
   // 使用 partnerDevelopment 字段来可靠地判断开发店
@@ -295,22 +284,9 @@ const syncSubscriptionFromShopifyInternal = async (
         const isTrialing = trialEndTime !== null && trialEndTime > Date.now();
         const trialEnd = trialEndTime ? new Date(trialEndTime) : null;
         
-        const existingState = await getBillingState(shopDomain);
-        
-        // 只要用户未曾开始试用期且有剩余试用天数，就授予试用期
-        const shouldGrantTrial = 
-          plan.trialSupported && 
-          !isTrialing &&
-          !existingState?.lastTrialStartAt &&
-          (existingState?.usedTrialDays || 0) < plan.defaultTrialDays;
-        
         // Update local billing state
         if (isTrialing && plan.trialSupported) {
           await setSubscriptionTrialState(shopDomain, plan.id, trialEnd, activeSub.status, createdAt);
-        } else if (shouldGrantTrial) {
-          const remainingTrialDays = plan.defaultTrialDays - (existingState?.usedTrialDays || 0);
-          const localTrialEnd = new Date(Date.now() + remainingTrialDays * DAY_IN_MS);
-          await setSubscriptionTrialState(shopDomain, plan.id, localTrialEnd, activeSub.status);
         } else {
           await setSubscriptionActiveState(shopDomain, plan.id, activeSub.status);
         }

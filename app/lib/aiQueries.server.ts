@@ -19,7 +19,7 @@ import { allowDemoData } from "./runtime.server";
 import prisma from "../db.server";
 import { Prisma } from "@prisma/client";
 import { fromPrismaAiSource, toPrismaAiSource } from "./aiSourceMapper";
-import { startOfDay, formatDateOnly } from "./dateUtils";
+import { startOfDay, formatDateOnly, getWeekStart, getMonthStart } from "./dateUtils";
 import { logger } from "./logger.server";
 import { t, type Lang } from "./i18n";
 
@@ -30,6 +30,7 @@ import {
   toNumber,
   getSum,
   computeRepeatRate,
+  RAW_SQL_SOURCE_NAME_CONDITION,
 } from "./queries/helpers";
 import { TREND_DATA_DB_AGGREGATION_THRESHOLD } from "./constants";
 import { createQueryTimer } from "./metrics/collector";
@@ -223,8 +224,6 @@ async function buildDashboardFromDb(
     const priceColumn = metric === "subtotal_price" ? '"subtotalPrice"' : '"totalPrice"';
     
     // 构建动态 WHERE 条件
-    const sourceNameCondition = `AND ("sourceName" IS NULL OR "sourceName" NOT IN ('pos', 'draft_order', 'shopify_draft_order'))`;
-    
     // 慢查询监控
     const endTrendTimer = createQueryTimer("rawQuery", "Order", {
       query: "trend_aggregation",
@@ -245,7 +244,7 @@ async function buildDashboardFromDb(
         AND "createdAt" >= $2
         AND "createdAt" <= $3
         AND "currency" = $4
-        ${sourceNameCondition}
+        ${RAW_SQL_SOURCE_NAME_CONDITION}
       GROUP BY period, "aiSource"
       ORDER BY period ASC
     `, shopDomain, range.start, range.end, currency);
@@ -332,16 +331,12 @@ async function buildDashboardFromDb(
            key = formatDateOnly(date, timezone);
            sortKey = startOfDay(date, timezone).getTime();
          } else if (bucket === "week") {
-           const start = startOfDay(date, timezone);
-           const day = start.getUTCDay();
-           const diff = (day + 6) % 7;
-           start.setUTCDate(start.getUTCDate() - diff);
+           const start = getWeekStart(date, timezone);
            key = `${formatDateOnly(start, timezone)} · 周`;
            sortKey = start.getTime();
          } else {
-           key = new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit" }).format(date);
-           const start = startOfDay(date, timezone);
-           start.setUTCDate(1); 
+           const start = getMonthStart(date, timezone);
+           key = new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit" }).format(start);
            sortKey = start.getTime();
          }
 
@@ -431,7 +426,8 @@ async function buildDashboardFromDb(
     const orderTotal = order.products.reduce((sum, l) => sum + toNumber(l.price) * l.quantity, 0);
     const orderVal = metric === "subtotal_price" ? toNumber(order.subtotalPrice) : toNumber(order.totalPrice);
     
-    const share = orderTotal > 0 ? lineTotal / orderTotal : 0;
+    const allocationDenominator = Math.max(order.products.length, 1);
+    const share = orderTotal > 0 ? lineTotal / orderTotal : 1 / allocationDenominator;
     const allocatedGmv = orderVal * share;
     
     // 使用订单 ID 去重，避免同一订单中同一产品多次计数

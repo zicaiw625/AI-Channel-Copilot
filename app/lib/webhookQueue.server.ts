@@ -15,6 +15,15 @@ type WebhookJob = {
   run: (payload: Record<string, unknown>) => Promise<void>;
 };
 
+export type EnqueueWebhookResult =
+  | { status: "enqueued" }
+  | { status: "duplicate" };
+
+type ExistingWebhookJobForReclaim = {
+  id: number;
+  status: string;
+};
+
 const processingKeys = new Set<string>();
 const scheduledTimers = new Map<string, NodeJS.Timeout>();
 const lastRecoveryTime = new Map<string, number>(); // 记录上次恢复时间，限制恢复频率
@@ -358,25 +367,25 @@ const evictLRUHandlers = (targetSize: number) => {
 /**
  * 入队 Webhook 任务
  */
-export const enqueueWebhookJob = async (job: WebhookJob) => {
+export const enqueueWebhookJob = async (job: WebhookJob): Promise<EnqueueWebhookResult> => {
   // 如果正在关闭，拒绝新任务
   if (isShuttingDown) {
     logger.warn("[webhook] job rejected: server is shutting down", { 
       shopDomain: job?.shopDomain, 
       intent: job?.intent 
     });
-    return;
+    throw new Error("Webhook enqueue failed: server is shutting down");
   }
 
   // 基础验证
   if (!job || typeof job !== "object") {
     logger.warn("[webhook] job rejected: invalid job object");
-    return;
+    throw new Error("Webhook enqueue failed: invalid job object");
   }
   
   if (!job.shopDomain || typeof job.shopDomain !== "string") {
     logger.warn("[webhook] job rejected: missing shopDomain");
-    return;
+    throw new Error("Webhook enqueue failed: missing shopDomain");
   }
   
   const payloadIsObject = job.payload && typeof job.payload === "object";
@@ -385,7 +394,7 @@ export const enqueueWebhookJob = async (job: WebhookJob) => {
       shopDomain: job.shopDomain, 
       intent: job.intent 
     });
-    return;
+    throw new Error("Webhook enqueue failed: payload must be object");
   }
 
   // Payload 大小检查
@@ -398,14 +407,17 @@ export const enqueueWebhookJob = async (job: WebhookJob) => {
         size: payloadSize,
         maxSize: MAX_PAYLOAD_SIZE,
       });
-      return;
+      throw new Error("Webhook enqueue failed: payload too large");
     }
   } catch (err) {
+    if (err instanceof Error && err.message === "Webhook enqueue failed: payload too large") {
+      throw err;
+    }
     logger.error("[webhook] payload rejected: not serializable", {
       shopDomain: job.shopDomain,
       error: sanitizeErrorMessage(err),
     });
-    return;
+    throw new Error("Webhook enqueue failed: payload not serializable");
   }
 
   // 注册 handler（带 LRU 淘汰策略）
@@ -450,12 +462,52 @@ export const enqueueWebhookJob = async (job: WebhookJob) => {
   } catch (err) {
     // 检查是否是唯一约束冲突
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+      if (job.externalId) {
+        const existing = await prisma.webhookJob.findFirst({
+          where: {
+            shopDomain: job.shopDomain,
+            topic: job.topic,
+            externalId: job.externalId,
+          },
+          select: { id: true, status: true },
+        }) as ExistingWebhookJobForReclaim | null;
+
+        if (existing?.status === "failed") {
+          const reclaimed = await prisma.webhookJob.updateMany({
+            where: { id: existing.id, status: "failed" },
+            data: {
+              intent: job.intent,
+              payload: job.payload as Prisma.InputJsonValue,
+              orderId: job.orderId || null,
+              eventTime: job.eventTime || null,
+              status: "queued",
+              attempts: 0,
+              nextRunAt: new Date(),
+              startedAt: null,
+              finishedAt: null,
+              error: null,
+            },
+          });
+
+          if (reclaimed.count > 0) {
+            logger.info("[webhook] reclaimed failed job for retry", {
+              shopDomain: job.shopDomain,
+              topic: job.topic,
+              externalId: job.externalId,
+              jobId: existing.id,
+            });
+            void processWebhookQueueForShop(job.shopDomain);
+            return { status: "enqueued" };
+          }
+        }
+      }
+
       logger.info("[webhook] duplicate ignored by unique constraint", { 
         shopDomain: job.shopDomain, 
         topic: job.topic,
         externalId: job.externalId,
       });
-      return;
+      return { status: "duplicate" };
     }
     // 其他错误抛出
     throw err;
@@ -489,6 +541,7 @@ export const enqueueWebhookJob = async (job: WebhookJob) => {
   }
 
   void processWebhookQueueForShop(job.shopDomain);
+  return { status: "enqueued" };
 };
 
 export const getWebhookQueueSize = async () =>
@@ -566,12 +619,16 @@ export const checkWebhookDuplicate = async (
   if (!externalId) return false;
   
   try {
-    // 检查是否已存在相同的 webhook（任何状态）
+    // 仅将仍有意义的状态视为重复：
+    // - queued / processing: 正在等待或处理中
+    // - completed: 已成功处理
+    // failed 应允许重新入队或被 Shopify 重试重新投递
     const existing = await prisma.webhookJob.findFirst({
       where: {
         shopDomain,
         topic,
         externalId,
+        status: { in: ["queued", "processing", "completed"] },
       },
       select: { id: true, status: true },
     });

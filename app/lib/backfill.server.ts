@@ -1,6 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import type { SettingsDefaults, DateRange } from "./aiData";
-import { fetchOrdersForRange } from "./shopifyOrders.server";
+import { didFetchOrdersComplete, fetchOrdersForRange } from "./shopifyOrders.server";
 import { markActivity, updatePipelineStatuses } from "./settings.server";
 import { persistOrders, removeDeletedOrders } from "./persistence.server";
 import prisma from "../db.server";
@@ -86,119 +86,126 @@ const processQueue = async (
   // withAdvisoryLock 是非阻塞的，如果锁被其他实例持有会立即返回
   const { lockInfo } = await withAdvisoryLock(1002, async () => {
     logger.info('[backfill] Acquired advisory lock, starting queue processing');
-    for (;;) {
-      const job = await dequeue(where);
-      if (!job) break;
+    const job = await dequeue(where);
+    if (!job) return;
 
-      const range: DateRange = {
-        key: "custom",
-        label: job.range,
-        start: job.rangeStart,
-        end: job.rangeEnd,
-        days: Math.max(1, Math.round((job.rangeEnd.getTime() - job.rangeStart.getTime()) / 86_400_000)),
-      };
+    const range: DateRange = {
+      key: "custom",
+      label: job.range,
+      start: job.rangeStart,
+      end: job.rangeEnd,
+      days: Math.max(1, Math.round((job.rangeEnd.getTime() - job.rangeStart.getTime()) / 86_400_000)),
+    };
 
-      const { admin, settings } = await resolveDependencies(job);
+    const { admin, settings } = await resolveDependencies(job);
 
-      if (!admin || !settings) {
-        logger.warn("[backfill] missing dependencies for queued job", {
-          jobId: job.id,
-          shopDomain: job.shopDomain,
-          hasAdmin: Boolean(admin),
-          hasSettings: Boolean(settings),
-        });
-        await updateJobStatus(job.id, "failed", { error: "missing dependencies" });
-        continue;
-      }
+    if (!admin || !settings) {
+      logger.warn("[backfill] missing dependencies for queued job", {
+        jobId: job.id,
+        shopDomain: job.shopDomain,
+        hasAdmin: Boolean(admin),
+        hasSettings: Boolean(settings),
+      });
+      await updateJobStatus(job.id, "failed", { error: "missing dependencies" });
+      return;
+    }
 
-      try {
-        const fetched = await fetchOrdersForRange(
-          admin,
-          range,
-          settings,
-          { shopDomain: job.shopDomain, intent: "queued-backfill", rangeLabel: range.label },
-          {
-            maxOrders: job.maxOrders ?? MAX_BACKFILL_ORDERS,
-            maxDurationMs: job.maxDurationMs ?? MAX_BACKFILL_DURATION_MS,
-          },
-        );
+    try {
+      const fetched = await fetchOrdersForRange(
+        admin,
+        range,
+        settings,
+        { shopDomain: job.shopDomain, intent: "queued-backfill", rangeLabel: range.label },
+        {
+          maxOrders: job.maxOrders ?? MAX_BACKFILL_ORDERS,
+          maxDurationMs: job.maxDurationMs ?? MAX_BACKFILL_DURATION_MS,
+        },
+      );
 
-        // 【修复】处理权限相关的错误，显示明确的提示
-        if (fetched.error) {
-          const errorDetail = fetched.error.suggestReauth 
-            ? `${fetched.error.message} 建议商家重新授权。`
-            : fetched.error.message;
-          
-          logger.warn("[backfill] job completed with access restriction", {
-            jobType: "backfill",
-            jobId: job.id,
-            shopDomain: job.shopDomain,
-            errorCode: fetched.error.code,
-            suggestReauth: fetched.error.suggestReauth,
-          });
-          
-          await updateJobStatus(job.id, "completed", { 
-            ordersFetched: 0, 
-            error: `[${fetched.error.code}] ${fetched.error.message}`,
-          });
-          await setBackfillStatus(
-            job.shopDomain,
-            "warning",
-            errorDetail.slice(0, 100),
-          );
-          continue;
-        }
-
-        // 【优化 1】无论拉到多少单，都更新 lastBackfillAttemptAt 和 lastBackfillOrdersFetched
-        const now = new Date();
-        const activityUpdate: Parameters<typeof markActivity>[1] = {
-          lastBackfillAttemptAt: now,
-          lastBackfillOrdersFetched: fetched.orders.length,
-        };
+      // 【修复】处理权限相关的错误，显示明确的提示
+      if (fetched.error) {
+        const errorDetail = fetched.error.suggestReauth 
+          ? `${fetched.error.message} 建议商家重新授权。`
+          : fetched.error.message;
         
-        // 只在有订单时更新 lastBackfillAt
-        if (fetched.orders.length > 0) {
-          await persistOrders(job.shopDomain, fetched.orders);
-          activityUpdate.lastBackfillAt = now;
-        }
-        
-        await markActivity(job.shopDomain, activityUpdate);
-
-        // 【修复】删除数据库中存在但 Shopify 已删除的订单
-        const shopifyOrderIds = new Set(fetched.orders.map(o => o.id));
-        const deletedCount = await removeDeletedOrders(job.shopDomain, range, shopifyOrderIds);
-
-        await updateJobStatus(job.id, "completed", { ordersFetched: fetched.orders.length });
-        
-        // 【优化 2】0 单时显示 info 而非 healthy，让用户明确知道"任务成功但无数据"
-        const statusLevel = fetched.orders.length > 0 ? "healthy" : "info";
-        const statusDetail = fetched.orders.length > 0
-          ? `Last completed at ${now.toISOString()} · ${fetched.orders.length} orders`
-          : `Completed at ${now.toISOString()} · 0 orders in last 60 days (Shopify default limit)`;
-        
-        await setBackfillStatus(job.shopDomain, statusLevel, statusDetail);
-        logger.info("[backfill] job completed", {
+        logger.warn("[backfill] job completed with access restriction", {
           jobType: "backfill",
           jobId: job.id,
           shopDomain: job.shopDomain,
-          ordersFetched: fetched.orders.length,
-          deletedFromDb: deletedCount,
+          errorCode: fetched.error.code,
+          suggestReauth: fetched.error.suggestReauth,
         });
-      } catch (error) {
-        const message = (error as Error).message;
-        logger.error("[backfill] job failed", {
-          jobType: "backfill",
-          jobId: job.id,
-          shopDomain: job.shopDomain,
-          message,
+        
+        await updateJobStatus(job.id, "completed", { 
+          ordersFetched: 0, 
+          error: `[${fetched.error.code}] ${fetched.error.message}`,
         });
-        await updateJobStatus(job.id, "failed", { error: message });
         await setBackfillStatus(
           job.shopDomain,
           "warning",
-          `Failed at ${new Date().toISOString()}: ${message.slice(0, 50)}`,
+          errorDetail.slice(0, 100),
         );
+        return;
       }
+
+      const canSyncDeletes = didFetchOrdersComplete(fetched);
+
+      // 【优化 1】无论拉到多少单，都更新 lastBackfillAttemptAt 和 lastBackfillOrdersFetched
+      const now = new Date();
+      const activityUpdate: Parameters<typeof markActivity>[1] = {
+        lastBackfillAttemptAt: now,
+        lastBackfillOrdersFetched: fetched.orders.length,
+      };
+      
+      // 只有完整补拉成功时才写 lastBackfillAt，避免把冷却期建立在截断数据上
+      if (fetched.orders.length > 0) {
+        await persistOrders(job.shopDomain, fetched.orders);
+        if (canSyncDeletes) {
+          activityUpdate.lastBackfillAt = now;
+        }
+      }
+      
+      await markActivity(job.shopDomain, activityUpdate);
+
+      const deletedCount = canSyncDeletes
+        ? await removeDeletedOrders(
+            job.shopDomain,
+            range,
+            new Set(fetched.orders.map((o) => o.id)),
+          )
+        : 0;
+
+      await updateJobStatus(job.id, "completed", { ordersFetched: fetched.orders.length });
+      
+      // 【优化 2】0 单时显示 info 而非 healthy，让用户明确知道"任务成功但无数据"
+      const statusLevel = fetched.orders.length > 0 ? "healthy" : "info";
+      const statusDetail = fetched.orders.length > 0
+        ? `Last completed at ${now.toISOString()} · ${fetched.orders.length} orders`
+        : `Completed at ${now.toISOString()} · 0 orders in last 60 days (Shopify default limit)`;
+      
+      await setBackfillStatus(job.shopDomain, statusLevel, statusDetail);
+      logger.info("[backfill] job completed", {
+        jobType: "backfill",
+        jobId: job.id,
+        shopDomain: job.shopDomain,
+        ordersFetched: fetched.orders.length,
+        deletedFromDb: deletedCount,
+        skippedDeleteSync: !canSyncDeletes,
+      });
+    } catch (error) {
+      const message = (error as Error).message;
+      logger.error("[backfill] job failed", {
+        jobType: "backfill",
+        jobId: job.id,
+        shopDomain: job.shopDomain,
+        message,
+      });
+      await updateJobStatus(job.id, "failed", { error: message });
+      await setBackfillStatus(
+        job.shopDomain,
+        "warning",
+        `Failed at ${new Date().toISOString()}: ${message.slice(0, 50)}`,
+      );
     }
   }, { fallbackOnError: false });
 

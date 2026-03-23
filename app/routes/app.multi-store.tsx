@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
-import { Link, useLoaderData } from "react-router";
+import { Link, useLoaderData, useLocation } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 
 import { authenticate } from "../shopify.server";
@@ -12,6 +12,7 @@ import { ordersRepository } from "../lib/repositories/orders.repository";
 import { resolveDateRange } from "../lib/aiData";
 import { logger } from "../lib/logger.server";
 import prisma from "../db.server";
+import { buildEmbeddedAppPath } from "../lib/navigation";
 
 // ============================================================================
 // Types
@@ -635,6 +636,9 @@ function AddStorePrompt({ en }: { en: boolean }) {
 // ============================================================================
 
 function UpgradePrompt({ en }: { en: boolean }) {
+  const location = useLocation();
+  const billingHref = buildEmbeddedAppPath("/app/billing", location.search);
+
   return (
     <div
       style={{
@@ -718,7 +722,7 @@ function UpgradePrompt({ en }: { en: boolean }) {
       </div>
       
       <Link
-        to="/app/billing"
+        to={billingHref}
         style={{
           display: "inline-block",
           padding: "14px 32px",
@@ -731,7 +735,7 @@ function UpgradePrompt({ en }: { en: boolean }) {
           boxShadow: "0 4px 12px rgba(82, 196, 26, 0.3)",
         }}
       >
-        {en ? "Upgrade to Growth →" : "升级到 Growth →"}
+        {en ? "Upgrade to unlock multi-store rollup →" : "升级以解锁多店铺汇总 →"}
       </Link>
     </div>
   );
@@ -741,6 +745,8 @@ export default function MultiStore() {
   const { language, shopDomain, isGrowth, data } = useLoaderData<typeof loader>();
   const uiLanguage = useUILanguage(language);
   const en = uiLanguage === "English";
+  const location = useLocation();
+  const dashboardHref = buildEmbeddedAppPath("/app", location.search);
 
   const formatCurrency = useMemo(() => {
     return (amount: number, currency = "USD") => {
@@ -760,7 +766,7 @@ export default function MultiStore() {
         <div className={styles.page}>
           {/* 顶部导航 */}
           <div style={{ marginBottom: 16, display: "flex", gap: 12 }}>
-            <Link to="/app" className={styles.secondaryButton}>
+            <Link to={dashboardHref} className={styles.secondaryButton}>
               ← {en ? "Back to Dashboard" : "返回仪表盘"}
             </Link>
           </div>
@@ -776,7 +782,7 @@ export default function MultiStore() {
       <div className={styles.page}>
         {/* 顶部导航 */}
         <div style={{ marginBottom: 16, display: "flex", gap: 12 }}>
-          <Link to="/app" className={styles.secondaryButton}>
+          <Link to={dashboardHref} className={styles.secondaryButton}>
             ← {en ? "Back to Dashboard" : "返回仪表盘"}
           </Link>
         </div>

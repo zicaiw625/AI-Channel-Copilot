@@ -10,6 +10,7 @@ import { useUILanguage } from "../lib/useUILanguage";
 import styles from "../styles/app.dashboard.module.css";
 import { AI_CHANNELS, timeRanges, type TimeRangeKey } from "../lib/aiData";
 import { AIConversionPath, type PathStage } from "../components/dashboard";
+import { buildEmbeddedAppPath } from "../lib/navigation";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
@@ -304,6 +305,8 @@ export default function FunnelAnalysis() {
     if (selectedChannel === "ai") return funnelData.aiChannels;
     return funnelData.byChannel[selectedChannel] || funnelData.overall;
   }, [selectedChannel, funnelData]);
+  const dashboardHref = buildEmbeddedAppPath("/app", location.search);
+  const optimizationHref = buildEmbeddedAppPath("/app/optimization", location.search);
   
   const setRange = (value: TimeRangeKey) => {
     const params = new URLSearchParams(location.search);
@@ -317,10 +320,10 @@ export default function FunnelAnalysis() {
         {/* 顶部导航 */}
         <div style={{ marginBottom: 16, display: "flex", gap: 12, justifyContent: "space-between" }}>
           <div style={{ display: "flex", gap: 12 }}>
-            <Link to="/app" className={styles.secondaryButton}>
+            <Link to={dashboardHref} className={styles.secondaryButton}>
               ← {isEnglish ? "Back to Dashboard" : "返回仪表盘"}
             </Link>
-            <Link to="/app/optimization" className={styles.primaryButton}>
+            <Link to={optimizationHref} className={styles.primaryButton}>
               {isEnglish ? "AI Optimization Tips" : "AI 优化建议"} →
             </Link>
           </div>

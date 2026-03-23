@@ -2,7 +2,6 @@ import type { HeadersFunction, LoaderFunctionArgs, ActionFunctionArgs } from "re
 import { useLoaderData, useSearchParams, useActionData, Form } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
-import { requireEnv } from "../lib/env.server";
 import { 
   computeIsTestMode, 
   detectAndPersistDevShop, 
@@ -20,6 +19,7 @@ import { isDemoMode } from "../lib/runtime.server";
 import { OrdersRepository } from "../lib/repositories/orders.repository";
 import { resolveDateRange } from "../lib/aiData";
 import { logger } from "../lib/logger.server";
+import { buildEmbeddedAppUrl } from "../lib/navigation";
 
 // 共享 UI 组件
 import { Banner, PlanCard } from "../components/ui";
@@ -715,8 +715,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
       if (plan.id === "free") {
         await activateFreePlan(shopDomain);
-        const appUrl = requireEnv("SHOPIFY_APP_URL");
-        throw new Response(null, { status: 302, headers: { Location: `${appUrl}/app` } });
+        const next = buildEmbeddedAppUrl(request.url, "/app/ai-visibility", returnUrlContext);
+        next.searchParams.set("tab", "llms");
+        throw new Response(null, { status: 302, headers: { Location: next.toString() } });
       }
 
       if (plan.status !== "live") {

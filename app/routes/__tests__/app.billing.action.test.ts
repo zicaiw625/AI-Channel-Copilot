@@ -168,4 +168,62 @@ describe("app.billing action subscription logic", () => {
     expect(cancelSubscription).toHaveBeenCalledTimes(2);
     expect(activateFreePlan).toHaveBeenCalledWith("test.myshopify.com");
   });
+
+  it("redirects free selection to llms workspace and preserves context", async () => {
+    authenticateAdmin.mockResolvedValueOnce({
+      admin: { graphql: vi.fn() },
+      session: { shop: "test.myshopify.com" },
+    });
+
+    const form = new FormData();
+    form.set("intent", "select_free");
+    const req = new Request("https://example.com/app/billing?embedded=1&host=abc&locale=en", { method: "POST", body: form });
+
+    try {
+      await action({ request: req } as any);
+      expect.fail("expected redirect response");
+    } catch (resp) {
+      const r = resp as Response;
+      expect(r.status).toBe(302);
+      const loc = r.headers.get("Location") || "";
+      const url = new URL(loc);
+      expect(url.pathname).toBe("/app/ai-visibility");
+      expect(url.searchParams.get("tab")).toBe("llms");
+      expect(url.searchParams.get("embedded")).toBe("1");
+      expect(url.searchParams.get("host")).toBe("abc");
+      expect(url.searchParams.get("locale")).toBe("en");
+    }
+
+    expect(activateFreePlan).toHaveBeenCalledWith("test.myshopify.com");
+  });
+
+  it("redirects free upgrade intent to llms workspace and preserves context", async () => {
+    authenticateAdmin.mockResolvedValueOnce({
+      admin: { graphql: vi.fn() },
+      session: { shop: "test.myshopify.com" },
+    });
+
+    const form = new FormData();
+    form.set("intent", "upgrade");
+    form.set("planId", "free");
+    const req = new Request("https://example.com/app/billing?embedded=1&host=abc&locale=en", { method: "POST", body: form });
+
+    try {
+      await action({ request: req } as any);
+      expect.fail("expected redirect response");
+    } catch (resp) {
+      const r = resp as Response;
+      expect(r.status).toBe(302);
+      const loc = r.headers.get("Location") || "";
+      const url = new URL(loc);
+      expect(url.pathname).toBe("/app/ai-visibility");
+      expect(url.searchParams.get("tab")).toBe("llms");
+      expect(url.searchParams.get("embedded")).toBe("1");
+      expect(url.searchParams.get("host")).toBe("abc");
+      expect(url.searchParams.get("locale")).toBe("en");
+    }
+
+    expect(activateFreePlan).toHaveBeenCalledWith("test.myshopify.com");
+    expect(requestSubscription).not.toHaveBeenCalled();
+  });
 });

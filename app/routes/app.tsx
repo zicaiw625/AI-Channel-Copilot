@@ -1,5 +1,5 @@
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
-import { Outlet, useLoaderData, useRouteError } from "react-router";
+import { Outlet, useLoaderData, useLocation, useRouteError } from "react-router";
 import { useUILanguage } from "../lib/useUILanguage";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { AppProvider } from "@shopify/shopify-app-react-router/react";
@@ -16,6 +16,7 @@ import { resolveDateRange } from "../lib/aiData";
 import { MAX_BACKFILL_DURATION_MS, MAX_BACKFILL_ORDERS } from "../lib/constants";
 import { ensureWebhooks } from "../lib/webhooks.server";
 import { extractAdminClient } from "../lib/graphqlSdk.server";
+import { buildEmbeddedAppPath } from "../lib/navigation";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { demoMode, enableBilling } = readAppFlags();
@@ -162,14 +163,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 export default function App() {
   const { apiKey, language, plan, trialDaysLeft, isDevShop } = useLoaderData<typeof loader>();
   const uiLanguage = useUILanguage(language);
+  const location = useLocation();
 
   return (
     <AppProvider embedded apiKey={apiKey}>
       <NavMenu>
-        <a href="/app" rel="home">{uiLanguage === "English" ? "Dashboard" : "仪表盘"}</a>
-        <a href="/app/ai-visibility">{uiLanguage === "English" ? "AI SEO / llms.txt" : "AI SEO / llms.txt"}</a>
-        <a href="/app/optimization">{uiLanguage === "English" ? "Optimization" : "优化建议"}</a>
-        <a href="/app/billing">{uiLanguage === "English" ? "Subscription" : "订阅管理"}</a>
+        <a href={buildEmbeddedAppPath("/app", location.search)} rel="home">{uiLanguage === "English" ? "Dashboard" : "仪表盘"}</a>
+        <a href={buildEmbeddedAppPath("/app/ai-visibility", location.search, { tab: "llms" })}>{uiLanguage === "English" ? "AI SEO Workspace" : "AI SEO 工作台"}</a>
+        <a href={buildEmbeddedAppPath("/app/optimization", location.search)}>{uiLanguage === "English" ? "Optimization" : "优化建议"}</a>
+        <a href={buildEmbeddedAppPath("/app/billing", location.search)}>{uiLanguage === "English" ? "Billing" : "计费管理"}</a>
       </NavMenu>
 
       <div style={{ padding: '10px 16px', background: '#f1f2f3', borderBottom: '1px solid #dfe3e8', display: 'flex', alignItems: 'center', gap: '12px', fontSize: '13px' }}>

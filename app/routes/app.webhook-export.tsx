@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
-import { Link, useLoaderData, useFetcher } from "react-router";
+import { Link, useLoaderData, useFetcher, useLocation } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 
 import { authenticate } from "../shopify.server";
@@ -8,6 +8,7 @@ import { getSettings } from "../lib/settings.server";
 import { useUILanguage } from "../lib/useUILanguage";
 import styles from "../styles/app.dashboard.module.css";
 import { hasFeature, FEATURES } from "../lib/access.server";
+import { buildEmbeddedAppPath } from "../lib/navigation";
 
 // ============================================================================
 // Loader
@@ -71,6 +72,9 @@ export default function WebhookExport() {
   const { language, shopDomain, isGrowth, webhookConfig } = useLoaderData<typeof loader>();
   const uiLanguage = useUILanguage(language);
   const en = uiLanguage === "English";
+  const location = useLocation();
+  const dashboardHref = buildEmbeddedAppPath("/app", location.search);
+  const billingHref = buildEmbeddedAppPath("/app/billing", location.search);
   
   const configFetcher = useFetcher();
   const testFetcher = useFetcher();
@@ -138,7 +142,7 @@ export default function WebhookExport() {
       <s-page heading={en ? "Webhook Export" : "Webhook 导出"}>
         <div className={styles.page}>
           <div style={{ marginBottom: 16 }}>
-            <Link to="/app" className={styles.secondaryButton}>
+            <Link to={dashboardHref} className={styles.secondaryButton}>
               ← {en ? "Back to Dashboard" : "返回仪表盘"}
             </Link>
           </div>
@@ -162,7 +166,7 @@ export default function WebhookExport() {
                 : "Webhook 导出功能仅在 Growth 版中可用。升级后可自动将 AI 订单数据推送到您的系统。"}
             </p>
             <Link
-              to="/app/billing"
+              to={billingHref}
               style={{
                 display: "inline-block",
                 padding: "12px 24px",
@@ -174,7 +178,7 @@ export default function WebhookExport() {
                 textDecoration: "none",
               }}
             >
-              {en ? "Upgrade to Growth" : "升级到 Growth"}
+              {en ? "Upgrade to push AI order data" : "升级以推送 AI 订单数据"}
             </Link>
           </div>
         </div>
@@ -187,7 +191,7 @@ export default function WebhookExport() {
       <div className={styles.page}>
         {/* 顶部导航 */}
         <div style={{ marginBottom: 16, display: "flex", gap: 12, justifyContent: "space-between" }}>
-          <Link to="/app" className={styles.secondaryButton}>
+          <Link to={dashboardHref} className={styles.secondaryButton}>
             ← {en ? "Back to Dashboard" : "返回仪表盘"}
           </Link>
           

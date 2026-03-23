@@ -18,6 +18,7 @@ import {
 } from "../lib/billing.server";
 import { getEffectivePlan, type PlanTier } from "../lib/access.server";
 import { BILLING_PLANS, PRIMARY_BILLABLE_PLAN_ID, type PlanId, validatePlanId, validateAndGetPlan } from "../lib/billing/plans";
+import { buildEmbeddedAppUrl } from "../lib/navigation";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { demoMode } = readAppFlags();
@@ -174,8 +175,8 @@ export default function Billing() {
                     ? "Choose a plan below to start using AI SEO & Discovery" 
                     : "请从下方选择一个计划以开始使用 AI SEO & Discovery"}
                 </div>
-                <Link 
-                  to="/app/billing"
+                <a
+                  href="#plans"
                   style={{
                     display: "inline-block",
                     background: "#008060",
@@ -188,7 +189,7 @@ export default function Billing() {
                   }}
                 >
                   {en ? "Choose a Plan" : "选择计划"}
-                </Link>
+                </a>
               </div>
             </>
           ) : (
@@ -300,7 +301,7 @@ export default function Billing() {
           )}
       </div>
 
-      <div style={{ marginTop: 32 }}>
+      <div id="plans" style={{ marginTop: 32 }}>
         <h3 style={{ marginBottom: 16 }}>{en ? "Available Plans" : "可用方案"}</h3>
         <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
           {plans
@@ -545,7 +546,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     // 处理首次选择 Free 计划（用户还没选择任何计划时）
     if (intent === "select_free") {
       await activateFreePlan(shopDomain);
-      return Response.json({ ok: true });
+      const next = buildEmbeddedAppUrl(request.url, "/app/ai-visibility", returnUrlContext);
+      next.searchParams.set("tab", "llms");
+      throw new Response(null, { status: 302, headers: { Location: next.toString() } });
     }
 
     if (intent === "upgrade") {
@@ -557,7 +560,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       if (plan.status !== "live") return Response.json({ ok: false, message: "Plan unavailable" }, { status: 400 });
       if (plan.priceUsd === 0) {
         await activateFreePlan(shopDomain);
-        return Response.json({ ok: true });
+        const next = buildEmbeddedAppUrl(request.url, "/app/ai-visibility", returnUrlContext);
+        next.searchParams.set("tab", "llms");
+        throw new Response(null, { status: 302, headers: { Location: next.toString() } });
       }
 
       // 防止重复订阅：先清理已存在的付费订阅（含重复/旧计划）

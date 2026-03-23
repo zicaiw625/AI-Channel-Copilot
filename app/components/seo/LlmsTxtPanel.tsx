@@ -1,8 +1,9 @@
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useFetcher } from "react-router";
+import { Link, useFetcher, useLocation } from "react-router";
 import type { SettingsDefaults } from "../../lib/aiData";
 import type { LlmsStatus } from "../../lib/llms.server";
+import { buildEmbeddedAppPath } from "../../lib/navigation";
 
 type ExposurePreferences = SettingsDefaults["exposurePreferences"];
 
@@ -40,8 +41,10 @@ type Props = {
   compact?: boolean;
   showPreview?: boolean;
   settingsHref?: string;
+  workspaceHref?: string;
   exposurePreferences?: ExposurePreferences;
   onExposurePreferencesChange?: (next: ExposurePreferences) => void;
+  context?: "dashboard" | "workspace" | "settings";
 };
 
 const statusMeta = (language: string, status: LlmsStatus) => {
@@ -118,11 +121,14 @@ export function LlmsTxtPanel({
   compact = false,
   showPreview = true,
   settingsHref,
+  workspaceHref,
   exposurePreferences,
   onExposurePreferencesChange,
+  context = "settings",
 }: Props) {
   const en = language === "English";
   const shopify = useAppBridge();
+  const location = useLocation();
   const syncFetcher = useFetcher<SyncResponse>();
   const previewFetcher = useFetcher<PreviewResponse>();
   const [localExposurePreferences, setLocalExposurePreferences] = useState(initialExposurePreferences);
@@ -134,6 +140,9 @@ export function LlmsTxtPanel({
   const activeExposurePreferences = exposurePreferences ?? localExposurePreferences;
   const meta = statusMeta(language, statusInfo.status);
   const liveUrl = statusInfo.publicUrl || (shopDomain ? `https://${shopDomain}/a/llms` : "");
+  const billingHref = buildEmbeddedAppPath("/app/billing", location.search);
+  const defaultWorkspaceHref = workspaceHref || buildEmbeddedAppPath("/app/ai-visibility", location.search, { tab: "llms" });
+  const downloadHref = canUseAdvanced ? "/api/llms-txt-preview?download=1" : billingHref;
 
   const updateExposurePreferences = (next: ExposurePreferences) => {
     if (!exposurePreferences) {
@@ -409,7 +418,57 @@ export function LlmsTxtPanel({
         >
           {en ? "View live" : "查看线上版本"}
         </a>
-        {settingsHref && (
+        {context === "dashboard" && (
+          <Link
+            to={defaultWorkspaceHref}
+            style={{
+              padding: "10px 16px",
+              border: "1px solid #c4cdd5",
+              borderRadius: 8,
+              color: "#111827",
+              textDecoration: "none",
+              fontWeight: 500,
+            }}
+          >
+            {en ? "Open Workspace" : "打开工作台"}
+          </Link>
+        )}
+        {context === "workspace" && (
+          <>
+            <button
+              type="button"
+              onClick={handleCopy}
+              disabled={!canUseAdvanced || !previewText}
+              style={{
+                padding: "10px 16px",
+                border: "1px solid #c4cdd5",
+                borderRadius: 8,
+                background: "#fff",
+                cursor: !canUseAdvanced || !previewText ? "not-allowed" : "pointer",
+                opacity: !canUseAdvanced || !previewText ? 0.6 : 1,
+                fontWeight: 500,
+              }}
+            >
+              {copied ? (en ? "Copied" : "已复制") : (en ? "Copy" : "复制")}
+            </button>
+            <a
+              href={downloadHref}
+              style={{
+                padding: "10px 16px",
+                borderRadius: 8,
+                background: "#fff",
+                border: "1px solid #c4cdd5",
+                color: "#111827",
+                textDecoration: "none",
+                opacity: canUseAdvanced ? 1 : 0.6,
+                fontWeight: 500,
+              }}
+            >
+              {en ? "Download" : "下载"}
+            </a>
+          </>
+        )}
+        {context === "settings" && settingsHref && (
           <Link
             to={settingsHref}
             style={{
@@ -421,14 +480,19 @@ export function LlmsTxtPanel({
               fontWeight: 500,
             }}
           >
-            {en ? "Edit settings" : "编辑设置"}
+            {en ? "Open detailed settings" : "打开详细设置"}
           </Link>
         )}
       </div>
+      {context === "settings" && (
+        <p style={{ margin: "10px 0 0", color: "#637381" }}>
+          {en ? "Use this page for advanced exposure controls and sync management." : "此页用于调整高级暴露选项和同步管理。"}
+        </p>
+      )}
       {!canManage && (
         <p style={{ margin: "10px 0 0", color: "#637381" }}>
           {syncBlockedMessage}{" "}
-          <Link to="/app/billing" style={{ color: "#005bd3" }}>
+          <Link to={billingHref} style={{ color: "#005bd3" }}>
             {en ? "View plans" : "查看套餐"}
           </Link>
         </p>
@@ -438,37 +502,39 @@ export function LlmsTxtPanel({
         <div style={{ marginTop: 18 }}>
           <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap", marginBottom: 8 }}>
             <strong>{en ? "Preview" : "预览"}</strong>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <button
-                type="button"
-                onClick={handleCopy}
-                disabled={!canUseAdvanced || !previewText}
-                style={{
-                  padding: "8px 12px",
-                  border: "1px solid #c4cdd5",
-                  borderRadius: 8,
-                  background: "#fff",
-                  cursor: !canUseAdvanced || !previewText ? "not-allowed" : "pointer",
-                  opacity: !canUseAdvanced || !previewText ? 0.6 : 1,
-                }}
-              >
-                {copied ? (en ? "Copied" : "已复制") : (en ? "Copy" : "复制")}
-              </button>
-              <a
-                href={canUseAdvanced ? "/api/llms-txt-preview?download=1" : "/app/billing"}
-                style={{
-                  padding: "8px 12px",
-                  borderRadius: 8,
-                  background: "#fff",
-                  border: "1px solid #c4cdd5",
-                  color: "#111827",
-                  textDecoration: "none",
-                  opacity: canUseAdvanced ? 1 : 0.6,
-                }}
-              >
-                {en ? "Download llms.txt" : "下载 llms.txt"}
-              </a>
-            </div>
+            {context !== "workspace" && (
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  onClick={handleCopy}
+                  disabled={!canUseAdvanced || !previewText}
+                  style={{
+                    padding: "8px 12px",
+                    border: "1px solid #c4cdd5",
+                    borderRadius: 8,
+                    background: "#fff",
+                    cursor: !canUseAdvanced || !previewText ? "not-allowed" : "pointer",
+                    opacity: !canUseAdvanced || !previewText ? 0.6 : 1,
+                  }}
+                >
+                  {copied ? (en ? "Copied" : "已复制") : (en ? "Copy" : "复制")}
+                </button>
+                <a
+                  href={downloadHref}
+                  style={{
+                    padding: "8px 12px",
+                    borderRadius: 8,
+                    background: "#fff",
+                    border: "1px solid #c4cdd5",
+                    color: "#111827",
+                    textDecoration: "none",
+                    opacity: canUseAdvanced ? 1 : 0.6,
+                  }}
+                >
+                  {en ? "Download llms.txt" : "下载 llms.txt"}
+                </a>
+              </div>
+            )}
           </div>
           <textarea
             readOnly
@@ -489,7 +555,7 @@ export function LlmsTxtPanel({
           {!canUseAdvanced && (
             <p style={{ margin: "8px 0 0", color: "#637381" }}>
               {previewBlockedMessage}{" "}
-              <Link to="/app/billing" style={{ color: "#005bd3" }}>
+              <Link to={billingHref} style={{ color: "#005bd3" }}>
                 {en ? "Upgrade plan" : "升级套餐"}
               </Link>
             </p>

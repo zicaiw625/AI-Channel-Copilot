@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
-import { Link, useFetcher, useLoaderData } from "react-router";
+import { Link, useFetcher, useLoaderData, useLocation } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import { getSettings } from "../lib/settings.server";
@@ -9,6 +9,7 @@ import { useUILanguage } from "../lib/useUILanguage";
 import styles from "../styles/app.copilot.module.css";
 import { hasFeature, FEATURES } from "../lib/access.server";
 import { isDemoMode } from "../lib/runtime.server";
+import { buildEmbeddedAppPath } from "../lib/navigation";
 
 /**
  * Copilot API 内部数据类型
@@ -79,11 +80,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
 export default function Copilot() {
   const { settings, dateRange, range, readOnly, demo } = useLoaderData<typeof loader>();
+  const location = useLocation();
   const fetcher = useFetcher<CopilotResponse>();
   const [question, setQuestion] = useState("");
   const [activeIntent, setActiveIntent] = useState<string | null>(null);
   // 使用 useUILanguage 保持语言设置的客户端一致性
   const language = useUILanguage(settings.languages[0] || "中文");
+  const dashboardHref = buildEmbeddedAppPath("/app", location.search);
+  const billingHref = buildEmbeddedAppPath("/app/billing", location.search);
   
   const isLoading = fetcher.state !== "idle";
   
@@ -134,8 +138,8 @@ export default function Copilot() {
                   : "AI Copilot 需要 Pro 计划。升级以解锁智能问答。"}
             </p>
           </div>
-          <Link to="/app/billing" className={styles.primaryButton}>
-              {language === "English" ? "Upgrade to Pro" : "升级到 Pro"}
+          <Link to={billingHref} className={styles.primaryButton}>
+              {language === "English" ? "Upgrade to unlock Copilot answers" : "升级以解锁 Copilot 问答"}
           </Link>
       </div>
   );
@@ -145,7 +149,7 @@ export default function Copilot() {
       <div className={styles.page}>
         {/* 顶部导航 */}
         <div style={{ marginBottom: 16, display: "flex", gap: 12 }}>
-          <Link to="/app" className={styles.secondaryButton}>
+          <Link to={dashboardHref} className={styles.secondaryButton}>
             ← {language === "English" ? "Back to Dashboard" : "返回仪表盘"}
           </Link>
         </div>

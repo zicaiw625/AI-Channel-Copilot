@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import type { ActionFunctionArgs, HeadersFunction, LoaderFunctionArgs } from "react-router";
-import { useFetcher, useLoaderData, useNavigate, useLocation } from "react-router";
+import { Link, useFetcher, useLoaderData, useNavigate, useLocation } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 
@@ -31,6 +31,7 @@ import { loadDashboardContext } from "../lib/dashboardContext.server";
 import { logger } from "../lib/logger.server";
 import { hasFeature, FEATURES } from "../lib/access.server";
 import { LlmsTxtPanel } from "../components/seo/LlmsTxtPanel";
+import { buildEmbeddedAppPath } from "../lib/navigation";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const _demo = isDemoMode();
@@ -441,6 +442,10 @@ export default function SettingsAndExport() {
   const [advancedExpanded, setAdvancedExpanded] = useState(false);
 
   const locale = language === "English" ? "en-US" : "zh-CN";
+  const dashboardHref = buildEmbeddedAppPath("/app", location.search);
+  const workspaceHref = buildEmbeddedAppPath("/app/ai-visibility", location.search, { tab: "llms" });
+  const optimizationHref = buildEmbeddedAppPath("/app/optimization", location.search);
+  const utmWizardHref = buildEmbeddedAppPath("/app/utm-wizard", location.search);
 
   const utmMediumKeywords = useMemo(
     () =>
@@ -644,10 +649,21 @@ export default function SettingsAndExport() {
   }, [fetcher.data, shopify, language]);
 
   return (
-    <s-page heading={language === "English" ? "AI SEO & Tracking Settings" : "AI SEO 与归因设置"}>
+    <s-page heading={language === "English" ? "Attribution & Advanced Settings" : "归因与高级设置"}>
       <div className={styles.page}>
+      <div className={styles.inlineActions} style={{ marginBottom: 16 }}>
+        <Link to={dashboardHref} className={styles.secondaryButton}>
+          ← {language === "English" ? "Back to Dashboard" : "返回仪表盘"}
+        </Link>
+        <Link to={workspaceHref} className={styles.primaryButton}>
+          {language === "English" ? "Open AI SEO Workspace" : "打开 AI SEO 工作台"}
+        </Link>
+        <Link to={optimizationHref} className={styles.secondaryButton}>
+          {language === "English" ? "View Optimization" : "查看优化建议"}
+        </Link>
+      </div>
       <div className={styles.lede}>
-        <h1>{language === "English" ? "AI SEO & Tracking Settings" : "AI SEO 与归因设置"}</h1>
+        <h1>{language === "English" ? "Attribution, Tracking, and Advanced Controls" : "归因、追踪与高级控制"}</h1>
         <p>{t(language as Lang, "settings_lede_desc")}</p>
         <div className={styles.alert}>{t(language as Lang, "ai_conservative_alert")}</div>
         <p className={styles.helpText}>{t(language as Lang, "default_rules_help")}</p>
@@ -733,7 +749,7 @@ export default function SettingsAndExport() {
               type="button"
               className={styles.primaryButton}
               style={{ background: "#0284c7" }}
-              onClick={() => navigate("/app/utm-wizard")}
+              onClick={() => navigate(utmWizardHref)}
             >
               {language === "English" ? "Generate UTM Links →" : "生成 UTM 链接 →"}
             </button>
@@ -1110,7 +1126,7 @@ export default function SettingsAndExport() {
             canManage={canManageLlms}
             canUseAdvanced={canUseLlmsAdvanced}
             editable={canManageLlms}
-            settingsHref="/app/additional#llms-txt-settings"
+            context="settings"
           />
         </div>
 

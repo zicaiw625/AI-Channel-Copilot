@@ -3,8 +3,9 @@
  * 用更有价值感知的方式引导用户升级
  */
 
-import { Link } from "react-router";
+import { Link, useLocation } from "react-router";
 import type { Lang } from "./types";
+import { buildEmbeddedAppPath } from "../../lib/navigation";
 
 export interface UpgradePromptProps {
   lang: Lang;
@@ -144,6 +145,8 @@ export const UpgradePrompt = ({
 }: UpgradePromptProps) => {
   const en = lang === "English";
   const details = featureDetails[feature];
+  const location = useLocation();
+  const billingHref = buildEmbeddedAppPath("/app/billing", location.search);
 
   // Overlay 模式：极简紧凑版
   if (variant === "overlay") {
@@ -187,7 +190,7 @@ export const UpgradePrompt = ({
             {en ? details.title.en : details.title.zh}
           </h3>
           <Link
-            to="/app/billing"
+            to={billingHref}
             style={{
               display: "inline-block",
               background: "#635bff",
@@ -240,7 +243,7 @@ export const UpgradePrompt = ({
           </div>
         </div>
         <Link
-          to="/app/billing"
+          to={billingHref}
           style={{
             background: "white",
             color: "#635bff",
@@ -276,7 +279,7 @@ export const UpgradePrompt = ({
         {en ? details.title.en : details.title.zh}
       </span>
       <Link
-        to="/app/billing"
+        to={billingHref}
         style={{
           marginLeft: "auto",
           color: "#635bff",

@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import type { HeadersFunction, LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
-import { Link, useLoaderData, useLocation } from "react-router";
+import { Link, useLoaderData, useLocation, useNavigate, useSearchParams } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 
 import { authenticate } from "../shopify.server";
@@ -19,6 +19,7 @@ import {
 import { requireEnv } from "../lib/env.server";
 import { getEmbedCopy, toEmbedStatus, MANUAL_PATH_COPY } from "../lib/productSchemaEmbedCopy";
 import { LlmsTxtPanel } from "../components/seo/LlmsTxtPanel";
+import { buildEmbeddedAppPath, getPreservedSearchParams } from "../lib/navigation";
 
 // ============================================================================
 // Loader
@@ -897,7 +898,13 @@ ${safeJsonString}
 // ============================================================================
 
 // Tab 类型定义
-type TabId = "schema" | "faq" | "llmstxt";
+type TabId = "schema" | "faq" | "llms";
+
+const VALID_TABS: TabId[] = ["schema", "faq", "llms"];
+
+function resolveTab(value: string | null): TabId {
+  return VALID_TABS.includes(value as TabId) ? (value as TabId) : "llms";
+}
 
 export default function AIVisibility() {
   const { 
@@ -916,31 +923,50 @@ export default function AIVisibility() {
   const uiLanguage = useUILanguage(language);
   const en = uiLanguage === "English";
   const location = useLocation();
-
-  const [activeTab, setActiveTab] = useState<TabId>("schema");
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = resolveTab(searchParams.get("tab"));
   const [showAdvanced, setShowAdvanced] = useState(false);
 
-  // 监听 URL hash 并滚动到目标元素（用于从其他页面跳转后定位到具体设置）
+  useEffect(() => {
+    const currentTab = searchParams.get("tab");
+    if (!VALID_TABS.includes(currentTab as TabId)) {
+      const next = getPreservedSearchParams(location.search);
+      next.set("tab", "llms");
+      setSearchParams(next, { replace: true });
+    }
+  }, [location.search, searchParams, setSearchParams]);
+
+  const updateActiveTab = useCallback((tab: TabId) => {
+    const next = getPreservedSearchParams(location.search);
+    next.set("tab", tab);
+    navigate({
+      pathname: location.pathname,
+      search: `?${next.toString()}`,
+      hash: location.hash,
+    });
+  }, [location.hash, location.pathname, location.search, navigate]);
+
   useEffect(() => {
     const hash = location.hash;
     if (hash) {
-      // 如果 hash 指向 product-schema-settings，确保切换到 schema tab
-      if (hash === "#product-schema-settings") {
-        setActiveTab("schema");
+      if (hash === "#product-schema-settings" && activeTab !== "schema") {
+        const next = getPreservedSearchParams(location.search);
+        next.set("tab", "schema");
+        setSearchParams(next, { replace: true });
+        return;
       }
-      // 延迟执行以确保 DOM 已渲染（包括 tab 切换后的内容）
       const timer = setTimeout(() => {
         const element = document.querySelector(hash);
         if (element) {
           element.scrollIntoView({ behavior: "smooth", block: "start" });
-          // 添加高亮效果
           element.classList.add("highlight-target");
           setTimeout(() => element.classList.remove("highlight-target"), 2000);
         }
       }, 150);
       return () => clearTimeout(timer);
     }
-  }, [location.hash]);
+  }, [activeTab, location.hash, location.search, setSearchParams]);
 
   return (
     <s-page heading={en ? "AI SEO Workspace" : "AI SEO 工作台"}>
@@ -948,10 +974,10 @@ export default function AIVisibility() {
         {/* 顶部导航 */}
         <div style={{ marginBottom: 16, display: "flex", gap: 12, justifyContent: "space-between" }}>
           <div style={{ display: "flex", gap: 12 }}>
-            <Link to="/app" className={styles.secondaryButton}>
+            <Link to={buildEmbeddedAppPath("/app", location.search)} className={styles.secondaryButton}>
               ← {en ? "Back to Dashboard" : "返回仪表盘"}
             </Link>
-            <Link to="/app/optimization" className={styles.primaryButton}>
+            <Link to={buildEmbeddedAppPath("/app/optimization", location.search)} className={styles.primaryButton}>
               {en ? "View AI Score" : "查看 AI 评分"} →
             </Link>
           </div>
@@ -1009,12 +1035,12 @@ export default function AIVisibility() {
           {([
             { id: "schema" as const, label: en ? "🏷️ Product Schema" : "🏷️ 产品 Schema" },
             { id: "faq" as const, label: en ? "❓ FAQ Schema" : "❓ FAQ Schema" },
-            { id: "llmstxt" as const, label: "📝 llms.txt" },
+            { id: "llms" as const, label: "📝 llms.txt" },
           ] satisfies { id: TabId; label: string }[]).map((tab) => (
             <button
               key={tab.id}
               type="button"
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => updateActiveTab(tab.id)}
               style={{
                 padding: "12px 20px",
                 border: "none",
@@ -1136,7 +1162,7 @@ export default function AIVisibility() {
             </>
           )}
 
-          {activeTab === "llmstxt" && (
+          {activeTab === "llms" && (
             <>
               <div className={styles.sectionHeader}>
                 <div>
@@ -1154,7 +1180,7 @@ export default function AIVisibility() {
                 canManage={canManageLlms}
                 canUseAdvanced={canUseLlmsAdvanced}
                 editable={canManageLlms}
-                settingsHref="/app/additional#llms-txt-settings"
+                context="workspace"
               />
             </>
           )}
@@ -1170,7 +1196,7 @@ export default function AIVisibility() {
                   {en ? "Based on Your Store Analysis" : "基于店铺分析的建议"}
                 </h3>
               </div>
-              <Link to="/app/optimization" style={{ color: "#008060", fontSize: 13, fontWeight: 500 }}>
+              <Link to={buildEmbeddedAppPath("/app/optimization", location.search)} style={{ color: "#008060", fontSize: 13, fontWeight: 500 }}>
                 {en ? "View All →" : "查看全部 →"}
               </Link>
             </div>

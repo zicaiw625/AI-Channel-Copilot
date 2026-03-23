@@ -1,11 +1,12 @@
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
-import { useLoaderData } from "react-router";
+import { useLoaderData, useLocation } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { AppProvider } from "@shopify/shopify-app-react-router/react";
 import { authenticate } from "../shopify.server";
 import { getSettings } from "../lib/settings.server";
 import { requireEnv } from "../lib/env.server";
 import { useUILanguage } from "../lib/useUILanguage";
+import { buildEmbeddedAppPath } from "../lib/navigation";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   let language = "中文";
@@ -77,6 +78,8 @@ export default function Intro() {
   const { language, apiKey } = useLoaderData<typeof loader>();
   const uiLanguage = useUILanguage(language);
   const en = uiLanguage === "English";
+  const location = useLocation();
+  const onboardingHref = buildEmbeddedAppPath("/app/onboarding", location.search);
   return (
     <AppProvider embedded apiKey={apiKey}>
       <section style={{ padding: 16 }}>
@@ -85,7 +88,7 @@ export default function Intro() {
         <p>{en ? "Permissions: read-only orders/customers; no modifications." : "权限：仅读取订单/客户信息，不会修改订单。"}</p>
         <p>{en ? "Historical sync may be started to populate dashboards." : "可进行历史订单同步以填充仪表盘。"}</p>
         <div style={{ display: "inline-block", marginTop: 12 }}>
-          <s-link href="/app/onboarding">
+          <s-link href={onboardingHref}>
             {en ? "Back to Onboarding" : "返回 Onboarding"}
           </s-link>
         </div>

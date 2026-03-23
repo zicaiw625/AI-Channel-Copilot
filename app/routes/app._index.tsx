@@ -26,6 +26,7 @@ import { readAppFlags } from "../lib/env.server";
 import { logger } from "../lib/logger.server";
 import { getLlmsStatus } from "../lib/llms.server";
 import { LlmsTxtPanel } from "../components/seo/LlmsTxtPanel";
+import { buildEmbeddedAppPath } from "../lib/navigation";
 
 // Dashboard 子组件
 import { 
@@ -229,6 +230,16 @@ export default function Index() {
     (iso?: string | null) => (iso ? timeFormatter.format(new Date(iso)) : (uiLanguage === "English" ? "None" : "暂无")),
     [timeFormatter, uiLanguage],
   );
+  const billingHref = buildEmbeddedAppPath("/app/billing", location.search);
+  const attributionHref = buildEmbeddedAppPath("/app/additional", location.search);
+  const optimizationHref = buildEmbeddedAppPath("/app/optimization", location.search);
+  const funnelHref = buildEmbeddedAppPath("/app/funnel", location.search);
+  const copilotHref = buildEmbeddedAppPath("/app/copilot", location.search);
+  const utmWizardHref = buildEmbeddedAppPath("/app/utm-wizard", location.search);
+  const multiStoreHref = buildEmbeddedAppPath("/app/multi-store", location.search);
+  const aiWorkspaceHref = buildEmbeddedAppPath("/app/ai-visibility", location.search, { tab: "llms" });
+  const webhookExportHref = buildEmbeddedAppPath("/app/webhook-export", location.search);
+  const teamHref = buildEmbeddedAppPath("/app/team", location.search);
 
   useEffect(() => {
     setCustomFrom((dateRange.fromParam as string | undefined) || dateRange.start.slice(0, 10));
@@ -460,7 +471,7 @@ export default function Index() {
                 <span style={{ color: "#0050b3" }}>
                     {uiLanguage === "English" ? "You are on the Free plan (Limited to 7 days history)." : "当前为免费版（仅限查看最近 7 天数据）。"}
                 </span>
-                <Link to="/app/billing" style={{ color: "#0050b3", fontWeight: "bold", textDecoration: "underline" }}>
+                <Link to={billingHref} style={{ color: "#0050b3", fontWeight: "bold", textDecoration: "underline" }}>
                     {uiLanguage === "English" ? "Upgrade to Pro" : "升级到 Pro 版"}
                 </Link>
             </div>
@@ -590,8 +601,8 @@ export default function Index() {
                 {uiLanguage === "English" 
                   ? "No qualifying orders found in the last 60 days (Shopify default limit). This may be a new store, or orders are older than 60 days. To access older orders, request 'read_all_orders' scope and re-authorize." 
                   : "最近 60 天内暂无符合条件的订单（Shopify 默认限制）。可能是新店铺，或订单都在 60 天之前。如需访问更早订单，请申请 read_all_orders 权限并重新授权。"}
-                <Link to="/app/additional" className={styles.link} style={{ marginLeft: 8 }}>
-                  {uiLanguage === "English" ? "Check Settings" : "查看设置"}
+                <Link to={attributionHref} className={styles.link} style={{ marginLeft: 8 }}>
+                  {uiLanguage === "English" ? "Open Attribution Settings" : "打开归因设置"}
                 </Link>
               </div>
             )}
@@ -599,7 +610,7 @@ export default function Index() {
               <div className={styles.callout}>
                 <span>{uiLanguage === "English" ? "Hint" : "提示"}</span>
                 {t(lang, "hint_zero_ai")}
-                <Link to="/app/additional" className={styles.link}>{t(lang, "goto_settings")}</Link>
+                <Link to={attributionHref} className={styles.link}>{uiLanguage === "English" ? "Open Attribution Settings" : "打开归因设置"}</Link>
               </div>
             )}
             </div>
@@ -644,47 +655,54 @@ export default function Index() {
                 </button>
               </div>
               <div className={styles.actionButtons}>
-                <Link to="/app/additional" className={styles.primaryButton}>
-                  {uiLanguage === "English" ? "AI SEO & Settings" : "AI SEO 与设置"}
+                <Link to={aiWorkspaceHref} className={styles.primaryButton}>
+                  {uiLanguage === "English" ? "Open AI SEO Workspace" : "打开 AI SEO 工作台"}
                 </Link>
-                <Link to="/app/optimization" className={styles.secondaryButton} style={{ background: "#635bff", color: "white", border: "none" }}>
-                  {uiLanguage === "English" ? "🚀 AI Optimization" : "🚀 AI 优化建议"}
+                <Link to={optimizationHref} className={styles.secondaryButton} style={{ background: "#635bff", color: "white", border: "none" }}>
+                  {uiLanguage === "English" ? "View Optimization" : "查看优化建议"}
                 </Link>
-                <Link to="/app/funnel" className={styles.secondaryButton}>
-                  {uiLanguage === "English" ? "📊 Funnel Analysis" : "📊 漏斗分析"}
+                <Link to={attributionHref} className={styles.secondaryButton}>
+                  {uiLanguage === "English" ? "Attribution Settings" : "归因设置"}
                 </Link>
-                <Link to="/app/copilot" className={styles.secondaryButton}>
-                  {uiLanguage === "English" ? "Copilot Q&A" : "Copilot 分析问答"}
-                </Link>
-                <Link to="/app/utm-wizard" className={styles.secondaryButton} style={{ background: "#fff7e6", border: "1px solid #ffd591", color: "#d46b08" }}>
-                  {uiLanguage === "English" ? "🔗 UTM Setup" : "🔗 UTM 设置向导"}
-                </Link>
-                <Link to="/app/multi-store" className={styles.secondaryButton} style={{ background: "#f6ffed", border: "1px solid #b7eb8f", color: "#389e0d" }}>
-                  {uiLanguage === "English" ? "🏪 Multi-Store" : "🏪 多店铺汇总"}
-                </Link>
-                <Link to="/app/ai-visibility" className={styles.secondaryButton} style={{ background: "#f0f4ff", border: "1px solid #adc6ff", color: "#2f54eb" }}>
-                  {uiLanguage === "English" ? "🚀 AI SEO Workspace" : "🚀 AI SEO 工作台"}
-                </Link>
-                <Link to="/app/webhook-export" className={styles.secondaryButton} style={{ background: "#fff0f6", border: "1px solid #ffadd2", color: "#c41d7f" }}>
-                  {uiLanguage === "English" ? "🔌 Webhook Export" : "🔌 Webhook 导出"}
-                </Link>
-                <Link to="/app/team" className={styles.secondaryButton} style={{ background: "#f9f0ff", border: "1px solid #d3adf7", color: "#722ed1" }}>
-                  {uiLanguage === "English" ? "👥 Team" : "👥 团队"}
-                </Link>
-                <a
-                  className={styles.secondaryButton}
-                  href={canViewFull ? `/api/export/orders?range=${range}&from=${encodeURIComponent(dateRange.fromParam || "")}&to=${encodeURIComponent(dateRange.toParam || "")}` : "#"}
-                  onClick={(e) => {
-                      if (!canViewFull) {
-                          e.preventDefault();
-                          shopify.toast.show?.(uiLanguage === "English" ? "Upgrade to Pro to export data." : "升级到 Pro 版以导出数据。");
-                          return;
-                      }
-                      handleDownload(e, `/api/export/orders?range=${range}&from=${encodeURIComponent(dateRange.fromParam || "")}&to=${encodeURIComponent(dateRange.toParam || "")}`, `ai-orders-${range}.csv`);
-                  }}
-                >
-                  {t(lang, "export_orders_csv")}
-                </a>
+        </div>
+        <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 10 }}>
+          <span style={{ fontSize: 12, fontWeight: 600, color: "#637381", textTransform: "uppercase", letterSpacing: 0.4 }}>
+            {uiLanguage === "English" ? "More tools" : "更多工具"}
+          </span>
+          <div className={styles.actionButtons}>
+            <Link to={funnelHref} className={styles.secondaryButton}>
+              {uiLanguage === "English" ? "Funnel" : "漏斗分析"}
+            </Link>
+            <Link to={copilotHref} className={styles.secondaryButton}>
+              {uiLanguage === "English" ? "Copilot" : "Copilot"}
+            </Link>
+            <Link to={utmWizardHref} className={styles.secondaryButton} style={{ background: "#fff7e6", border: "1px solid #ffd591", color: "#d46b08" }}>
+              {uiLanguage === "English" ? "UTM Wizard" : "UTM 向导"}
+            </Link>
+            <Link to={multiStoreHref} className={styles.secondaryButton} style={{ background: "#f6ffed", border: "1px solid #b7eb8f", color: "#389e0d" }}>
+              {uiLanguage === "English" ? "Multi-Store" : "多店铺汇总"}
+            </Link>
+            <Link to={teamHref} className={styles.secondaryButton} style={{ background: "#f9f0ff", border: "1px solid #d3adf7", color: "#722ed1" }}>
+              {uiLanguage === "English" ? "Team" : "团队"}
+            </Link>
+            <Link to={webhookExportHref} className={styles.secondaryButton} style={{ background: "#fff0f6", border: "1px solid #ffadd2", color: "#c41d7f" }}>
+              {uiLanguage === "English" ? "Webhook Export" : "Webhook 导出"}
+            </Link>
+            <a
+              className={styles.secondaryButton}
+              href={canViewFull ? `/api/export/orders?range=${range}&from=${encodeURIComponent(dateRange.fromParam || "")}&to=${encodeURIComponent(dateRange.toParam || "")}` : "#"}
+              onClick={(e) => {
+                  if (!canViewFull) {
+                      e.preventDefault();
+                      shopify.toast.show?.(uiLanguage === "English" ? "Upgrade to Pro to export data." : "升级到 Pro 版以导出数据。");
+                      return;
+                  }
+                  handleDownload(e, `/api/export/orders?range=${range}&from=${encodeURIComponent(dateRange.fromParam || "")}&to=${encodeURIComponent(dateRange.toParam || "")}`, `ai-orders-${range}.csv`);
+              }}
+            >
+              {t(lang, "export_orders_csv")}
+            </a>
+          </div>
         </div>
         </div>
 
@@ -714,7 +732,8 @@ export default function Index() {
           canUseAdvanced={canUseLlmsAdvanced}
           compact
           showPreview={false}
-          settingsHref="/app/additional#llms-txt-settings"
+          context="dashboard"
+          workspaceHref={aiWorkspaceHref}
         />
         <KPICards 
           overview={overview} 

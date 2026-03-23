@@ -5,10 +5,11 @@
  * 低样本量时弱化 AI 相关指标的展示，提示用户数据不足
  */
 
-import { Link } from "react-router";
+import { Link, useLocation } from "react-router";
 import { t } from "../../lib/i18n";
 import type { DashboardOverview, FormatHelpers, Lang } from "./types";
 import styles from "../../styles/app.dashboard.module.css";
+import { buildEmbeddedAppPath } from "../../lib/navigation";
 
 // 低样本量阈值
 const LOW_SAMPLE_THRESHOLD = 10;
@@ -213,6 +214,7 @@ function DetectionCoverageCard({
 }) {
   const { fmtPercent, fmtNumber } = formatters;
   const isEnglish = lang === "English";
+  const location = useLocation();
   
   const coverage = overview.detectionCoverage ?? 0;
   const utmCoverage = overview.utmCoverage ?? 0;
@@ -230,6 +232,7 @@ function DetectionCoverageCard({
   const statusColor = isLowCoverage ? "#de3618" : isMediumCoverage ? "#f4a623" : "#50b83c";
   const statusBg = isLowCoverage ? "#fef3f3" : isMediumCoverage ? "#fffbe6" : "#f6ffed";
   const statusBorder = isLowCoverage ? "#ffccc7" : isMediumCoverage ? "#ffe58f" : "#b7eb8f";
+  const utmWizardHref = buildEmbeddedAppPath("/app/utm-wizard", location.search);
   
   return (
     <div
@@ -327,7 +330,7 @@ function DetectionCoverageCard({
         {/* 行动按钮 */}
         {isLowCoverage && (
           <Link
-            to="/app/utm-wizard"
+            to={utmWizardHref}
             style={{
               display: "inline-flex",
               alignItems: "center",

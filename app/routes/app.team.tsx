@@ -1,5 +1,5 @@
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
-import { Link, useLoaderData } from "react-router";
+import { Link, useLoaderData, useLocation } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 
 import { authenticate } from "../shopify.server";
@@ -9,6 +9,7 @@ import styles from "../styles/app.dashboard.module.css";
 import { hasFeature, FEATURES } from "../lib/access.server";
 import { logger } from "../lib/logger.server";
 import prisma from "../db.server";
+import { buildEmbeddedAppPath } from "../lib/navigation";
 
 // ============================================================================
 // Types
@@ -212,13 +213,16 @@ export default function Team() {
   const { language, shopDomain, shopName, isGrowth, teamMembers, currentUserEmail } = useLoaderData<typeof loader>();
   const uiLanguage = useUILanguage(language);
   const en = uiLanguage === "English";
+  const location = useLocation();
+  const dashboardHref = buildEmbeddedAppPath("/app", location.search);
+  const billingHref = buildEmbeddedAppPath("/app/billing", location.search);
 
   if (!isGrowth) {
     return (
       <s-page heading={en ? "Team Access" : "团队访问"}>
         <div className={styles.page}>
           <div style={{ marginBottom: 16 }}>
-            <Link to="/app" className={styles.secondaryButton}>
+            <Link to={dashboardHref} className={styles.secondaryButton}>
               ← {en ? "Back to Dashboard" : "返回仪表盘"}
             </Link>
           </div>
@@ -242,7 +246,7 @@ export default function Team() {
                 : "团队管理功能仅在 Growth 版中可用。升级后可查看团队成员的访问权限。"}
             </p>
             <Link
-              to="/app/billing"
+              to={billingHref}
               style={{
                 display: "inline-block",
                 padding: "12px 24px",
@@ -254,7 +258,7 @@ export default function Team() {
                 textDecoration: "none",
               }}
             >
-              {en ? "Upgrade to Growth" : "升级到 Growth"}
+              {en ? "Upgrade to manage team access" : "升级以管理团队访问"}
             </Link>
           </div>
         </div>
@@ -267,7 +271,7 @@ export default function Team() {
       <div className={styles.page}>
         {/* 顶部导航 */}
         <div style={{ marginBottom: 16, display: "flex", gap: 12, justifyContent: "space-between" }}>
-          <Link to="/app" className={styles.secondaryButton}>
+          <Link to={dashboardHref} className={styles.secondaryButton}>
             ← {en ? "Back to Dashboard" : "返回仪表盘"}
           </Link>
           

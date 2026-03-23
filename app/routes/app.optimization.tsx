@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 // useRef is used for: timer cleanup in CopyButton, and storing latest searchParams/navigate refs
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
-import { Link, useLoaderData, useNavigate, useSearchParams } from "react-router";
+import { Link, useLoaderData, useLocation, useNavigate, useSearchParams } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 
 import { authenticate } from "../shopify.server";
@@ -9,6 +9,7 @@ import { getSettings } from "../lib/settings.server";
 import { generateAIOptimizationReport, type OptimizationSuggestion } from "../lib/aiOptimization.server";
 import { useUILanguage } from "../lib/useUILanguage";
 import { requireEnv } from "../lib/env.server";
+import { buildEmbeddedAppPath } from "../lib/navigation";
 import styles from "../styles/app.dashboard.module.css";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -254,6 +255,7 @@ const SuggestionCard = ({
   expanded: boolean;
   onToggle: () => void;
 }) => {
+  const location = useLocation();
   const isEnglish = language === "English";
   const priorityColors = {
     high: { bg: "#fef3f3", border: "#de3618", text: "#de3618" },
@@ -273,6 +275,9 @@ const SuggestionCard = ({
   // 特殊处理：某些建议直接跳转到对应页面
   const isSchemaEmbedSuggestion = suggestion.id === "schema-embed-disabled";
   const isLlmsTxtSuggestion = suggestion.id === "llms-txt-optimization";
+  const quickActionHref = isSchemaEmbedSuggestion
+    ? buildEmbeddedAppPath("/app/ai-visibility", location.search, { tab: "schema" }, "#product-schema-settings")
+    : buildEmbeddedAppPath("/app/ai-visibility", location.search, { tab: "llms" });
   
   return (
     <div
@@ -333,7 +338,7 @@ const SuggestionCard = ({
       {(isSchemaEmbedSuggestion || isLlmsTxtSuggestion) && (
         <div style={{ marginTop: 12 }}>
           <Link
-            to={isSchemaEmbedSuggestion ? "/app/ai-visibility#product-schema-settings" : "/app/additional#llms-txt-settings"}
+            to={quickActionHref}
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -472,6 +477,7 @@ const StatusBadge = ({
 
 export default function AIOptimization() {
   const { report, language, shopDomain: _shopDomain, currency } = useLoaderData<typeof loader>();
+  const location = useLocation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   
@@ -494,13 +500,18 @@ export default function AIOptimization() {
       // 只有当 URL 中没有 lang 参数或参数值与 uiLanguage 不同时才导航
       const currentLangParam = searchParamsRef.current.get("lang");
       if (currentLangParam !== uiLanguage) {
-        navigateRef.current(`/app/optimization?lang=${encodeURIComponent(uiLanguage)}`, { replace: true });
+        const next = new URLSearchParams(searchParamsRef.current);
+        next.set("lang", uiLanguage);
+        navigateRef.current({ pathname: "/app/optimization", search: `?${next.toString()}` }, { replace: true });
       }
     }
   }, [uiLanguage, language]);
   
   // 使用后端返回的语言来保证 UI 和数据内容一致
   const isEnglish = language === "English";
+  const dashboardHref = buildEmbeddedAppPath("/app", location.search);
+  const funnelHref = buildEmbeddedAppPath("/app/funnel", location.search);
+  const workspaceLlmsHref = buildEmbeddedAppPath("/app/ai-visibility", location.search, { tab: "llms" });
   
   const [expandedSuggestions, setExpandedSuggestions] = useState<Set<string>>(new Set());
   
@@ -531,10 +542,10 @@ export default function AIOptimization() {
       <div className={styles.page}>
         {/* 顶部导航 */}
         <div style={{ marginBottom: 16, display: "flex", gap: 12 }}>
-          <Link to="/app" className={styles.secondaryButton}>
+          <Link to={dashboardHref} className={styles.secondaryButton}>
             ← {isEnglish ? "Back to Dashboard" : "返回仪表盘"}
           </Link>
-          <Link to="/app/funnel" className={styles.primaryButton}>
+          <Link to={funnelHref} className={styles.primaryButton}>
             {isEnglish ? "View Funnel Analysis" : "查看漏斗分析"} →
           </Link>
         </div>
@@ -901,8 +912,8 @@ export default function AIOptimization() {
             </p>
           )}
           
-          <Link to="/app/additional#llms-txt-settings" className={styles.primaryButton}>
-            {isEnglish ? "Configure llms.txt Settings" : "配置 llms.txt 设置"}
+          <Link to={workspaceLlmsHref} className={styles.primaryButton}>
+            {isEnglish ? "Open llms.txt Workspace" : "打开 llms.txt 工作台"}
           </Link>
         </div>
       </div>

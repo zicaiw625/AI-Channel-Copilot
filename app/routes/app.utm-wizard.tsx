@@ -1,12 +1,13 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
-import { Link, useLoaderData } from "react-router";
+import { Link, useLoaderData, useLocation } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 
 import { authenticate } from "../shopify.server";
 import { getSettings } from "../lib/settings.server";
 import { useUILanguage } from "../lib/useUILanguage";
 import styles from "../styles/app.dashboard.module.css";
+import { buildEmbeddedAppPath } from "../lib/navigation";
 
 // ============================================================================
 // Loader
@@ -486,6 +487,8 @@ export default function UTMWizard() {
   const uiLanguage = useUILanguage(language);
   const en = uiLanguage === "English";
 
+  const location = useLocation();
+  const additionalHref = buildEmbeddedAppPath("/app/additional", location.search);
   const [productPath, setProductPath] = useState("/products/");
   const [selectedSource, setSelectedSource] = useState<typeof AI_SOURCES[number] | null>(null);
   const [activeTab, setActiveTab] = useState<"single" | "bulk">("single");
@@ -495,8 +498,8 @@ export default function UTMWizard() {
       <div className={styles.page}>
         {/* 顶部导航 */}
         <div style={{ marginBottom: 16, display: "flex", gap: 12 }}>
-          <Link to="/app" className={styles.secondaryButton}>
-            ← {en ? "Back to Dashboard" : "返回仪表盘"}
+          <Link to={additionalHref} className={styles.secondaryButton}>
+            ← {en ? "Back to Attribution Settings" : "返回归因设置"}
           </Link>
         </div>
 

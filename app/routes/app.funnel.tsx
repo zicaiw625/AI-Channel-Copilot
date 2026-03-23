@@ -305,7 +305,6 @@ export default function FunnelAnalysis() {
     if (selectedChannel === "ai") return funnelData.aiChannels;
     return funnelData.byChannel[selectedChannel] || funnelData.overall;
   }, [selectedChannel, funnelData]);
-  const dashboardHref = buildEmbeddedAppPath("/app", location.search);
   const optimizationHref = buildEmbeddedAppPath("/app/optimization", location.search);
   
   const setRange = (value: TimeRangeKey) => {
@@ -317,17 +316,11 @@ export default function FunnelAnalysis() {
   return (
     <s-page heading={isEnglish ? "Funnel Analysis" : "漏斗分析"}>
       <div className={styles.page}>
-        {/* 顶部导航 */}
-        <div style={{ marginBottom: 16, display: "flex", gap: 12, justifyContent: "space-between" }}>
-          <div style={{ display: "flex", gap: 12 }}>
-            <Link to={dashboardHref} className={styles.secondaryButton}>
-              ← {isEnglish ? "Back to Dashboard" : "返回仪表盘"}
-            </Link>
-            <Link to={optimizationHref} className={styles.primaryButton}>
-              {isEnglish ? "AI Optimization Tips" : "AI 优化建议"} →
-            </Link>
-          </div>
-          
+        <div style={{ marginBottom: 16, display: "flex", gap: 12, justifyContent: "space-between", alignItems: "center" }}>
+          <Link to={optimizationHref} className={styles.secondaryButton}>
+            ← {isEnglish ? "Back to Optimization" : "返回 Optimization"}
+          </Link>
+
           <div className={styles.rangePills}>
             {(Object.keys(timeRanges) as TimeRangeKey[]).filter(k => k !== "custom").map((key) => (
               <button

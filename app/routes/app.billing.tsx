@@ -137,8 +137,8 @@ export default function Billing() {
   };
   
   return (
-    <section style={{ padding: 20, maxWidth: 800, margin: "0 auto", fontFamily: "system-ui" }}>
-      <h2 style={{ marginBottom: 20 }}>{en ? "Subscription Management" : "订阅管理"}</h2>
+    <s-page heading={en ? "Billing" : "计费管理"}>
+      <section style={{ padding: 20, maxWidth: 800, margin: "0 auto", fontFamily: "system-ui" }}>
       
       {actionData && actionData.ok === false && (
         <div style={{ marginBottom: 20, padding: 10, background: "#fff2e8", color: "#b25b1a", borderRadius: 4 }}>
@@ -499,7 +499,8 @@ export default function Billing() {
           </div>
         </div>
       )}
-    </section>
+      </section>
+    </s-page>
   );
 }
 

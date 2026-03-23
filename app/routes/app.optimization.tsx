@@ -17,20 +17,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   const shopDomain = session.shop;
   const settings = await getSettings(shopDomain);
-  
-  // 优先从 URL 参数读取语言（最可靠的方式，避免 cookie 在 iframe 中的问题）
-  const url = new URL(request.url);
-  const urlLanguage = url.searchParams.get("lang");
-  
-  // 其次尝试从 cookie 读取
+
   const cookieHeader = request.headers.get("Cookie") || "";
   const cookieLanguageMatch = cookieHeader.match(/aicc_language=([^;]+)/);
   const cookieLanguage = cookieLanguageMatch 
     ? decodeURIComponent(cookieLanguageMatch[1]) 
     : null;
-  
-  // 优先级：URL 参数 > cookie > 数据库设置
-  const language = urlLanguage || cookieLanguage || settings.languages?.[0] || "中文";
+
+  const language = cookieLanguage || settings.languages?.[0] || "中文";
   
   // 获取店铺货币设置
   const currency = settings.primaryCurrency || "USD";
@@ -481,12 +475,7 @@ export default function AIOptimization() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   
-  // 监听语言变化事件，当用户在其他页面切换语言时触发重新加载
   const uiLanguage = useUILanguage(language);
-  
-  // 当 localStorage 中的语言与后端返回的语言不一致时，通过 URL 参数重新加载
-  // 使用 URL 参数而非 cookie，避免 Shopify iframe 中的第三方 cookie 限制
-  // 使用 ref 存储最新的 searchParams 和 navigate，避免将它们加入依赖数组
   const searchParamsRef = useRef(searchParams);
   const navigateRef = useRef(navigate);
   
@@ -497,19 +486,21 @@ export default function AIOptimization() {
   
   useEffect(() => {
     if (uiLanguage !== language) {
-      // 只有当 URL 中没有 lang 参数或参数值与 uiLanguage 不同时才导航
-      const currentLangParam = searchParamsRef.current.get("lang");
-      if (currentLangParam !== uiLanguage) {
-        const next = new URLSearchParams(searchParamsRef.current);
-        next.set("lang", uiLanguage);
-        navigateRef.current({ pathname: "/app/optimization", search: `?${next.toString()}` }, { replace: true });
-      }
+      const next = new URLSearchParams(searchParamsRef.current);
+      next.delete("lang");
+      document.cookie = `aicc_language=${encodeURIComponent(uiLanguage)};path=/;max-age=31536000;SameSite=Lax`;
+      navigateRef.current(
+        {
+          pathname: "/app/optimization",
+          search: next.toString() ? `?${next.toString()}` : "",
+        },
+        { replace: true },
+      );
     }
   }, [uiLanguage, language]);
   
   // 使用后端返回的语言来保证 UI 和数据内容一致
   const isEnglish = language === "English";
-  const dashboardHref = buildEmbeddedAppPath("/app", location.search);
   const funnelHref = buildEmbeddedAppPath("/app/funnel", location.search);
   const workspaceLlmsHref = buildEmbeddedAppPath("/app/ai-visibility", location.search, { tab: "llms" });
   
@@ -540,13 +531,9 @@ export default function AIOptimization() {
   return (
     <s-page heading={isEnglish ? "AI Optimization" : "AI 优化建议"}>
       <div className={styles.page}>
-        {/* 顶部导航 */}
-        <div style={{ marginBottom: 16, display: "flex", gap: 12 }}>
-          <Link to={dashboardHref} className={styles.secondaryButton}>
-            ← {isEnglish ? "Back to Dashboard" : "返回仪表盘"}
-          </Link>
-          <Link to={funnelHref} className={styles.primaryButton}>
-            {isEnglish ? "View Funnel Analysis" : "查看漏斗分析"} →
+        <div style={{ marginBottom: 16 }}>
+          <Link to={workspaceLlmsHref} className={styles.secondaryButton}>
+            ← {isEnglish ? "Back to AI SEO Workspace" : "返回 AI SEO 工作台"}
           </Link>
         </div>
 
@@ -631,6 +618,12 @@ export default function AIOptimization() {
                 ? "AI traffic detection depends on referrer data and UTM parameters. Some AI platforms may not send referrer headers when users click links. For best results, encourage AI platforms to include UTM parameters (e.g., ?utm_source=chatgpt) in shared links."
                 : "AI 流量检测依赖于 referrer 数据和 UTM 参数。部分 AI 平台在用户点击链接时可能不会发送 referrer 信息。为获得最佳检测效果，建议在分享链接时添加 UTM 参数（如 ?utm_source=chatgpt）。"}
             </p>
+          </div>
+
+          <div style={{ marginTop: 16 }}>
+            <Link to={funnelHref} className={styles.secondaryButton}>
+              {isEnglish ? "View Funnel Analysis" : "查看漏斗分析"}
+            </Link>
           </div>
         </div>
 

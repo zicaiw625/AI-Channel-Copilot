@@ -442,9 +442,7 @@ export default function SettingsAndExport() {
   const [advancedExpanded, setAdvancedExpanded] = useState(false);
 
   const locale = language === "English" ? "en-US" : "zh-CN";
-  const dashboardHref = buildEmbeddedAppPath("/app", location.search);
   const workspaceHref = buildEmbeddedAppPath("/app/ai-visibility", location.search, { tab: "llms" });
-  const optimizationHref = buildEmbeddedAppPath("/app/optimization", location.search);
   const utmWizardHref = buildEmbeddedAppPath("/app/utm-wizard", location.search);
 
   const utmMediumKeywords = useMemo(
@@ -652,14 +650,8 @@ export default function SettingsAndExport() {
     <s-page heading={language === "English" ? "Attribution & Advanced Settings" : "归因与高级设置"}>
       <div className={styles.page}>
       <div className={styles.inlineActions} style={{ marginBottom: 16 }}>
-        <Link to={dashboardHref} className={styles.secondaryButton}>
-          ← {language === "English" ? "Back to Dashboard" : "返回仪表盘"}
-        </Link>
-        <Link to={workspaceHref} className={styles.primaryButton}>
-          {language === "English" ? "Open AI SEO Workspace" : "打开 AI SEO 工作台"}
-        </Link>
-        <Link to={optimizationHref} className={styles.secondaryButton}>
-          {language === "English" ? "View Optimization" : "查看优化建议"}
+        <Link to={workspaceHref} className={styles.secondaryButton}>
+          ← {language === "English" ? "Back to AI SEO Workspace" : "返回 AI SEO 工作台"}
         </Link>
       </div>
       <div className={styles.lede}>

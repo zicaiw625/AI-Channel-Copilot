@@ -6,7 +6,7 @@ import { authenticate } from "../shopify.server";
 import { getSettings } from "../lib/settings.server";
 import { requireEnv } from "../lib/env.server";
 import { useUILanguage } from "../lib/useUILanguage";
-import { buildEmbeddedAppPath } from "../lib/navigation";
+import { getShopifyContextParams } from "../lib/navigation";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   let language = "中文";
@@ -79,7 +79,15 @@ export default function Intro() {
   const uiLanguage = useUILanguage(language);
   const en = uiLanguage === "English";
   const location = useLocation();
-  const onboardingHref = buildEmbeddedAppPath("/app/onboarding", location.search);
+  const onboardingParams = getShopifyContextParams(location.search);
+  const currentParams = new URLSearchParams(location.search);
+  for (const key of ["shop", "id_token", "lang"] as const) {
+    const value = currentParams.get(key);
+    if (value) {
+      onboardingParams.set(key, value);
+    }
+  }
+  const onboardingHref = `/app/onboarding${onboardingParams.toString() ? `?${onboardingParams.toString()}` : ""}`;
   return (
     <AppProvider embedded apiKey={apiKey}>
       <section style={{ padding: 16 }}>

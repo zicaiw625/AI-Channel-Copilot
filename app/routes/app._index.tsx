@@ -654,6 +654,12 @@ export default function Index() {
                   {uiLanguage === "English" ? "Apply Custom" : "应用自定义"}
                 </button>
               </div>
+              <p className={styles.helpText} style={{ marginTop: 12 }}>
+                {uiLanguage === "English" ? "Need to adjust referrer or UTM rules? " : "需要调整 referrer 或 UTM 规则？"}
+                <Link to={attributionHref} className={styles.link}>
+                  {uiLanguage === "English" ? "Open Attribution Settings" : "打开归因设置"}
+                </Link>
+              </p>
               <div className={styles.actionButtons}>
                 <Link to={aiWorkspaceHref} className={styles.primaryButton}>
                   {uiLanguage === "English" ? "Open AI SEO Workspace" : "打开 AI SEO 工作台"}
@@ -661,48 +667,49 @@ export default function Index() {
                 <Link to={optimizationHref} className={styles.secondaryButton} style={{ background: "#635bff", color: "white", border: "none" }}>
                   {uiLanguage === "English" ? "View Optimization" : "查看优化建议"}
                 </Link>
-                <Link to={attributionHref} className={styles.secondaryButton}>
-                  {uiLanguage === "English" ? "Attribution Settings" : "归因设置"}
-                </Link>
-        </div>
-        <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 10 }}>
-          <span style={{ fontSize: 12, fontWeight: 600, color: "#637381", textTransform: "uppercase", letterSpacing: 0.4 }}>
-            {uiLanguage === "English" ? "More tools" : "更多工具"}
-          </span>
-          <div className={styles.actionButtons}>
-            <Link to={funnelHref} className={styles.secondaryButton}>
-              {uiLanguage === "English" ? "Funnel" : "漏斗分析"}
-            </Link>
-            <Link to={copilotHref} className={styles.secondaryButton}>
-              {uiLanguage === "English" ? "Copilot" : "Copilot"}
-            </Link>
-            <Link to={utmWizardHref} className={styles.secondaryButton} style={{ background: "#fff7e6", border: "1px solid #ffd591", color: "#d46b08" }}>
-              {uiLanguage === "English" ? "UTM Wizard" : "UTM 向导"}
-            </Link>
-            <Link to={multiStoreHref} className={styles.secondaryButton} style={{ background: "#f6ffed", border: "1px solid #b7eb8f", color: "#389e0d" }}>
-              {uiLanguage === "English" ? "Multi-Store" : "多店铺汇总"}
-            </Link>
-            <Link to={teamHref} className={styles.secondaryButton} style={{ background: "#f9f0ff", border: "1px solid #d3adf7", color: "#722ed1" }}>
-              {uiLanguage === "English" ? "Team" : "团队"}
-            </Link>
-            <Link to={webhookExportHref} className={styles.secondaryButton} style={{ background: "#fff0f6", border: "1px solid #ffadd2", color: "#c41d7f" }}>
-              {uiLanguage === "English" ? "Webhook Export" : "Webhook 导出"}
-            </Link>
-            <a
-              className={styles.secondaryButton}
-              href={canViewFull ? `/api/export/orders?range=${range}&from=${encodeURIComponent(dateRange.fromParam || "")}&to=${encodeURIComponent(dateRange.toParam || "")}` : "#"}
-              onClick={(e) => {
-                  if (!canViewFull) {
-                      e.preventDefault();
-                      shopify.toast.show?.(uiLanguage === "English" ? "Upgrade to Pro to export data." : "升级到 Pro 版以导出数据。");
-                      return;
-                  }
-                  handleDownload(e, `/api/export/orders?range=${range}&from=${encodeURIComponent(dateRange.fromParam || "")}&to=${encodeURIComponent(dateRange.toParam || "")}`, `ai-orders-${range}.csv`);
-              }}
-            >
-              {t(lang, "export_orders_csv")}
-            </a>
-          </div>
+                <details style={{ position: "relative" }}>
+                  <summary className={styles.secondaryButton} style={{ listStyle: "none", cursor: "pointer" }}>
+                    {uiLanguage === "English" ? "More tools" : "更多工具"}
+                  </summary>
+                  <div
+                    style={{
+                      position: "absolute",
+                      right: 0,
+                      top: "calc(100% + 8px)",
+                      minWidth: 220,
+                      background: "#fff",
+                      border: "1px solid #dfe3e8",
+                      borderRadius: 12,
+                      boxShadow: "0 12px 24px rgba(33, 43, 54, 0.12)",
+                      padding: 8,
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 4,
+                      zIndex: 10,
+                    }}
+                  >
+                    <Link to={funnelHref} className={styles.secondaryButton}>{uiLanguage === "English" ? "Funnel" : "漏斗分析"}</Link>
+                    <Link to={utmWizardHref} className={styles.secondaryButton}>{uiLanguage === "English" ? "UTM Wizard" : "UTM 向导"}</Link>
+                    <Link to={copilotHref} className={styles.secondaryButton}>{uiLanguage === "English" ? "Copilot" : "Copilot"}</Link>
+                    <Link to={multiStoreHref} className={styles.secondaryButton}>{uiLanguage === "English" ? "Multi-Store" : "多店铺汇总"}</Link>
+                    <Link to={teamHref} className={styles.secondaryButton}>{uiLanguage === "English" ? "Team" : "团队"}</Link>
+                    <Link to={webhookExportHref} className={styles.secondaryButton}>{uiLanguage === "English" ? "Webhook Export" : "Webhook 导出"}</Link>
+                    <a
+                      className={styles.secondaryButton}
+                      href={canViewFull ? `/api/export/orders?range=${range}&from=${encodeURIComponent(dateRange.fromParam || "")}&to=${encodeURIComponent(dateRange.toParam || "")}` : "#"}
+                      onClick={(e) => {
+                          if (!canViewFull) {
+                              e.preventDefault();
+                              shopify.toast.show?.(uiLanguage === "English" ? "Upgrade to Pro to export data." : "升级到 Pro 版以导出数据。");
+                              return;
+                          }
+                          handleDownload(e, `/api/export/orders?range=${range}&from=${encodeURIComponent(dateRange.fromParam || "")}&to=${encodeURIComponent(dateRange.toParam || "")}`, `ai-orders-${range}.csv`);
+                      }}
+                    >
+                      {t(lang, "export_orders_csv")}
+                    </a>
+                  </div>
+                </details>
         </div>
         </div>
 

@@ -971,37 +971,6 @@ export default function AIVisibility() {
   return (
     <s-page heading={en ? "AI SEO Workspace" : "AI SEO 工作台"}>
       <div className={styles.page}>
-        {/* 顶部导航 */}
-        <div style={{ marginBottom: 16, display: "flex", gap: 12, justifyContent: "space-between" }}>
-          <div style={{ display: "flex", gap: 12 }}>
-            <Link to={buildEmbeddedAppPath("/app", location.search)} className={styles.secondaryButton}>
-              ← {en ? "Back to Dashboard" : "返回仪表盘"}
-            </Link>
-            <Link to={buildEmbeddedAppPath("/app/optimization", location.search)} className={styles.primaryButton}>
-              {en ? "View AI Score" : "查看 AI 评分"} →
-            </Link>
-          </div>
-          
-          <div
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "6px 12px",
-              background: canUseLlmsAdvanced ? "#f6ffed" : "#f4f6f8",
-              border: `1px solid ${canUseLlmsAdvanced ? "#b7eb8f" : "#dfe3e8"}`,
-              borderRadius: 20,
-              fontSize: 13,
-              color: canUseLlmsAdvanced ? "#389e0d" : "#637381",
-              fontWeight: 500,
-            }}
-          >
-            {canUseLlmsAdvanced ? "✨" : "ℹ️"} {canUseLlmsAdvanced
-              ? (en ? "Advanced llms tools enabled" : "已启用高级 llms 工具")
-              : (en ? "Core llms workflow available" : "可使用 llms 核心流程")}
-          </div>
-        </div>
-
         {/* 介绍卡片 */}
         <div className={styles.card}>
           <div className={styles.sectionHeader}>

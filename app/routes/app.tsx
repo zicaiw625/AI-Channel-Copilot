@@ -146,7 +146,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
                 !path.includes("/app/billing") &&
                 !path.includes("/app/billing/confirm") &&
                 !path.includes("/app/additional") &&
-                !path.includes("/app/attribution") &&
                 !path.includes("/app/redirect"));
 
         if (isProtected && plan === "none") {
@@ -187,10 +186,10 @@ export default function App() {
     <AppProvider embedded apiKey={apiKey}>
       <NavMenu>
         <a href={buildDashboardHref(location.search)} rel="home">{uiLanguage === "English" ? "Dashboard" : "仪表盘"}</a>
-        <a href={buildAttributionHref(location.search)}>
+        <a href={buildAttributionHref(location.search, { backTo: null })}>
           {uiLanguage === "English" ? "Tracking & Attribution" : "追踪与归因"}
         </a>
-        <a href={buildAiVisibilityHref(location.search, { tab: "llms" })}>
+        <a href={buildAiVisibilityHref(location.search, { tab: "llms", backTo: null, fromTab: null })}>
           {uiLanguage === "English" ? "AI SEO" : "AI SEO"}
         </a>
         <a href={buildBillingHref(location.search)}>

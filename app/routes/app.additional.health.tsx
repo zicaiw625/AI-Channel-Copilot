@@ -1,15 +1,27 @@
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
-import { redirect } from "react-router";
+import { useLoaderData } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 
-import { APP_PATHS, buildEmbeddedAppUrl } from "../lib/navigation";
+import {
+  AdditionalPageLayout,
+  HealthContent,
+  useAdditionalController,
+} from "../components/additional/AdditionalPage";
+import { loadAdditionalPageData } from "../lib/additional.server";
 
-export const loader = async ({ request }: LoaderFunctionArgs) => {
-  throw redirect(buildEmbeddedAppUrl(request.url, APP_PATHS.attributionHealth).toString());
+export const loader = async (args: LoaderFunctionArgs) => {
+  return loadAdditionalPageData(args);
 };
 
-export default function LegacyAdditionalHealthRedirect() {
-  return null;
+export default function AdditionalHealthRoute() {
+  const data = useLoaderData<typeof loader>();
+  const controller = useAdditionalController(data);
+
+  return (
+    <AdditionalPageLayout activeKey="health" controller={controller}>
+      <HealthContent controller={controller} />
+    </AdditionalPageLayout>
+  );
 }
 
 export const headers: HeadersFunction = (headersArgs) => {

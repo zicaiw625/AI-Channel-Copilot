@@ -6,6 +6,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const url = new URL(request.url);
   const params = getPreservedSearchParams(url.search);
   const query = params.toString();
-  return redirect(`/app/attribution/rules${query ? `?${query}` : ""}`);
+  return redirect(`/app/additional/attribution${query ? `?${query}` : ""}`);
 };
 

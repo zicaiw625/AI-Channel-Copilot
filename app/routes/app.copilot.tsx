@@ -9,8 +9,7 @@ import { useUILanguage } from "../lib/useUILanguage";
 import styles from "../styles/app.copilot.module.css";
 import { hasFeature, FEATURES } from "../lib/access.server";
 import { isDemoMode } from "../lib/runtime.server";
-import { PageHeader } from "../components/layout/PageHeader";
-import { buildDashboardHref, buildBillingHref } from "../lib/navigation";
+import { buildEmbeddedAppPath } from "../lib/navigation";
 import { resolveUILanguageFromRequest } from "../lib/language.server";
 
 /**
@@ -51,7 +50,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       if (!demo) throw error;
     }
     if (!demo) {
-      const redirectUrl = buildDashboardHref(new URL(request.url).search);
+      const redirectUrl = buildEmbeddedAppPath("/app", new URL(request.url).search, { backTo: null, fromTab: null, tab: null });
       throw new Response(null, { 
         status: 302, 
         headers: { Location: redirectUrl } 
@@ -63,7 +62,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   
   // If no shop domain and not demo, redirect
   if (!shopDomain && !demo) {
-    const redirectUrl = buildDashboardHref(new URL(request.url).search);
+    const redirectUrl = buildEmbeddedAppPath("/app", new URL(request.url).search, { backTo: null, fromTab: null, tab: null });
     throw new Response(null, { 
       status: 302, 
       headers: { Location: redirectUrl } 
@@ -92,8 +91,8 @@ export default function Copilot() {
   const [activeIntent, setActiveIntent] = useState<string | null>(null);
   // 使用 useUILanguage 保持语言设置的客户端一致性
   const language = useUILanguage(loaderLanguage || settings.languages[0] || "中文");
-  const dashboardHref = buildDashboardHref(location.search);
-  const billingHref = buildBillingHref(location.search);
+  const dashboardHref = buildEmbeddedAppPath("/app", location.search, { backTo: null, fromTab: null, tab: null });
+  const billingHref = buildEmbeddedAppPath("/app/billing", location.search, { backTo: null, fromTab: null, tab: null });
   
   const isLoading = fetcher.state !== "idle";
   
@@ -154,12 +153,11 @@ export default function Copilot() {
     <s-page heading={language === "English" ? "Copilot Q&A (v0.2 Experimental)" : "Copilot 分析问答（v0.2 实验）"}>
       <div className={styles.page}>
         {/* 顶部导航 */}
-        <PageHeader
-          back={{
-            to: dashboardHref,
-            label: language === "English" ? "Back to Dashboard" : "返回仪表盘",
-          }}
-        />
+        <div style={{ marginBottom: 16, display: "flex", gap: 12 }}>
+          <Link to={dashboardHref} className={styles.secondaryButton}>
+            ← {language === "English" ? "Back to Dashboard" : "返回仪表盘"}
+          </Link>
+        </div>
 
         <div className={styles.lede}>
           <h1>{language === "English" ? "Quick Q&A based on fixed intents" : "基于固定意图的快捷问答"}</h1>

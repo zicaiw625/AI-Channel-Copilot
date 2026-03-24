@@ -143,7 +143,7 @@ export function LlmsTxtPanel({
   const meta = statusMeta(language, statusInfo.status);
   const liveUrl = statusInfo.publicUrl || (shopDomain ? `https://${shopDomain}/a/llms` : "");
   const billingHref = buildBillingHref(location.search);
-  const defaultWorkspaceHref = workspaceHref || buildAiVisibilityHref(location.search, { tab: "llms" });
+  const defaultWorkspaceHref = workspaceHref || buildAiVisibilityHref(location.search, { tab: "llms", fromTab: null, backTo: null });
   const downloadHref = canUseAdvanced ? "/api/llms-txt-preview?download=1" : billingHref;
 
   const updateExposurePreferences = useCallback((next: ExposurePreferences) => {

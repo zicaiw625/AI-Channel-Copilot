@@ -1,5 +1,5 @@
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
-import { useLoaderData, useLocation } from "react-router";
+import { Link, useLoaderData, useLocation } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 
 import { authenticate } from "../shopify.server";
@@ -10,8 +10,7 @@ import styles from "../styles/app.dashboard.module.css";
 import { hasFeature, FEATURES } from "../lib/access.server";
 import { logger } from "../lib/logger.server";
 import prisma from "../db.server";
-import { PageHeader } from "../components/layout/PageHeader";
-import { buildBillingHref, buildDashboardHref } from "../lib/navigation";
+import { buildEmbeddedAppPath } from "../lib/navigation";
 
 // ============================================================================
 // Types
@@ -218,23 +217,18 @@ export default function Team() {
   const uiLanguage = useUILanguage(language);
   const en = uiLanguage === "English";
   const location = useLocation();
-  const dashboardHref = buildDashboardHref(location.search);
-  const billingHref = buildBillingHref(location.search);
+  const dashboardHref = buildEmbeddedAppPath("/app", location.search, { backTo: null, fromTab: null, tab: null });
+  const billingHref = buildEmbeddedAppPath("/app/billing", location.search, { backTo: null, fromTab: null, tab: null });
 
   if (!isGrowth) {
     return (
       <s-page heading={en ? "Team Access" : "团队访问"}>
         <div className={styles.page}>
-          <PageHeader
-            back={{ to: dashboardHref, label: en ? "Back to Dashboard" : "返回仪表盘" }}
-            actions={[
-              {
-                to: billingHref,
-                label: en ? "Upgrade to Growth" : "升级到 Growth 版",
-                variant: "primary",
-              },
-            ]}
-          />
+          <div style={{ marginBottom: 16 }}>
+            <Link to={dashboardHref} className={styles.secondaryButton}>
+              ← {en ? "Back to Dashboard" : "返回仪表盘"}
+            </Link>
+          </div>
           
           <div
             style={{
@@ -254,6 +248,21 @@ export default function Team() {
                 ? "Team management is available on the Growth plan. Upgrade to see who on your team has access."
                 : "团队管理功能仅在 Growth 版中可用。升级后可查看团队成员的访问权限。"}
             </p>
+            <Link
+              to={billingHref}
+              style={{
+                display: "inline-block",
+                padding: "12px 24px",
+                background: "#008060",
+                color: "#fff",
+                borderRadius: 6,
+                fontSize: 14,
+                fontWeight: 600,
+                textDecoration: "none",
+              }}
+            >
+              {en ? "Upgrade to Growth" : "升级到 Growth 版"}
+            </Link>
           </div>
         </div>
       </s-page>
@@ -263,27 +272,29 @@ export default function Team() {
   return (
     <s-page heading={en ? "Team Access" : "团队访问"}>
       <div className={styles.page}>
-        <PageHeader
-          back={{ to: dashboardHref, label: en ? "Back to Dashboard" : "返回仪表盘" }}
-          extra={
-            <div
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                padding: "6px 12px",
-                background: "#f6ffed",
-                border: "1px solid #b7eb8f",
-                borderRadius: 20,
-                fontSize: 13,
-                color: "#389e0d",
-                fontWeight: 500,
-              }}
-            >
-              ✨ {en ? "Requires Growth" : "需要 Growth 版"}
-            </div>
-          }
-        />
+        {/* 顶部导航 */}
+        <div style={{ marginBottom: 16, display: "flex", gap: 12, justifyContent: "space-between" }}>
+          <Link to={dashboardHref} className={styles.secondaryButton}>
+            ← {en ? "Back to Dashboard" : "返回仪表盘"}
+          </Link>
+          
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "6px 12px",
+              background: "#f6ffed",
+              border: "1px solid #b7eb8f",
+              borderRadius: 20,
+              fontSize: 13,
+              color: "#389e0d",
+              fontWeight: 500,
+            }}
+          >
+            ✨ {en ? "Requires Growth" : "需要 Growth 版"}
+          </div>
+        </div>
 
         {/* 店铺信息 */}
         <div className={styles.card}>

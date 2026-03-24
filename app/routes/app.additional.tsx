@@ -3,19 +3,21 @@ import { Outlet, redirect } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 
 import { additionalAction } from "../lib/additional.server";
-import { APP_PATHS, buildEmbeddedAppUrl } from "../lib/navigation";
-
-export const action = additionalAction;
+import { buildEmbeddedAppUrl } from "../lib/navigation";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const url = new URL(request.url);
-  if (url.pathname === "/app/additional" || url.pathname === "/app/additional/") {
-    throw redirect(buildEmbeddedAppUrl(request.url, APP_PATHS.attributionRules).toString());
+
+  if (url.pathname === "/app/additional") {
+    throw redirect(buildEmbeddedAppUrl(request.url, "/app/additional/attribution").toString());
   }
+
   return null;
 };
 
-export default function LegacyAdditionalLayout() {
+export const action = additionalAction;
+
+export default function AdditionalRouteLayout() {
   return <Outlet />;
 }
 

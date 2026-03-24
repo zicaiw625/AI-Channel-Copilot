@@ -26,7 +26,7 @@ import {
 } from "../lib/billing.server";
 import { getEffectivePlan, type PlanTier } from "../lib/access.server";
 import { BILLING_PLANS, PRIMARY_BILLABLE_PLAN_ID, type PlanId, validatePlanId, validateAndGetPlan } from "../lib/billing/plans";
-import { APP_PATHS, buildEmbeddedAppUrl } from "../lib/navigation";
+import { buildEmbeddedAppUrl } from "../lib/navigation";
 import { resolveUILanguageFromRequest } from "../lib/language.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -243,7 +243,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     // 处理首次选择 Free 计划（用户还没选择任何计划时）
     if (intent === "select_free") {
       await activateFreePlan(shopDomain);
-      const next = buildEmbeddedAppUrl(request.url, APP_PATHS.aiSeoWorkspace, returnUrlContext);
+      const next = buildEmbeddedAppUrl(request.url, "/app/ai-visibility", returnUrlContext);
       next.searchParams.set("tab", "llms");
       throw new Response(null, { status: 302, headers: { Location: next.toString() } });
     }
@@ -257,7 +257,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       if (plan.status !== "live") return Response.json({ ok: false, message: "Plan unavailable" }, { status: 400 });
       if (plan.priceUsd === 0) {
         await activateFreePlan(shopDomain);
-        const next = buildEmbeddedAppUrl(request.url, APP_PATHS.aiSeoWorkspace, returnUrlContext);
+        const next = buildEmbeddedAppUrl(request.url, "/app/ai-visibility", returnUrlContext);
         next.searchParams.set("tab", "llms");
         throw new Response(null, { status: 302, headers: { Location: next.toString() } });
       }

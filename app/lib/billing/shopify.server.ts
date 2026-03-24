@@ -288,6 +288,7 @@ const syncSubscriptionFromShopifyInternal = async (
         const existingForMerge = await getBillingState(shopDomain);
         if (
           trialDays > 0 &&
+          existingForMerge?.billingState !== "CANCELLED" &&
           existingForMerge?.lastTrialEndAt &&
           existingForMerge.lastTrialEndAt.getTime() > Date.now()
         ) {
@@ -642,6 +643,15 @@ export const calculateRemainingTrialDays = async (
     !state.billingState.includes("TRIALING")
   ) {
     return 0;
+  }
+
+  // 已卸载：无在订订阅，不得用残留的 lastTrialEndAt（常见于卸载前处于 TRIALING）
+  if (state.billingState === "CANCELLED") {
+    const remainingBudget = Math.max(plan.defaultTrialDays - (state.usedTrialDays || 0), 0);
+    if (state.hasEverSubscribed && toPlanId(state.billingPlan) === plan.id) {
+      return remainingBudget <= 0 ? 0 : remainingBudget;
+    }
+    return remainingBudget;
   }
 
   if (state.lastTrialEndAt && state.lastTrialEndAt.getTime() > Date.now()) {

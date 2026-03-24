@@ -400,5 +400,9 @@ export const markShopUninstalled = async (shopDomain: string): Promise<void> => 
   await upsertBillingState(shopDomain, {
     billingState: "CANCELLED",
     lastUninstalledAt: new Date(),
+    // 卸载后 Shopify 侧无在订订阅；保留 usedTrialDays / hasEverSubscribed 供「试用额度」策略使用，
+    // 但试用结束时间锚点必须清空，否则重装后 calculateRemainingTrialDays 与 GraphQL 同步会误用上一周期。
+    lastTrialStartAt: null,
+    lastTrialEndAt: null,
   });
 };

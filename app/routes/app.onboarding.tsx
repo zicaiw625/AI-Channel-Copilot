@@ -84,7 +84,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const trialDays = Object.fromEntries(trialDaysEntries) as Record<PlanId, number>;
   
   const billingState = await getBillingState(shopDomain);
-  const isReinstall = billingState?.lastUninstalledAt != null && billingState?.lastReinstalledAt != null;
+  const isReinstall =
+    billingState?.lastUninstalledAt != null &&
+    billingState?.lastReinstalledAt != null &&
+    billingState.lastReinstalledAt.getTime() >= billingState.lastUninstalledAt.getTime();
   const proTrial = trialDays[PRIMARY_BILLABLE_PLAN_ID] ?? 0;
   // 展示条件放宽到 <=，避免剩余试用天数刚好等于默认值时误判为“无剩余”
   const hasRemainingTrial =

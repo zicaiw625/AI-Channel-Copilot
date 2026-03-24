@@ -71,4 +71,40 @@ describe("calculateRemainingTrialDays", () => {
     expect(remaining).toBeGreaterThanOrEqual(4);
     expect(remaining).toBeLessThanOrEqual(5);
   });
+
+  it("when CANCELLED (uninstalled), ignores stale future lastTrialEndAt and uses trial budget", async () => {
+    const end = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000);
+    stateMocks.getBillingState.mockResolvedValue({
+      shopDomain: "x.myshopify.com",
+      isDevShop: false,
+      billingPlan: "pro",
+      billingState: "CANCELLED",
+      firstInstalledAt: new Date(),
+      lastTrialStartAt: null,
+      lastTrialEndAt: end,
+      usedTrialDays: 0,
+      hasEverSubscribed: true,
+    });
+
+    const remaining = await calculateRemainingTrialDays("x.myshopify.com", "pro");
+    expect(remaining).toBe(14);
+  });
+
+  it("when CANCELLED and trial budget exhausted, returns 0", async () => {
+    const end = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000);
+    stateMocks.getBillingState.mockResolvedValue({
+      shopDomain: "x.myshopify.com",
+      isDevShop: false,
+      billingPlan: "pro",
+      billingState: "CANCELLED",
+      firstInstalledAt: new Date(),
+      lastTrialStartAt: null,
+      lastTrialEndAt: end,
+      usedTrialDays: 14,
+      hasEverSubscribed: true,
+    });
+
+    const remaining = await calculateRemainingTrialDays("x.myshopify.com", "pro");
+    expect(remaining).toBe(0);
+  });
 });

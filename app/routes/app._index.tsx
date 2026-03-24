@@ -622,6 +622,7 @@ export default function Index() {
               </div>
             </div>
             <p className={styles.helpText}>{resultSummary}</p>
+            <p className={styles.helpTextFollow}>{t(lang, "attribution_timing_note")}</p>
           </div>
 
           <div className={styles.card}>
@@ -634,7 +635,6 @@ export default function Index() {
             </div>
             <p className={styles.helpText}>{confidenceSummary}</p>
             <ul className={styles.helpList}>
-              <li>{t(lang, "attribution_timing_note")}</li>
               <li>{t(lang, "dashboard_data_source_prefix")}{sourceSummary}</li>
               <li>{t(lang, "dashboard_last_synced_prefix")}{timeFormatter.format(new Date(overview.lastSyncedAt))}</li>
               <li>{t(lang, "dashboard_last_updated_prefix")}{dataLastUpdated ? timeFormatter.format(new Date(dataLastUpdated)) : fmtTime()}</li>

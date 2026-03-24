@@ -37,6 +37,7 @@ import {
   buildUTMWizardHref,
   parseWorkspaceTab,
 } from "../../lib/navigation";
+import { AttributionDomainNav } from "../attribution/AttributionDomainNav";
 import styles from "../../styles/app.settings.module.css";
 
 import type {
@@ -58,12 +59,6 @@ function isValidDomain(value: string) {
 
 function isValidUtmSource(value: string) {
   return /^[a-z0-9_-]+$/i.test(value.trim());
-}
-
-interface AdditionalNavItem {
-  key: AdditionalSectionKey;
-  label: string;
-  href: string;
 }
 
 export interface AdditionalController {
@@ -89,7 +84,6 @@ export interface AdditionalController {
   llmsSeoHref: string;
   utmWizardHref: string;
   additionalActionHref: string;
-  navItems: AdditionalNavItem[];
   confirmModal: { open: boolean; rule: AiDomainRule | null };
   confirmUtmModal: { open: boolean; rule: UtmSourceRule | null };
   setNewDomain: (value: string) => void;
@@ -196,36 +190,11 @@ export function useAdditionalController(data: AdditionalLoaderData): AdditionalC
 
   const locale = language === "English" ? "en-US" : "zh-CN";
   const dashboardHref = buildDashboardHref(location.search);
-  const activeWorkspaceTab = parseWorkspaceTab(
-    new URLSearchParams(location.search).get("tab") ?? new URLSearchParams(location.search).get("fromTab"),
-    "llms",
-  );
-  const workspaceHref = buildAiVisibilityHref(location.search, { tab: activeWorkspaceTab, fromTab: null, backTo: null });
-  const llmsSeoHref = buildAiVisibilityHref(location.search, { tab: "llms", fromTab: null, backTo: null });
-  const utmWizardHref = buildUTMWizardHref(location.search, { backTo: "additional" });
-  const additionalActionHref = buildEmbeddedAppPath("/app/additional", location.search);
-  const navItems: AdditionalNavItem[] = [
-    {
-      key: "attribution",
-      label: language === "English" ? "Attribution" : "归因规则",
-      href: buildEmbeddedAppPath("/app/additional/attribution", location.search, { backTo: null, utmTab: null }),
-    },
-    {
-      key: "diagnostics",
-      label: language === "English" ? "Diagnostics" : "诊断排查",
-      href: buildEmbeddedAppPath("/app/additional/diagnostics", location.search, { backTo: null, utmTab: null }),
-    },
-    {
-      key: "export",
-      label: language === "English" ? "Export" : "数据导出",
-      href: buildEmbeddedAppPath("/app/additional/export", location.search, { backTo: null, utmTab: null }),
-    },
-    {
-      key: "health",
-      label: language === "English" ? "System Health" : "系统健康",
-      href: buildEmbeddedAppPath("/app/additional/health", location.search, { backTo: null, utmTab: null }),
-    },
-  ];
+  const activeWorkspaceTab = parseWorkspaceTab(new URLSearchParams(location.search).get("tab"), "llms");
+  const workspaceHref = buildAiVisibilityHref(location.search, { tab: activeWorkspaceTab });
+  const llmsSeoHref = buildAiVisibilityHref(location.search, { tab: "llms" });
+  const utmWizardHref = buildUTMWizardHref(location.search);
+  const additionalActionHref = buildEmbeddedAppPath("/app/attribution", location.search);
 
   const utmMediumKeywords = useMemo(
     () =>
@@ -493,7 +462,7 @@ export function useAdditionalController(data: AdditionalLoaderData): AdditionalC
     setExportWindow(value);
     const params = getPreservedSearchParams(location.search);
     params.set("range", value);
-    navigate({ search: `?${params.toString()}` });
+    navigate({ search: `?${params.toString()}` }, { replace: true });
   }, [location.search, navigate]);
 
   const applyLanguageChange = useCallback((next: Lang) => {
@@ -539,7 +508,6 @@ export function useAdditionalController(data: AdditionalLoaderData): AdditionalC
     llmsSeoHref,
     utmWizardHref,
     additionalActionHref,
-    navItems,
     confirmModal,
     confirmUtmModal,
     setNewDomain,
@@ -571,26 +539,17 @@ export function useAdditionalController(data: AdditionalLoaderData): AdditionalC
   };
 }
 
-function AdditionalSubnav({
-  activeKey,
-  items,
-}: {
-  activeKey: AdditionalSectionKey;
-  items: AdditionalNavItem[];
-}) {
-  return (
-    <div className={styles.inlineActions} style={{ marginTop: 12 }}>
-      {items.map((item) => (
-        <Link
-          key={item.key}
-          to={item.href}
-          className={item.key === activeKey ? styles.primaryButton : styles.secondaryButton}
-        >
-          {item.label}
-        </Link>
-      ))}
-    </div>
-  );
+function additionalSectionToNavActive(key: AdditionalSectionKey): "rules" | "diagnostics" | "export" | "health" {
+  switch (key) {
+    case "attribution":
+      return "rules";
+    case "diagnostics":
+      return "diagnostics";
+    case "export":
+      return "export";
+    case "health":
+      return "health";
+  }
 }
 
 export function AdditionalPageLayout({
@@ -644,7 +603,10 @@ export function AdditionalPageLayout({
               </span>
             )}
           </div>
-          <AdditionalSubnav activeKey={activeKey} items={controller.navItems} />
+          <AttributionDomainNav
+            active={additionalSectionToNavActive(activeKey)}
+            en={controller.language === "English"}
+          />
         </div>
 
         {children}

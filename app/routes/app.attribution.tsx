@@ -9,13 +9,13 @@ export const action = additionalAction;
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const url = new URL(request.url);
-  if (url.pathname === "/app/additional" || url.pathname === "/app/additional/") {
+  if (url.pathname === "/app/attribution" || url.pathname === "/app/attribution/") {
     throw redirect(buildEmbeddedAppUrl(request.url, APP_PATHS.attributionRules).toString());
   }
   return null;
 };
 
-export default function LegacyAdditionalLayout() {
+export default function AttributionLayout() {
   return <Outlet />;
 }
 

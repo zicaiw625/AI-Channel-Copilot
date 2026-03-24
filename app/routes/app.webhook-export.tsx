@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
-import { Link, useLoaderData, useFetcher, useLocation } from "react-router";
+import { useLoaderData, useFetcher, useLocation } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 
 import { Banner, Button } from "../components/ui";
@@ -10,7 +10,8 @@ import { useUILanguage } from "../lib/useUILanguage";
 import { resolveUILanguageFromRequest } from "../lib/language.server";
 import styles from "../styles/app.dashboard.module.css";
 import { hasFeature, FEATURES } from "../lib/access.server";
-import { buildEmbeddedAppPath } from "../lib/navigation";
+import { PageHeader } from "../components/layout/PageHeader";
+import { buildBillingHref, buildDashboardHref } from "../lib/navigation";
 
 // ============================================================================
 // Loader
@@ -77,8 +78,8 @@ export default function WebhookExport() {
   const uiLanguage = useUILanguage(language);
   const en = uiLanguage === "English";
   const location = useLocation();
-  const dashboardHref = buildEmbeddedAppPath("/app", location.search, { backTo: null, fromTab: null, tab: null });
-  const billingHref = buildEmbeddedAppPath("/app/billing", location.search, { backTo: null, fromTab: null, tab: null });
+  const dashboardHref = buildDashboardHref(location.search);
+  const billingHref = buildBillingHref(location.search);
   
   const configFetcher = useFetcher();
   const testFetcher = useFetcher();
@@ -145,12 +146,17 @@ export default function WebhookExport() {
     return (
       <s-page heading={en ? "Webhook Export" : "Webhook 导出"}>
         <div className={styles.page}>
-          <div style={{ marginBottom: 16 }}>
-            <Link to={dashboardHref} className={styles.secondaryButton}>
-              ← {en ? "Back to Dashboard" : "返回仪表盘"}
-            </Link>
-          </div>
-          
+          <PageHeader
+            back={{ to: dashboardHref, label: en ? "Back to Dashboard" : "返回仪表盘" }}
+            actions={[
+              {
+                to: billingHref,
+                label: en ? "Upgrade to Growth" : "升级到 Growth 版",
+                variant: "primary",
+              },
+            ]}
+          />
+
           <div
             style={{
               textAlign: "center",
@@ -169,14 +175,6 @@ export default function WebhookExport() {
                 ? "Webhook export is available on the Growth plan. Upgrade to automatically push AI order data to your systems."
                 : "Webhook 导出功能仅在 Growth 版中可用。升级后可自动将 AI 订单数据推送到您的系统。"}
             </p>
-            <Link
-              to={billingHref}
-              style={{ textDecoration: "none" }}
-            >
-              <Button variant="primary" size="medium">
-                {en ? "Upgrade to Growth" : "升级到 Growth 版"}
-              </Button>
-            </Link>
           </div>
         </div>
       </s-page>
@@ -186,29 +184,27 @@ export default function WebhookExport() {
   return (
     <s-page heading={en ? "Webhook Export" : "Webhook 导出"}>
       <div className={styles.page}>
-        {/* 顶部导航 */}
-        <div style={{ marginBottom: 16, display: "flex", gap: 12, justifyContent: "space-between" }}>
-          <Link to={dashboardHref} className={styles.secondaryButton}>
-            ← {en ? "Back to Dashboard" : "返回仪表盘"}
-          </Link>
-          
-          <div
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "6px 12px",
-              background: "#f6ffed",
-              border: "1px solid #b7eb8f",
-              borderRadius: 20,
-              fontSize: 13,
-              color: "#389e0d",
-              fontWeight: 500,
-            }}
-          >
-            ✨ {en ? "Requires Growth" : "需要 Growth 版"}
-          </div>
-        </div>
+        <PageHeader
+          back={{ to: dashboardHref, label: en ? "Back to Dashboard" : "返回仪表盘" }}
+          extra={
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "6px 12px",
+                background: "#f6ffed",
+                border: "1px solid #b7eb8f",
+                borderRadius: 20,
+                fontSize: 13,
+                color: "#389e0d",
+                fontWeight: 500,
+              }}
+            >
+              ✨ {en ? "Requires Growth" : "需要 Growth 版"}
+            </div>
+          }
+        />
 
         {/* 配置卡片 */}
         <div className={styles.card}>

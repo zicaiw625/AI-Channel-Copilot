@@ -58,30 +58,33 @@ export function buildEmbeddedAppUrl(
   return new URL(buildEmbeddedAppPath(path, url.search, extraParams, hash), url.origin);
 }
 
-// ============================================================================
-// Route context helpers (tab / backTo / fromTab)
-// ============================================================================
+export const APP_PATHS = {
+  dashboard: "/app",
+  aiSeoWorkspace: "/app/ai-seo/workspace",
+  aiSeoOptimization: "/app/ai-seo/optimization",
+  aiSeoFunnel: "/app/ai-seo/funnel",
+  attributionRules: "/app/attribution/rules",
+  attributionDiagnostics: "/app/attribution/diagnostics",
+  attributionExport: "/app/attribution/export",
+  attributionHealth: "/app/attribution/health",
+  attributionUtmWizard: "/app/attribution/utm-wizard",
+  billing: "/app/billing",
+  advancedTools: "/app/advanced-tools",
+} as const;
+
+export function toAppRoute(
+  path: string,
+  search: string | URLSearchParams,
+  extraParams?: Record<string, ParamValue>,
+  hash?: string,
+) {
+  return buildEmbeddedAppPath(path, search, extraParams, hash);
+}
 
 export const WORKSPACE_TABS = ["schema", "faq", "llms"] as const;
 export type WorkspaceTab = (typeof WORKSPACE_TABS)[number];
 
-export type BackTo = "dashboard" | "workspace" | "optimization" | "additional";
-
 const WORKSPACE_TABS_SET = new Set<WorkspaceTab>(WORKSPACE_TABS);
-
-function parseToSearchParams(search: string | URLSearchParams) {
-  return toSearchParams(search);
-}
-
-export function parseBackTo(value: string | null): BackTo | null {
-  if (!value) return null;
-  const v = value.trim();
-  if (v === "dashboard") return "dashboard";
-  if (v === "workspace") return "workspace";
-  if (v === "optimization") return "optimization";
-  if (v === "additional") return "additional";
-  return null;
-}
 
 export function parseWorkspaceTab(value: string | null | undefined, fallback: WorkspaceTab = "llms"): WorkspaceTab {
   if (!value) return fallback;
@@ -104,136 +107,56 @@ export function parseUtmTab(value: string | null | undefined, fallback: UtmWizar
   return UTM_WIZARD_TABS_SET.has(v as UtmWizardTab) ? (v as UtmWizardTab) : fallback;
 }
 
+const DASHBOARD_CLEAR: Record<string, ParamValue> = {
+  backTo: null,
+  fromTab: null,
+  tab: null,
+  utmTab: null,
+  optimizationBackTo: null,
+};
+
 export function buildDashboardHref(search: string | URLSearchParams) {
-  return buildEmbeddedAppPath("/app", search, { backTo: null, fromTab: null, tab: null, utmTab: null });
+  return buildEmbeddedAppPath(APP_PATHS.dashboard, search, DASHBOARD_CLEAR);
 }
 
 export function buildAiVisibilityHref(
   search: string | URLSearchParams,
-  {
-    tab,
-    fromTab,
-    backTo,
-    hash,
-  }: {
-    tab?: WorkspaceTab;
-    fromTab?: WorkspaceTab | null;
-    backTo?: BackTo | null;
-    hash?: string;
-  } = {},
+  { tab, hash }: { tab?: WorkspaceTab; hash?: string } = {},
 ) {
   return buildEmbeddedAppPath(
-    "/app/ai-visibility",
+    APP_PATHS.aiSeoWorkspace,
     search,
     {
+      ...DASHBOARD_CLEAR,
       tab: tab ?? "llms",
-      fromTab: fromTab ?? null,
-      backTo: backTo ?? null,
-      utmTab: null,
     },
     hash,
   );
 }
 
-export function buildOptimizationHref(
-  search: string | URLSearchParams,
-  {
-    backTo,
-    fromTab,
-    hash,
-  }: {
-    backTo?: BackTo | null;
-    fromTab?: WorkspaceTab | null;
-    hash?: string;
-  } = {},
-) {
-  return buildEmbeddedAppPath(
-    "/app/optimization",
-    search,
-    {
-      backTo: backTo ?? null,
-      fromTab: fromTab ?? null,
-      tab: null,
-      utmTab: null,
-    },
-    hash,
-  );
+export function buildOptimizationHref(search: string | URLSearchParams, { hash }: { hash?: string } = {}) {
+  return buildEmbeddedAppPath(APP_PATHS.aiSeoOptimization, search, { ...DASHBOARD_CLEAR, tab: null }, hash);
 }
 
-export function buildFunnelHref(
-  search: string | URLSearchParams,
-  {
-    backTo,
-    fromTab,
-    optimizationBackTo,
-    hash,
-  }: {
-    backTo?: BackTo | null;
-    fromTab?: WorkspaceTab | null;
-    optimizationBackTo?: BackTo | null;
-    hash?: string;
-  } = {},
-) {
-  return buildEmbeddedAppPath(
-    "/app/funnel",
-    search,
-    {
-      backTo: backTo ?? null,
-      fromTab: fromTab ?? null,
-      tab: null,
-      utmTab: null,
-      optimizationBackTo: optimizationBackTo ?? null,
-    },
-    hash,
-  );
+export function buildFunnelHref(search: string | URLSearchParams, { hash }: { hash?: string } = {}) {
+  return buildEmbeddedAppPath(APP_PATHS.aiSeoFunnel, search, { ...DASHBOARD_CLEAR, tab: null }, hash);
 }
 
 export function buildUTMWizardHref(
   search: string | URLSearchParams,
-  { backTo, utmTab }: { backTo?: BackTo | null; utmTab?: UtmWizardTab | null } = {},
+  { utmTab }: { utmTab?: UtmWizardTab | null } = {},
 ) {
-  return buildEmbeddedAppPath("/app/utm-wizard", search, {
-    backTo: backTo ?? null,
-    fromTab: null,
+  return buildEmbeddedAppPath(APP_PATHS.attributionUtmWizard, search, {
+    ...DASHBOARD_CLEAR,
     tab: null,
     utmTab: utmTab ?? "single",
   });
 }
 
-export function buildAttributionHref(search: string | URLSearchParams, { backTo }: { backTo?: BackTo | null } = {}) {
-  return buildEmbeddedAppPath("/app/additional/attribution", search, { backTo: backTo ?? null, utmTab: null });
+export function buildAttributionHref(search: string | URLSearchParams) {
+  return buildEmbeddedAppPath(APP_PATHS.attributionRules, search, { ...DASHBOARD_CLEAR, utmTab: null });
 }
 
 export function buildBillingHref(search: string | URLSearchParams) {
-  return buildEmbeddedAppPath("/app/billing", search, { backTo: null, fromTab: null, tab: null, utmTab: null });
-}
-
-// ----------------------------------------------------------------------------
-// Back href builders (for pages that show a back arrow)
-// ----------------------------------------------------------------------------
-
-export function buildOptimizationBackHref(search: string | URLSearchParams) {
-  const params = parseToSearchParams(search);
-  const backTo = parseBackTo(params.get("backTo"));
-  const fromTab = parseWorkspaceTab(params.get("fromTab"), "llms");
-
-  return backTo === "dashboard"
-    ? buildDashboardHref(params)
-    : buildAiVisibilityHref(params, { tab: fromTab, fromTab: null, backTo: null });
-}
-
-export function buildFunnelBackHref(search: string | URLSearchParams) {
-  const params = parseToSearchParams(search);
-  const fromTab = parseWorkspaceTab(params.get("fromTab"), "llms");
-  const optimizationBackTo = parseBackTo(params.get("optimizationBackTo"));
-
-  return buildOptimizationHref(params, { backTo: optimizationBackTo, fromTab });
-}
-
-export function buildUTMWizardBackHref(search: string | URLSearchParams) {
-  const params = parseToSearchParams(search);
-  const backTo = parseBackTo(params.get("backTo"));
-  return backTo === "dashboard"
-    ? buildDashboardHref(params)
-    : buildAttributionHref(params, { backTo: null });
+  return buildEmbeddedAppPath(APP_PATHS.billing, search, DASHBOARD_CLEAR);
 }

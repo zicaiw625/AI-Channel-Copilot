@@ -207,8 +207,8 @@ export const SuggestionCard = ({
   const isSchemaEmbedSuggestion = suggestion.id === "schema-embed-disabled";
   const isLlmsTxtSuggestion = suggestion.id === "llms-txt-optimization";
   const quickActionHref = isSchemaEmbedSuggestion
-    ? buildAiVisibilityHref(location.search, { tab: "schema", fromTab: null, backTo: null, hash: "#product-schema-settings" })
-    : buildAiVisibilityHref(location.search, { tab: "llms", fromTab: null, backTo: null });
+    ? buildAiVisibilityHref(location.search, { tab: "schema", hash: "#product-schema-settings" })
+    : buildAiVisibilityHref(location.search, { tab: "llms" });
 
   return (
     <div

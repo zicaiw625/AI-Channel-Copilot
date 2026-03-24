@@ -32,7 +32,6 @@ import {
   buildBillingHref,
   buildEmbeddedAppPath,
   buildOptimizationHref,
-  buildUTMWizardHref,
   getPreservedSearchParams,
 } from "../lib/navigation";
 
@@ -84,8 +83,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const plan = await getEffectivePlan(shopDomain);
   const isFreePlan = plan === "free";
   const canViewFull = await hasFeature(shopDomain, FEATURES.DASHBOARD_FULL);
-  const canUseCopilot = await hasFeature(shopDomain, FEATURES.COPILOT);
-  const canUseGrowthTools = await hasFeature(shopDomain, FEATURES.MULTI_STORE);
   const canManageLlms = await hasFeature(shopDomain, FEATURES.LLMS_BASIC);
   const canUseLlmsAdvanced = await hasFeature(shopDomain, FEATURES.LLMS_ADVANCED);
   const llmsStatus = await getLlmsStatus(shopDomain, settings);
@@ -150,8 +147,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     clamped: context.clamped,
     isFreePlan,
     canViewFull,
-    canUseCopilot,
-    canUseGrowthTools,
     canManageLlms,
     canUseLlmsAdvanced,
     shopDomain,
@@ -191,8 +186,6 @@ export default function Index() {
     dataLastUpdated,
     isFreePlan,
     canViewFull,
-    canUseCopilot,
-    canUseGrowthTools,
     canManageLlms,
     canUseLlmsAdvanced,
     shopDomain,
@@ -241,17 +234,10 @@ export default function Index() {
     [timeFormatter, uiLanguage],
   );
   const billingHref = buildBillingHref(location.search);
-  const attributionHref = buildAttributionHref(location.search, { backTo: null });
-  const diagnosticsHref = buildEmbeddedAppPath("/app/additional/diagnostics", location.search, { backTo: null, fromTab: null, tab: null, utmTab: null });
-  const exportsHref = buildEmbeddedAppPath("/app/additional/export", location.search, { backTo: null, fromTab: null, tab: null, utmTab: null });
-  const healthHref = buildEmbeddedAppPath("/app/additional/health", location.search, { backTo: null, fromTab: null, tab: null, utmTab: null });
-  const optimizationHref = buildOptimizationHref(location.search, { backTo: "dashboard", fromTab: null });
-  const copilotHref = buildEmbeddedAppPath("/app/copilot", location.search);
-  const utmWizardHref = buildUTMWizardHref(location.search, { backTo: "dashboard" });
-  const multiStoreHref = buildEmbeddedAppPath("/app/multi-store", location.search);
-  const aiWorkspaceHref = buildAiVisibilityHref(location.search, { tab: "llms", fromTab: null, backTo: null });
-  const webhookExportHref = buildEmbeddedAppPath("/app/webhook-export", location.search);
-  const teamHref = buildEmbeddedAppPath("/app/team", location.search);
+  const attributionHref = buildAttributionHref(location.search);
+  const optimizationHref = buildOptimizationHref(location.search);
+  const advancedToolsHref = buildEmbeddedAppPath("/app/advanced-tools", location.search);
+  const aiWorkspaceHref = buildAiVisibilityHref(location.search, { tab: "llms" });
 
   useEffect(() => {
     setCustomFrom((dateRange.fromParam as string | undefined) || dateRange.start.slice(0, 10));
@@ -482,7 +468,7 @@ export default function Index() {
       params.delete("from");
       params.delete("to");
     }
-    navigate({ search: `?${params.toString()}` });
+    navigate({ search: `?${params.toString()}` }, { replace: true });
   };
 
   const getRangeLabel = (key: TimeRangeKey) => {
@@ -505,7 +491,7 @@ export default function Index() {
     params.set("range", "custom");
     params.set("from", customFrom);
     params.set("to", customTo || customFrom);
-    navigate({ search: `?${params.toString()}` });
+    navigate({ search: `?${params.toString()}` }, { replace: true });
   };
   
   // 使用新的 UpgradePrompt 组件替代原有的 UpgradeOverlay
@@ -733,53 +719,10 @@ export default function Index() {
               <span className={styles.smallBadge}>{t(lang, "dashboard_tools_badge")}</span>
             </div>
             <div className={styles.toolGrid}>
+              <Link to={aiWorkspaceHref} className={styles.secondaryButton}>{t(lang, "dashboard_open_ai_workspace")}</Link>
               <Link to={attributionHref} className={styles.secondaryButton}>{t(lang, "dashboard_tool_attribution")}</Link>
-              <Link to={diagnosticsHref} className={styles.secondaryButton}>{t(lang, "dashboard_tool_diagnostics")}</Link>
-              <Link to={exportsHref} className={styles.secondaryButton}>{t(lang, "dashboard_tool_exports")}</Link>
-              <Link to={healthHref} className={styles.secondaryButton}>{t(lang, "dashboard_tool_system_health")}</Link>
-              <Link to={utmWizardHref} className={styles.secondaryButton}>{t(lang, "dashboard_tool_utm_wizard")}</Link>
-              {canUseCopilot ? (
-                <Link to={copilotHref} className={styles.secondaryButton}>Copilot</Link>
-              ) : (
-                <button
-                  type="button"
-                  className={styles.secondaryButton}
-                  onClick={() => shopify.toast.show?.(uiLanguage === "English" ? "Upgrade to Pro or Growth to unlock Copilot." : "升级到 Pro 或 Growth 版以解锁 Copilot。")}
-                >
-                  {t(lang, "dashboard_tool_copilot_growth")}
-                </button>
-              )}
-              {canUseGrowthTools ? (
-                <>
-                  <Link to={multiStoreHref} className={styles.secondaryButton}>{t(lang, "dashboard_tool_multi_store")}</Link>
-                  <Link to={teamHref} className={styles.secondaryButton}>{t(lang, "dashboard_tool_team")}</Link>
-                  <Link to={webhookExportHref} className={styles.secondaryButton}>{t(lang, "dashboard_tool_webhook_export")}</Link>
-                </>
-              ) : (
-                <>
-                  <button
-                    type="button"
-                    className={styles.secondaryButton}
-                    onClick={() => shopify.toast.show?.(uiLanguage === "English" ? "Upgrade to Growth to unlock Multi-Store." : "升级到 Growth 版以解锁多店铺汇总。")}
-                  >
-                    {t(lang, "dashboard_tool_multi_store_growth")}
-                  </button>
-                  <button
-                    type="button"
-                    className={styles.secondaryButton}
-                    onClick={() => shopify.toast.show?.(uiLanguage === "English" ? "Upgrade to Growth to unlock Team." : "升级到 Growth 版以解锁团队功能。")}
-                  >
-                    {t(lang, "dashboard_tool_team_growth")}
-                  </button>
-                  <button
-                    type="button"
-                    className={styles.secondaryButton}
-                    onClick={() => shopify.toast.show?.(uiLanguage === "English" ? "Upgrade to Growth to unlock Webhook Export." : "升级到 Growth 版以解锁 Webhook 导出。")}
-                  >
-                    {t(lang, "dashboard_tool_webhook_export_growth")}
-                  </button>
-                </>
-              )}
+              <Link to={billingHref} className={styles.secondaryButton}>{t(lang, "dashboard_shortcut_billing")}</Link>
+              <Link to={advancedToolsHref} className={styles.secondaryButton}>{t(lang, "dashboard_shortcut_advanced")}</Link>
             </div>
           </div>
         </div>

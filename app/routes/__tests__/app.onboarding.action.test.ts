@@ -109,7 +109,7 @@ describe("app.onboarding action subscription logic", () => {
       expect(r.status).toBe(302);
       const loc = r.headers.get("Location") || "";
       const url = new URL(loc);
-      expect(url.pathname).toBe("/app/ai-visibility");
+      expect(url.pathname).toBe("/app/ai-seo/workspace");
       expect(url.searchParams.get("tab")).toBe("llms");
       expect(url.searchParams.get("embedded")).toBe("1");
       expect(url.searchParams.get("host")).toBe("abc");

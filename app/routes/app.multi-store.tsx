@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
-import { Link, useLoaderData, useLocation } from "react-router";
+import { useLoaderData, useLocation } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 
 import { Banner, StatusBadge } from "../components/ui";
@@ -14,7 +14,8 @@ import { ordersRepository } from "../lib/repositories/orders.repository";
 import { resolveDateRange } from "../lib/aiData";
 import { logger } from "../lib/logger.server";
 import prisma from "../db.server";
-import { buildEmbeddedAppPath } from "../lib/navigation";
+import { PageHeader } from "../components/layout/PageHeader";
+import { buildDashboardHref } from "../lib/navigation";
 import type { DateRange } from "../lib/aiTypes";
 import { resolveUILanguageFromRequest } from "../lib/language.server";
 
@@ -206,7 +207,7 @@ export default function MultiStore() {
   const uiLanguage = useUILanguage(language);
   const en = uiLanguage === "English";
   const location = useLocation();
-  const dashboardHref = buildEmbeddedAppPath("/app", location.search, { backTo: null, fromTab: null, tab: null });
+  const dashboardHref = buildDashboardHref(location.search);
 
   const formatCurrency = useMemo(() => {
     return (amount: number, currency = "USD") =>
@@ -222,11 +223,7 @@ export default function MultiStore() {
     return (
       <s-page heading={en ? "Multi-Store Overview" : "多店铺汇总"}>
         <div className={styles.page}>
-          <div style={{ marginBottom: 16, display: "flex", gap: 12 }}>
-            <Link to={dashboardHref} className={styles.secondaryButton}>
-              ← {en ? "Back to Dashboard" : "返回仪表盘"}
-            </Link>
-          </div>
+          <PageHeader back={{ to: dashboardHref, label: en ? "Back to Dashboard" : "返回仪表盘" }} />
           <MultiStoreUpgradePrompt en={en} />
         </div>
       </s-page>
@@ -236,11 +233,7 @@ export default function MultiStore() {
   return (
     <s-page heading={en ? "Multi-Store Overview" : "多店铺汇总"}>
       <div className={styles.page}>
-        <div style={{ marginBottom: 16, display: "flex", gap: 12 }}>
-          <Link to={dashboardHref} className={styles.secondaryButton}>
-            ← {en ? "Back to Dashboard" : "返回仪表盘"}
-          </Link>
-        </div>
+        <PageHeader back={{ to: dashboardHref, label: en ? "Back to Dashboard" : "返回仪表盘" }} />
 
         <StatusBadge tone="success" style={{ marginBottom: 20 }}>
           ✨ {en ? "Requires Growth" : "需要 Growth 版"}

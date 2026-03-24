@@ -231,7 +231,7 @@ function DetectionCoverageCard({
   const statusColor = isLowCoverage ? "#de3618" : isMediumCoverage ? "#f4a623" : "#50b83c";
   const statusBg = isLowCoverage ? "#fef3f3" : isMediumCoverage ? "#fffbe6" : "#f6ffed";
   const statusBorder = isLowCoverage ? "#ffccc7" : isMediumCoverage ? "#ffe58f" : "#b7eb8f";
-  const utmWizardHref = buildUTMWizardHref(location.search, { backTo: "dashboard" });
+  const utmWizardHref = buildUTMWizardHref(location.search);
   
   return (
     <div

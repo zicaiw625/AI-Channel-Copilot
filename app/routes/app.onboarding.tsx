@@ -20,7 +20,7 @@ import { isDemoMode } from "../lib/runtime.server";
 import { OrdersRepository } from "../lib/repositories/orders.repository";
 import { resolveDateRange } from "../lib/aiData";
 import { logger } from "../lib/logger.server";
-import { buildEmbeddedAppUrl } from "../lib/navigation";
+import { APP_PATHS, buildEmbeddedAppUrl } from "../lib/navigation";
 import {
   OnboardingHero,
   OnboardingPlanSelection,
@@ -253,7 +253,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
       if (plan.id === "free") {
         await activateFreePlan(shopDomain);
-        const next = buildEmbeddedAppUrl(request.url, "/app/ai-visibility", returnUrlContext);
+        const next = buildEmbeddedAppUrl(request.url, APP_PATHS.aiSeoWorkspace, returnUrlContext);
         next.searchParams.set("tab", "llms");
         throw new Response(null, { status: 302, headers: { Location: next.toString() } });
       }

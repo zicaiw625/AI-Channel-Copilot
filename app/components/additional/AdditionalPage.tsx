@@ -604,6 +604,7 @@ export function AdditionalPageLayout({
           <h1>{copy.title}</h1>
           <p>{copy.description}</p>
           <div className={styles.alert}>{t(controller.language, "ai_conservative_alert")}</div>
+          <p className={styles.helpText}>{t(controller.language, "attribution_timing_note")}</p>
           <p className={styles.helpText}>{t(controller.language, "default_rules_help")}</p>
           <p className={styles.helpText}>{t(controller.language, "tag_prefix_help")}</p>
           <div className={styles.inlineStats}>

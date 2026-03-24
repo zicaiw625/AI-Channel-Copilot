@@ -43,6 +43,10 @@ const dict: Record<string, TranslationEntry> = {
   col_repeats: { zh: "复购次数", en: "Repeat Count" },
   settings_lede_desc: { zh: "控制 referrer / UTM 匹配规则、标签写回、语言时区，并导出 AI 渠道订单与产品榜单。所有数据基于 v0.1 保守识别。", en: "Control referrer/UTM rules, tag write-back, language/timezone, and export AI orders and product lists. All data follows v0.1 conservative attribution." },
   ai_conservative_alert: { zh: "AI 渠道识别为保守估计：依赖 referrer/UTM/标签，部分 AI 会隐藏来源；仅统计站外 AI 点击到站并完成订单的链路。", en: "AI attribution is conservative: depends on referrer/UTM/tags; some AI hide referrer. We only count offsite AI clicks that land and convert." },
+  attribution_timing_note: {
+    zh: "新订单刚生成时，Shopify 侧的客户旅程（referrer / UTM 等）有时会晚几秒到数分钟才就绪；本应用会在 webhook 同步、订单更新或补拉后刷新识别。若刚下单未显示为 AI，可稍后刷新或触发补拉。",
+    en: "Right after checkout, Shopify’s customer journey fields (referrer / UTM, etc.) can take seconds to a few minutes to populate. This app refreshes attribution via webhooks, order updates, or backfill—refresh or backfill if a new order isn’t labeled yet.",
+  },
   default_rules_help: { zh: "默认规则覆盖 ChatGPT / Perplexity / Gemini / Copilot / Claude / DeepSeek 等常见 referrer 与 utm_source；安装后无需改动即可识别主流 AI 域名与 UTM。", en: "Default rules cover common referrers and utm_source for ChatGPT, Perplexity, Gemini, Copilot, Claude, DeepSeek; works out-of-the-box." },
   tag_prefix_help: { zh: "标签默认前缀：订单 AI-Source-*；可在下方自定义。", en: "Default tag prefix: Orders AI-Source-*; customizable below." },
   backfill_protect_alert: { zh: "单次 Backfill 保护：最多回拉 60 天 / 1000 笔订单（Shopify 默认限制）。大店请拆分时间窗口分批回填。", en: "Backfill protection: max 60 days / 1000 orders per run (Shopify default limit). Split windows for high-volume shops." },

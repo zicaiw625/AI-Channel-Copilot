@@ -100,7 +100,7 @@ const processQueue = async (
     const { admin, settings } = await resolveDependencies(job);
 
     if (!admin || !settings) {
-      logger.warn("[backfill] missing dependencies for queued job", {
+      logger.debug("[backfill] missing dependencies for queued job", {
         jobId: job.id,
         shopDomain: job.shopDomain,
         hasAdmin: Boolean(admin),
@@ -194,7 +194,12 @@ const processQueue = async (
       });
     } catch (error) {
       const message = (error as Error).message;
-      logger.error("[backfill] job failed", {
+      const terminalShopify =
+        /\b(401|403|404)\b/.test(message) ||
+        message.includes("Forbidden") ||
+        message.includes("Not Found");
+      const logFn = terminalShopify ? logger.warn : logger.error;
+      logFn("[backfill] job failed", {
         jobType: "backfill",
         jobId: job.id,
         shopDomain: job.shopDomain,

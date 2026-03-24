@@ -131,17 +131,18 @@ describe("Trial Usage Calculation", () => {
       expect(computeIncrementalTrialUsage(state, freePlan, new Date())).toBe(0);
     });
 
-    it("calculates correct usage for active trial", () => {
+    it("calculates correct usage for active trial from lastTrialEndAt only", () => {
       const now = new Date();
-      const trialStart = new Date(now.getTime() - 7 * DAY_IN_MS); // 7 days ago
+      const trialEnd = new Date(now.getTime() + 7 * DAY_IN_MS); // 14d trial, 7d remaining
 
       const state: BillingState = {
         shopDomain: "test.myshopify.com",
         isDevShop: false,
         billingPlan: "pro",
         billingState: "PRO_TRIALING",
-        firstInstalledAt: trialStart,
-        lastTrialStartAt: trialStart,
+        firstInstalledAt: new Date(now.getTime() - 7 * DAY_IN_MS),
+        lastTrialStartAt: null,
+        lastTrialEndAt: trialEnd,
         usedTrialDays: 0,
         hasEverSubscribed: true,
       };
@@ -150,10 +151,50 @@ describe("Trial Usage Calculation", () => {
       expect(usage).toBe(7);
     });
 
-    it("respects trial end date", () => {
+    it("respects trial end date (inferred start from end)", () => {
       const now = new Date();
-      const trialStart = new Date(now.getTime() - 20 * DAY_IN_MS); // 20 days ago
-      const trialEnd = new Date(now.getTime() - 6 * DAY_IN_MS); // Ended 6 days ago
+      const trialEnd = new Date(now.getTime() - 6 * DAY_IN_MS); // Ended 6 days ago → window caps at end
+
+      const state: BillingState = {
+        shopDomain: "test.myshopify.com",
+        isDevShop: false,
+        billingPlan: "pro",
+        billingState: "PRO_TRIALING",
+        firstInstalledAt: new Date(now.getTime() - 20 * DAY_IN_MS),
+        lastTrialStartAt: null,
+        lastTrialEndAt: trialEnd,
+        usedTrialDays: 0,
+        hasEverSubscribed: true,
+      };
+
+      const usage = computeIncrementalTrialUsage(state, mockPlan, now);
+      expect(usage).toBe(14); // inferred start = end - 14d; floor((end-start)/DAY)=14
+    });
+
+    it("caps usage at plan's default trial days", () => {
+      const now = new Date();
+      const lastTrialEndAt = new Date(now.getTime() - 16 * DAY_IN_MS); // ended 16d ago → 14d window before end
+
+      const state: BillingState = {
+        shopDomain: "test.myshopify.com",
+        isDevShop: false,
+        billingPlan: "pro",
+        billingState: "PRO_TRIALING",
+        firstInstalledAt: new Date(now.getTime() - 30 * DAY_IN_MS),
+        lastTrialStartAt: null,
+        lastTrialEndAt,
+        usedTrialDays: 0,
+        hasEverSubscribed: true,
+      };
+
+      const usage = computeIncrementalTrialUsage(state, mockPlan, now);
+      expect(usage).toBeLessThanOrEqual(mockPlan.defaultTrialDays);
+    });
+
+    it("prefers legacy lastTrialStartAt when present", () => {
+      const now = new Date();
+      const trialStart = new Date(now.getTime() - 5 * DAY_IN_MS);
+      const trialEnd = new Date(now.getTime() + 20 * DAY_IN_MS); // would infer wrong span if start ignored
 
       const state: BillingState = {
         shopDomain: "test.myshopify.com",
@@ -167,27 +208,7 @@ describe("Trial Usage Calculation", () => {
         hasEverSubscribed: true,
       };
 
-      const usage = computeIncrementalTrialUsage(state, mockPlan, now);
-      expect(usage).toBe(14); // Limited by trialEnd - trialStart
-    });
-
-    it("caps usage at plan's default trial days", () => {
-      const now = new Date();
-      const trialStart = new Date(now.getTime() - 30 * DAY_IN_MS); // 30 days ago
-
-      const state: BillingState = {
-        shopDomain: "test.myshopify.com",
-        isDevShop: false,
-        billingPlan: "pro",
-        billingState: "PRO_TRIALING",
-        firstInstalledAt: trialStart,
-        lastTrialStartAt: trialStart,
-        usedTrialDays: 0,
-        hasEverSubscribed: true,
-      };
-
-      const usage = computeIncrementalTrialUsage(state, mockPlan, now);
-      expect(usage).toBeLessThanOrEqual(mockPlan.defaultTrialDays);
+      expect(computeIncrementalTrialUsage(state, mockPlan, now)).toBe(5);
     });
   });
 });

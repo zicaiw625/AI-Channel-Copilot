@@ -12,7 +12,8 @@ export type ResolveAppSubscriptionTrialEndOptions = {
 /**
  * 统一解析应用订阅的试用结束时刻。
  * - 有明确 `trial_end` 时（Webhook / 将来若 GraphQL 暴露同字段）始终优先；
- * - 否则按 Shopify 文档：试用从订阅创建日起计 `trialDays` 天（GraphQL 同步路径）。
+ * - 否则用 `createdAt + trialDays`（Admin GraphQL 文档口径）。注意：`createdAt` 常为创建收费时间，
+ *   可能早于商户批准日；同步逻辑会与库中 Webhook 写入的 `lastTrialEndAt` 取较晚者，避免误缩短试用。
  */
 export function resolveAppSubscriptionTrialEnd(
   options: ResolveAppSubscriptionTrialEndOptions,

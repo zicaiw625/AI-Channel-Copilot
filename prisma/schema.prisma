@@ -219,8 +219,8 @@ model ShopBillingState {
   
   // Trial Tracking
   firstInstalledAt       DateTime? // For calculating total trial eligibility
-  lastTrialStartAt       DateTime?
-  lastTrialEndAt         DateTime?
+  lastTrialStartAt       DateTime? // 遗留：新逻辑不再写入；消耗天数优先用 lastTrialEndAt 反推
+  lastTrialEndAt         DateTime? // 当前试用结束时间（展示剩余试用、过期的唯一锚点）
   usedTrialDays          Int       @default(0)
   
   // Subscription History

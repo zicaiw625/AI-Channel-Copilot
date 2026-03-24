@@ -20,6 +20,8 @@ type AppSubscriptionPayload = {
     name?: string | null;
     status?: string | null;
     trial_end?: string | null;
+    /** REST webhook 可能携带，与 GraphQL `trialDays` 对应 */
+    trial_days?: number | null;
   };
 };
 
@@ -190,7 +192,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   try {
     if (status === "ACTIVE") {
       if (isTrialEndInFuture(trialEnd) && plan.trialSupported) {
-        await setSubscriptionTrialState(shopDomain, plan.id, trialEnd, status);
+        const trialSpan =
+          typeof subscription.trial_days === "number" && subscription.trial_days > 0
+            ? subscription.trial_days
+            : null;
+        await setSubscriptionTrialState(shopDomain, plan.id, trialEnd, status, trialSpan);
       } else if (plan.trialSupported) {
         // 关键修复：如果当前已经处于 TRIALING 状态且试用期未过期，不要覆盖为 ACTIVE
         const isCurrentlyTrialing = existingState?.billingState?.includes("TRIALING") &&

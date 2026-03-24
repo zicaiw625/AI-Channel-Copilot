@@ -275,14 +275,18 @@ export const upsertBillingState = async (
 // Trial Management
 // ============================================================================
 
+/**
+ * 试用「已消耗天数」：只依赖结束时间 + 可选的开始时间。
+ * - 新数据仅持久化 `lastTrialEndAt`，开始时间用 `end - plan.defaultTrialDays` 反推（与 Shopify 创建订阅时的 trial 长度一致即可）。
+ * - 旧数据若仍有 `lastTrialStartAt`，优先使用，避免历史行行为变化。
+ */
 export const computeIncrementalTrialUsage = (state: BillingState, plan: PlanConfig, asOf: Date): number => {
-  if (!plan.trialSupported || !state.lastTrialStartAt) return 0;
-  const start = state.lastTrialStartAt.getTime();
-  const end =
-    state.lastTrialEndAt?.getTime() ?? start + plan.defaultTrialDays * DAY_IN_MS;
+  if (!plan.trialSupported || !state.lastTrialEndAt) return 0;
+  const end = state.lastTrialEndAt.getTime();
+  const start =
+    state.lastTrialStartAt?.getTime() ?? end - plan.defaultTrialDays * DAY_IN_MS;
   const windowEnd = Math.min(end, asOf.getTime());
   if (windowEnd <= start) return 0;
-  // 使用 Math.floor 而非 Math.ceil，避免在边界情况下多算一天
   const diff = Math.floor((windowEnd - start) / DAY_IN_MS);
   return Math.min(plan.defaultTrialDays, Math.max(diff, 0));
 };
@@ -318,25 +322,33 @@ export const activateFreePlan = async (shopDomain: string): Promise<void> => {
   });
 };
 
+/**
+ * 进入「试用中」：只持久化 `lastTrialEndAt`（剩余试用展示与过期判断的唯一时间锚点）。
+ * `trialSpanDays` 仅在 **未** 传入 `trialEnd` 时用于计算本地兜底结束时间；有 `trialEnd` 时以 Shopify 为准。
+ * `lastTrialStartAt` 不再写入（置 null），试用消耗见 `computeIncrementalTrialUsage`。
+ */
 export const setSubscriptionTrialState = async (
   shopDomain: string,
   planId: PlanId,
   trialEnd: Date | null,
   status = "ACTIVE",
-  trialStart?: Date | null,
+  trialSpanDays?: number | null,
 ): Promise<void> => {
   const plan = getPlanConfig(planId);
   if (!plan.trialSupported) {
     await setSubscriptionActiveState(shopDomain, planId, status);
     return;
   }
-  const now = trialStart ?? new Date();
+  const span =
+    trialSpanDays != null && trialSpanDays > 0 ? trialSpanDays : plan.defaultTrialDays;
   const computedTrialEnd =
-    trialEnd ?? new Date(now.getTime() + plan.defaultTrialDays * DAY_IN_MS);
+    trialEnd != null
+      ? trialEnd
+      : new Date(Date.now() + span * DAY_IN_MS);
   await upsertBillingState(shopDomain, {
     billingPlan: planId,
     billingState: planStateKey(planId, "TRIALING"),
-    lastTrialStartAt: now,
+    lastTrialStartAt: null,
     lastTrialEndAt: computedTrialEnd,
     lastSubscriptionStatus: status,
     hasEverSubscribed: true,

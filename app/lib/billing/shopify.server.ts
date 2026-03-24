@@ -276,18 +276,38 @@ const syncSubscriptionFromShopifyInternal = async (
           return { synced: false };
         }
         
-        // 与 Webhook `trial_end` 语义对齐：无显式 trial_end 时用 createdAt + trialDays
+        // GraphQL 的 createdAt 多为「创建收费/待批准」时间；试用从商户批准日开始。
+        // 仅用 createdAt + trialDays 会在批准较晚时把 trialEnd 算得过早（例如误显示剩 4 天）。
+        // 若库中已有 Webhook 写入的更晚的 lastTrialEndAt，取较晚者，避免同步覆盖正确试用结束时间。
         const createdAt = activeSub.createdAt ? new Date(activeSub.createdAt) : null;
         const trialDays = activeSub.trialDays ?? 0;
-        const trialEnd = resolveAppSubscriptionTrialEnd({
+        let trialEnd = resolveAppSubscriptionTrialEnd({
           createdAt,
           trialDays,
         });
+        const existingForMerge = await getBillingState(shopDomain);
+        if (
+          trialDays > 0 &&
+          existingForMerge?.lastTrialEndAt &&
+          existingForMerge.lastTrialEndAt.getTime() > Date.now()
+        ) {
+          const derivedMs = trialEnd?.getTime() ?? 0;
+          trialEnd = new Date(
+            Math.max(derivedMs, existingForMerge.lastTrialEndAt.getTime()),
+          );
+        }
+
         const isTrialing = isTrialEndInFuture(trialEnd);
-        
+
         // Update local billing state
         if (isTrialing && plan.trialSupported) {
-          await setSubscriptionTrialState(shopDomain, plan.id, trialEnd, activeSub.status, createdAt);
+          await setSubscriptionTrialState(
+            shopDomain,
+            plan.id,
+            trialEnd,
+            activeSub.status,
+            trialDays > 0 ? trialDays : null,
+          );
         } else {
           await setSubscriptionActiveState(shopDomain, plan.id, activeSub.status);
         }

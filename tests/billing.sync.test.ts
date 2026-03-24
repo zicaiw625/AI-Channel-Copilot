@@ -75,6 +75,43 @@ describe("syncSubscriptionFromShopify", () => {
     expect(stateMocks.setSubscriptionExpiredState).not.toHaveBeenCalled();
   });
 
+  it("keeps later trial end from DB when GraphQL createdAt predates merchant approval", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-24T12:00:00.000Z"));
+    const webhookTrialEnd = new Date("2026-04-07T00:00:00.000Z");
+    stateMocks.getBillingState.mockResolvedValue({
+      billingPlan: "pro",
+      billingState: "PRO_TRIALING",
+      lastTrialStartAt: new Date("2026-03-10T00:00:00.000Z"),
+      usedTrialDays: 0,
+      lastTrialEndAt: webhookTrialEnd,
+    });
+
+    const admin = createAdmin([
+      {
+        id: "gid://shopify/AppSubscription/3",
+        name: "AI Copilot Pro",
+        status: "ACTIVE",
+        trialDays: 14,
+        createdAt: "2026-03-14T00:00:00.000Z",
+        currentPeriodEnd: null,
+      },
+    ]);
+
+    const result = await syncSubscriptionFromShopify(admin as any, "demo.myshopify.com");
+
+    expect(result.status).toBe("ACTIVE");
+    expect(stateMocks.setSubscriptionTrialState).toHaveBeenCalledWith(
+      "demo.myshopify.com",
+      "pro",
+      webhookTrialEnd,
+      "ACTIVE",
+      14,
+    );
+    expect(stateMocks.setSubscriptionActiveState).not.toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
   it("maps active subscriptions without an active Shopify trial to ACTIVE, not local trial", async () => {
     const admin = createAdmin([
       {

@@ -6,11 +6,22 @@ import { persistOrders, removeDeletedOrders } from "./persistence.server";
 import prisma from "../db.server";
 import { withAdvisoryLock } from "./locks.server";
 import { logger } from "./logger.server";
-import { getBillingState } from "./billing/state.server";
+import { getBillingState, markShopUninstalled } from "./billing/state.server";
 import { MAX_BACKFILL_DURATION_MS, MAX_BACKFILL_ORDERS, BACKFILL_TIMEOUT_MINUTES, BACKFILL_STALE_THRESHOLD_SECONDS } from "./constants";
 
 // 【修复】更新标题以反映实际的 60 天限制
 const BACKFILL_STATUS_TITLE = "Hourly backfill (last 60 days)";
+
+const isLikelyPermanentShopifyAccessLoss = (message: string) => {
+  const m = message.toLowerCase();
+  if (m.includes("graphql client: not found")) return true;
+  if (m.includes("networkstatuscode") && m.includes("404")) return true;
+  if (m.includes("404") && m.includes("not found") && m.includes("shopify")) return true;
+  if (m.includes("graphql client: forbidden")) return true;
+  if (m.includes("networkstatuscode") && m.includes("403")) return true;
+  if (m.includes("403") && m.includes("forbidden") && m.includes("shopify")) return true;
+  return false;
+};
 
 const setBackfillStatus = async (
   shopDomain: string,
@@ -92,6 +103,12 @@ const processQueue = async (
 
     const billing = await getBillingState(job.shopDomain);
     if (billing?.billingState === "CANCELLED") {
+      await updateJobStatus(job.id, "completed", { ordersFetched: 0 });
+      return;
+    }
+
+    const sessionCount = await prisma.session.count({ where: { shop: job.shopDomain } });
+    if (sessionCount === 0) {
       await updateJobStatus(job.id, "completed", { ordersFetched: 0 });
       return;
     }
@@ -207,6 +224,17 @@ const processQueue = async (
         shopDomain: job.shopDomain,
         message,
       });
+      if (isLikelyPermanentShopifyAccessLoss(message)) {
+        try {
+          await markShopUninstalled(job.shopDomain);
+          await prisma.session.deleteMany({ where: { shop: job.shopDomain } });
+        } catch (cleanupErr) {
+          logger.warn("[backfill] shop cleanup after access loss failed", {
+            shopDomain: job.shopDomain,
+            error: cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr),
+          });
+        }
+      }
       await updateJobStatus(job.id, "failed", { error: message });
       await setBackfillStatus(
         job.shopDomain,
@@ -320,6 +348,11 @@ export const startBackfill = async (
   const billing = await getBillingState(shopDomain);
   if (billing?.billingState === "CANCELLED") {
     return { queued: false, reason: "uninstalled" } as const;
+  }
+
+  const sessionCount = await prisma.session.count({ where: { shop: shopDomain } });
+  if (sessionCount === 0) {
+    return { queued: false, reason: "no session" } as const;
   }
 
   // 【修复】先清理卡住的任务，确保用户可以重新触发

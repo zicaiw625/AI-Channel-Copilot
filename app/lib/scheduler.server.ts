@@ -84,11 +84,15 @@ export const runBackfillSweep = async () => {
           })
         ).map((row) => row.shopDomain),
       );
+      const shopDomainsWithSession = new Set(
+        (await prisma.session.groupBy({ by: ["shop"] })).map((row) => row.shop),
+      );
       let shopsQueued = 0;
       
       for (const shop of shops) {
         const shopDomain = shop.shopDomain;
         if (cancelledShopDomains.has(shopDomain)) continue;
+        if (!shopDomainsWithSession.has(shopDomain)) continue;
         const settings = await getSettings(shopDomain);
         const timezone = settings.timezones[0] || shop.timezone || "UTC";
 

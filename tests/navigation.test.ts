@@ -105,6 +105,38 @@ describe("navigation helpers", () => {
     expect(url.searchParams.get("foo")).toBe("bar");
   });
 
+  it("buildAttributionHref sets additionalSection for diagnostics without changing pathname", () => {
+    const href = buildAttributionHref("?host=abc&embedded=1&locale=en&lang=English&foo=bar", {
+      backTo: null,
+      section: "diagnostics",
+    });
+
+    const url = new URL(`https://example.com${href}`);
+    expect(url.pathname).toBe("/app/additional/attribution");
+    expect(url.searchParams.get("additionalSection")).toBe("diagnostics");
+  });
+
+  it("buildAttributionHref section attribution strips additionalSection", () => {
+    const href = buildAttributionHref(
+      "?host=abc&embedded=1&locale=en&lang=English&additionalSection=export&foo=bar",
+      { backTo: null, section: "attribution" },
+    );
+
+    const url = new URL(`https://example.com${href}`);
+    expect(url.pathname).toBe("/app/additional/attribution");
+    expect(url.searchParams.has("additionalSection")).toBe(false);
+  });
+
+  it("buildAttributionHref preserves additionalSection when section option is omitted", () => {
+    const href = buildAttributionHref(
+      "?host=abc&embedded=1&locale=en&lang=English&additionalSection=health&foo=bar",
+      { backTo: null },
+    );
+
+    const url = new URL(`https://example.com${href}`);
+    expect(url.searchParams.get("additionalSection")).toBe("health");
+  });
+
   it("buildFunnelHref preserves optimization fromTab context", () => {
     const href = buildFunnelHref(
       "?host=abc&embedded=1&locale=en&lang=English&fromTab=schema&foo=bar",

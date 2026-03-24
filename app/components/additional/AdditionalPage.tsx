@@ -30,12 +30,14 @@ import {
 import { downloadFromApi } from "../../lib/downloadUtils";
 import { t } from "../../lib/i18n";
 import {
+  buildAttributionHref,
   buildEmbeddedAppPath,
   buildAiVisibilityHref,
   buildDashboardHref,
   getPreservedSearchParams,
   buildUTMWizardHref,
   parseWorkspaceTab,
+  type AdditionalSectionKey,
 } from "../../lib/navigation";
 import styles from "../../styles/app.settings.module.css";
 
@@ -45,12 +47,6 @@ import type {
 } from "../../lib/additional.server";
 
 export type Lang = "English" | "中文";
-
-type AdditionalSectionKey =
-  | "attribution"
-  | "diagnostics"
-  | "export"
-  | "health";
 
 function isValidDomain(value: string) {
   return /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(value.trim());
@@ -208,22 +204,22 @@ export function useAdditionalController(data: AdditionalLoaderData): AdditionalC
     {
       key: "attribution",
       label: language === "English" ? "Attribution" : "归因规则",
-      href: buildEmbeddedAppPath("/app/additional/attribution", location.search, { backTo: null, utmTab: null }),
+      href: buildAttributionHref(location.search, { backTo: null, section: "attribution" }),
     },
     {
       key: "diagnostics",
       label: language === "English" ? "Diagnostics" : "诊断排查",
-      href: buildEmbeddedAppPath("/app/additional/diagnostics", location.search, { backTo: null, utmTab: null }),
+      href: buildAttributionHref(location.search, { backTo: null, section: "diagnostics" }),
     },
     {
       key: "export",
       label: language === "English" ? "Export" : "数据导出",
-      href: buildEmbeddedAppPath("/app/additional/export", location.search, { backTo: null, utmTab: null }),
+      href: buildAttributionHref(location.search, { backTo: null, section: "export" }),
     },
     {
       key: "health",
       label: language === "English" ? "System Health" : "系统健康",
-      href: buildEmbeddedAppPath("/app/additional/health", location.search, { backTo: null, utmTab: null }),
+      href: buildAttributionHref(location.search, { backTo: null, section: "health" }),
     },
   ];
 

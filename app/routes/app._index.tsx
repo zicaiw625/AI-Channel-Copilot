@@ -241,10 +241,22 @@ export default function Index() {
     [timeFormatter, uiLanguage],
   );
   const billingHref = buildBillingHref(location.search);
-  const attributionHref = buildAttributionHref(location.search, { backTo: null });
-  const diagnosticsHref = buildEmbeddedAppPath("/app/additional/diagnostics", location.search, { backTo: null, fromTab: null, tab: null, utmTab: null });
-  const exportsHref = buildEmbeddedAppPath("/app/additional/export", location.search, { backTo: null, fromTab: null, tab: null, utmTab: null });
-  const healthHref = buildEmbeddedAppPath("/app/additional/health", location.search, { backTo: null, fromTab: null, tab: null, utmTab: null });
+  const attributionHref = buildAttributionHref(location.search, { backTo: null, section: "attribution" });
+  const diagnosticsHref = buildAttributionHref(location.search, {
+    backTo: null,
+    section: "diagnostics",
+    clearWorkspaceContext: true,
+  });
+  const exportsHref = buildAttributionHref(location.search, {
+    backTo: null,
+    section: "export",
+    clearWorkspaceContext: true,
+  });
+  const healthHref = buildAttributionHref(location.search, {
+    backTo: null,
+    section: "health",
+    clearWorkspaceContext: true,
+  });
   const optimizationHref = buildOptimizationHref(location.search, { backTo: "dashboard", fromTab: null });
   const copilotHref = buildEmbeddedAppPath("/app/copilot", location.search);
   const utmWizardHref = buildUTMWizardHref(location.search, { backTo: "dashboard" });

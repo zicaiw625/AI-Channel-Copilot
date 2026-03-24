@@ -104,6 +104,20 @@ export function parseUtmTab(value: string | null | undefined, fallback: UtmWizar
   return UTM_WIZARD_TABS_SET.has(v as UtmWizardTab) ? (v as UtmWizardTab) : fallback;
 }
 
+/** Tracking & Attribution sub-pages share one pathname for Shopify NavMenu matching. */
+export const ADDITIONAL_SECTION_KEYS = ["attribution", "diagnostics", "export", "health"] as const;
+export type AdditionalSectionKey = (typeof ADDITIONAL_SECTION_KEYS)[number];
+
+const ADDITIONAL_SECTION_SET = new Set<string>(ADDITIONAL_SECTION_KEYS);
+
+export const ADDITIONAL_SECTION_QUERY = "additionalSection";
+
+export function parseAdditionalSection(value: string | null | undefined): AdditionalSectionKey {
+  if (!value) return "attribution";
+  const v = value.trim();
+  return ADDITIONAL_SECTION_SET.has(v) ? (v as AdditionalSectionKey) : "attribution";
+}
+
 export function buildDashboardHref(search: string | URLSearchParams) {
   return buildEmbeddedAppPath("/app", search, { backTo: null, fromTab: null, tab: null, utmTab: null });
 }
@@ -200,8 +214,31 @@ export function buildUTMWizardHref(
   });
 }
 
-export function buildAttributionHref(search: string | URLSearchParams, { backTo }: { backTo?: BackTo | null } = {}) {
-  return buildEmbeddedAppPath("/app/additional/attribution", search, { backTo: backTo ?? null, utmTab: null });
+export function buildAttributionHref(
+  search: string | URLSearchParams,
+  {
+    backTo,
+    section,
+    clearWorkspaceContext,
+  }: {
+    backTo?: BackTo | null;
+    /** Omit to keep the current `additionalSection` query (e.g. return links). Pass `"attribution"` to reset to the default sub-tab. */
+    section?: AdditionalSectionKey;
+    /** Strip AI workspace tab context (e.g. links from the main dashboard). */
+    clearWorkspaceContext?: boolean;
+  } = {},
+) {
+  const extra: Record<string, ParamValue> = {
+    backTo: backTo ?? null,
+    utmTab: null,
+    ...(clearWorkspaceContext ? { tab: null, fromTab: null } : {}),
+  };
+
+  if (section !== undefined) {
+    extra[ADDITIONAL_SECTION_QUERY] = section !== "attribution" ? section : null;
+  }
+
+  return buildEmbeddedAppPath("/app/additional/attribution", search, extra);
 }
 
 export function buildBillingHref(search: string | URLSearchParams) {

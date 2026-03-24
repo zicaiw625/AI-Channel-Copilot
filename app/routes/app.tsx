@@ -186,7 +186,7 @@ export default function App() {
     <AppProvider embedded apiKey={apiKey}>
       <NavMenu>
         <a href={buildDashboardHref(location.search)} rel="home">{uiLanguage === "English" ? "Dashboard" : "仪表盘"}</a>
-        <a href={buildAttributionHref(location.search, { backTo: null })}>
+        <a href={buildAttributionHref(location.search, { backTo: null, section: "attribution" })}>
           {uiLanguage === "English" ? "Tracking & Attribution" : "追踪与归因"}
         </a>
         <a href={buildAiVisibilityHref(location.search, { tab: "llms", backTo: null, fromTab: null })}>

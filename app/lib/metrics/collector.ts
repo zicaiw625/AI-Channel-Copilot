@@ -339,7 +339,7 @@ export class MetricsCollector {
         body: JSON.stringify({
           timestamp: Date.now(),
           metrics,
-          source: 'ai-channel-copilot'
+          source: 'AI Sales Tracker & Attribution'
         })
       });
 

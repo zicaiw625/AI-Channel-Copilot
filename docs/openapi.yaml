@@ -1,8 +1,8 @@
 openapi: 3.0.3
 info:
-  title: AI SEO & Discovery API
+  title: AI Sales Tracker & Attribution API
   description: |
-    AI SEO & Discovery 是一个 Shopify 嵌入式应用，用于追踪和分析来自 AI 渠道（ChatGPT、Perplexity、Gemini、Copilot 等）的订单归因和 GMV 贡献。
+    AI Sales Tracker & Attribution 是一个 Shopify 嵌入式应用，用于追踪和分析来自 AI 渠道（ChatGPT、Perplexity、Gemini、Copilot 等）的订单归因和 GMV 贡献。
 
     ## 认证
 
@@ -23,7 +23,7 @@ info:
 
   version: 1.0.0
   contact:
-    name: AI SEO & Discovery Support
+    name: AI Sales Tracker & Attribution Support
     email: support@aicc.app
   license:
     name: MIT

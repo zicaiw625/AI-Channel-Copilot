@@ -1,8 +1,8 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
 client_id = "775682342ec5187aaef9b6bd2a9d0b90"
-name = "AI SEO & Discovery"
-application_url = "https://ai-channel-copilot.onrender.com"
+name = "AI Sales Tracker & Attribution"
+application_url = "https://AI Sales Tracker & Attribution.onrender.com"
 embedded = true
 
 [build]
@@ -77,11 +77,11 @@ scopes = "read_orders,read_customers,read_products,write_orders,read_checkouts,r
 
 [auth]
 redirect_urls = [
-  "https://ai-channel-copilot.onrender.com/auth/callback",
-  "https://ai-channel-copilot.onrender.com/auth/login"
+  "https://AI Sales Tracker & Attribution.onrender.com/auth/callback",
+  "https://AI Sales Tracker & Attribution.onrender.com/auth/login"
 ]
 
 [app_proxy]
-url = "https://ai-channel-copilot.onrender.com/proxy/llms"
+url = "https://AI Sales Tracker & Attribution.onrender.com/proxy/llms"
 subpath = "llms"
 prefix = "a"

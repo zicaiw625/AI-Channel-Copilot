@@ -1,6 +1,6 @@
 # 权限说明 (Permissions Guide)
 
-本文档说明 AI SEO & Discovery 应用请求的各项 Shopify API 权限及其用途。
+本文档说明 AI Sales Tracker & Attribution 应用请求的各项 Shopify API 权限及其用途。
 
 ## 当前权限列表
 

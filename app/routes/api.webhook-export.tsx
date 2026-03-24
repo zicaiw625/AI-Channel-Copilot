@@ -429,7 +429,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       timestamp: new Date().toISOString(),
       shopDomain,
       data: {
-        message: "This is a test webhook from AI SEO & Discovery",
+        message: "This is a test webhook from AI Sales Tracker & Attribution",
         testId: Math.random().toString(36).substring(7),
       },
     };

@@ -1,10 +1,10 @@
-# AI SEO & Discovery API 文档
+# AI Sales Tracker & Attribution API 文档
 
-本文档描述 AI SEO & Discovery 应用的内部 API。
+本文档描述 AI Sales Tracker & Attribution 应用的内部 API。
 
 ## 概述
 
-AI SEO & Discovery 是一个 Shopify 嵌入式应用，用于追踪和分析来自 AI 渠道（ChatGPT、Perplexity、Gemini、Copilot 等）的订单归因和 GMV 贡献。
+AI Sales Tracker & Attribution 是一个 Shopify 嵌入式应用，用于追踪和分析来自 AI 渠道（ChatGPT、Perplexity、Gemini、Copilot 等）的订单归因和 GMV 贡献。
 
 ## OpenAPI 规范
 

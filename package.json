@@ -1,5 +1,5 @@
 {
-  "name": "ai-channel-copilot",
+  "name": "AI Sales Tracker & Attribution",
   "private": true,
   "scripts": {
     "build": "react-router build",

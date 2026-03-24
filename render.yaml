@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: ai-channel-copilot
+    name: AI Sales Tracker & Attribution
     env: node
     buildCommand: npm install --include=dev && bash scripts/render-setup.sh && npm run build
     startCommand: npm run start
@@ -16,7 +16,7 @@ services:
       - key: SHOPIFY_API_SECRET
         value: placeholder
       - key: SHOPIFY_APP_URL
-        value: https://ai-channel-copilot.onrender.com
+        value: https://AI Sales Tracker & Attribution.onrender.com
       - key: SCOPES
         # 2025-12-10: 移除 write_customers，与 shopify.app.toml 保持一致
         value: read_orders,read_customers,read_products,write_orders,read_checkouts
@@ -36,7 +36,7 @@ services:
         value: true
       - key: DATABASE_URL
         fromDatabase:
-          name: ai-channel-copilot-db
+          name: AI Sales Tracker & Attribution-db
           property: connectionString
       - key: DEFAULT_RANGE_KEY
         value: 30d
@@ -58,5 +58,5 @@ services:
         value: 1
 
 databases:
-  - name: ai-channel-copilot-db
+  - name: AI Sales Tracker & Attribution-db
     plan: free

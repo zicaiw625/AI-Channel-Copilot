@@ -310,8 +310,8 @@ export default function Team() {
           
           <p className={styles.helpText}>
             {en
-              ? "Team members with access to this Shopify store can use AI SEO & Discovery."
-              : "拥有此 Shopify 店铺访问权限的团队成员可以使用 AI SEO & Discovery。"}
+              ? "Team members with access to this Shopify store can use AI Sales Tracker & Attribution."
+              : "拥有此 Shopify 店铺访问权限的团队成员可以使用 AI Sales Tracker & Attribution。"}
           </p>
         </div>
 
@@ -382,8 +382,8 @@ export default function Team() {
               step="3"
               title={en ? "Set Permissions" : "设置权限"}
               description={en
-                ? "Grant them access to 'Apps' permission to use AI SEO & Discovery"
-                : "授予「应用」权限以使用 AI SEO & Discovery"}
+                ? "Grant them access to 'Apps' permission to use AI Sales Tracker & Attribution"
+                : "授予「应用」权限以使用 AI Sales Tracker & Attribution"}
             />
             <StepCard
               step="4"
@@ -431,8 +431,8 @@ export default function Team() {
         >
           <strong>💡 {en ? "Note:" : "说明："}</strong>{" "}
           {en
-            ? "AI SEO & Discovery inherits permissions from your Shopify store. Staff members with 'Apps' permission will automatically have access to this app with the same data visibility as other apps."
-            : "AI SEO & Discovery 继承 Shopify 店铺的权限设置。拥有「应用」权限的员工将自动获得此应用的访问权限，数据可见性与其他应用相同。"}
+            ? "AI Sales Tracker & Attribution inherits permissions from your Shopify store. Staff members with 'Apps' permission will automatically have access to this app with the same data visibility as other apps."
+            : "AI Sales Tracker & Attribution 继承 Shopify 店铺的权限设置。拥有「应用」权限的员工将自动获得此应用的访问权限，数据可见性与其他应用相同。"}
         </div>
       </div>
     </s-page>

@@ -237,7 +237,7 @@ export async function isProductSchemaEmbedEnabled(
     // "shopify://apps/{app-handle}/blocks/{block-handle}/{uuid}"
     // 
     // 精确匹配 "/blocks/product-schema-embed/" 以避免误匹配其他 app 的 schema block
-    // 例如：shopify://apps/ai-channel-copilot/blocks/product-schema-embed/abc123
+    // 例如：shopify://apps/AI Sales Tracker & Attribution/blocks/product-schema-embed/abc123
     const BLOCK_HANDLE = "product-schema-embed";
     const BLOCK_PATTERN = `/blocks/${BLOCK_HANDLE}/`;
     

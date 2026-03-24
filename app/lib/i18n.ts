@@ -64,10 +64,10 @@ const dict: Record<string, TranslationEntry> = {
   title_delete_rule: { zh: "删除规则", en: "Delete rule" },
   badge_v01: { zh: "v0.1 内测 · Referrer + UTM", en: "v0.1 Beta · Referrer + UTM" },
   badge_conservative_orders: { zh: "保守识别 · Shopify Orders", en: "Conservative · Shopify Orders" },
-  dashboard_title: { zh: "AI SEO & Discovery Dashboard", en: "AI Channels Dashboard" },
+  dashboard_title: { zh: "AI Sales Tracker & Attribution Dashboard", en: "AI Channels Dashboard" },
   dashboard_subheading: { zh: "自动识别来自 ChatGPT / Perplexity / Gemini / Copilot 等 AI 助手的订单，给出保守 GMV 估计与差异洞察。", en: "Automatically detects orders from ChatGPT / Perplexity / Gemini / Copilot and provides conservative GMV estimate and insights." },
   dashboard_warning: { zh: "AI 渠道识别为保守估计，依赖 referrer / UTM / 标签，部分 AI 会隐藏来源；仅统计站外 AI 点击 → 到站 → 完成订单的链路，不含 AI 应用内曝光或自然流量。", en: "AI attribution is conservative, relies on referrer/UTM/tags, some AI hide referrer; counts only offsite AI click → land → order, excludes in-app exposure or generic traffic." },
-  dashboard_page_heading: { zh: "AI SEO 与发现仪表盘", en: "AI SEO & Discovery" },
+  dashboard_page_heading: { zh: "AI SEO 与发现仪表盘", en: "AI Sales Tracker & Attribution" },
   dashboard_focus_label: { zh: "当前重点：", en: "Focus:" },
   dashboard_results_label: { zh: "结果概览", en: "Results" },
   dashboard_results_title: { zh: "AI 正在带来什么结果", en: "What AI is driving" },
@@ -293,7 +293,7 @@ const dict: Record<string, TranslationEntry> = {
   // ============================================================================
   // 首页/落地页
   // ============================================================================
-  landing_badge: { zh: "AI SEO & Discovery · v0.1", en: "AI SEO & Discovery · v0.1" },
+  landing_badge: { zh: "AI Sales Tracker & Attribution · v0.1", en: "AI Sales Tracker & Attribution · v0.1" },
   landing_heading: { zh: "提升商品被 AI 助手发现和理解的概率", en: "Increase the chance your products are discovered by AI assistants" },
   landing_text: { zh: "识别来自 ChatGPT / Perplexity / Gemini / Copilot 的 AI 归因订单，结合 llms.txt 与 AI SEO 工具提升可见性，并追踪这些渠道实际带来的 GMV。", en: "Measure AI-attributed orders from ChatGPT, Perplexity, Gemini, and Copilot, improve discoverability with llms.txt and AI SEO tools, and track the GMV these channels actually drive." },
   shop_placeholder: { zh: "your-store.myshopify.com", en: "your-store.myshopify.com" },

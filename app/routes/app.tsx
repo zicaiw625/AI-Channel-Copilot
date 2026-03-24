@@ -9,7 +9,13 @@ import { authenticate, unauthenticated } from "../shopify.server";
 import { readAppFlags, requireEnv } from "../lib/env.server";
 import { getSettings, syncShopPreferences } from "../lib/settings.server";
 import { logger } from "../lib/logger.server";
-import { detectAndPersistDevShop, shouldSkipBillingForPath, calculateRemainingTrialDays } from "../lib/billing.server";
+import {
+  detectAndPersistDevShop,
+  shouldSkipBillingForPath,
+  calculateRemainingTrialDays,
+  PRIMARY_BILLABLE_PLAN_ID,
+  type PlanId,
+} from "../lib/billing.server";
 import { getEffectivePlan, FEATURES, hasFeature, type PlanTier } from "../lib/access.server";
 import { startBackfill, processBackfillQueue } from "../lib/backfill.server";
 import { resolveDateRange } from "../lib/aiData";
@@ -136,7 +142,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     } else if (!skipBilling) {
         plan = await getEffectivePlan(shopDomain);
         canViewFullDashboard = await hasFeature(shopDomain, FEATURES.DASHBOARD_FULL);
-        trialDaysLeft = await calculateRemainingTrialDays(shopDomain);
+        const trialPlanId: PlanId =
+          plan === "pro" || plan === "growth" ? plan : PRIMARY_BILLABLE_PLAN_ID;
+        trialDaysLeft = await calculateRemainingTrialDays(shopDomain, trialPlanId);
 
         const path = url.pathname.toLowerCase();
         const isProtected =

@@ -8,6 +8,7 @@ import {
   toPlanId,
 } from "../lib/billing.server";
 import { resolvePlanByShopifyName, getPlanConfig, PRIMARY_BILLABLE_PLAN_ID } from "../lib/billing/plans";
+import { isTrialEndInFuture, resolveAppSubscriptionTrialEnd } from "../lib/billing/trialEnd.server";
 import { logger } from "../lib/logger.server";
 import prisma from "../db.server";
 
@@ -175,7 +176,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const fallbackPlanId = toPlanId(existingState?.billingPlan) || PRIMARY_BILLABLE_PLAN_ID;
   const plan =
     resolvePlanByShopifyName(subscription.name) || getPlanConfig(fallbackPlanId);
-  const trialEnd = subscription.trial_end ? new Date(subscription.trial_end) : null;
+  const trialEnd = resolveAppSubscriptionTrialEnd({
+    trialEndFromShopify: subscription.trial_end ? new Date(subscription.trial_end) : null,
+  });
 
   logger.info("[billing-webhook] Processing subscription update", {
     shopDomain,
@@ -186,7 +189,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   try {
     if (status === "ACTIVE") {
-      if (trialEnd && trialEnd.getTime() > Date.now() && plan.trialSupported) {
+      if (isTrialEndInFuture(trialEnd) && plan.trialSupported) {
         await setSubscriptionTrialState(shopDomain, plan.id, trialEnd, status);
       } else if (plan.trialSupported) {
         // 关键修复：如果当前已经处于 TRIALING 状态且试用期未过期，不要覆盖为 ACTIVE

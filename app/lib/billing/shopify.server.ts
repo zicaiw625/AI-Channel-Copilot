@@ -23,6 +23,7 @@ import {
   toPlanId,
   type BillingState,
 } from "./state.server";
+import { isTrialEndInFuture, resolveAppSubscriptionTrialEnd } from "./trialEnd.server";
 
 // ============================================================================
 // Internal Helpers
@@ -275,14 +276,14 @@ const syncSubscriptionFromShopifyInternal = async (
           return { synced: false };
         }
         
-        // 正确计算试用期
+        // 与 Webhook `trial_end` 语义对齐：无显式 trial_end 时用 createdAt + trialDays
         const createdAt = activeSub.createdAt ? new Date(activeSub.createdAt) : null;
         const trialDays = activeSub.trialDays ?? 0;
-        const trialEndTime = createdAt && trialDays > 0
-          ? createdAt.getTime() + trialDays * DAY_IN_MS
-          : null;
-        const isTrialing = trialEndTime !== null && trialEndTime > Date.now();
-        const trialEnd = trialEndTime ? new Date(trialEndTime) : null;
+        const trialEnd = resolveAppSubscriptionTrialEnd({
+          createdAt,
+          trialDays,
+        });
+        const isTrialing = isTrialEndInFuture(trialEnd);
         
         // Update local billing state
         if (isTrialing && plan.trialSupported) {
@@ -610,6 +611,18 @@ export const calculateRemainingTrialDays = async (
   if (!plan.trialSupported) return 0;
   const state = await getBillingState(shopDomain);
   if (!state) return plan.defaultTrialDays;
+
+  // 已转为正式付费（ACTIVE）时本地会清空 lastTrialEndAt；若仍用「默认试用天数 − usedTrialDays」
+  // 会误显示剩余试用。usedTrialDays 为全店维度，用「错误 planId」（如 Growth 用户按默认 pro 算）也会错。
+  // 任意 Pro/Growth 正式订阅（非 TRIALING）均视为当前无进行中的应用试用。
+  const subscribedPlanId = toPlanId(state.billingPlan);
+  if (
+    (subscribedPlanId === "pro" || subscribedPlanId === "growth") &&
+    state.billingState.includes("ACTIVE") &&
+    !state.billingState.includes("TRIALING")
+  ) {
+    return 0;
+  }
 
   if (state.lastTrialEndAt && state.lastTrialEndAt.getTime() > Date.now()) {
     const diff = Math.ceil((state.lastTrialEndAt.getTime() - Date.now()) / DAY_IN_MS);

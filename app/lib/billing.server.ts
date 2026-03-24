@@ -84,3 +84,13 @@ export {
   getPlanConfig,
   resolvePlanByShopifyName,
 } from "./billing/plans";
+
+// ============================================================================
+// Trial end (Webhook + GraphQL 统一)
+// ============================================================================
+
+export {
+  resolveAppSubscriptionTrialEnd,
+  isTrialEndInFuture,
+  type ResolveAppSubscriptionTrialEndOptions,
+} from "./billing/trialEnd.server";

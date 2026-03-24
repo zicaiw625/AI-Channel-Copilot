@@ -82,7 +82,6 @@ export interface AdditionalController {
   advancedExpanded: boolean;
   dashboardHref: string;
   workspaceHref: string;
-  llmsSeoHref: string;
   utmWizardHref: string;
   additionalActionHref: string;
   navItems: AdditionalNavItem[];
@@ -197,7 +196,6 @@ export function useAdditionalController(data: AdditionalLoaderData): AdditionalC
     "llms",
   );
   const workspaceHref = buildAiVisibilityHref(location.search, { tab: activeWorkspaceTab, fromTab: null, backTo: null });
-  const llmsSeoHref = buildAiVisibilityHref(location.search, { tab: "llms", fromTab: null, backTo: null });
   const utmWizardHref = buildUTMWizardHref(location.search, { backTo: "additional" });
   const additionalActionHref = buildEmbeddedAppPath("/app/additional", location.search);
   const navItems: AdditionalNavItem[] = [
@@ -532,7 +530,6 @@ export function useAdditionalController(data: AdditionalLoaderData): AdditionalC
     advancedExpanded,
     dashboardHref,
     workspaceHref,
-    llmsSeoHref,
     utmWizardHref,
     additionalActionHref,
     navItems,
@@ -993,21 +990,6 @@ export function AttributionContent({ controller }: { controller: AdditionalContr
             </select>
           </label>
           <p className={styles.helpText}>{t(language, "gmv_metric_help")}</p>
-        </div>
-      </div>
-
-      <div id="llms-txt-settings" className={styles.card}>
-        <div className={styles.sectionHeader}>
-          <div>
-            <p className={styles.sectionLabel}>llms.txt</p>
-            <h3 className={styles.sectionTitle}>{t(language, "tracking_llms_pointer_title")}</h3>
-          </div>
-        </div>
-        <p className={styles.helpText}>{t(language, "tracking_llms_pointer_body")}</p>
-        <div className={styles.inlineActions} style={{ marginTop: 12 }}>
-          <Link to={controller.llmsSeoHref} className={styles.primaryButton}>
-            {t(language, "tracking_llms_pointer_cta")}
-          </Link>
         </div>
       </div>
 

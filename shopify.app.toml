@@ -2,7 +2,7 @@
 
 client_id = "775682342ec5187aaef9b6bd2a9d0b90"
 name = "AI Sales Tracker & Attribution"
-application_url = "https://AI Sales Tracker & Attribution.onrender.com"
+application_url = "https://ai-sales-tracker.onrender.com"
 embedded = true
 
 [build]
@@ -77,11 +77,11 @@ scopes = "read_orders,read_customers,read_products,write_orders,read_checkouts,r
 
 [auth]
 redirect_urls = [
-  "https://AI Sales Tracker & Attribution.onrender.com/auth/callback",
-  "https://AI Sales Tracker & Attribution.onrender.com/auth/login"
+  "https://ai-sales-tracker.onrender.com/auth/callback",
+  "https://ai-sales-tracker.onrender.com/auth/login"
 ]
 
 [app_proxy]
-url = "https://AI Sales Tracker & Attribution.onrender.com/proxy/llms"
+url = "https://ai-sales-tracker.onrender.com/proxy/llms"
 subpath = "llms"
 prefix = "a"

@@ -492,6 +492,16 @@ export default function Index() {
     return timeRanges[key].label;
   };
 
+  const getBackfillTriggeredRangeLabel = () => {
+    const apiLabel = backfillData?.range;
+    if (!apiLabel) return getRangeLabel(range);
+    if (uiLanguage !== "English") return apiLabel;
+    if (apiLabel === timeRanges["7d"].label) return "Last 7 days";
+    if (apiLabel === timeRanges["30d"].label) return "Last 30 days";
+    if (apiLabel === timeRanges["90d"].label) return "Last 90 days";
+    return apiLabel;
+  };
+
   const applyCustomRange = () => {
     if (isFreePlan) {
         shopify.toast.show?.(uiLanguage === "English" ? "Upgrade to Pro or Growth to use custom ranges." : "升级到 Pro 或 Growth 版以使用自定义时间范围。");
@@ -649,7 +659,7 @@ export default function Index() {
               {backfillData && (
                 <span className={styles.backfillStatus}>
                   {backfillData.queued
-                    ? tp(lang, "dashboard_backfill_triggered", { range: backfillData.range || range })
+                    ? tp(lang, "dashboard_backfill_triggered", { range: getBackfillTriggeredRangeLabel() })
                     : backfillData.reason === "in-flight"
                       ? t(lang, "dashboard_backfill_running_refresh")
                       : t(lang, "dashboard_backfill_cannot_trigger")}

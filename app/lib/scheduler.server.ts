@@ -92,12 +92,6 @@ export const runBackfillSweep = async () => {
 
         const existing = await prisma.backfillJob.findFirst({ where: { shopDomain, status: { in: ["queued", "processing"] } } });
         if (!existing) {
-          const offlineSession = await prisma.session.findFirst({
-            where: { shop: shopDomain, isOnline: false },
-            select: { id: true },
-          });
-          if (!offlineSession) continue;
-
           const queued = await startBackfill(shopDomain, range, {
             maxOrders: MAX_BACKFILL_ORDERS,
             maxDurationMs: MAX_BACKFILL_DURATION_MS,

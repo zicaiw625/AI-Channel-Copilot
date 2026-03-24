@@ -61,12 +61,6 @@ type RequestOptions = {
 const platform = getPlatform();
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const terminalGraphqlHttpStatus = (status: number) =>
-  status === 401 || status === 403 || status === 404;
-
-const terminalGraphqlErrorText = (text: string) =>
-  /\b(401|403|404)\b/.test(text) || text.includes("Forbidden") || text.includes("Not Found");
-
 export const graphqlRequest = async (
   admin: AdminGraphqlClient,
   operation: string,
@@ -135,8 +129,7 @@ export const graphqlRequest = async (
           ok: false,
           error: text,
         });
-        const logFn = terminalGraphqlHttpStatus(response.status) ? logger.warn : logger.error;
-        logFn("[shopify] graphql request failed", {
+        logger.error("[shopify] graphql request failed", {
           platform,
           shopDomain: context?.shopDomain,
           operation,
@@ -185,16 +178,11 @@ export const graphqlRequest = async (
     });
 
     if (!shouldRetry) {
-      const status = lastResponse?.status ?? (error instanceof Response ? error.status : undefined);
-      const logFn =
-        (status !== undefined && terminalGraphqlHttpStatus(status)) || terminalGraphqlErrorText(message)
-          ? logger.warn
-          : logger.error;
-      logFn("[shopify] graphql request failed", {
+      logger.error("[shopify] graphql request failed", {
         platform,
         shopDomain: context?.shopDomain,
         operation,
-        status,
+        status: lastResponse?.status ?? (error instanceof Response ? error.status : undefined),
         message,
         jobType: "shopify-graphql",
       });

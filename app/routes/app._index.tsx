@@ -31,7 +31,6 @@ import {
   buildAttributionHref,
   buildBillingHref,
   buildEmbeddedAppPath,
-  buildFunnelHref,
   buildOptimizationHref,
   buildUTMWizardHref,
   getPreservedSearchParams,
@@ -242,12 +241,11 @@ export default function Index() {
     [timeFormatter, uiLanguage],
   );
   const billingHref = buildBillingHref(location.search);
-  const attributionHref = buildAttributionHref(location.search, { backTo: "dashboard" });
-  const diagnosticsHref = buildEmbeddedAppPath("/app/additional/diagnostics", location.search, { backTo: "dashboard", fromTab: null, tab: null });
-  const exportsHref = buildEmbeddedAppPath("/app/additional/export", location.search, { backTo: "dashboard", fromTab: null, tab: null });
-  const healthHref = buildEmbeddedAppPath("/app/additional/health", location.search, { backTo: "dashboard", fromTab: null, tab: null });
+  const attributionHref = buildAttributionHref(location.search, { backTo: null });
+  const diagnosticsHref = buildEmbeddedAppPath("/app/additional/diagnostics", location.search, { backTo: null, fromTab: null, tab: null, utmTab: null });
+  const exportsHref = buildEmbeddedAppPath("/app/additional/export", location.search, { backTo: null, fromTab: null, tab: null, utmTab: null });
+  const healthHref = buildEmbeddedAppPath("/app/additional/health", location.search, { backTo: null, fromTab: null, tab: null, utmTab: null });
   const optimizationHref = buildOptimizationHref(location.search, { backTo: "dashboard", fromTab: null });
-  const funnelHref = buildFunnelHref(location.search, { backTo: "dashboard" });
   const copilotHref = buildEmbeddedAppPath("/app/copilot", location.search);
   const utmWizardHref = buildUTMWizardHref(location.search, { backTo: "dashboard" });
   const multiStoreHref = buildEmbeddedAppPath("/app/multi-store", location.search);
@@ -739,7 +737,6 @@ export default function Index() {
               <Link to={diagnosticsHref} className={styles.secondaryButton}>{t(lang, "dashboard_tool_diagnostics")}</Link>
               <Link to={exportsHref} className={styles.secondaryButton}>{t(lang, "dashboard_tool_exports")}</Link>
               <Link to={healthHref} className={styles.secondaryButton}>{t(lang, "dashboard_tool_system_health")}</Link>
-              <Link to={funnelHref} className={styles.secondaryButton}>{t(lang, "dashboard_tool_funnel")}</Link>
               <Link to={utmWizardHref} className={styles.secondaryButton}>{t(lang, "dashboard_tool_utm_wizard")}</Link>
               {canUseCopilot ? (
                 <Link to={copilotHref} className={styles.secondaryButton}>Copilot</Link>
@@ -789,13 +786,13 @@ export default function Index() {
 
         {/* KPI 卡片组件 */}
         <LlmsTxtPanel
-          // 使用前端当前 UI 语言，避免与 loader 的语言造成中英混排
           language={lang}
           shopDomain={shopDomain}
           initialStatus={llmsStatus}
           initialExposurePreferences={exposurePreferences}
           canManage={canManageLlms}
           canUseAdvanced={canUseLlmsAdvanced}
+          editable={false}
           compact
           showPreview={false}
           context="dashboard"

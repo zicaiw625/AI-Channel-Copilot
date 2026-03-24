@@ -20,7 +20,6 @@ import {
   buildAiVisibilityHref,
   buildAttributionHref,
   buildDashboardHref,
-  buildOptimizationHref,
   buildBillingHref,
 } from "../lib/navigation";
 import { resolveUILanguageFromRequest } from "../lib/language.server";
@@ -182,24 +181,16 @@ export default function App() {
   const { apiKey, language, plan, trialDaysLeft, isDevShop } = useLoaderData<typeof loader>();
   const uiLanguage = useUILanguage(language);
   const location = useLocation();
-  const originIsDashboard = location.pathname.toLowerCase() === "/app";
 
   return (
     <AppProvider embedded apiKey={apiKey}>
       <NavMenu>
         <a href={buildDashboardHref(location.search)} rel="home">{uiLanguage === "English" ? "Dashboard" : "仪表盘"}</a>
-        <a
-          href={buildAttributionHref(location.search, { backTo: originIsDashboard ? "dashboard" : null })}
-        >
-          {uiLanguage === "English" ? "Attribution" : "归因规则"}
+        <a href={buildAttributionHref(location.search, { backTo: null })}>
+          {uiLanguage === "English" ? "Tracking & Attribution" : "追踪与归因"}
         </a>
         <a href={buildAiVisibilityHref(location.search, { tab: "llms", backTo: null, fromTab: null })}>
-          {uiLanguage === "English" ? "AI SEO Workspace" : "AI SEO 工作台"}
-        </a>
-        <a
-          href={buildOptimizationHref(location.search, { backTo: originIsDashboard ? "dashboard" : null, fromTab: null })}
-        >
-          {uiLanguage === "English" ? "Optimization" : "优化建议"}
+          {uiLanguage === "English" ? "AI SEO" : "AI SEO"}
         </a>
         <a href={buildBillingHref(location.search)}>
           {uiLanguage === "English" ? "Billing" : "计费管理"}

@@ -14,7 +14,7 @@ import {
   syncShopPreferences,
 } from "./settings.server";
 import { mergeSettingsForSave } from "./settings/utils";
-import { buildLlmsTxt, getLlmsStatus, updateLlmsTxtCache } from "./llms.server";
+import { buildLlmsTxt, updateLlmsTxtCache } from "./llms.server";
 import { getDeadLetterJobs, getWebhookQueueSize } from "./webhookQueue.server";
 import { persistOrders, removeDeletedOrders } from "./persistence.server";
 import { applyAiTags } from "./tagging.server";
@@ -74,14 +74,11 @@ export async function loadAdditionalPageData({ request }: LoaderFunctionArgs) {
   });
 
   const ordersSample = orders.slice(0, 20);
-  const [webhookQueueSize, deadLetters, canExport, canManageLlms, canUseLlmsAdvanced] = await Promise.all([
+  const [webhookQueueSize, deadLetters, canExport] = await Promise.all([
     getWebhookQueueSize(),
     getDeadLetterJobs(10),
     hasFeature(shopDomain, FEATURES.EXPORTS),
-    hasFeature(shopDomain, FEATURES.LLMS_BASIC),
-    hasFeature(shopDomain, FEATURES.LLMS_ADVANCED),
   ]);
-  const llmsStatus = await getLlmsStatus(shopDomain, settings);
   const { showDebugPanels } = readAppFlags();
 
   return {
@@ -93,13 +90,6 @@ export async function loadAdditionalPageData({ request }: LoaderFunctionArgs) {
     webhookQueueSize,
     deadLetters,
     canExport,
-    canManageLlms,
-    canUseLlmsAdvanced,
-    llmsStatus: {
-      status: llmsStatus.status,
-      publicUrl: llmsStatus.publicUrl,
-      cachedAt: llmsStatus.cachedAt?.toISOString() || null,
-    },
     showDebugPanels,
     shopDomain,
   };

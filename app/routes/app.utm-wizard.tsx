@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
-import { Link, useLoaderData, useLocation } from "react-router";
+import { Link, useLoaderData, useLocation, useNavigate } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 
 import { authenticate } from "../shopify.server";
@@ -11,7 +11,7 @@ import { getSettings } from "../lib/settings.server";
 import { useUILanguage } from "../lib/useUILanguage";
 import { resolveUILanguageFromRequest } from "../lib/language.server";
 import styles from "../styles/app.dashboard.module.css";
-import { buildUTMWizardBackHref, parseBackTo } from "../lib/navigation";
+import { buildUTMWizardBackHref, getPreservedSearchParams, parseBackTo, parseUtmTab } from "../lib/navigation";
 
 // ============================================================================
 // Loader
@@ -45,14 +45,32 @@ export default function UTMWizard() {
   const en = uiLanguage === "English";
 
   const location = useLocation();
+  const navigate = useNavigate();
   const backTo = parseBackTo(new URLSearchParams(location.search).get("backTo"));
   const backHref = buildUTMWizardBackHref(location.search);
   const backLabel = backTo === "dashboard"
     ? (en ? "Back to Dashboard" : "返回仪表盘")
-    : (en ? "Back to Attribution & Advanced Settings" : "返回归因与高级设置");
+    : (en ? "Back to Tracking & Attribution" : "返回追踪与归因");
   const [productPath, setProductPath] = useState("/products/");
   const [selectedSource, setSelectedSource] = useState<typeof AI_SOURCES[number] | null>(null);
-  const [activeTab, setActiveTab] = useState<"single" | "bulk">("single");
+  const activeTab = parseUtmTab(new URLSearchParams(location.search).get("utmTab"));
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get("utmTab")) return;
+    const next = getPreservedSearchParams(location.search);
+    next.set("utmTab", "single");
+    navigate({ pathname: location.pathname, search: `?${next.toString()}` }, { replace: true });
+  }, [location.pathname, location.search, navigate]);
+
+  const setActiveTab = useCallback(
+    (tab: "single" | "bulk") => {
+      const next = getPreservedSearchParams(location.search);
+      next.set("utmTab", tab);
+      navigate({ pathname: location.pathname, search: `?${next.toString()}` }, { replace: true });
+    },
+    [location.pathname, location.search, navigate],
+  );
 
   return (
     <s-page heading={en ? "AI Detection Setup Wizard" : "AI 检测设置向导"}>

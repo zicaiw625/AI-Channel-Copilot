@@ -4,6 +4,7 @@ import { Link, useFetcher, useLocation } from "react-router";
 import type { SettingsDefaults } from "../../lib/aiData";
 import type { LlmsStatus } from "../../lib/llms.server";
 import { buildAiVisibilityHref, buildBillingHref } from "../../lib/navigation";
+import { t, type Lang } from "../../lib/i18n";
 
 type ExposurePreferences = SettingsDefaults["exposurePreferences"];
 
@@ -402,6 +403,7 @@ export function LlmsTxtPanel({
       )}
 
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 }}>
+        {context !== "dashboard" && (
         <button
           type="button"
           onClick={handleSync}
@@ -421,6 +423,7 @@ export function LlmsTxtPanel({
             ? (en ? "Syncing..." : "同步中...")
             : (en ? "Generate & Sync llms.txt" : "生成并同步 llms.txt")}
         </button>
+        )}
         <a
           href={liveUrl}
           target="_blank"
@@ -448,7 +451,7 @@ export function LlmsTxtPanel({
               fontWeight: 500,
             }}
           >
-            {en ? "Open Workspace" : "打开工作台"}
+            {t(language as Lang, "dashboard_llms_manage_cta")}
           </Link>
         )}
         {context === "workspace" && (

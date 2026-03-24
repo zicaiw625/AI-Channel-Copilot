@@ -93,8 +93,19 @@ export function parseAiVisibilityTab(value: string | null | undefined): Workspac
   return parseWorkspaceTab(value, "llms");
 }
 
+export const UTM_WIZARD_TABS = ["single", "bulk"] as const;
+export type UtmWizardTab = (typeof UTM_WIZARD_TABS)[number];
+
+const UTM_WIZARD_TABS_SET = new Set<UtmWizardTab>(UTM_WIZARD_TABS);
+
+export function parseUtmTab(value: string | null | undefined, fallback: UtmWizardTab = "single"): UtmWizardTab {
+  if (!value) return fallback;
+  const v = value.trim();
+  return UTM_WIZARD_TABS_SET.has(v as UtmWizardTab) ? (v as UtmWizardTab) : fallback;
+}
+
 export function buildDashboardHref(search: string | URLSearchParams) {
-  return buildEmbeddedAppPath("/app", search, { backTo: null, fromTab: null, tab: null });
+  return buildEmbeddedAppPath("/app", search, { backTo: null, fromTab: null, tab: null, utmTab: null });
 }
 
 export function buildAiVisibilityHref(
@@ -118,6 +129,7 @@ export function buildAiVisibilityHref(
       tab: tab ?? "llms",
       fromTab: fromTab ?? null,
       backTo: backTo ?? null,
+      utmTab: null,
     },
     hash,
   );
@@ -142,6 +154,7 @@ export function buildOptimizationHref(
       backTo: backTo ?? null,
       fromTab: fromTab ?? null,
       tab: null,
+      utmTab: null,
     },
     hash,
   );
@@ -165,27 +178,34 @@ export function buildFunnelHref(
     "/app/funnel",
     search,
     {
-      backTo: backTo ?? null, // funnel back arrow target
-      fromTab: fromTab ?? null, // workspace tab context for returning into optimization
+      backTo: backTo ?? null,
+      fromTab: fromTab ?? null,
       tab: null,
-      optimizationBackTo: optimizationBackTo ?? null, // preserve optimization page's original backTo
+      utmTab: null,
+      optimizationBackTo: optimizationBackTo ?? null,
     },
     hash,
   );
 }
 
-export function buildUTMWizardHref(search: string | URLSearchParams, { backTo }: { backTo?: BackTo | null } = {}) {
-  return buildEmbeddedAppPath("/app/utm-wizard", search, { backTo: backTo ?? null, fromTab: null, tab: null });
+export function buildUTMWizardHref(
+  search: string | URLSearchParams,
+  { backTo, utmTab }: { backTo?: BackTo | null; utmTab?: UtmWizardTab | null } = {},
+) {
+  return buildEmbeddedAppPath("/app/utm-wizard", search, {
+    backTo: backTo ?? null,
+    fromTab: null,
+    tab: null,
+    utmTab: utmTab ?? "single",
+  });
 }
 
 export function buildAttributionHref(search: string | URLSearchParams, { backTo }: { backTo?: BackTo | null } = {}) {
-  // 允许保留来自 ai-visibility/optimization 的 tab/fromTab 上下文；
-  // additional 页面用于“返回 AI SEO 工作台”时可以据此恢复正确的 workspace tab。
-  return buildEmbeddedAppPath("/app/additional/attribution", search, { backTo: backTo ?? null });
+  return buildEmbeddedAppPath("/app/additional/attribution", search, { backTo: backTo ?? null, utmTab: null });
 }
 
 export function buildBillingHref(search: string | URLSearchParams) {
-  return buildEmbeddedAppPath("/app/billing", search, { backTo: null, fromTab: null, tab: null });
+  return buildEmbeddedAppPath("/app/billing", search, { backTo: null, fromTab: null, tab: null, utmTab: null });
 }
 
 // ----------------------------------------------------------------------------
@@ -204,13 +224,10 @@ export function buildOptimizationBackHref(search: string | URLSearchParams) {
 
 export function buildFunnelBackHref(search: string | URLSearchParams) {
   const params = parseToSearchParams(search);
-  const backTo = parseBackTo(params.get("backTo"));
   const fromTab = parseWorkspaceTab(params.get("fromTab"), "llms");
   const optimizationBackTo = parseBackTo(params.get("optimizationBackTo"));
 
-  return backTo === "dashboard"
-    ? buildDashboardHref(params)
-    : buildOptimizationHref(params, { backTo: optimizationBackTo, fromTab });
+  return buildOptimizationHref(params, { backTo: optimizationBackTo, fromTab });
 }
 
 export function buildUTMWizardBackHref(search: string | URLSearchParams) {
@@ -220,13 +237,3 @@ export function buildUTMWizardBackHref(search: string | URLSearchParams) {
     ? buildDashboardHref(params)
     : buildAttributionHref(params, { backTo: null });
 }
-
-export function buildAdditionalBackHref(search: string | URLSearchParams) {
-  const params = parseToSearchParams(search);
-  const backTo = parseBackTo(params.get("backTo"));
-  const tabFromQuery = parseWorkspaceTab(params.get("tab") ?? params.get("fromTab"), "llms");
-  return backTo === "dashboard"
-    ? buildDashboardHref(params)
-    : buildAiVisibilityHref(params, { tab: tabFromQuery, fromTab: null, backTo: null });
-}
-

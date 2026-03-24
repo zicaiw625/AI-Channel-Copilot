@@ -12,7 +12,7 @@ import { useUILanguage } from "../lib/useUILanguage";
 import styles from "../styles/app.dashboard.module.css";
 import { AI_CHANNELS, timeRanges, type TimeRangeKey } from "../lib/aiData";
 import { AIConversionPath, type PathStage } from "../components/dashboard";
-import { buildFunnelBackHref, getPreservedSearchParams, parseBackTo } from "../lib/navigation";
+import { buildFunnelBackHref, getPreservedSearchParams } from "../lib/navigation";
 import { resolveUILanguageFromRequest } from "../lib/language.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -68,11 +68,8 @@ export default function FunnelAnalysis() {
     if (selectedChannel === "ai") return funnelData.aiChannels;
     return funnelData.byChannel[selectedChannel] || funnelData.overall;
   }, [selectedChannel, funnelData]);
-  const backTo = parseBackTo(new URLSearchParams(location.search).get("backTo"));
   const backHref = buildFunnelBackHref(location.search);
-  const backLabel = backTo === "dashboard"
-    ? (isEnglish ? "Back to Dashboard" : "返回仪表盘")
-    : (isEnglish ? "Back to Optimization" : "返回优化建议");
+  const backLabel = isEnglish ? "Back to Optimization" : "返回优化建议";
   
   const setRange = (value: TimeRangeKey) => {
     const params = getPreservedSearchParams(location.search);

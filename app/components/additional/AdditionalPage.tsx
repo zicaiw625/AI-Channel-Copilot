@@ -31,15 +31,12 @@ import { downloadFromApi } from "../../lib/downloadUtils";
 import { t } from "../../lib/i18n";
 import {
   buildEmbeddedAppPath,
-  buildAdditionalBackHref,
   buildAiVisibilityHref,
   buildDashboardHref,
   getPreservedSearchParams,
   buildUTMWizardHref,
-  parseBackTo,
   parseWorkspaceTab,
 } from "../../lib/navigation";
-import { LlmsTxtPanel } from "../seo/LlmsTxtPanel";
 import styles from "../../styles/app.settings.module.css";
 
 import type {
@@ -89,8 +86,7 @@ export interface AdditionalController {
   advancedExpanded: boolean;
   dashboardHref: string;
   workspaceHref: string;
-  backHref: string;
-  backLabel: string;
+  llmsSeoHref: string;
   utmWizardHref: string;
   additionalActionHref: string;
   navItems: AdditionalNavItem[];
@@ -134,7 +130,7 @@ function getSectionCopy(language: Lang, section: AdditionalSectionKey) {
   switch (section) {
     case "attribution":
       return {
-        title: en ? "Attribution, Tracking, and Advanced Controls" : "归因、追踪与高级控制",
+        title: en ? "Attribution rules, tagging, and store defaults" : "归因规则、标签写回与店铺默认项",
         description: t(language, "settings_lede_desc"),
       };
     case "diagnostics":
@@ -199,39 +195,35 @@ export function useAdditionalController(data: AdditionalLoaderData): AdditionalC
   const [advancedExpanded, setAdvancedExpanded] = useState(false);
 
   const locale = language === "English" ? "en-US" : "zh-CN";
-  const backTo = location.search ? parseBackTo(new URLSearchParams(location.search).get("backTo")) : null;
   const dashboardHref = buildDashboardHref(location.search);
   const activeWorkspaceTab = parseWorkspaceTab(
     new URLSearchParams(location.search).get("tab") ?? new URLSearchParams(location.search).get("fromTab"),
     "llms",
   );
   const workspaceHref = buildAiVisibilityHref(location.search, { tab: activeWorkspaceTab, fromTab: null, backTo: null });
+  const llmsSeoHref = buildAiVisibilityHref(location.search, { tab: "llms", fromTab: null, backTo: null });
   const utmWizardHref = buildUTMWizardHref(location.search, { backTo: "additional" });
-  const backHref = buildAdditionalBackHref(location.search);
-  const backLabel = backTo === "dashboard"
-    ? (language === "English" ? "Back to Dashboard" : "返回仪表盘")
-    : (language === "English" ? "Back to AI SEO Workspace" : "返回 AI SEO 工作台");
   const additionalActionHref = buildEmbeddedAppPath("/app/additional", location.search);
   const navItems: AdditionalNavItem[] = [
     {
       key: "attribution",
       label: language === "English" ? "Attribution" : "归因规则",
-      href: buildEmbeddedAppPath("/app/additional/attribution", location.search, { backTo }),
+      href: buildEmbeddedAppPath("/app/additional/attribution", location.search, { backTo: null, utmTab: null }),
     },
     {
       key: "diagnostics",
       label: language === "English" ? "Diagnostics" : "诊断排查",
-      href: buildEmbeddedAppPath("/app/additional/diagnostics", location.search, { backTo }),
+      href: buildEmbeddedAppPath("/app/additional/diagnostics", location.search, { backTo: null, utmTab: null }),
     },
     {
       key: "export",
       label: language === "English" ? "Export" : "数据导出",
-      href: buildEmbeddedAppPath("/app/additional/export", location.search, { backTo }),
+      href: buildEmbeddedAppPath("/app/additional/export", location.search, { backTo: null, utmTab: null }),
     },
     {
       key: "health",
       label: language === "English" ? "System Health" : "系统健康",
-      href: buildEmbeddedAppPath("/app/additional/health", location.search, { backTo }),
+      href: buildEmbeddedAppPath("/app/additional/health", location.search, { backTo: null, utmTab: null }),
     },
   ];
 
@@ -544,8 +536,7 @@ export function useAdditionalController(data: AdditionalLoaderData): AdditionalC
     advancedExpanded,
     dashboardHref,
     workspaceHref,
-    backHref,
-    backLabel,
+    llmsSeoHref,
     utmWizardHref,
     additionalActionHref,
     navItems,
@@ -614,14 +605,8 @@ export function AdditionalPageLayout({
   const copy = getSectionCopy(controller.language, activeKey);
 
   return (
-    <s-page heading={controller.language === "English" ? "Attribution & Advanced Settings" : "归因与高级设置"}>
+    <s-page heading={controller.language === "English" ? "Tracking & Attribution" : "追踪与归因"}>
       <div className={styles.page}>
-        <div className={styles.inlineActions} style={{ marginBottom: 16 }}>
-          <Link to={controller.backHref} className={styles.secondaryButton}>
-            ← {controller.backLabel}
-          </Link>
-        </div>
-
         <div className={styles.lede}>
           <h1>{copy.title}</h1>
           <p>{copy.description}</p>
@@ -1016,18 +1001,18 @@ export function AttributionContent({ controller }: { controller: AdditionalContr
       </div>
 
       <div id="llms-txt-settings" className={styles.card}>
-        <LlmsTxtPanel
-          language={language}
-          shopDomain={data.shopDomain}
-          initialStatus={data.llmsStatus}
-          initialExposurePreferences={data.settings.exposurePreferences}
-          exposurePreferences={controller.exposurePreferences}
-          onExposurePreferencesChange={controller.setExposurePreferences}
-          canManage={data.canManageLlms}
-          canUseAdvanced={data.canUseLlmsAdvanced}
-          editable={data.canManageLlms}
-          context="settings"
-        />
+        <div className={styles.sectionHeader}>
+          <div>
+            <p className={styles.sectionLabel}>llms.txt</p>
+            <h3 className={styles.sectionTitle}>{t(language, "tracking_llms_pointer_title")}</h3>
+          </div>
+        </div>
+        <p className={styles.helpText}>{t(language, "tracking_llms_pointer_body")}</p>
+        <div className={styles.inlineActions} style={{ marginTop: 12 }}>
+          <Link to={controller.llmsSeoHref} className={styles.primaryButton}>
+            {t(language, "tracking_llms_pointer_cta")}
+          </Link>
+        </div>
       </div>
 
       <ConfirmationModal

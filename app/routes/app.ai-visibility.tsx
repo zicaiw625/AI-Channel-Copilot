@@ -21,6 +21,7 @@ import { TabPanel, Tabs } from "../components/navigation/Tabs";
 import { LlmsTxtPanel } from "../components/seo/LlmsTxtPanel";
 import { Banner } from "../components/ui";
 import {
+  buildDashboardHref,
   buildOptimizationHref,
   getPreservedSearchParams,
   parseAiVisibilityTab,
@@ -164,8 +165,40 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 // Main Component
 // ============================================================================
 
-// Tab 类型定义
 type TabId = WorkspaceTab;
+
+function WorkspaceTabFooter({
+  search,
+  workspaceTab,
+  en,
+}: {
+  search: string;
+  workspaceTab: WorkspaceTab;
+  en: boolean;
+}) {
+  return (
+    <div
+      style={{
+        marginTop: 24,
+        paddingTop: 16,
+        borderTop: "1px solid #e0e0e0",
+        display: "flex",
+        gap: 12,
+        flexWrap: "wrap",
+      }}
+    >
+      <Link
+        to={buildOptimizationHref(search, { backTo: "workspace", fromTab: workspaceTab })}
+        className={styles.secondaryButton}
+      >
+        {en ? "View optimization suggestions" : "查看优化建议"}
+      </Link>
+      <Link to={buildDashboardHref(search)} className={styles.secondaryButton}>
+        {en ? "Back to Dashboard" : "返回仪表盘"}
+      </Link>
+    </div>
+  );
+}
 
 export default function AIVisibility() {
   const { 
@@ -194,6 +227,7 @@ export default function AIVisibility() {
     if (currentTab !== resolvedTab) {
       const next = getPreservedSearchParams(location.search);
       next.set("tab", resolvedTab);
+      next.delete("utmTab");
       setSearchParams(next, { replace: true });
     }
   }, [location.search, searchParams, setSearchParams]);
@@ -201,6 +235,7 @@ export default function AIVisibility() {
   const updateActiveTab = useCallback((tab: TabId) => {
     const next = getPreservedSearchParams(location.search);
     next.set("tab", tab);
+    next.delete("utmTab");
     const nextHash =
       tab === "schema" && location.hash === "#product-schema-settings"
         ? location.hash
@@ -234,7 +269,7 @@ export default function AIVisibility() {
   }, [activeTab, location.hash, location.search, setSearchParams]);
 
   return (
-    <s-page heading={en ? "AI SEO Workspace" : "AI SEO 工作台"}>
+    <s-page heading={en ? "AI SEO" : "AI SEO"}>
       <div className={styles.page}>
         {/* 介绍卡片 */}
         <div className={styles.card}>
@@ -346,6 +381,7 @@ export default function AIVisibility() {
                   </div>
                 )}
               </div>
+              <WorkspaceTabFooter search={location.search} workspaceTab="schema" en={en} />
           </TabPanel>
 
           <TabPanel baseId="ai-visibility-tabs" tabId="faq" activeTab={activeTab}>
@@ -358,6 +394,7 @@ export default function AIVisibility() {
                 </div>
               </div>
               <FAQGenerator en={en} />
+              <WorkspaceTabFooter search={location.search} workspaceTab="faq" en={en} />
           </TabPanel>
 
           <TabPanel baseId="ai-visibility-tabs" tabId="llms" activeTab={activeTab}>
@@ -379,6 +416,7 @@ export default function AIVisibility() {
                 editable={canManageLlms}
                 context="workspace"
               />
+              <WorkspaceTabFooter search={location.search} workspaceTab="llms" en={en} />
           </TabPanel>
         </div>
 

@@ -4,9 +4,9 @@ import {
   buildEmbeddedAppPath,
   buildEmbeddedAppUrl,
   buildAttributionHref,
-  buildAdditionalBackHref,
   buildFunnelBackHref,
   buildFunnelHref,
+  buildUTMWizardHref,
   getPreservedSearchParams,
   getShopifyContextParams,
 } from "../app/lib/navigation";
@@ -105,29 +105,6 @@ describe("navigation helpers", () => {
     expect(url.searchParams.get("foo")).toBe("bar");
   });
 
-  it("buildAdditionalBackHref restores matching ai-visibility tab", () => {
-    const href = buildAdditionalBackHref(
-      "?host=abc&embedded=1&locale=en&lang=English&backTo=workspace&tab=schema&fromTab=faq&foo=bar",
-    );
-
-    const url = new URL(`https://example.com${href}`);
-    expect(url.pathname).toBe("/app/ai-visibility");
-    expect(url.searchParams.get("tab")).toBe("schema");
-    // 返回 workspace 时清空 return-state 参数
-    expect(url.searchParams.has("backTo")).toBe(false);
-    expect(url.searchParams.has("fromTab")).toBe(false);
-  });
-
-  it("buildAdditionalBackHref falls back to fromTab when tab missing", () => {
-    const href = buildAdditionalBackHref(
-      "?host=abc&embedded=1&locale=en&lang=English&backTo=workspace&fromTab=schema&foo=bar",
-    );
-
-    const url = new URL(`https://example.com${href}`);
-    expect(url.pathname).toBe("/app/ai-visibility");
-    expect(url.searchParams.get("tab")).toBe("schema");
-  });
-
   it("buildFunnelHref preserves optimization fromTab context", () => {
     const href = buildFunnelHref(
       "?host=abc&embedded=1&locale=en&lang=English&fromTab=schema&foo=bar",
@@ -143,9 +120,9 @@ describe("navigation helpers", () => {
     expect(url.searchParams.get("foo")).toBe("bar");
   });
 
-  it("buildFunnelBackHref restores matching optimization fromTab context", () => {
+  it("buildFunnelBackHref always returns optimization with fromTab", () => {
     const href = buildFunnelBackHref(
-      "?host=abc&embedded=1&locale=en&lang=English&backTo=optimization&fromTab=faq&foo=bar",
+      "?host=abc&embedded=1&locale=en&lang=English&backTo=dashboard&fromTab=faq&foo=bar",
     );
 
     const url = new URL(`https://example.com${href}`);
@@ -163,5 +140,19 @@ describe("navigation helpers", () => {
     expect(url.pathname).toBe("/app/optimization");
     expect(url.searchParams.get("backTo")).toBe("dashboard");
     expect(url.searchParams.get("fromTab")).toBe("faq");
+  });
+
+  it("buildUTMWizardHref sets utmTab and clears workspace tab", () => {
+    const href = buildUTMWizardHref("?host=abc&embedded=1&locale=en&lang=English&tab=llms&foo=bar", {
+      backTo: "dashboard",
+      utmTab: "bulk",
+    });
+
+    const url = new URL(`https://example.com${href}`);
+    expect(url.pathname).toBe("/app/utm-wizard");
+    expect(url.searchParams.get("utmTab")).toBe("bulk");
+    expect(url.searchParams.get("backTo")).toBe("dashboard");
+    expect(url.searchParams.has("tab")).toBe(false);
+    expect(url.searchParams.get("foo")).toBe("bar");
   });
 });

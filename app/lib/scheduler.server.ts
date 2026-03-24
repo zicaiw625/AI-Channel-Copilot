@@ -76,10 +76,19 @@ export const runBackfillSweep = async () => {
     try {
       logger.info("[scheduler] Starting backfill sweep (acquired lock)");
       const shops = await prisma.shopSettings.findMany({ select: { shopDomain: true, timezone: true, lastBackfillAt: true } });
+      const cancelledShopDomains = new Set(
+        (
+          await prisma.shopBillingState.findMany({
+            where: { billingState: "CANCELLED" },
+            select: { shopDomain: true },
+          })
+        ).map((row) => row.shopDomain),
+      );
       let shopsQueued = 0;
       
       for (const shop of shops) {
         const shopDomain = shop.shopDomain;
+        if (cancelledShopDomains.has(shopDomain)) continue;
         const settings = await getSettings(shopDomain);
         const timezone = settings.timezones[0] || shop.timezone || "UTC";
 

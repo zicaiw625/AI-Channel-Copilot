@@ -6,6 +6,7 @@ import { persistOrders, removeDeletedOrders } from "./persistence.server";
 import prisma from "../db.server";
 import { withAdvisoryLock } from "./locks.server";
 import { logger } from "./logger.server";
+import { getBillingState } from "./billing/state.server";
 import { MAX_BACKFILL_DURATION_MS, MAX_BACKFILL_ORDERS, BACKFILL_TIMEOUT_MINUTES, BACKFILL_STALE_THRESHOLD_SECONDS } from "./constants";
 
 // 【修复】更新标题以反映实际的 60 天限制
@@ -88,6 +89,12 @@ const processQueue = async (
     logger.info('[backfill] Acquired advisory lock, starting queue processing');
     const job = await dequeue(where);
     if (!job) return;
+
+    const billing = await getBillingState(job.shopDomain);
+    if (billing?.billingState === "CANCELLED") {
+      await updateJobStatus(job.id, "completed", { ordersFetched: 0 });
+      return;
+    }
 
     const range: DateRange = {
       key: "custom",
@@ -309,6 +316,11 @@ export const startBackfill = async (
   options?: { maxOrders?: number; maxDurationMs?: number },
 ) => {
   if (!shopDomain) return { queued: false, reason: "missing shop domain" } as const;
+
+  const billing = await getBillingState(shopDomain);
+  if (billing?.billingState === "CANCELLED") {
+    return { queued: false, reason: "uninstalled" } as const;
+  }
 
   // 【修复】先清理卡住的任务，确保用户可以重新触发
   await cleanupStaleJobsForShop(shopDomain);

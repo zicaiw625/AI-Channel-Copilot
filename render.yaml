@@ -16,7 +16,7 @@ services:
       - key: SHOPIFY_API_SECRET
         value: placeholder
       - key: SHOPIFY_APP_URL
-        value: https://AI Sales Tracker & Attribution.onrender.com
+        value: https://ai-channel-copilot.onrender.com
       - key: SCOPES
         # 2025-12-10: 移除 write_customers，与 shopify.app.toml 保持一致
         value: read_orders,read_customers,read_products,write_orders,read_checkouts

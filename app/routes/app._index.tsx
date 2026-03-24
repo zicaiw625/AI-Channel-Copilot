@@ -242,21 +242,6 @@ export default function Index() {
   );
   const billingHref = buildBillingHref(location.search);
   const attributionHref = buildAttributionHref(location.search, { backTo: null, section: "attribution" });
-  const diagnosticsHref = buildAttributionHref(location.search, {
-    backTo: null,
-    section: "diagnostics",
-    clearWorkspaceContext: true,
-  });
-  const exportsHref = buildAttributionHref(location.search, {
-    backTo: null,
-    section: "export",
-    clearWorkspaceContext: true,
-  });
-  const healthHref = buildAttributionHref(location.search, {
-    backTo: null,
-    section: "health",
-    clearWorkspaceContext: true,
-  });
   const optimizationHref = buildOptimizationHref(location.search, { backTo: "dashboard", fromTab: null });
   const copilotHref = buildEmbeddedAppPath("/app/copilot", location.search);
   const utmWizardHref = buildUTMWizardHref(location.search, { backTo: "dashboard" });
@@ -745,10 +730,6 @@ export default function Index() {
               <span className={styles.smallBadge}>{t(lang, "dashboard_tools_badge")}</span>
             </div>
             <div className={styles.toolGrid}>
-              <Link to={attributionHref} className={styles.secondaryButton}>{t(lang, "dashboard_tool_attribution")}</Link>
-              <Link to={diagnosticsHref} className={styles.secondaryButton}>{t(lang, "dashboard_tool_diagnostics")}</Link>
-              <Link to={exportsHref} className={styles.secondaryButton}>{t(lang, "dashboard_tool_exports")}</Link>
-              <Link to={healthHref} className={styles.secondaryButton}>{t(lang, "dashboard_tool_system_health")}</Link>
               <Link to={utmWizardHref} className={styles.secondaryButton}>{t(lang, "dashboard_tool_utm_wizard")}</Link>
               {canUseCopilot ? (
                 <Link to={copilotHref} className={styles.secondaryButton}>Copilot</Link>

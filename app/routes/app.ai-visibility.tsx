@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
 import type { HeadersFunction, LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
-import { Link, useLoaderData, useLocation, useNavigate, useSearchParams } from "react-router";
+import { useLoaderData, useLocation, useNavigate, useSearchParams } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 
 import { authenticate } from "../shopify.server";
@@ -9,7 +9,6 @@ import { getLlmsStatus } from "../lib/llms.server";
 import { useUILanguage } from "../lib/useUILanguage";
 import styles from "../styles/app.dashboard.module.css";
 import { FEATURES, hasFeature } from "../lib/access.server";
-import { generateAIOptimizationReport } from "../lib/aiOptimization.server";
 import { logger } from "../lib/logger.server";
 import { 
   isProductSchemaEmbedEnabled, 
@@ -21,8 +20,6 @@ import { TabPanel, Tabs } from "../components/navigation/Tabs";
 import { LlmsTxtPanel } from "../components/seo/LlmsTxtPanel";
 import { Banner } from "../components/ui";
 import {
-  buildDashboardHref,
-  buildOptimizationHref,
   getPreservedSearchParams,
   parseAiVisibilityTab,
   type WorkspaceTab,
@@ -51,15 +48,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   // 生成 App Embed 启用的 deep link（带 activateAppId 以直接触发激活流程）
   const apiKey = requireEnv("SHOPIFY_API_KEY");
   const embedDeepLink = getAppEmbedDeepLink(shopDomain, { apiKey });
-  
-  // 获取优化报告（复用已检测的 embedEnabled，避免重复 GraphQL 调用）
-  const report = await generateAIOptimizationReport(shopDomain, admin, {
-    range: "30d",
-    language,
-    exposurePreferences: settings.exposurePreferences,
-    embedEnabled, // ✅ 复用上面已检测的结果
-    apiKey, // ✅ 用于生成带 activateAppId 的 deep link
-  });
 
   // 获取店铺基本信息用于生成代码
   let shopInfo = {
@@ -131,7 +119,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     shopDomain,
     canManageLlms,
     canUseLlmsAdvanced,
-    report,
     shopInfo,
     settings,
     llmsStatus: {
@@ -167,39 +154,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
 type TabId = WorkspaceTab;
 
-function WorkspaceTabFooter({
-  search,
-  workspaceTab,
-  en,
-}: {
-  search: string;
-  workspaceTab: WorkspaceTab;
-  en: boolean;
-}) {
-  return (
-    <div
-      style={{
-        marginTop: 24,
-        paddingTop: 16,
-        borderTop: "1px solid #e0e0e0",
-        display: "flex",
-        gap: 12,
-        flexWrap: "wrap",
-      }}
-    >
-      <Link
-        to={buildOptimizationHref(search, { backTo: "workspace", fromTab: workspaceTab })}
-        className={styles.secondaryButton}
-      >
-        {en ? "View optimization suggestions" : "查看优化建议"}
-      </Link>
-      <Link to={buildDashboardHref(search)} className={styles.secondaryButton}>
-        {en ? "Back to Dashboard" : "返回仪表盘"}
-      </Link>
-    </div>
-  );
-}
-
 export default function AIVisibility() {
   const { 
     language, 
@@ -209,7 +163,6 @@ export default function AIVisibility() {
     shopDomain,
     settings,
     llmsStatus,
-    report,
     embedEnabled,
     embedDeepLink,
   } = useLoaderData<typeof loader>();
@@ -381,7 +334,6 @@ export default function AIVisibility() {
                   </div>
                 )}
               </div>
-              <WorkspaceTabFooter search={location.search} workspaceTab="schema" en={en} />
           </TabPanel>
 
           <TabPanel baseId="ai-visibility-tabs" tabId="faq" activeTab={activeTab}>
@@ -394,7 +346,6 @@ export default function AIVisibility() {
                 </div>
               </div>
               <FAQGenerator en={en} />
-              <WorkspaceTabFooter search={location.search} workspaceTab="faq" en={en} />
           </TabPanel>
 
           <TabPanel baseId="ai-visibility-tabs" tabId="llms" activeTab={activeTab}>
@@ -416,47 +367,8 @@ export default function AIVisibility() {
                 editable={canManageLlms}
                 context="workspace"
               />
-              <WorkspaceTabFooter search={location.search} workspaceTab="llms" en={en} />
           </TabPanel>
         </div>
-
-        {/* AI 优化建议摘要 */}
-        {report.suggestions.length > 0 && (
-          <div className={styles.card} style={{ marginTop: 20 }}>
-            <div className={styles.sectionHeader}>
-              <div>
-                <p className={styles.sectionLabel}>{en ? "Recommendations" : "优化建议"}</p>
-                <h3 className={styles.sectionTitle}>
-                  {en ? "Based on Your Store Analysis" : "基于店铺分析的建议"}
-                </h3>
-              </div>
-              <Link to={buildOptimizationHref(location.search, { backTo: "workspace", fromTab: activeTab })} style={{ color: "#008060", fontSize: 13, fontWeight: 500 }}>
-                {en ? "View All →" : "查看全部 →"}
-              </Link>
-            </div>
-            
-            <div className={styles.suggestionList} role="list" aria-label={en ? "Optimization suggestions" : "优化建议列表"}>
-              {report.suggestions.slice(0, 3).map((suggestion) => (
-                <div
-                  key={suggestion.id}
-                  role="listitem"
-                  aria-label={en ? suggestion.title.en : suggestion.title.zh}
-                  className={`${styles.suggestionCard} ${suggestion.priority === "high" ? styles.suggestionCardHigh : ""}`}
-                >
-                  <div className={styles.suggestionTitle}>
-                    {suggestion.priority === "high" && (
-                      <span className={styles.suggestionPriorityIcon} aria-label={en ? "High priority" : "高优先级"}>⚠️</span>
-                    )}
-                    {en ? suggestion.title.en : suggestion.title.zh}
-                  </div>
-                  <div className={styles.suggestionDescription}>
-                    {en ? suggestion.description.en : suggestion.description.zh}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
     </s-page>
   );

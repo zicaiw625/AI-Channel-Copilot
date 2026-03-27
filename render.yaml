@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: AI Sales Tracker & Attribution
+    name: ai-channel-copilot
     env: node
     buildCommand: npm install --include=dev && bash scripts/render-setup.sh && npm run build
     startCommand: npm run start
@@ -36,7 +36,7 @@ services:
         value: true
       - key: DATABASE_URL
         fromDatabase:
-          name: AI Sales Tracker & Attribution-db
+          name: ai-channel-copilot-db
           property: connectionString
       - key: DEFAULT_RANGE_KEY
         value: 30d
@@ -58,5 +58,5 @@ services:
         value: 1
 
 databases:
-  - name: AI Sales Tracker & Attribution-db
+  - name: ai-channel-copilot-db
     plan: free

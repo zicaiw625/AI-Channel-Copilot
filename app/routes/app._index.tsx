@@ -546,7 +546,9 @@ export default function Index() {
             <div className={styles.badgeRow}>
               <span className={styles.badge}>{t(lang, "badge_v01")}</span>
               <span className={styles.badgeSecondary}>{t(lang, "badge_conservative_orders")}</span>
-              <span className={styles.badgeSecondary}>{dateRange.label}</span>
+              <span className={styles.badgeSecondary}>
+                {range === "custom" ? dateRange.label : getRangeLabel(range)}
+              </span>
             </div>
             <h1 className={styles.heading}>{t(lang, "dashboard_title")}</h1>
             <p className={styles.subheading}>{t(lang, "dashboard_subheading")}</p>

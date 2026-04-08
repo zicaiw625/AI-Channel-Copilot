@@ -1,41 +1,43 @@
-# App Store Listing Pack
+# Shopify App Store Listing
 
 ## App name
 AI Attribution for Shopify
 
-## One-line promise
-Free to start, see which AI assistants actually drive orders.
-
 ## Subtitle
-Track AI-attributed orders, GMV, and new customers before investing in visibility tools.
+Free to start, see which AI assistants drive orders.
 
 ## Short description
-AI Attribution for Shopify shows which AI assistants, like ChatGPT, Perplexity, Gemini, and Copilot, are sending revenue to your store. Start with proof, then decide whether visibility tools are worth the effort.
+Track AI-attributed orders, GMV, and new customers. Start with proof, then decide whether visibility tools are worth it.
 
 ## Long description
-AI Attribution for Shopify helps merchants prove AI revenue first, starting with a free Starter plan.
+AI Attribution for Shopify helps merchants prove which AI assistants actually drive revenue.
 
-The app tracks AI-attributed orders, GMV, new customers, AOV, and repeat behavior using conservative referrer, UTM, and tag-based detection. You get a clear dashboard, order-level debugging, CSV exports, and optional growth tools only after you see real signal.
+Start free, backfill the last 60 days, and see AI-attributed orders, AI GMV, new customers, AOV, and repeat purchase behavior in one dashboard. The app uses conservative referrer, UTM, and tag-based attribution so you can separate AI-driven sales from everything else.
 
-### What it does
-- Detects AI-attributed orders from ChatGPT, Perplexity, Gemini, Copilot, and other known AI sources
-- Shows AI orders, AI GMV, new customer share, AOV, and repeat purchase patterns
-- Explains why an order was attributed with referrer, UTM, and tag details
-- Exports AI orders, products, and customer LTV data to CSV
-- Supports optional visibility tools like llms.txt, Schema, and FAQ after proof is established
+### What you get
+- AI order tracking for ChatGPT, Perplexity, Gemini, Copilot, and other known AI sources
+- AI GMV, AI orders, new customer share, AOV, and repeat purchase insights
+- Order-level debugging with referrer, UTM, and detection details
+- CSV exports for AI orders, products, and customer LTV
+- Optional visibility tools like llms.txt, Schema, and FAQ after proof is established
 
 ### Why merchants install it
-- They want proof before spending time or money on visibility tools
-- They need a simple way to separate AI-driven revenue from everything else
+- They want proof before spending on visibility tools
+- They want to know whether AI assistants are actually sending revenue
 - They want a conservative attribution model they can trust
-- They want to see results in the first week, not after a long setup
+- They want results quickly, not after a long setup
+
+### How it works
+1. Install the free Starter plan
+2. Backfill and start seeing AI-attributed data
+3. Decide whether to enable exports, tag write-back, or visibility tools
 
 ## Screenshot captions
 1. Free to start, see which AI assistants drive orders
 2. Track AI GMV, AI orders, and new customers in one dashboard
 3. Review why each order was attributed
-4. Build trackable AI links with UTM rules
-5. Export AI orders, customer LTV, and product performance
+4. Compare AI traffic quality with funnel and AOV signals
+5. Export AI orders, customer LTV, and top products
 6. Turn on visibility tools only after proof
 
 ## Suggested keywords
@@ -46,6 +48,11 @@ AI attribution, Shopify analytics, AI orders, AI GMV, UTM tracking, referrer tra
 - Pro, for deeper insights
 - Visibility, for optional growth tools
 
-## App review answer
-If asked what makes it different:
-"We help merchants prove which AI assistants drive revenue before they invest in AI SEO."
+## Review notes for Shopify
+- The app is installed into a Shopify store and uses Shopify Admin API plus webhooks to build attribution data.
+- The free Starter plan is intended to give merchants an immediate proof point before they spend on growth tools.
+- If the reviewer needs a quick path, open the dashboard after install and check the AI orders / AI GMV cards.
+- The app uses conservative attribution and may undercount sources that hide referrers. That is intentional.
+
+## Review answer if Shopify asks "what makes this different?"
+"We help merchants prove which AI assistants drive revenue before they invest in visibility tools."

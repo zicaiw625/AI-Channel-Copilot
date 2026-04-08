@@ -1,6 +1,6 @@
 # AI Attribution for Shopify
 
-AI Attribution for Shopify helps Shopify merchants prove which AI assistants drive revenue, then decide whether visibility tools are worth the effort.
+AI Attribution for Shopify helps Shopify merchants prove which AI assistants drive revenue. Start free, backfill the last 60 days, and see AI-attributed orders, GMV, and new customers quickly. assistants drive revenue, then decide whether visibility tools are worth the effort.
 
  ## 指标口径（统一）
  - GMV：可选择 `current_total_price`（含税/运费）或 `subtotal_price`（不含税/运费）。

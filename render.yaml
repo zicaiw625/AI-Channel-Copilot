@@ -55,4 +55,4 @@ services:
 
 databases:
   - name: ai-channel-copilot-db
-    plan: free
+    plan: basic-256mb

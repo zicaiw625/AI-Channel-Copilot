@@ -86,7 +86,7 @@ export default function AIOptimization() {
   const workspaceLlmsHref = buildAiVisibilityHref(location.search, { tab: workspaceTab, fromTab: null, backTo: null });
   const backLabel = backTo === "dashboard"
     ? (isEnglish ? "Back to Dashboard" : "返回仪表盘")
-    : (isEnglish ? "Back to AI SEO Workspace" : "返回 AI SEO 工作台");
+    : (isEnglish ? "Back to Visibility Tools" : "返回可选增长工具");
   
   const [expandedSuggestions, setExpandedSuggestions] = useState<Set<string>>(new Set());
   
@@ -491,7 +491,7 @@ export default function AIOptimization() {
           )}
           
           <Link to={workspaceLlmsHref} className={styles.primaryButton}>
-            {isEnglish ? "Open AI SEO Workspace" : "打开 AI SEO 工作台"}
+            {isEnglish ? "Open Visibility Tools" : "打开可选增长工具"}
           </Link>
         </div>
       </div>

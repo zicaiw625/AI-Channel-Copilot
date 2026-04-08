@@ -222,7 +222,7 @@ export default function AIVisibility() {
   }, [activeTab, location.hash, location.search, setSearchParams]);
 
   return (
-    <s-page heading={en ? "AI SEO" : "AI SEO"}>
+    <s-page heading={en ? "Visibility tools" : "可选增长工具"}>
       <div className={styles.page}>
         {/* 介绍卡片 */}
         <div className={styles.card}>
@@ -234,7 +234,7 @@ export default function AIVisibility() {
               </h3>
             </div>
             <span className={styles.badge} style={{ background: "#f6ffed", color: "#389e0d" }}>
-              {en ? "AI SEO workspace" : "AI SEO 工作台"}
+              {en ? "Visibility tools workspace" : "增长工具工作台"}
             </span>
           </div>
           

@@ -79,7 +79,7 @@ const featureDetails = {
   },
   copilot: {
     icon: "🤖",
-    title: { en: "Unlock AI Copilot", zh: "解锁 AI Copilot" },
+    title: { en: "Unlock instant insights", zh: "解锁即时洞察" },
     description: {
       en: "Get instant AI-powered insights about your store",
       zh: "获取关于店铺的即时 AI 洞察",

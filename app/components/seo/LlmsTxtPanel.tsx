@@ -309,7 +309,7 @@ export function LlmsTxtPanel({
             llms.txt
           </p>
           <h3 style={{ margin: "6px 0 8px", fontSize: compact ? 20 : 22 }}>
-            {en ? "AI SEO / llms.txt" : "AI SEO / llms.txt"}
+            {en ? "Visibility tools / llms.txt" : "增长工具 / llms.txt"}
           </h3>
           <p style={{ margin: 0, color: "#637381", lineHeight: 1.6 }}>
             {compact

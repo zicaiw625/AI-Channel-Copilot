@@ -745,12 +745,12 @@ export default function Index() {
             <div className={styles.toolGrid}>
               <Link to={utmWizardHref} className={styles.secondaryButton}>{t(lang, "dashboard_tool_utm_wizard")}</Link>
               {canUseCopilot ? (
-                <Link to={copilotHref} className={styles.secondaryButton}>Copilot</Link>
+                <Link to={copilotHref} className={styles.secondaryButton}>Insights</Link>
               ) : (
                 <button
                   type="button"
                   className={styles.secondaryButton}
-                  onClick={() => shopify.toast.show?.(uiLanguage === "English" ? "Upgrade to Pro or Growth to unlock Copilot." : "升级到 Pro 或 Growth 版以解锁 Copilot。")}
+                  onClick={() => shopify.toast.show?.(uiLanguage === "English" ? "Upgrade to Pro or Visibility to unlock instant answers." : "升级到 Pro 或可选增长工具版以解锁即时答案。")}
                 >
                   {t(lang, "dashboard_tool_copilot_growth")}
                 </button>

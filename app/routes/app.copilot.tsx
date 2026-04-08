@@ -39,7 +39,7 @@ type CopilotResponse = {
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const demo = isDemoMode();
   let session;
-  
+
   try {
     const auth = await authenticate.admin(request);
     session = auth.session;
@@ -51,32 +51,32 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     }
     if (!demo) {
       const redirectUrl = buildEmbeddedAppPath("/app", new URL(request.url).search, { backTo: null, fromTab: null, tab: null });
-      throw new Response(null, { 
-        status: 302, 
-        headers: { Location: redirectUrl } 
+      throw new Response(null, {
+        status: 302,
+        headers: { Location: redirectUrl }
       });
     }
   }
 
   const shopDomain = session?.shop || "";
-  
+
   // If no shop domain and not demo, redirect
   if (!shopDomain && !demo) {
     const redirectUrl = buildEmbeddedAppPath("/app", new URL(request.url).search, { backTo: null, fromTab: null, tab: null });
-    throw new Response(null, { 
-      status: 302, 
-      headers: { Location: redirectUrl } 
+    throw new Response(null, {
+      status: 302,
+      headers: { Location: redirectUrl }
     });
   }
-  
+
   const settings = await getSettings(shopDomain);
   const language = resolveUILanguageFromRequest(request, settings.languages?.[0] || "中文");
   const timezone = settings.timezones[0] || "UTC";
   const range = "30d" as TimeRangeKey;
   const dateRange = resolveDateRange(range, new Date(), undefined, undefined, timezone);
-  
+
   const canUseCopilot = await hasFeature(shopDomain, FEATURES.COPILOT);
-  
+
   // If demo, allow; otherwise check feature access
   const readOnly = !canUseCopilot && !demo;
 
@@ -93,9 +93,9 @@ export default function Copilot() {
   const language = useUILanguage(loaderLanguage || settings.languages[0] || "中文");
   const dashboardHref = buildEmbeddedAppPath("/app", location.search, { backTo: null, fromTab: null, tab: null });
   const billingHref = buildEmbeddedAppPath("/app/billing", location.search, { backTo: null, fromTab: null, tab: null });
-  
+
   const isLoading = fetcher.state !== "idle";
-  
+
   // 类型安全的响应数据访问
   // apiSuccess 返回 { ok: true, data: ... }，apiError 返回 { ok: false, error: ... }
   const rawResponse = fetcher.data;
@@ -111,17 +111,17 @@ export default function Copilot() {
       { method: "post", action: "/api/copilot" },
     );
   };
-  
+
   // 检查特定按钮是否正在加载
   const isButtonLoading = (intent: string) => isLoading && activeIntent === intent;
-  
+
   // 检查特定按钮是否被选中（最后点击的意图）
   const isButtonSelected = (intent: string) => !isLoading && activeIntent === intent;
-  
+
   // 获取按钮样式：选中或加载中显示为 primary，否则为 secondary
-  const getButtonStyle = (intent: string) => 
+  const getButtonStyle = (intent: string) =>
     isButtonLoading(intent) || isButtonSelected(intent) ? styles.primaryButton : styles.secondaryButton;
-  
+
   const UpgradeBanner = () => (
       <div style={{
           background: "#fff2e8",
@@ -138,9 +138,9 @@ export default function Copilot() {
                 {language === "English" ? "Requires Pro or Growth" : "需要 Pro 或 Growth 版"}
             </h3>
             <p style={{ margin: 0 }}>
-                {language === "English" 
-                  ? "AI Copilot is available on Pro and Growth plans. Upgrade to access instant answers." 
-                  : "AI Copilot 仅在 Pro 和 Growth 版中可用。升级后即可使用智能问答。"}
+                {language === "English"
+                  ? "Instant answers are available on Pro and Visibility plans. Upgrade to access them."
+                  : "即时答案仅在 Pro 和 Visibility 方案中可用。升级后即可使用。"}
             </p>
           </div>
           <Link to={billingHref} className={styles.primaryButton}>
@@ -150,7 +150,7 @@ export default function Copilot() {
   );
 
   return (
-    <s-page heading={language === "English" ? "Copilot Q&A (v0.2 Experimental)" : "Copilot 分析问答（v0.2 实验）"}>
+    <s-page heading={language === "English" ? "Insights Q&A (v0.2 Experimental)" : "即时洞察问答（v0.2 实验）"}>
       <div className={styles.page}>
         {/* 顶部导航 */}
         <div style={{ marginBottom: 16, display: "flex", gap: 12 }}>
@@ -170,22 +170,22 @@ export default function Copilot() {
         </div>
 
         {readOnly && <UpgradeBanner />}
-        
+
         <div className={styles.quickButtons} style={readOnly ? { opacity: 0.5, pointerEvents: "none" } : {}}>
-          <button 
+          <button
             type="button"
-            className={getButtonStyle("ai_performance")} 
+            className={getButtonStyle("ai_performance")}
             onClick={() => ask("ai_performance")}
             disabled={readOnly || isLoading}
             data-action="copilot-ai_performance"
           >
-            {isButtonLoading("ai_performance") 
-              ? (language === "English" ? "Loading..." : "加载中...") 
+            {isButtonLoading("ai_performance")
+              ? (language === "English" ? "Loading..." : "加载中...")
               : (language === "English" ? "AI channel performance in last 30 days?" : "过去 30 天 AI 渠道表现如何？")}
           </button>
-          <button 
+          <button
             type="button"
-            className={getButtonStyle("ai_vs_all_aov")} 
+            className={getButtonStyle("ai_vs_all_aov")}
             onClick={() => ask("ai_vs_all_aov")}
             disabled={readOnly || isLoading}
             data-action="copilot-ai_vs_all_aov"
@@ -194,9 +194,9 @@ export default function Copilot() {
               ? (language === "English" ? "Loading..." : "加载中...")
               : (language === "English" ? "AI channel vs all channels AOV?" : "AI 渠道 vs 全部渠道 AOV？")}
           </button>
-          <button 
+          <button
             type="button"
-            className={getButtonStyle("ai_top_products")} 
+            className={getButtonStyle("ai_top_products")}
             onClick={() => ask("ai_top_products")}
             disabled={readOnly || isLoading}
             data-action="copilot-ai_top_products"
@@ -231,7 +231,7 @@ export default function Copilot() {
         )}
 
         <div className={styles.smallNote}>
-          {language === "English" ? "Copilot is experimental: generates narrative from aggregated results only; not guaranteed to be real-time or exhaustive. Cross-check on the dashboard." : "Copilot 为实验特性：仅从聚合结果生成自然语言，不保证即时性与完整性。建议在仪表盘交叉验证。"}
+          {language === "English" ? "Insights is experimental: it generates narrative from aggregated results only, and is not guaranteed to be real-time or exhaustive. Cross-check on the dashboard." : "即时洞察为实验特性：仅从聚合结果生成自然语言，不保证即时性与完整性。建议在仪表盘交叉验证。"}
         </div>
       </div>
     </s-page>

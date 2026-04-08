@@ -160,7 +160,7 @@ export const getAppConfig = (): AppConfig => {
 
   const trialDays = readIntegerEnv("BILLING_TRIAL_DAYS", 14, 0)!;
   const interval = readBillingInterval(process.env.BILLING_INTERVAL || "EVERY_30_DAYS");
-  const planName = (process.env.BILLING_PLAN_NAME || "AI Copilot Pro").trim();
+  const planName = (process.env.BILLING_PLAN_NAME || "AI Attribution Pro").trim();
 
   const billing: BillingConfig = { amount, currencyCode, trialDays, interval, planName };
 

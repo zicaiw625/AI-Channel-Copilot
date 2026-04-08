@@ -36,7 +36,7 @@ export function BillingFeedbackBanners({
         <div style={{ marginBottom: 20 }}>
           <Banner status={downgradeResult.ok ? "success" : "critical"}>
             {downgradeResult.ok
-              ? downgradeResult.message || (en ? "Successfully downgraded to Free plan." : "已成功降级到免费版。")
+              ? downgradeResult.message || (en ? "Successfully downgraded to Starter plan." : "已成功降级到 Starter 方案。")
               : downgradeResult.message || (en ? "Downgrade failed. Please try again." : "降级失败，请重试。")}
           </Banner>
         </div>
@@ -49,7 +49,7 @@ export function BillingIntro({ en }: { en: boolean }) {
   return (
     <div style={{ marginBottom: 20, color: "#637381", fontSize: 14, lineHeight: 1.6 }}>
       {en
-        ? "Use this page to review your current plan, trial status, and switching options. Onboarding focuses on getting started; Billing is where you manage plan changes."
+        ? "Use this page to review your current plan and proof window. Onboarding focuses on setup; Billing is where you change plans only when you need more scale or visibility tools."
         : "这里用于查看当前方案、试用状态和切换选项。Onboarding 负责帮助你开始使用，Billing 负责后续方案管理。"}
     </div>
   );
@@ -138,8 +138,8 @@ export function BillingCurrentPlanCard({
             <div style={{ marginBottom: 16, padding: 12, borderRadius: 8, ...trialBannerStyle }}>
               <div style={{ fontWeight: 500 }}>
                 ✨ {en
-                  ? `Enjoying your ${trialPlanName} trial · ${activePlan.remainingTrialDays} day${activePlan.remainingTrialDays === 1 ? "" : "s"} remaining`
-                  : `正在体验 ${trialPlanName} 全部功能 · 剩余 ${activePlan.remainingTrialDays} 天`}
+                  ? `Using your ${trialPlanName} proof window · ${activePlan.remainingTrialDays} day${activePlan.remainingTrialDays === 1 ? "" : "s"} remaining`
+                  : `正在使用 ${trialPlanName} proof window · 剩余 ${activePlan.remainingTrialDays} 天`}
               </div>
               {formattedTrialEndDate && (
                 <div style={{ fontSize: 12, marginTop: 4, color: "#637381" }}>
@@ -293,7 +293,7 @@ export function BillingPlansSection({
         {plans.map((plan) => {
           const isActive = !hasNoPlan && plan.id === activePlanId;
           const priceLabel = plan.priceUsd === 0 ? "$0" : `$${plan.priceUsd}`;
-          const trialLabel = plan.trialSupported ? (en ? "Includes free trial" : "包含免费试用") : (en ? "No trial" : "无试用");
+          const trialLabel = plan.trialSupported ? (en ? "Includes proof window" : "包含证明期") : (en ? "No proof window" : "无证明期");
 
           return (
             <PlanCard
@@ -376,8 +376,8 @@ export function DowngradeConfirmationModal({
         <h3 style={{ margin: "0 0 12px", fontSize: 16, fontWeight: 600 }}>{en ? "Confirm Downgrade" : "确认降级"}</h3>
         <p style={{ margin: "0 0 20px", color: "#555", lineHeight: 1.5 }}>
           {en
-            ? "Are you sure you want to downgrade to Free? You will lose access to detailed history and Copilot."
-            : "确定要降级到免费版吗？您将失去历史数据详情和 Copilot 功能。"}
+            ? "Are you sure you want to downgrade to Starter? You will lose access to detailed history and insights."
+            : "确定要降级到 Starter 方案吗？您将失去历史数据详情和洞察功能。"}
         </p>
         <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
           <Button type="button" onClick={onCancel} variant="secondary">

@@ -223,7 +223,7 @@ export default function App() {
           {uiLanguage === "English" ? "Tracking & Attribution" : "追踪与归因"}
         </a>
         <a href={buildAiVisibilityHref(location.search, { tab: "llms", backTo: null, fromTab: null })}>
-          {uiLanguage === "English" ? "AI SEO" : "AI SEO"}
+          {uiLanguage === "English" ? "Visibility tools" : "可选增长工具"}
         </a>
         <a href={buildBillingHref(location.search)}>
           {uiLanguage === "English" ? "Billing" : "计费管理"}

@@ -1,6 +1,6 @@
-# AI Sales Tracker & Attribution Copilot
+# AI Attribution for Shopify
 
- AI Sales Tracker & Attribution Copilot 帮助 Shopify 商家识别来自 ChatGPT、Perplexity、Gemini、Copilot 等 AI 助手带来的真实 GMV。应用默认以保守口径统计“站外 AI 点击 → 到站 → 完成订单”的链路，并提供仪表盘、调试视图、标签写回与 CSV 导出。
+AI Attribution for Shopify helps Shopify merchants prove which AI assistants drive revenue, then decide whether visibility tools are worth the effort.
 
  ## 指标口径（统一）
  - GMV：可选择 `current_total_price`（含税/运费）或 `subtotal_price`（不含税/运费）。
@@ -27,7 +27,7 @@
 - 未打 `utm_source` 的 AI 链接可能无法完全识别，建议配合自定义 UTM 规则。
 - 当前统计为保守估计，仅包含“站外 AI 点击 → 到站 → 完成订单”的链路。
 
- ## Copilot（v0.2 实验）
+ ## 即时答案（v0.2 实验）
  - intent 与 range 参数白名单校验；仅从后端结构化结果生成解读，尾注附数据范围与口径说明。
 
  ## 回归脚本（仅限开发环境）
@@ -46,7 +46,7 @@
 
 ### 新增功能（v0.2）
 
-#### 🚀 AI 优化建议（AI Optimization）
+#### 🚀 可选增长工具（Visibility tools）
 - **Schema.org 结构化数据检测**：分析产品页面的 Schema 标记完整度，生成优化建议
 - **内容质量评分**：评估产品描述、SEO 标题/描述的完整性
 - **FAQ 建议生成**：基于热销产品自动生成推荐的 FAQ 内容
@@ -64,7 +64,7 @@
 - 产品分类和品牌信息
 - 推荐的 FAQ 问答对
 - 店铺政策页面链接
-- AI 可理解的 YAML 格式
+- AI 可理解的 YAML 格式（可选）
 
 ## 默认识别规则（开箱即用）
 - **Referrer** 包含：`chat.openai.com`、`perplexity.ai`、`gemini.google.com`、`copilot.microsoft.com`。

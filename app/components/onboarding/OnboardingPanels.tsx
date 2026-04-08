@@ -105,7 +105,7 @@ function ProValueBanner({ en }: { en: boolean }) {
             marginBottom: 4,
           }}
         >
-          {en ? "🎯 Understand AI traffic quality with funnel comparison" : "🎯 通过漏斗对比理解 AI 流量质量"}
+          {en ? "🎯 See which AI assistants drive orders" : "🎯 先看清哪些 AI 助手真正带来订单"}
         </span>
         <span style={{ fontSize: 13, color: "#637381" }}>
           {en ? "Visit → Add to Cart → Checkout → Order — Compare AI vs Overall" : "访问 → 加购 → 发起结账 → 成交 — AI 渠道 vs 全站对比"}
@@ -208,7 +208,7 @@ function GrowthValueBanner({ en }: { en: boolean }) {
           {en ? "🚀 Make your store easier for AI assistants to understand" : "🚀 让你的店铺更容易被 AI 助手理解"}
         </span>
         <span style={{ fontSize: 13, color: "#637381" }}>
-          {en ? "One-click fixes: llms.txt + Schema + FAQ — Your AI SEO workspace" : "一键落地：llms.txt + Schema + FAQ — 你的 AI SEO 工作台"}
+          {en ? "Optional growth tools: llms.txt + Schema + FAQ — turn on after proof" : "可选增长工具：llms.txt + Schema + FAQ — 先证明，再开启"}
         </span>
       </div>
 

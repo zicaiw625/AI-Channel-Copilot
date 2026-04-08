@@ -10,6 +10,11 @@ import { readAppFlags, requireEnv } from "../lib/env.server";
 import { getSettings, syncShopPreferences } from "../lib/settings.server";
 import { logger } from "../lib/logger.server";
 import {
+  buildSessionTokenBounceUrl,
+  invalidSessionRetryResponse,
+  isBrowserAuthRequest,
+} from "../lib/sessionToken.server";
+import {
   detectAndPersistDevShop,
   shouldSkipBillingForPath,
   calculateRemainingTrialDays,
@@ -37,29 +42,49 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   let admin: AuthShape["admin"] | null = null;
   let session: AuthShape["session"] | null = null;
   let authFailed = false;
+  const url = new URL(request.url);
+  const path = url.pathname.toLowerCase();
+  // 仅允许 redirect 页面在无 session 时继续（用于跳转到 Shopify 确认页）。
+  // onboarding / billing 必须有有效 session，否则应触发 Shopify OAuth 流程。
+  const allowUnauth = path.includes("/app/redirect") || path.includes("/app/billing/confirm");
 
   try {
     const auth = await authenticate.admin(request);
     if (auth instanceof Response) {
       authFailed = true;
-      const url = new URL(request.url);
-      const path = url.pathname.toLowerCase();
-      // 仅允许 redirect 页面在无 session 时继续（用于跳转到 Shopify 确认页）。
-      // onboarding / billing 必须有有效 session，否则应触发 Shopify OAuth 流程。
-      const allowUnauth = path.includes("/app/redirect") || path.includes("/app/billing/confirm");
-      if (!demo && !allowUnauth) throw auth;
+      if (!demo && !allowUnauth) {
+        if (isBrowserAuthRequest(request)) {
+          return invalidSessionRetryResponse();
+        }
+        throw new Response(null, {
+          status: 302,
+          headers: { Location: buildSessionTokenBounceUrl(request.url) },
+        });
+      }
     } else {
       admin = auth.admin;
       session = auth.session;
     }
   } catch (e) {
     authFailed = true;
-    const url = new URL(request.url);
-    const path = url.pathname.toLowerCase();
-    // 仅允许 redirect 页面在无 session 时继续（用于跳转到 Shopify 确认页）。
-    // onboarding / billing 必须有有效 session，否则应触发 Shopify OAuth 流程。
-    const allowUnauth = path.includes("/app/redirect") || path.includes("/app/billing/confirm");
-    if (!demo && !allowUnauth) throw e;
+    if (!demo && !allowUnauth) {
+      if (e instanceof Response) {
+        if (isBrowserAuthRequest(request)) {
+          return invalidSessionRetryResponse();
+        }
+        throw new Response(null, {
+          status: 302,
+          headers: { Location: buildSessionTokenBounceUrl(request.url) },
+        });
+      }
+      if (isBrowserAuthRequest(request)) {
+        return invalidSessionRetryResponse();
+      }
+      throw new Response(null, {
+        status: 302,
+        headers: { Location: buildSessionTokenBounceUrl(request.url) },
+      });
+    }
   }
 
   const shopDomain = session?.shop || "";

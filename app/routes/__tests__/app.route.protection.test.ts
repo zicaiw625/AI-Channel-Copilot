@@ -25,7 +25,10 @@ vi.mock("../../lib/env.server", () => ({
     enableBilling: true,
     enableLoginForm: false,
   }),
-  requireEnv: () => "test-shopify-api-key",
+  requireEnv: (name: string) => {
+    if (name === "SHOPIFY_APP_URL") return "https://example.com";
+    return "test-shopify-api-key";
+  },
 }));
 
 vi.mock("../../lib/settings.server", () => ({
@@ -81,6 +84,27 @@ describe("app.tsx loader protection", () => {
         plan: "none",
       }),
     );
+  });
+
+  it("redirects /app to the session-token bounce page when auth fails", async () => {
+    authenticateAdmin.mockResolvedValueOnce(new Response("Gone", { status: 410 }));
+    shouldSkipBillingForPath.mockReturnValueOnce(false);
+
+    const req = new Request("https://example.com/app?embedded=1&host=abc&locale=en");
+
+    try {
+      await appLoader({ request: req } as any);
+      expect.fail("expected redirect response");
+    } catch (resp) {
+      const r = resp as Response;
+      expect(r.status).toBe(302);
+      const location = r.headers.get("Location") || "";
+      const url = new URL(location);
+      expect(url.pathname).toBe("/session-token-bounce");
+      expect(url.searchParams.get("shopify-reload")).toContain("/app?embedded=1&host=abc&locale=en");
+    }
+
+    expect(getSettings).not.toHaveBeenCalled();
   });
 });
 

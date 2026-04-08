@@ -68,7 +68,7 @@ const dict: Record<string, TranslationEntry> = {
   title_delete_rule: { zh: "删除规则", en: "Delete rule" },
   badge_v01: { zh: "v0.1 内测 · Referrer + UTM", en: "v0.1 Beta · Referrer + UTM" },
   badge_conservative_orders: { zh: "保守识别 · Shopify Orders", en: "Conservative · Shopify Orders" },
-  dashboard_title: { zh: "AI Attribution & Growth Dashboard Dashboard", en: "AI Channels Dashboard" },
+  dashboard_title: { zh: "AI Attribution & Growth Dashboard", en: "AI Attribution & Growth Dashboard" },
   dashboard_subheading: { zh: "自动识别来自 ChatGPT / Perplexity / Gemini / Copilot 等 AI 助手的订单，给出保守 GMV 估计与差异洞察。", en: "Automatically detects orders from ChatGPT / Perplexity / Gemini / Copilot and provides conservative GMV estimate and insights." },
   dashboard_warning: { zh: "AI 渠道识别为保守估计，依赖 referrer / UTM / 标签，部分 AI 会隐藏来源；仅统计站外 AI 点击 → 到站 → 完成订单的链路，不含 AI 应用内曝光或自然流量。", en: "AI attribution is conservative, relies on referrer/UTM/tags, some AI hide referrer; counts only offsite AI click → land → order, excludes in-app exposure or generic traffic." },
   dashboard_page_heading: { zh: "AI Attribution & Growth Dashboard", en: "AI Attribution & Growth Dashboard" },
@@ -297,9 +297,9 @@ const dict: Record<string, TranslationEntry> = {
   // ============================================================================
   // 首页/落地页
   // ============================================================================
-  landing_badge: { zh: "AI Attribution for Shopify · v1", en: "AI Attribution for Shopify · v1" },
-  landing_heading: { zh: "先看清哪些 AI 助手真正带来订单", en: "See which AI assistants actually drive orders" },
-  landing_text: { zh: "先追踪 AI 归因订单、GMV 和新客，再决定可选增长工具值不值得开。", en: "Track AI-attributed orders, GMV, and new customers first, then decide whether visibility tools are worth the effort." },
+  landing_badge: { zh: "免费 Starter · AI Attribution for Shopify", en: "Free Starter · AI Attribution for Shopify" },
+  landing_heading: { zh: "免费开始，先看清哪些 AI 助手真正带来订单", en: "Start free, then see which AI assistants actually drive orders" },
+  landing_text: { zh: "免费安装后先回补 60 天订单，快速看到 AI 归因订单、GMV 和新客，再决定可选增长工具值不值得开。", en: "Install free, backfill 60 days, and quickly see AI-attributed orders, GMV, and new customers before deciding whether visibility tools are worth the effort." },
   shop_placeholder: { zh: "your-store.myshopify.com", en: "your-store.myshopify.com" },
   chip_conservative: { zh: "Referrer + UTM 保守识别", en: "Conservative: Referrer + UTM" },
   chip_ai_gmv: { zh: "AI 渠道 GMV / 订单 / 新客", en: "AI GMV / Orders / New Customers" },
@@ -307,7 +307,7 @@ const dict: Record<string, TranslationEntry> = {
   chip_export: { zh: "标签写回 & CSV 导出", en: "Tag write-back & CSV export" },
   switch_to_chinese: { zh: "切换为中文", en: "切换为中文" },
   switch_to_english: { zh: "Switch to English", en: "Switch to English" },
-  features_v01: { zh: "第 1 周能看到什么", en: "What you get in week 1" },
+  features_v01: { zh: "安装后 1 周能看到什么", en: "What you get in week 1" },
   feature_data_ingress: { zh: "数据接入：Shopify Admin API + orders/create webhook + 60 天回补。", en: "Data ingress: Shopify Admin API + orders/create webhook + 60-day backfill." },
   feature_ai_attribution: { zh: "AI 归因：预置 AI 域名与 UTM 规则，覆盖 ChatGPT / Perplexity / Gemini / Copilot。", en: "AI attribution: preset AI domains and UTM rules for ChatGPT, Perplexity, Gemini, and Copilot." },
   feature_dashboard: { zh: "仪表盘：AI 订单、AI GMV、新客、AOV、复购，与整体表现对比。", en: "Dashboard: AI orders, AI GMV, new customers, AOV, repeat, and overall comparison." },
@@ -319,8 +319,8 @@ const dict: Record<string, TranslationEntry> = {
   stat_ai_aov_vs_overall: { zh: "AI AOV 对比", en: "AI AOV vs Overall" },
   stat_attribution: { zh: "识别口径", en: "Attribution" },
   stat_conservative: { zh: "保守估计", en: "Conservative" },
-  getting_started: { zh: "先证明，再扩展", en: "Prove first, then expand" },
-  step_1: { zh: "安装应用并回补最近 60 天订单。", en: "Install the app and backfill the last 60 days." },
+  getting_started: { zh: "免费开始，先证明", en: "Start free, prove first" },
+  step_1: { zh: "安装免费 Starter，并回补最近 60 天订单。", en: "Install the free Starter and backfill the last 60 days." },
   step_2: { zh: "打开仪表盘，先看匹配到的来源、AI 订单和 AI GMV。", en: "Open the dashboard to see matched sources, AI orders, and AI GMV." },
   step_3: { zh: "先把证明做出来，再按需开启标签写回、导出或可选增长工具。", en: "Only then turn on tags, exports, or optional growth tools if you want to grow visibility." },
   

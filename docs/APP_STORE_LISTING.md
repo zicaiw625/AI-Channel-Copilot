@@ -4,16 +4,16 @@
 AI Attribution for Shopify
 
 ## One-line promise
-See which AI assistants actually drive orders.
+Free to start, see which AI assistants actually drive orders.
 
 ## Subtitle
-Track AI-attributed orders, GMV, and new customers before investing in AI SEO.
+Track AI-attributed orders, GMV, and new customers before investing in visibility tools.
 
 ## Short description
 AI Attribution for Shopify shows which AI assistants, like ChatGPT, Perplexity, Gemini, and Copilot, are sending revenue to your store. Start with proof, then decide whether visibility tools are worth the effort.
 
 ## Long description
-AI Attribution for Shopify helps merchants prove AI revenue first.
+AI Attribution for Shopify helps merchants prove AI revenue first, starting with a free Starter plan.
 
 The app tracks AI-attributed orders, GMV, new customers, AOV, and repeat behavior using conservative referrer, UTM, and tag-based detection. You get a clear dashboard, order-level debugging, CSV exports, and optional growth tools only after you see real signal.
 
@@ -25,13 +25,13 @@ The app tracks AI-attributed orders, GMV, new customers, AOV, and repeat behavio
 - Supports optional visibility tools like llms.txt, Schema, and FAQ after proof is established
 
 ### Why merchants install it
-- They want proof before spending time on AI SEO
+- They want proof before spending time or money on visibility tools
 - They need a simple way to separate AI-driven revenue from everything else
 - They want a conservative attribution model they can trust
 - They want to see results in the first week, not after a long setup
 
 ## Screenshot captions
-1. See which AI assistants drive orders
+1. Free to start, see which AI assistants drive orders
 2. Track AI GMV, AI orders, and new customers in one dashboard
 3. Review why each order was attributed
 4. Build trackable AI links with UTM rules

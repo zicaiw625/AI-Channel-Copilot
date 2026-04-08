@@ -273,11 +273,11 @@ export function AddStorePrompt({ en }: { en: boolean }) {
       icon="➕"
       title={en ? "Connect More Stores" : "连接更多店铺"}
       description={en
-        ? "Install AI Sales Tracker & Attribution on your other Shopify stores using the same account email to see aggregated data here."
-        : "在您的其他 Shopify 店铺上安装 AI Sales Tracker & Attribution（使用相同的账户邮箱），即可在此查看汇总数据。"}
+        ? "Install AI Attribution for Shopify on your other Shopify stores using the same account email to see aggregated data here."
+        : "在您的其他 Shopify 店铺上安装 AI Attribution for Shopify（使用相同的账户邮箱），即可在此查看汇总数据。"}
       dashed
       action={(
-        <a href="https://apps.shopify.com/AI Sales Tracker & Attribution" target="_blank" rel="noreferrer" style={{ textDecoration: "none" }}>
+        <a href="https://apps.shopify.com/AI-Attribution-for-Shopify" target="_blank" rel="noreferrer" style={{ textDecoration: "none" }}>
           <Button variant="primary" size="medium">
             {en ? "Install on Another Store" : "在其他店铺安装"}
           </Button>

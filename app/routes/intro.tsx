@@ -95,7 +95,7 @@ export default function Intro() {
   return (
     <AppProvider embedded apiKey={apiKey}>
       <section style={{ padding: 16 }}>
-        <h2>{en ? "AI Sales Tracker & Attribution Introduction" : "AI Sales Tracker & Attribution 简介"}</h2>
+        <h2>{en ? "AI Attribution for Shopify Introduction" : "AI Attribution for Shopify 简介"}</h2>
         <p>{en ? "Detect AI-attributed orders and analyze AOV/LTV." : "识别 AI 渠道订单，分析 AOV/LTV。"}</p>
         <p>{en ? "Permissions: orders/customers stay read-only by default; order tags are written only if you enable tag write-back." : "权限：默认仅读取订单/客户信息；只有手动开启标签写回时，才会向订单写入标签。"}</p>
         <p>{en ? "Historical sync may be started to populate dashboards." : "可进行历史订单同步以填充仪表盘。"}</p>

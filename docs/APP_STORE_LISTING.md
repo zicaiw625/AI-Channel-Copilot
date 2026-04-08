@@ -4,10 +4,10 @@
 AI Attribution for Shopify
 
 ## Subtitle
-Free to start, see which AI assistants drive orders.
+Free to start, prove which AI assistants drive orders.
 
 ## Short description
-Track AI-attributed orders, GMV, and new customers. Start with proof, then decide whether visibility tools are worth it.
+Track AI-attributed orders, GMV, and new customers before you spend on visibility tools.
 
 ## Long description
 AI Attribution for Shopify helps merchants prove which AI assistants actually drive revenue.
@@ -22,7 +22,7 @@ Start free, backfill the last 60 days, and see AI-attributed orders, AI GMV, new
 - Optional visibility tools like llms.txt, Schema, and FAQ after proof is established
 
 ### Why merchants install it
-- They want proof before spending on visibility tools
+- They want proof before spending time or money on visibility tools
 - They want to know whether AI assistants are actually sending revenue
 - They want a conservative attribution model they can trust
 - They want results quickly, not after a long setup
@@ -33,7 +33,7 @@ Start free, backfill the last 60 days, and see AI-attributed orders, AI GMV, new
 3. Decide whether to enable exports, tag write-back, or visibility tools
 
 ## Screenshot captions
-1. Free to start, see which AI assistants drive orders
+1. Free to start, prove which AI assistants drive orders
 2. Track AI GMV, AI orders, and new customers in one dashboard
 3. Review why each order was attributed
 4. Compare AI traffic quality with funnel and AOV signals

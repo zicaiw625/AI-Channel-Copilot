@@ -2,7 +2,7 @@
 
 client_id = "775682342ec5187aaef9b6bd2a9d0b90"
 name = "AI Attribution for Shopify"
-application_url = "https://ai-channel-copilot.onrender.com"
+application_url = "https://ai-attribution-for-shopify.onrender.com"
 embedded = true
 
 [build]
@@ -77,11 +77,11 @@ scopes = "read_orders,read_customers,read_products,write_orders,read_checkouts,r
 
 [auth]
 redirect_urls = [
-  "https://ai-channel-copilot.onrender.com/auth/callback",
-  "https://ai-channel-copilot.onrender.com/auth/login"
+  "https://ai-attribution-for-shopify.onrender.com/auth/callback",
+  "https://ai-attribution-for-shopify.onrender.com/auth/login"
 ]
 
 [app_proxy]
-url = "https://ai-channel-copilot.onrender.com/proxy/llms"
+url = "https://ai-attribution-for-shopify.onrender.com/proxy/llms"
 subpath = "llms"
 prefix = "a"

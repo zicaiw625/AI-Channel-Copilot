@@ -1,5 +1,5 @@
 {
-  "name": "AI Sales Tracker & Attribution",
+  "name": "AI Attribution for Shopify",
   "private": true,
   "scripts": {
     "build": "react-router build",

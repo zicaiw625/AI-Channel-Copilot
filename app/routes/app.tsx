@@ -10,17 +10,17 @@ import { readAppFlags, requireEnv } from "../lib/env.server";
 import { getSettings, syncShopPreferences } from "../lib/settings.server";
 import { logger } from "../lib/logger.server";
 import {
-  buildSessionTokenBounceUrl,
-  invalidSessionRetryResponse,
-  isBrowserAuthRequest,
-} from "../lib/sessionToken.server";
-import {
   detectAndPersistDevShop,
   shouldSkipBillingForPath,
-  calculateRemainingTrialDays,
   PRIMARY_BILLABLE_PLAN_ID,
   type PlanId,
+  type PlanTier,
+  calculateRemainingTrialDays,
+  getActivePaidSubscription,
+  isSubscriptionActive,
+  validateBillingState,
 } from "../lib/billing.server";
+import { activateFreePlan } from "../lib/billing/state.server";
 import { getEffectivePlan, FEATURES, hasFeature, type PlanTier } from "../lib/access.server";
 import { startBackfill, processBackfillQueue } from "../lib/backfill.server";
 import { resolveDateRange } from "../lib/aiData";
@@ -182,9 +182,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
                 !path.includes("/app/redirect"));
 
         if (isProtected && plan === "none") {
-            const next = new URL("/app/onboarding", url.origin);
-            next.search = url.search;
-            throw new Response(null, { status: 302, headers: { Location: next.toString() } });
+            await activateFreePlan(shopDomain);
+            plan = "free" as PlanTier;
+            canViewFullDashboard = false;
         }
     }
 
